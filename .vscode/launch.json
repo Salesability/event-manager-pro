@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Next.js: server-side",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm dev"
+    },
+    {
+      "name": "Next.js: client-side (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000"
+    },
+    {
+      "name": "Next.js: client-side (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3000"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Next.js: full stack (Chrome)",
+      "configurations": ["Next.js: server-side", "Next.js: client-side (Chrome)"],
+      "stopAll": true
+    },
+    {
+      "name": "Next.js: full stack (Edge)",
+      "configurations": ["Next.js: server-side", "Next.js: client-side (Edge)"],
+      "stopAll": true
+    }
+  ]
+}
