@@ -1,14 +1,33 @@
-import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
+import {
+  loadCampaignStyles,
+  loadCampaigns,
+  loadCoaches,
+  loadDealers,
+  loadSalesLeadSources,
+  type Campaign,
+  type Coach,
+  type Dealer,
+  type LookupOption,
+} from '@/features/schedule/queries';
 import { ProductionFilters } from './production-filters';
+import { RowActions } from './row-actions';
 
 type Props = {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; cancelled?: string }>;
 };
 
 export default async function ProductionPage({ searchParams }: Props) {
-  const { q, status } = await searchParams;
-  const all = await loadCampaigns();
-  const filtered = filterCampaigns(all, { q: q ?? '', status: status ?? '' });
+  const { q, status, cancelled } = await searchParams;
+  const showCancelled = cancelled === '1';
+
+  const [all, dealers, coaches, styles, sources] = await Promise.all([
+    loadCampaigns(),
+    loadDealers(),
+    loadCoaches(),
+    loadCampaignStyles(),
+    loadSalesLeadSources(),
+  ]);
+  const filtered = filterCampaigns(all, { q: q ?? '', status: status ?? '', showCancelled });
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,11 +64,19 @@ export default async function ProductionPage({ searchParams }: Props) {
                   <th className="px-3 py-2.5 text-right">BDC</th>
                   <th className="px-3 py-2.5">Coach</th>
                   <th className="px-3 py-2.5">Notes</th>
+                  <th className="px-3 py-2.5"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c) => (
-                  <CampaignRow key={c.id} campaign={c} />
+                  <CampaignRow
+                    key={c.id}
+                    campaign={c}
+                    dealers={dealers}
+                    coaches={coaches}
+                    styles={styles}
+                    sources={sources}
+                  />
                 ))}
               </tbody>
             </table>
@@ -60,7 +87,19 @@ export default async function ProductionPage({ searchParams }: Props) {
   );
 }
 
-function CampaignRow({ campaign }: { campaign: Campaign }) {
+function CampaignRow({
+  campaign,
+  dealers,
+  coaches,
+  styles,
+  sources,
+}: {
+  campaign: Campaign;
+  dealers: Dealer[];
+  coaches: Coach[];
+  styles: LookupOption[];
+  sources: LookupOption[];
+}) {
   const today = todayIso();
   const isPast = campaign.endDate < today;
   const isLive = campaign.startDate <= today && campaign.endDate >= today;
@@ -126,13 +165,26 @@ function CampaignRow({ campaign }: { campaign: Campaign }) {
       <td className="max-w-[200px] border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
         {campaign.notes ?? '—'}
       </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        <RowActions
+          campaign={campaign}
+          dealers={dealers}
+          coaches={coaches}
+          styles={styles}
+          sources={sources}
+        />
+      </td>
     </tr>
   );
 }
 
-function filterCampaigns(rows: Campaign[], { q, status }: { q: string; status: string }) {
+function filterCampaigns(
+  rows: Campaign[],
+  { q, status, showCancelled }: { q: string; status: string; showCancelled: boolean }
+) {
   const today = todayIso();
   let out = rows;
+  if (!showCancelled) out = out.filter((c) => c.status !== 'cancelled');
   if (status === 'upcoming') out = out.filter((c) => c.endDate >= today);
   if (status === 'past') out = out.filter((c) => c.endDate < today);
   if (q) {

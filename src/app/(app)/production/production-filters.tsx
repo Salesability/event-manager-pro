@@ -10,24 +10,30 @@ export function ProductionFilters() {
 
   const initialQ = params.get('q') ?? '';
   const initialStatus = params.get('status') ?? '';
+  const initialCancelled = params.get('cancelled') === '1';
 
   const [q, setQ] = useState(initialQ);
   const [status, setStatus] = useState(initialStatus);
+  const [showCancelled, setShowCancelled] = useState(initialCancelled);
   const [, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setQ(params.get('q') ?? '');
     setStatus(params.get('status') ?? '');
+    setShowCancelled(params.get('cancelled') === '1');
   }, [params]);
 
-  function pushParams(next: { q?: string; status?: string }) {
+  function pushParams(next: { q?: string; status?: string; cancelled?: boolean }) {
     const sp = new URLSearchParams(params.toString());
     if (next.q !== undefined) {
       next.q ? sp.set('q', next.q) : sp.delete('q');
     }
     if (next.status !== undefined) {
       next.status ? sp.set('status', next.status) : sp.delete('status');
+    }
+    if (next.cancelled !== undefined) {
+      next.cancelled ? sp.set('cancelled', '1') : sp.delete('cancelled');
     }
     const qs = sp.toString();
     startTransition(() => {
@@ -44,6 +50,11 @@ export function ProductionFilters() {
   function onStatusChange(value: string) {
     setStatus(value);
     pushParams({ status: value });
+  }
+
+  function onCancelledToggle(value: boolean) {
+    setShowCancelled(value);
+    pushParams({ cancelled: value });
   }
 
   return (
@@ -67,6 +78,15 @@ export function ProductionFilters() {
         <option value="upcoming">Upcoming</option>
         <option value="past">Past</option>
       </select>
+      <label className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-600">
+        <input
+          type="checkbox"
+          checked={showCancelled}
+          onChange={(e) => onCancelledToggle(e.target.checked)}
+          className="h-3.5 w-3.5 accent-navy"
+        />
+        Show cancelled
+      </label>
     </div>
   );
 }
