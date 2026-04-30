@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   contactIdentifiers,
@@ -18,6 +18,24 @@ import { EMAIL_RE, field, parseId, validateContactInputs } from './validators';
 type ActionResult = { ok: true } | { error: string };
 
 const generatePublicId = () => randomBytes(9).toString('base64url');
+
+class IdentifierConflictError extends Error {
+  constructor(
+    readonly kind: 'email' | 'phone',
+    readonly value: string,
+  ) {
+    super(`${kind} ${value} already in use`);
+    this.name = 'IdentifierConflictError';
+  }
+}
+
+function toActionResult(err: unknown): ActionResult {
+  if (err instanceof IdentifierConflictError) {
+    const noun = err.kind === 'email' ? 'email address' : 'phone number';
+    return { error: `That ${noun} is already linked to another contact.` };
+  }
+  throw err;
+}
 
 async function requireUserId(): Promise<string> {
   const user = await getUser();
@@ -44,63 +62,47 @@ export async function createDealer(formData: FormData): Promise<ActionResult> {
   });
   if (contactErr) return { error: contactErr };
 
-  await db.transaction(async (tx) => {
-    const [dealerRow] = await tx
-      .insert(dealers)
-      .values({
-        publicId: generatePublicId(),
-        name,
-        address: address || null,
+  try {
+    await db.transaction(async (tx) => {
+      const [dealerRow] = await tx
+        .insert(dealers)
+        .values({
+          publicId: generatePublicId(),
+          name,
+          address: address || null,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ id: dealers.id });
+
+      const hasContact = contactFirst || contactLast;
+      if (!hasContact) return;
+
+      const [contactRow] = await tx
+        .insert(contacts)
+        .values({
+          firstName: contactFirst,
+          lastName: contactLast,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ id: contacts.id });
+
+      await tx.insert(dealerContacts).values({
+        dealerId: dealerRow.id,
+        contactId: contactRow.id,
+        role: 'staff',
+        source: 'admin',
         createdById: userId,
         updatedById: userId,
-      })
-      .returning({ id: dealers.id });
+      });
 
-    const hasContact = contactFirst || contactLast;
-    if (!hasContact) return;
-
-    const [contactRow] = await tx
-      .insert(contacts)
-      .values({
-        firstName: contactFirst,
-        lastName: contactLast,
-        createdById: userId,
-        updatedById: userId,
-      })
-      .returning({ id: contacts.id });
-
-    await tx.insert(dealerContacts).values({
-      dealerId: dealerRow.id,
-      contactId: contactRow.id,
-      role: 'staff',
-      source: 'admin',
-      createdById: userId,
-      updatedById: userId,
+      await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
+      await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
     });
-
-    if (contactEmail) {
-      await tx.insert(contactIdentifiers).values({
-        contactId: contactRow.id,
-        kind: 'email',
-        value: contactEmail,
-        isPrimary: true,
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-    }
-    if (contactPhone) {
-      await tx.insert(contactIdentifiers).values({
-        contactId: contactRow.id,
-        kind: 'phone',
-        value: contactPhone,
-        isPrimary: true,
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-    }
-  });
+  } catch (err) {
+    return toActionResult(err);
+  }
 
   revalidatePath('/lists');
   revalidatePath('/production');
@@ -136,66 +138,70 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
     .limit(1);
   if (!dealerExists.length) return { error: 'Dealer not found.' };
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(dealers)
-      .set({ name, address: address || null, updatedById: userId })
-      .where(eq(dealers.id, id));
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(dealers)
+        .set({ name, address: address || null, updatedById: userId })
+        .where(eq(dealers.id, id));
 
-    const hasContactInputs = contactFirst || contactLast || contactEmail || contactPhone;
-    if (!hasContactInputs) return;
+      const hasContactInputs = contactFirst || contactLast || contactEmail || contactPhone;
+      if (!hasContactInputs) return;
 
-    const [link] = await tx
-      .select({ id: dealerContacts.id, contactId: dealerContacts.contactId })
-      .from(dealerContacts)
-      .where(
-        and(
-          eq(dealerContacts.dealerId, id),
-          eq(dealerContacts.role, 'staff'),
-          isNull(dealerContacts.archivedAt)
+      const [link] = await tx
+        .select({ id: dealerContacts.id, contactId: dealerContacts.contactId })
+        .from(dealerContacts)
+        .where(
+          and(
+            eq(dealerContacts.dealerId, id),
+            eq(dealerContacts.role, 'staff'),
+            isNull(dealerContacts.archivedAt)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    let contactId: number;
-    if (link) {
-      contactId = link.contactId;
-      if (contactFirst && contactLast) {
-        await tx
-          .update(contacts)
-          .set({ firstName: contactFirst, lastName: contactLast, updatedById: userId })
-          .where(eq(contacts.id, contactId));
-      }
-    } else {
-      if (!contactFirst || !contactLast) {
-        // No staff link yet, but we don't have enough name input to create one.
-        // Email/phone alone aren't sufficient for a contacts row (NOT NULL names).
-        return;
-      }
-      const [contactRow] = await tx
-        .insert(contacts)
-        .values({
-          firstName: contactFirst,
-          lastName: contactLast,
+      let contactId: number;
+      if (link) {
+        contactId = link.contactId;
+        if (contactFirst && contactLast) {
+          await tx
+            .update(contacts)
+            .set({ firstName: contactFirst, lastName: contactLast, updatedById: userId })
+            .where(eq(contacts.id, contactId));
+        }
+      } else {
+        if (!contactFirst || !contactLast) {
+          // No staff link yet, but we don't have enough name input to create one.
+          // Email/phone alone aren't sufficient for a contacts row (NOT NULL names).
+          return;
+        }
+        const [contactRow] = await tx
+          .insert(contacts)
+          .values({
+            firstName: contactFirst,
+            lastName: contactLast,
+            createdById: userId,
+            updatedById: userId,
+          })
+          .returning({ id: contacts.id });
+        contactId = contactRow.id;
+
+        await tx.insert(dealerContacts).values({
+          dealerId: id,
+          contactId,
+          role: 'staff',
+          source: 'admin',
           createdById: userId,
           updatedById: userId,
-        })
-        .returning({ id: contacts.id });
-      contactId = contactRow.id;
+        });
+      }
 
-      await tx.insert(dealerContacts).values({
-        dealerId: id,
-        contactId,
-        role: 'staff',
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-    }
-
-    await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
-    await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
-  });
+      await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
+      await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
+    });
+  } catch (err) {
+    return toActionResult(err);
+  }
 
   revalidatePath('/lists');
   revalidatePath('/production');
@@ -220,48 +226,32 @@ export async function createCoach(formData: FormData): Promise<ActionResult> {
   if (!firstName || !lastName) return { error: 'First and last name are required.' };
   if (email && !EMAIL_RE.test(email)) return { error: 'Email looks invalid.' };
 
-  await db.transaction(async (tx) => {
-    const [contactRow] = await tx
-      .insert(contacts)
-      .values({
-        firstName,
-        lastName,
+  try {
+    await db.transaction(async (tx) => {
+      const [contactRow] = await tx
+        .insert(contacts)
+        .values({
+          firstName,
+          lastName,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ id: contacts.id });
+
+      await tx.insert(teamMemberRoles).values({
+        contactId: contactRow.id,
+        role: 'coach',
+        specialty: specialty || null,
         createdById: userId,
         updatedById: userId,
-      })
-      .returning({ id: contacts.id });
+      });
 
-    await tx.insert(teamMemberRoles).values({
-      contactId: contactRow.id,
-      role: 'coach',
-      specialty: specialty || null,
-      createdById: userId,
-      updatedById: userId,
+      await swapPrimaryIdentifier(tx, contactRow.id, 'email', email, userId);
+      await swapPrimaryIdentifier(tx, contactRow.id, 'phone', phone, userId);
     });
-
-    if (email) {
-      await tx.insert(contactIdentifiers).values({
-        contactId: contactRow.id,
-        kind: 'email',
-        value: email,
-        isPrimary: true,
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-    }
-    if (phone) {
-      await tx.insert(contactIdentifiers).values({
-        contactId: contactRow.id,
-        kind: 'phone',
-        value: phone,
-        isPrimary: true,
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-    }
-  });
+  } catch (err) {
+    return toActionResult(err);
+  }
 
   revalidateCoachViews();
   return { ok: true };
@@ -297,26 +287,30 @@ export async function updateCoach(formData: FormData): Promise<ActionResult> {
     .limit(1);
   if (!coach) return { error: 'Coach not found.' };
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(contacts)
-      .set({ firstName, lastName, updatedById: userId })
-      .where(eq(contacts.id, id));
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(contacts)
+        .set({ firstName, lastName, updatedById: userId })
+        .where(eq(contacts.id, id));
 
-    await tx
-      .update(teamMemberRoles)
-      .set({ specialty: specialty || null, updatedById: userId })
-      .where(
-        and(
-          eq(teamMemberRoles.contactId, id),
-          eq(teamMemberRoles.role, 'coach'),
-          isNull(teamMemberRoles.archivedAt)
-        )
-      );
+      await tx
+        .update(teamMemberRoles)
+        .set({ specialty: specialty || null, updatedById: userId })
+        .where(
+          and(
+            eq(teamMemberRoles.contactId, id),
+            eq(teamMemberRoles.role, 'coach'),
+            isNull(teamMemberRoles.archivedAt)
+          )
+        );
 
-    await swapPrimaryIdentifier(tx, id, 'email', email, userId);
-    await swapPrimaryIdentifier(tx, id, 'phone', phone, userId);
-  });
+      await swapPrimaryIdentifier(tx, id, 'email', email, userId);
+      await swapPrimaryIdentifier(tx, id, 'phone', phone, userId);
+    });
+  } catch (err) {
+    return toActionResult(err);
+  }
 
   revalidateCoachViews();
   return { ok: true };
@@ -390,6 +384,25 @@ async function swapPrimaryIdentifier(
   }
 
   if (existing && existing.value === newValue) return;
+
+  // Pre-check the global active-uniqueness index
+  // (contact_identifiers_kind_value_active_unique) before mutating, so a
+  // conflict surfaces as a clean toast rather than a 500 from the constraint.
+  const conflict = await tx
+    .select({ contactId: contactIdentifiers.contactId })
+    .from(contactIdentifiers)
+    .where(
+      and(
+        eq(contactIdentifiers.kind, kind),
+        eq(contactIdentifiers.value, newValue),
+        ne(contactIdentifiers.contactId, contactId),
+        isNull(contactIdentifiers.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (conflict.length > 0) {
+    throw new IdentifierConflictError(kind, newValue);
+  }
 
   if (existing) {
     // Demote the old primary first to free up the
