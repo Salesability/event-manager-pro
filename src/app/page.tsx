@@ -1,6 +1,9 @@
 import { Ping } from '@/features/ping/ping';
+import { getUser } from '@/lib/supabase/session';
 
-export default function Home() {
+export default async function Home() {
+  const user = await getUser();
+
   return (
     <main className="flex min-h-screen flex-col items-start justify-center gap-6 px-8 py-16 sm:px-16">
       <div className="flex flex-col gap-2">
@@ -8,7 +11,8 @@ export default function Home() {
           event-manager-pro
         </h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Scaffold up. Server actions wired. Tap the button to round-trip the server.
+          Signed in as <span className="font-mono">{user?.email ?? 'unknown'}</span>. Tap the
+          button to round-trip the server.
         </p>
       </div>
       <Ping />
