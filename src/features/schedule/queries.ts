@@ -46,7 +46,9 @@ export type Campaign = {
   dealerAddress: string | null;
   coachId: number | null;
   coachName: string | null;
+  styleId: number | null;
   styleLabel: string | null;
+  salesLeadSourceId: number | null;
   salesLeadSourceLabel: string | null;
   qtyRecords: number | null;
   smsEmail: number | null;
@@ -56,6 +58,11 @@ export type Campaign = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+};
+
+export type LookupOption = {
+  id: number;
+  label: string;
 };
 
 export type AvailabilityBlock = {
@@ -333,7 +340,9 @@ export async function loadCampaigns(): Promise<Campaign[]> {
       coachId: campaigns.coachId,
       coachFirstName: contacts.firstName,
       coachLastName: contacts.lastName,
+      styleId: campaigns.styleId,
       styleLabel: campaignStyles.label,
+      salesLeadSourceId: campaigns.salesLeadSourceId,
       salesLeadSourceLabel: salesLeadSources.label,
       qtyRecords: campaigns.qtyRecords,
       smsEmail: campaigns.smsEmail,
@@ -365,7 +374,9 @@ export async function loadCampaigns(): Promise<Campaign[]> {
       r.coachFirstName || r.coachLastName
         ? `${r.coachFirstName ?? ''} ${r.coachLastName ?? ''}`.trim()
         : null,
+    styleId: r.styleId,
     styleLabel: r.styleLabel,
+    salesLeadSourceId: r.salesLeadSourceId,
     salesLeadSourceLabel: r.salesLeadSourceLabel,
     qtyRecords: r.qtyRecords,
     smsEmail: r.smsEmail,
@@ -376,6 +387,86 @@ export async function loadCampaigns(): Promise<Campaign[]> {
     email: r.email,
     notes: r.notes,
   }));
+}
+
+export async function loadCampaign(id: number): Promise<Campaign | null> {
+  const [row] = await db
+    .select({
+      id: campaigns.id,
+      publicId: campaigns.publicId,
+      startDate: campaigns.startDate,
+      endDate: campaigns.endDate,
+      status: campaigns.status,
+      dealerId: campaigns.dealerId,
+      dealerName: dealers.name,
+      dealerAddress: dealers.address,
+      coachId: campaigns.coachId,
+      coachFirstName: contacts.firstName,
+      coachLastName: contacts.lastName,
+      styleId: campaigns.styleId,
+      styleLabel: campaignStyles.label,
+      salesLeadSourceId: campaigns.salesLeadSourceId,
+      salesLeadSourceLabel: salesLeadSources.label,
+      qtyRecords: campaigns.qtyRecords,
+      smsEmail: campaigns.smsEmail,
+      letters: campaigns.letters,
+      bdc: campaigns.bdc,
+      contact: campaigns.contact,
+      phone: campaigns.phone,
+      email: campaigns.email,
+      notes: campaigns.notes,
+    })
+    .from(campaigns)
+    .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
+    .leftJoin(campaignStyles, eq(campaignStyles.id, campaigns.styleId))
+    .leftJoin(salesLeadSources, eq(salesLeadSources.id, campaigns.salesLeadSourceId))
+    .where(eq(campaigns.id, id))
+    .limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    status: row.status,
+    dealerId: row.dealerId,
+    dealerName: row.dealerName,
+    dealerAddress: row.dealerAddress,
+    coachId: row.coachId,
+    coachName:
+      row.coachFirstName || row.coachLastName
+        ? `${row.coachFirstName ?? ''} ${row.coachLastName ?? ''}`.trim()
+        : null,
+    styleId: row.styleId,
+    styleLabel: row.styleLabel,
+    salesLeadSourceId: row.salesLeadSourceId,
+    salesLeadSourceLabel: row.salesLeadSourceLabel,
+    qtyRecords: row.qtyRecords,
+    smsEmail: row.smsEmail,
+    letters: row.letters,
+    bdc: row.bdc,
+    contact: row.contact,
+    phone: row.phone,
+    email: row.email,
+    notes: row.notes,
+  };
+}
+
+export async function loadCampaignStyles(): Promise<LookupOption[]> {
+  return db
+    .select({ id: campaignStyles.id, label: campaignStyles.label })
+    .from(campaignStyles)
+    .where(isNull(campaignStyles.archivedAt))
+    .orderBy(campaignStyles.sortOrder, campaignStyles.label);
+}
+
+export async function loadSalesLeadSources(): Promise<LookupOption[]> {
+  return db
+    .select({ id: salesLeadSources.id, label: salesLeadSources.label })
+    .from(salesLeadSources)
+    .where(isNull(salesLeadSources.archivedAt))
+    .orderBy(salesLeadSources.sortOrder, salesLeadSources.label);
 }
 
 export async function loadAvailabilityBlocks(
