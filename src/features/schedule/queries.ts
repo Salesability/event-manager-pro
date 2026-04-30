@@ -284,6 +284,41 @@ export async function loadCoaches(): Promise<Coach[]> {
   });
 }
 
+export async function loadCoach(id: number): Promise<Coach | null> {
+  const [row] = await db
+    .select({
+      id: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      displayName: contacts.displayName,
+      specialty: teamMemberRoles.specialty,
+    })
+    .from(contacts)
+    .innerJoin(
+      teamMemberRoles,
+      and(
+        eq(teamMemberRoles.contactId, contacts.id),
+        eq(teamMemberRoles.role, 'coach'),
+        isNull(teamMemberRoles.archivedAt)
+      )
+    )
+    .where(and(eq(contacts.id, id), isNull(contacts.archivedAt)))
+    .limit(1);
+  if (!row) return null;
+
+  const idents = await fetchPrimaryIdentifiers([row.id]);
+  const ident = idents.get(row.id);
+  return {
+    id: row.id,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    displayName: row.displayName,
+    specialty: row.specialty,
+    primaryEmail: ident?.email ?? null,
+    primaryPhone: ident?.phone ?? null,
+  };
+}
+
 export async function loadCampaigns(): Promise<Campaign[]> {
   const rows = await db
     .select({

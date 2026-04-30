@@ -5,44 +5,19 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contactIdentifiers, contacts, dealerContacts, dealers } from '@/lib/db/schema';
+import {
+  contactIdentifiers,
+  contacts,
+  dealerContacts,
+  dealers,
+  teamMemberRoles,
+} from '@/lib/db/schema';
 import { getUser } from '@/lib/supabase/session';
+import { EMAIL_RE, field, parseId, validateContactInputs } from './validators';
 
 type ActionResult = { ok: true } | { error: string };
 
 const generatePublicId = () => randomBytes(9).toString('base64url');
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function field(formData: FormData, name: string): string {
-  return String(formData.get(name) ?? '').trim();
-}
-
-function parseId(formData: FormData, name = 'id'): number | null {
-  const raw = formData.get(name);
-  if (raw == null) return null;
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-function validateContactInputs(input: {
-  contactFirst: string;
-  contactLast: string;
-  contactEmail: string;
-  contactPhone: string;
-}): string | null {
-  const hasAnyContactField =
-    input.contactFirst || input.contactLast || input.contactEmail || input.contactPhone;
-  if (hasAnyContactField) {
-    if (!input.contactFirst || !input.contactLast) {
-      return 'Contact first and last name are both required when adding a contact.';
-    }
-  }
-  if (input.contactEmail && !EMAIL_RE.test(input.contactEmail)) {
-    return 'Contact email looks invalid.';
-  }
-  return null;
-}
 
 async function requireUserId(): Promise<string> {
   const user = await getUser();
@@ -224,6 +199,147 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
 
   revalidatePath('/lists');
   revalidatePath('/production');
+  return { ok: true };
+}
+
+function revalidateCoachViews() {
+  revalidatePath('/lists');
+  revalidatePath('/calendar');
+  revalidatePath('/production');
+}
+
+export async function createCoach(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const firstName = field(formData, 'firstName');
+  const lastName = field(formData, 'lastName');
+  const specialty = field(formData, 'specialty');
+  const email = field(formData, 'email').toLowerCase();
+  const phone = field(formData, 'phone');
+
+  if (!firstName || !lastName) return { error: 'First and last name are required.' };
+  if (email && !EMAIL_RE.test(email)) return { error: 'Email looks invalid.' };
+
+  await db.transaction(async (tx) => {
+    const [contactRow] = await tx
+      .insert(contacts)
+      .values({
+        firstName,
+        lastName,
+        createdById: userId,
+        updatedById: userId,
+      })
+      .returning({ id: contacts.id });
+
+    await tx.insert(teamMemberRoles).values({
+      contactId: contactRow.id,
+      role: 'coach',
+      specialty: specialty || null,
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    if (email) {
+      await tx.insert(contactIdentifiers).values({
+        contactId: contactRow.id,
+        kind: 'email',
+        value: email,
+        isPrimary: true,
+        source: 'admin',
+        createdById: userId,
+        updatedById: userId,
+      });
+    }
+    if (phone) {
+      await tx.insert(contactIdentifiers).values({
+        contactId: contactRow.id,
+        kind: 'phone',
+        value: phone,
+        isPrimary: true,
+        source: 'admin',
+        createdById: userId,
+        updatedById: userId,
+      });
+    }
+  });
+
+  revalidateCoachViews();
+  return { ok: true };
+}
+
+export async function updateCoach(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid coach id.' };
+
+  const firstName = field(formData, 'firstName');
+  const lastName = field(formData, 'lastName');
+  const specialty = field(formData, 'specialty');
+  const email = field(formData, 'email').toLowerCase();
+  const phone = field(formData, 'phone');
+
+  if (!firstName || !lastName) return { error: 'First and last name are required.' };
+  if (email && !EMAIL_RE.test(email)) return { error: 'Email looks invalid.' };
+
+  const [coach] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .innerJoin(
+      teamMemberRoles,
+      and(
+        eq(teamMemberRoles.contactId, contacts.id),
+        eq(teamMemberRoles.role, 'coach'),
+        isNull(teamMemberRoles.archivedAt)
+      )
+    )
+    .where(and(eq(contacts.id, id), isNull(contacts.archivedAt)))
+    .limit(1);
+  if (!coach) return { error: 'Coach not found.' };
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(contacts)
+      .set({ firstName, lastName, updatedById: userId })
+      .where(eq(contacts.id, id));
+
+    await tx
+      .update(teamMemberRoles)
+      .set({ specialty: specialty || null, updatedById: userId })
+      .where(
+        and(
+          eq(teamMemberRoles.contactId, id),
+          eq(teamMemberRoles.role, 'coach'),
+          isNull(teamMemberRoles.archivedAt)
+        )
+      );
+
+    await swapPrimaryIdentifier(tx, id, 'email', email, userId);
+    await swapPrimaryIdentifier(tx, id, 'phone', phone, userId);
+  });
+
+  revalidateCoachViews();
+  return { ok: true };
+}
+
+export async function archiveCoach(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid coach id.' };
+
+  await db
+    .update(teamMemberRoles)
+    .set({ archivedAt: new Date(), updatedById: userId })
+    .where(
+      and(
+        eq(teamMemberRoles.contactId, id),
+        eq(teamMemberRoles.role, 'coach'),
+        isNull(teamMemberRoles.archivedAt)
+      )
+    );
+
+  revalidateCoachViews();
   return { ok: true };
 }
 
