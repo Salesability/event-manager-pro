@@ -14,7 +14,13 @@ import {
   teamMemberRoles,
 } from '@/lib/db/schema';
 import { getUser } from '@/lib/supabase/session';
-import { EMAIL_RE, field, parseId, validateContactInputs } from './validators';
+import {
+  EMAIL_RE,
+  field,
+  parseCampaignInput,
+  parseId,
+  validateContactInputs,
+} from './validators';
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -355,76 +361,6 @@ export async function archiveDealer(formData: FormData): Promise<ActionResult> {
 }
 
 // ---------- Campaigns (5.2) ----------
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function parseDate(formData: FormData, name: string): string | null {
-  const v = field(formData, name);
-  return ISO_DATE_RE.test(v) ? v : null;
-}
-
-function parseOptionalId(formData: FormData, name: string): number | null {
-  const raw = formData.get(name);
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-function parseOptionalInt(formData: FormData, name: string): number | null {
-  const raw = formData.get(name);
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  return Number.isInteger(n) ? n : null;
-}
-
-type CampaignInput = {
-  startDate: string;
-  endDate: string;
-  dealerId: number;
-  coachId: number | null;
-  styleId: number | null;
-  salesLeadSourceId: number | null;
-  qtyRecords: number | null;
-  smsEmail: number | null;
-  letters: number | null;
-  bdc: number | null;
-  contact: string | null;
-  phone: string | null;
-  email: string | null;
-  notes: string | null;
-};
-
-function parseCampaignInput(formData: FormData): CampaignInput | { error: string } {
-  const startDate = parseDate(formData, 'startDate');
-  const endDate = parseDate(formData, 'endDate');
-  if (!startDate || !endDate) return { error: 'Start and end date are required (YYYY-MM-DD).' };
-  if (endDate < startDate) return { error: 'End date must be on or after start date.' };
-
-  const dealerId = parseOptionalId(formData, 'dealerId');
-  if (dealerId == null) return { error: 'Dealer is required.' };
-
-  const contactEmail = field(formData, 'email').toLowerCase();
-  if (contactEmail && !EMAIL_RE.test(contactEmail)) {
-    return { error: 'Contact email looks invalid.' };
-  }
-
-  return {
-    startDate,
-    endDate,
-    dealerId,
-    coachId: parseOptionalId(formData, 'coachId'),
-    styleId: parseOptionalId(formData, 'styleId'),
-    salesLeadSourceId: parseOptionalId(formData, 'salesLeadSourceId'),
-    qtyRecords: parseOptionalInt(formData, 'qtyRecords'),
-    smsEmail: parseOptionalInt(formData, 'smsEmail'),
-    letters: parseOptionalInt(formData, 'letters'),
-    bdc: parseOptionalInt(formData, 'bdc'),
-    contact: field(formData, 'contact') || null,
-    phone: field(formData, 'phone') || null,
-    email: contactEmail || null,
-    notes: field(formData, 'notes') || null,
-  };
-}
 
 function revalidateCampaignViews() {
   revalidatePath('/calendar');
