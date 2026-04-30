@@ -17,17 +17,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-8 py-16">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Sign in
-          </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Sign-in is invitation only.</p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-cream px-8 py-16">
+      <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-stone-200 bg-white p-8 shadow-[0_8px_32px_rgba(15,30,60,0.18)]">
+        <div className="flex flex-col gap-2 text-center">
+          <h1 className="font-display text-3xl text-navy">Event Manager Pro</h1>
+          <p className="text-sm text-stone-600">Sign-in is invitation only.</p>
         </div>
 
         {sent ? (
-          <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100">
+          <div className="rounded-lg border border-status-green/30 bg-status-green/10 p-4 text-sm text-status-green">
             Check <span className="font-mono">{sent}</span> for your sign-in link.
           </div>
         ) : (
@@ -36,7 +34,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <input type="hidden" name="next" value={target} />
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-3 rounded-md border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 shadow-sm transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-100"
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-stone-800 shadow-[0_1px_4px_rgba(15,30,60,0.08)] transition hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(15,30,60,0.12)]"
               >
                 <GoogleG />
                 Continue with Google
@@ -44,16 +42,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </form>
 
             <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-              <span className="text-xs uppercase tracking-wide text-zinc-500">or</span>
-              <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+              <div className="h-px flex-1 bg-stone-200" />
+              <span className="text-xs uppercase tracking-wide text-stone-400">or</span>
+              <div className="h-px flex-1 bg-stone-200" />
             </div>
 
             <form action={signInWithMagicLink} className="flex flex-col gap-3">
               <input type="hidden" name="next" value={target} />
               <label
                 htmlFor="email"
-                className="text-sm font-medium text-zinc-900 dark:text-zinc-100"
+                className="text-xs font-semibold uppercase tracking-wide text-stone-600"
               >
                 Email
               </label>
@@ -63,11 +61,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 type="email"
                 required
                 autoComplete="email"
-                className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
               />
               <button
                 type="submit"
-                className="rounded-md border border-zinc-900 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-50 transition hover:bg-zinc-800 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                className="rounded-lg bg-navy px-4 py-2.5 text-sm font-medium text-white transition hover:bg-navy-light hover:-translate-y-px hover:shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
               >
                 Send magic link
               </button>
@@ -76,7 +74,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         )}
 
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100">
+          <div className="rounded-lg border border-status-red/30 bg-status-red/10 p-3 text-sm text-status-red">
             {error}
           </div>
         )}

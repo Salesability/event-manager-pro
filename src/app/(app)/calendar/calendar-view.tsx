@@ -1,0 +1,539 @@
+'use client';
+
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { AvailabilityBlock, Campaign, Coach } from '@/features/schedule/queries';
+
+type Mode = 'app' | 'share';
+
+type Props = {
+  coaches: Coach[];
+  campaigns: Campaign[];
+  blocks: AvailabilityBlock[];
+  mode: Mode;
+  forcedCoachId?: number;
+};
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Verbatim from legacy `deprecated/index.html`
+const COACH_COLORS: Array<{ bg: string; border: string }> = [
+  { bg: '#0f1e3c', border: '#c9963a' },
+  { bg: '#1a5fa8', border: '#85b7eb' },
+  { bg: '#1e7e4a', border: '#97c459' },
+  { bg: '#993c1d', border: '#f0997b' },
+  { bg: '#534ab7', border: '#afa9ec' },
+  { bg: '#0f6e56', border: '#5dcaa5' },
+  { bg: '#854f0b', border: '#fac775' },
+  { bg: '#993556', border: '#ed93b1' },
+  { bg: '#444441', border: '#d3d1c7' },
+  { bg: '#185fa5', border: '#b5d4f4' },
+];
+
+const MAX_RIBBONS = 10;
+const RIBBON_H = 22;
+const RIBBON_GAP = 3;
+const TOP_PAD = 26;
+
+function isoDate(y: number, m: number, d: number) {
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }: Props) {
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const [month, setMonth] = useState<number>(today.getMonth());
+  const [year, setYear] = useState<number>(today.getFullYear());
+  const [activeCoachFilter, setActiveCoachFilter] = useState<number | null>(
+    forcedCoachId ?? null
+  );
+
+  // Stable per-coach color assignment in encounter order.
+  const coachColorMap = useMemo(() => {
+    const map = new Map<number, { bg: string; border: string }>();
+    let idx = 0;
+    for (const ev of campaigns) {
+      if (ev.coachId == null) continue;
+      if (!map.has(ev.coachId)) {
+        map.set(ev.coachId, COACH_COLORS[idx % COACH_COLORS.length]);
+        idx++;
+      }
+    }
+    return map;
+  }, [campaigns]);
+
+  function getCoachColor(coachId: number | null) {
+    if (coachId == null) return COACH_COLORS[0];
+    return coachColorMap.get(coachId) ?? COACH_COLORS[0];
+  }
+
+  // Build the 42-cell grid for the visible month.
+  const cells = useMemo(() => {
+    const first = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const prevDays = new Date(year, month, 0).getDate();
+    const out: { date: string; day: number; otherMonth: boolean; isToday: boolean }[] = [];
+    for (let i = first - 1; i >= 0; i--) {
+      const d = prevDays - i;
+      const my = month === 0 ? year - 1 : year;
+      const mm = month === 0 ? 11 : month - 1;
+      out.push({
+        date: isoDate(my, mm, d),
+        day: d,
+        otherMonth: true,
+        isToday: false,
+      });
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      const cellDate = new Date(year, month, i);
+      out.push({
+        date: isoDate(year, month, i),
+        day: i,
+        otherMonth: false,
+        isToday: cellDate.getTime() === today.getTime(),
+      });
+    }
+    const rem = 42 - out.length;
+    for (let i = 1; i <= rem; i++) {
+      const my = month === 11 ? year + 1 : year;
+      const mm = month === 11 ? 0 : month + 1;
+      out.push({
+        date: isoDate(my, mm, i),
+        day: i,
+        otherMonth: true,
+        isToday: false,
+      });
+    }
+    return out;
+  }, [month, year, today]);
+
+  const cellIndexMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    cells.forEach((c, i) => {
+      map[c.date] = i;
+    });
+    return map;
+  }, [cells]);
+
+  const blockedByDate = useMemo(() => {
+    const map: Record<string, AvailabilityBlock> = {};
+    for (const b of blocks) {
+      // Iterate every date in the block range; for the visible window only.
+      const start = new Date(`${b.startDate}T12:00:00`);
+      const end = new Date(`${b.endDate}T12:00:00`);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = isoDate(d.getFullYear(), d.getMonth(), d.getDate());
+        if (cellIndexMap[ds] !== undefined && !map[ds]) {
+          map[ds] = b;
+        }
+      }
+    }
+    return map;
+  }, [blocks, cellIndexMap]);
+
+  const visibleEvents = useMemo(() => {
+    const filterCoach = forcedCoachId ?? activeCoachFilter;
+    return filterCoach == null
+      ? campaigns
+      : campaigns.filter((c) => c.coachId === filterCoach);
+  }, [campaigns, activeCoachFilter, forcedCoachId]);
+
+  // Slot assignment, verbatim translation of legacy renderCalendar slot-packing.
+  const slotAssignment = useMemo(() => {
+    type Slotted = Campaign & { _rowSlotAssigned: Record<number, number> };
+    const slotted = visibleEvents.map(
+      (c): Slotted => ({ ...c, _rowSlotAssigned: {} })
+    );
+
+    const rowEvents: Record<number, Slotted[]> = {};
+    for (const ev of slotted) {
+      if (!ev.startDate || !ev.endDate) continue;
+      const si = cellIndexMap[ev.startDate];
+      const ei = cellIndexMap[ev.endDate];
+      if (si === undefined || ei === undefined) continue;
+      for (let row = Math.floor(si / 7); row <= Math.floor(ei / 7); row++) {
+        if (!rowEvents[row]) rowEvents[row] = [];
+        if (!rowEvents[row].includes(ev)) rowEvents[row].push(ev);
+      }
+    }
+
+    for (const rowKey of Object.keys(rowEvents)) {
+      const row = Number(rowKey);
+      const evs = rowEvents[row];
+      evs.sort((a, b) => (a.startDate < b.startDate ? -1 : a.startDate > b.startDate ? 1 : 0));
+      const rowStart = row * 7;
+      const rowEnd = rowStart + 6;
+      for (const ev of evs) {
+        const si = Math.max(cellIndexMap[ev.startDate] ?? 0, rowStart);
+        const ei = Math.min(cellIndexMap[ev.endDate] ?? 0, rowEnd);
+        const usedSlots = new Set<number>();
+        for (const other of evs) {
+          if (other === ev) continue;
+          if (other._rowSlotAssigned[row] === undefined) continue;
+          const osi = Math.max(cellIndexMap[other.startDate] ?? 0, rowStart);
+          const oei = Math.min(cellIndexMap[other.endDate] ?? 0, rowEnd);
+          if (si <= oei && ei >= osi) usedSlots.add(other._rowSlotAssigned[row]);
+        }
+        let slot = 0;
+        while (usedSlots.has(slot) && slot < MAX_RIBBONS) slot++;
+        ev._rowSlotAssigned[row] = slot;
+      }
+    }
+
+    const rowMaxSlots: Record<number, number> = {};
+    for (const ev of slotted) {
+      if (!ev.startDate || !ev.endDate) continue;
+      const si = cellIndexMap[ev.startDate];
+      const ei = cellIndexMap[ev.endDate];
+      if (si === undefined || ei === undefined) continue;
+      for (let row = Math.floor(si / 7); row <= Math.floor(ei / 7); row++) {
+        const slot = ev._rowSlotAssigned[row] ?? 0;
+        rowMaxSlots[row] = Math.max(rowMaxSlots[row] ?? 0, slot + 1);
+      }
+    }
+
+    return { slotted, rowMaxSlots };
+  }, [visibleEvents, cellIndexMap]);
+
+  // Compute per-row cell heights from row max slots.
+  const rowHeights = useMemo(() => {
+    const heights: number[] = [];
+    for (let row = 0; row < 6; row++) {
+      const slots = Math.min(slotAssignment.rowMaxSlots[row] ?? 0, MAX_RIBBONS);
+      heights.push(Math.max(TOP_PAD + slots * (RIBBON_H + RIBBON_GAP) + 10, 52));
+    }
+    return heights;
+  }, [slotAssignment]);
+
+  // The per-cell selected-range tint (event background under the ribbon).
+  const selectedDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const ev of visibleEvents) {
+      if (!ev.startDate || !ev.endDate) continue;
+      const s = new Date(`${ev.startDate}T12:00:00`);
+      const e = new Date(`${ev.endDate}T12:00:00`);
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+        set.add(isoDate(d.getFullYear(), d.getMonth(), d.getDate()));
+      }
+    }
+    return set;
+  }, [visibleEvents]);
+
+  // Ribbon overlay positioning. Verbatim port of legacy drawRibbons.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [, setLayoutTick] = useState(0);
+
+  const drawRibbons = useCallback(() => {
+    const overlay = overlayRef.current;
+    const grid = gridRef.current;
+    const wrap = wrapperRef.current;
+    if (!overlay || !grid || !wrap) return;
+
+    overlay.innerHTML = '';
+    overlay.style.height = `${grid.offsetHeight}px`;
+
+    const evs = slotAssignment.slotted;
+    if (!evs.length) return;
+
+    const gridRect = grid.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const offX = gridRect.left - wrapRect.left;
+    const offY = gridRect.top - wrapRect.top;
+
+    for (const ev of evs) {
+      if (!ev.startDate || !ev.endDate) continue;
+      const si = cellIndexMap[ev.startDate];
+      const ei = cellIndexMap[ev.endDate];
+      if (si === undefined || ei === undefined) continue;
+      const color = getCoachColor(ev.coachId);
+      const clientName = ev.dealerName || 'Event';
+      const coachName = ev.coachName ?? '';
+
+      for (let row = Math.floor(si / 7); row <= Math.floor(ei / 7); row++) {
+        const slot = ev._rowSlotAssigned[row] ?? 0;
+        if (slot >= MAX_RIBBONS) continue;
+        const rs = Math.max(si, row * 7);
+        const re = Math.min(ei, row * 7 + 6);
+        // grid.children: 7 day-headers, then 42 cells
+        const sc = grid.children[rs + 7] as HTMLElement | undefined;
+        const ec = grid.children[re + 7] as HTMLElement | undefined;
+        if (!sc || !ec) continue;
+        const sr = sc.getBoundingClientRect();
+        const er = ec.getBoundingClientRect();
+        const left = sr.left - gridRect.left + offX + 3;
+        const top = sr.top - gridRect.top + offY + TOP_PAD + slot * (RIBBON_H + RIBBON_GAP);
+        const width = er.right - sr.left - 6;
+
+        const bar = document.createElement('div');
+        bar.className =
+          'absolute flex items-center overflow-hidden rounded-md px-2 transition-opacity hover:opacity-80 cursor-pointer pointer-events-auto';
+        bar.style.left = `${left}px`;
+        bar.style.top = `${top}px`;
+        bar.style.width = `${width}px`;
+        bar.style.height = `${RIBBON_H}px`;
+        bar.style.background = color.bg;
+        bar.style.borderLeft = `3px solid ${color.border}`;
+
+        const lbl = document.createElement('span');
+        lbl.className = 'truncate text-[10px] font-semibold text-white';
+        lbl.textContent = clientName;
+        bar.appendChild(lbl);
+
+        if (coachName) {
+          const tag = document.createElement('span');
+          tag.className = 'ml-1.5 flex-shrink-0 whitespace-nowrap text-[9px] text-white/60';
+          tag.textContent = coachName;
+          bar.appendChild(tag);
+        }
+
+        if (mode === 'app') {
+          bar.title = `${clientName}${coachName ? ` · ${coachName}` : ''} · ${ev.startDate} → ${ev.endDate}`;
+        }
+
+        overlay.appendChild(bar);
+      }
+    }
+  }, [slotAssignment, cellIndexMap, getCoachColor, mode]);
+
+  useLayoutEffect(() => {
+    drawRibbons();
+  }, [drawRibbons]);
+
+  useEffect(() => {
+    const handler = () => setLayoutTick((n) => n + 1);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  useLayoutEffect(() => {
+    drawRibbons();
+  });
+
+  // Coach filter pill bar — only coaches that actually have campaigns visible.
+  const usedCoachIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const ev of campaigns) if (ev.coachId != null) set.add(ev.coachId);
+    return [...set];
+  }, [campaigns]);
+
+  const stats = useMemo(() => {
+    const monthEvents = campaigns.filter((c) => {
+      const d = new Date(`${c.startDate}T12:00:00`);
+      return d.getMonth() === month && d.getFullYear() === year;
+    });
+    return {
+      thisMonth: monthEvents.length,
+      total: campaigns.length,
+      activeCoaches: new Set(campaigns.filter((c) => c.coachId != null).map((c) => c.coachId)).size,
+      activeClients: new Set(campaigns.map((c) => c.dealerId)).size,
+    };
+  }, [campaigns, month, year]);
+
+  function changeMonth(delta: number) {
+    let m = month + delta;
+    let y = year;
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
+    if (m < 0) {
+      m = 11;
+      y--;
+    }
+    setMonth(m);
+    setYear(y);
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl text-navy">
+            {mode === 'share' ? 'Schedule' : 'Master Schedule'}
+          </h1>
+          <p className="mt-1 text-sm text-stone-600">
+            {mode === 'share'
+              ? `${forcedCoachId ? coaches.find((c) => c.id === forcedCoachId)?.displayName ?? 'Coach' : 'Coach'} — booked sales events.`
+              : 'Click any campaign to inspect — booking will land in a later phase.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => changeMonth(-1)}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
+          >
+            ‹
+          </button>
+          <span className="min-w-[180px] text-center font-display text-xl text-navy">
+            {MONTHS[month]} {year}
+          </span>
+          <button
+            type="button"
+            onClick={() => changeMonth(1)}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      {mode === 'app' && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat label="This Month" value={stats.thisMonth} sub="campaigns booked" />
+          <Stat label="Total Campaigns" value={stats.total} sub="all time" />
+          <Stat label="Active Coaches" value={stats.activeCoaches} sub="assigned" />
+          <Stat label="Active Dealers" value={stats.activeClients} sub="on schedule" />
+        </div>
+      )}
+
+      {mode === 'app' && usedCoachIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Pill
+            active={activeCoachFilter === null}
+            label="All Coaches"
+            colorBg="#6b6760"
+            onClick={() => setActiveCoachFilter(null)}
+          />
+          {usedCoachIds.map((cid) => {
+            const coach = coaches.find((c) => c.id === cid);
+            if (!coach) return null;
+            const color = getCoachColor(cid);
+            return (
+              <Pill
+                key={cid}
+                active={activeCoachFilter === cid}
+                label={`${coach.firstName} ${coach.lastName}`}
+                colorBg={color.bg}
+                onClick={() => setActiveCoachFilter(cid)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      <div className="relative" ref={wrapperRef}>
+        <div
+          ref={gridRef}
+          className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-stone-200 bg-stone-200 shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
+        >
+          {DAYS.map((d) => (
+            <div
+              key={d}
+              className="bg-navy py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70"
+            >
+              {d}
+            </div>
+          ))}
+          {cells.map((c, i) => {
+            const row = Math.floor(i / 7);
+            const blocked = blockedByDate[c.date];
+            const isSelected = selectedDates.has(c.date);
+            return (
+              <div
+                key={c.date + ':' + i}
+                data-date={c.date}
+                style={{ height: rowHeights[row] }}
+                className={[
+                  'relative bg-white p-2 text-left transition-colors',
+                  c.otherMonth ? 'bg-stone-100' : '',
+                  c.isToday ? 'bg-navy-pale' : '',
+                  blocked ? 'bg-red-50' : '',
+                  isSelected && !c.otherMonth && !blocked ? 'bg-amber-50' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <div
+                  className={[
+                    'text-xs font-medium',
+                    c.otherMonth ? 'text-stone-400' : 'text-stone-800',
+                    c.isToday ? 'text-status-blue font-semibold' : '',
+                    blocked ? 'text-status-red' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {c.day}
+                </div>
+                {blocked && (
+                  <span className="mt-0.5 block text-[9px] font-bold tracking-wide text-status-red">
+                    🚫 {blocked.reason ?? 'Blocked'}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div
+          ref={overlayRef}
+          className="pointer-events-none absolute inset-0 z-10"
+        />
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value, sub }: { label: string; value: number; sub: string }) {
+  return (
+    <div className="rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        {label}
+      </div>
+      <div className="mt-1 font-display text-3xl text-navy">{value}</div>
+      <div className="text-xs text-stone-600">{sub}</div>
+    </div>
+  );
+}
+
+function Pill({
+  active,
+  label,
+  colorBg,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  colorBg: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-semibold transition ${
+        active ? 'border-navy' : 'border-transparent'
+      }`}
+      style={{ background: `${colorBg}22`, color: colorBg }}
+    >
+      <span className="inline-block h-2 w-2 rounded-full" style={{ background: colorBg }} />
+      {label}
+    </button>
+  );
+}

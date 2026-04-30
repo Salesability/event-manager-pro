@@ -1,0 +1,165 @@
+import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
+import { ProductionFilters } from './production-filters';
+
+type Props = {
+  searchParams: Promise<{ q?: string; status?: string }>;
+};
+
+export default async function ProductionPage({ searchParams }: Props) {
+  const { q, status } = await searchParams;
+  const all = await loadCampaigns();
+  const filtered = filterCampaigns(all, { q: q ?? '', status: status ?? '' });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl text-navy">Production List</h1>
+          <p className="mt-1 text-sm text-stone-600">
+            All campaigns imported from the legacy spreadsheet.
+          </p>
+        </div>
+        <ProductionFilters />
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+        <div className="overflow-x-auto">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-20 text-stone-400">
+              <span className="text-4xl">📋</span>
+              <span className="text-sm font-semibold text-stone-600">No campaigns match</span>
+              <span className="text-xs">Adjust the search or status filter to see more.</span>
+            </div>
+          ) : (
+            <table className="min-w-[1100px] table-auto border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                  <th className="px-3 py-2.5">Date Range</th>
+                  <th className="px-3 py-2.5">Dealership</th>
+                  <th className="px-3 py-2.5">Contact</th>
+                  <th className="px-3 py-2.5">Format</th>
+                  <th className="px-3 py-2.5">Data Source</th>
+                  <th className="px-3 py-2.5 text-right">Records</th>
+                  <th className="px-3 py-2.5 text-right">SMS / Email</th>
+                  <th className="px-3 py-2.5 text-right">Letters</th>
+                  <th className="px-3 py-2.5 text-right">BDC</th>
+                  <th className="px-3 py-2.5">Coach</th>
+                  <th className="px-3 py-2.5">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c) => (
+                  <CampaignRow key={c.id} campaign={c} />
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CampaignRow({ campaign }: { campaign: Campaign }) {
+  const today = todayIso();
+  const isPast = campaign.endDate < today;
+  const isLive = campaign.startDate <= today && campaign.endDate >= today;
+  const badge = isLive
+    ? { label: 'Live', cls: 'bg-status-green/15 text-status-green' }
+    : isPast
+      ? { label: 'Past', cls: 'bg-stone-200 text-stone-600' }
+      : { label: 'Upcoming', cls: 'bg-navy-pale text-navy' };
+
+  return (
+    <tr className="border-b border-stone-200 last:border-b-0 hover:bg-navy-pale/40">
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        <div className="text-xs font-semibold text-navy">{fmtDate(campaign.startDate)}</div>
+        <div className="text-[11px] text-stone-400">→ {fmtDate(campaign.endDate)}</div>
+        <span
+          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}
+        >
+          {badge.label}
+        </span>
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        <div className="font-semibold text-stone-800">{campaign.dealerName}</div>
+        {campaign.dealerAddress && (
+          <div className="text-[11px] text-stone-400">{campaign.dealerAddress}</div>
+        )}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        <div className="text-xs">{campaign.contact ?? '—'}</div>
+        <div className="text-[11px] text-stone-400">{campaign.phone ?? '—'}</div>
+        <div className="text-[11px] text-status-blue">{campaign.email ?? '—'}</div>
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        {campaign.styleLabel ? (
+          <span className="inline-block rounded-full bg-status-blue/10 px-2 py-0.5 text-[11px] font-semibold text-status-blue">
+            {campaign.styleLabel}
+          </span>
+        ) : (
+          '—'
+        )}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+        {campaign.salesLeadSourceLabel ?? '—'}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
+        {fmtNum(campaign.qtyRecords)}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
+        {fmtNum(campaign.smsEmail)}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
+        {fmtNum(campaign.letters)}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
+        {fmtNum(campaign.bdc)}
+      </td>
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+        {campaign.coachName ? (
+          <span className="font-semibold">{campaign.coachName}</span>
+        ) : (
+          <span className="text-stone-400">—</span>
+        )}
+      </td>
+      <td className="max-w-[200px] border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+        {campaign.notes ?? '—'}
+      </td>
+    </tr>
+  );
+}
+
+function filterCampaigns(rows: Campaign[], { q, status }: { q: string; status: string }) {
+  const today = todayIso();
+  let out = rows;
+  if (status === 'upcoming') out = out.filter((c) => c.endDate >= today);
+  if (status === 'past') out = out.filter((c) => c.endDate < today);
+  if (q) {
+    const needle = q.toLowerCase();
+    out = out.filter((c) => {
+      return (
+        c.dealerName.toLowerCase().includes(needle) ||
+        (c.coachName?.toLowerCase().includes(needle) ?? false) ||
+        (c.styleLabel?.toLowerCase().includes(needle) ?? false) ||
+        (c.notes?.toLowerCase().includes(needle) ?? false) ||
+        (c.contact?.toLowerCase().includes(needle) ?? false)
+      );
+    });
+  }
+  return out;
+}
+
+function fmtDate(iso: string) {
+  const d = new Date(`${iso}T12:00:00`);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function fmtNum(n: number | null) {
+  return n == null ? <span className="text-stone-400">—</span> : n.toLocaleString();
+}
+
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
