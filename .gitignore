@@ -12,6 +12,7 @@ deprecated/
 !.vscode/launch.json
 .idea/
 .claude/
+.agents/
 CLAUDE.md
 
 # Node / Next.js
@@ -32,3 +33,4 @@ next-env.d.ts
 
 # Misc
 *.pem
+skills-lock.json
