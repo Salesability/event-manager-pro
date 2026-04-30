@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   availabilityBlocks,
@@ -7,6 +7,7 @@ import {
   campaignStyles,
   contactIdentifiers,
   contacts,
+  dealerContacts,
   dealers,
   salesLeadSources,
   teamMemberRoles,
@@ -17,6 +18,11 @@ export type Dealer = {
   publicId: string;
   name: string;
   address: string | null;
+  contactId: number | null;
+  contactFirstName: string | null;
+  contactLastName: string | null;
+  primaryEmail: string | null;
+  primaryPhone: string | null;
 };
 
 export type Coach = {
@@ -61,6 +67,90 @@ export type AvailabilityBlock = {
   reason: string | null;
 };
 
+// dealer_contact_role priority for "primary contact" display: a dealer can have
+// several active links (staff, customer, prospect); pick whichever is most
+// authoritative. Importer wrote 'customer' for legacy Contact Person rows; the
+// new CRUD writes 'staff'. Reads accept either so already-imported dealers
+// don't lose their contact info on the Lists view.
+const DEALER_CONTACT_ROLE_PRIORITY = { staff: 0, customer: 1, prospect: 2 } as const;
+
+async function fetchPrimaryDealerContacts(dealerIds: number[]) {
+  if (!dealerIds.length) return new Map<number, { contactId: number; firstName: string; lastName: string }>();
+
+  const links = await db
+    .select({
+      dealerId: dealerContacts.dealerId,
+      role: dealerContacts.role,
+      contactId: contacts.id,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      linkId: dealerContacts.id,
+    })
+    .from(dealerContacts)
+    .innerJoin(contacts, eq(contacts.id, dealerContacts.contactId))
+    .where(
+      and(
+        inArray(dealerContacts.dealerId, dealerIds),
+        isNull(dealerContacts.archivedAt),
+        isNull(contacts.archivedAt)
+      )
+    )
+    .orderBy(asc(dealerContacts.dealerId), asc(dealerContacts.id));
+
+  const byDealer = new Map<
+    number,
+    { contactId: number; firstName: string; lastName: string; rolePriority: number }
+  >();
+  for (const link of links) {
+    const priority = DEALER_CONTACT_ROLE_PRIORITY[link.role];
+    const current = byDealer.get(link.dealerId);
+    if (!current || priority < current.rolePriority) {
+      byDealer.set(link.dealerId, {
+        contactId: link.contactId,
+        firstName: link.firstName,
+        lastName: link.lastName,
+        rolePriority: priority,
+      });
+    }
+  }
+  return byDealer;
+}
+
+async function fetchPrimaryIdentifiers(contactIds: number[]) {
+  if (!contactIds.length)
+    return new Map<number, { email: string | null; phone: string | null }>();
+
+  const idents = await db
+    .select({
+      contactId: contactIdentifiers.contactId,
+      kind: contactIdentifiers.kind,
+      value: contactIdentifiers.value,
+      isPrimary: contactIdentifiers.isPrimary,
+    })
+    .from(contactIdentifiers)
+    .where(
+      and(
+        inArray(contactIdentifiers.contactId, contactIds),
+        isNull(contactIdentifiers.archivedAt)
+      )
+    );
+
+  const map = new Map<number, { email: string | null; phone: string | null }>();
+  for (const ident of idents) {
+    let entry = map.get(ident.contactId);
+    if (!entry) {
+      entry = { email: null, phone: null };
+      map.set(ident.contactId, entry);
+    }
+    if (ident.kind === 'email') {
+      if (ident.isPrimary || !entry.email) entry.email = ident.value;
+    } else if (ident.kind === 'phone') {
+      if (ident.isPrimary || !entry.phone) entry.phone = ident.value;
+    }
+  }
+  return map;
+}
+
 export async function loadDealers(): Promise<Dealer[]> {
   const rows = await db
     .select({
@@ -72,7 +162,59 @@ export async function loadDealers(): Promise<Dealer[]> {
     .from(dealers)
     .where(isNull(dealers.archivedAt))
     .orderBy(dealers.name);
-  return rows;
+
+  const dealerIds = rows.map((r) => r.id);
+  const primaryContacts = await fetchPrimaryDealerContacts(dealerIds);
+  const idents = await fetchPrimaryIdentifiers(
+    Array.from(primaryContacts.values(), (v) => v.contactId)
+  );
+
+  return rows.map((r) => {
+    const link = primaryContacts.get(r.id);
+    const ident = link ? idents.get(link.contactId) : undefined;
+    return {
+      id: r.id,
+      publicId: r.publicId,
+      name: r.name,
+      address: r.address,
+      contactId: link?.contactId ?? null,
+      contactFirstName: link?.firstName ?? null,
+      contactLastName: link?.lastName ?? null,
+      primaryEmail: ident?.email ?? null,
+      primaryPhone: ident?.phone ?? null,
+    };
+  });
+}
+
+export async function loadDealer(id: number): Promise<Dealer | null> {
+  const [row] = await db
+    .select({
+      id: dealers.id,
+      publicId: dealers.publicId,
+      name: dealers.name,
+      address: dealers.address,
+    })
+    .from(dealers)
+    .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+    .limit(1);
+  if (!row) return null;
+
+  const primaryContacts = await fetchPrimaryDealerContacts([row.id]);
+  const link = primaryContacts.get(row.id);
+  const idents = await fetchPrimaryIdentifiers(link ? [link.contactId] : []);
+  const ident = link ? idents.get(link.contactId) : undefined;
+
+  return {
+    id: row.id,
+    publicId: row.publicId,
+    name: row.name,
+    address: row.address,
+    contactId: link?.contactId ?? null,
+    contactFirstName: link?.firstName ?? null,
+    contactLastName: link?.lastName ?? null,
+    primaryEmail: ident?.email ?? null,
+    primaryPhone: ident?.phone ?? null,
+  };
 }
 
 export async function loadCoaches(): Promise<Coach[]> {

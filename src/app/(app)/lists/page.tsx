@@ -20,19 +20,29 @@ export default async function ListsPage() {
             <EmptyState icon="🏢" label="No dealers yet" />
           ) : (
             <ul className="flex flex-col gap-2">
-              {dealers.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-start justify-between gap-4 rounded-lg border border-stone-200 bg-stone-100 px-4 py-3 transition hover:border-accent hover:bg-navy-pale"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-navy">{d.name}</div>
-                    {d.address && (
-                      <div className="mt-0.5 truncate text-xs text-stone-600">📍 {d.address}</div>
-                    )}
-                  </div>
-                </li>
-              ))}
+              {dealers.map((d) => {
+                const contactName = [d.contactFirstName, d.contactLastName].filter(Boolean).join(' ');
+                const contactLine = [contactName, d.primaryPhone].filter(Boolean).join(' · ');
+                return (
+                  <li
+                    key={d.id}
+                    className="flex items-start justify-between gap-4 rounded-lg border border-stone-200 bg-stone-100 px-4 py-3 transition hover:border-accent hover:bg-navy-pale"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-navy">{d.name}</div>
+                      {contactLine && (
+                        <div className="mt-0.5 truncate text-xs text-stone-600">{contactLine}</div>
+                      )}
+                      {d.primaryEmail && (
+                        <div className="truncate text-xs text-status-blue">{d.primaryEmail}</div>
+                      )}
+                      {d.address && (
+                        <div className="mt-0.5 truncate text-xs text-stone-600">📍 {d.address}</div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </ListCard>
