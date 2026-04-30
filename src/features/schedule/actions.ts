@@ -148,17 +148,17 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
       const hasContactInputs = contactFirst || contactLast || contactEmail || contactPhone;
       if (!hasContactInputs) return;
 
-      const [link] = await tx
-        .select({ id: dealerContacts.id, contactId: dealerContacts.contactId })
+      // Mirror loadDealers' priority (staff > customer > prospect): edit the
+      // existing primary link in place rather than creating a duplicate when
+      // the imported link is role='customer'.
+      const links = await tx
+        .select({ id: dealerContacts.id, contactId: dealerContacts.contactId, role: dealerContacts.role })
         .from(dealerContacts)
-        .where(
-          and(
-            eq(dealerContacts.dealerId, id),
-            eq(dealerContacts.role, 'staff'),
-            isNull(dealerContacts.archivedAt)
-          )
-        )
-        .limit(1);
+        .where(and(eq(dealerContacts.dealerId, id), isNull(dealerContacts.archivedAt)));
+      const rolePriority = { staff: 0, customer: 1, prospect: 2 } as const;
+      const link = links.length
+        ? links.reduce((best, cur) => (rolePriority[cur.role] < rolePriority[best.role] ? cur : best))
+        : null;
 
       let contactId: number;
       if (link) {
