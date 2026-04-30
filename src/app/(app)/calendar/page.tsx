@@ -1,7 +1,10 @@
 import {
   loadAvailabilityBlocks,
+  loadCampaignStyles,
   loadCampaigns,
   loadCoaches,
+  loadDealers,
+  loadSalesLeadSources,
 } from '@/features/schedule/queries';
 import { CalendarView } from './calendar-view';
 
@@ -11,17 +14,26 @@ export default async function CalendarPage() {
   const rangeStart = isoDate(new Date(today.getFullYear() - 1, 0, 1));
   const rangeEnd = isoDate(new Date(today.getFullYear() + 1, 11, 31));
 
-  const [coaches, campaigns, blocks] = await Promise.all([
+  const [coaches, campaigns, blocks, dealers, styles, sources] = await Promise.all([
     loadCoaches(),
     loadCampaigns(),
     loadAvailabilityBlocks(rangeStart, rangeEnd),
+    loadDealers(),
+    loadCampaignStyles(),
+    loadSalesLeadSources(),
   ]);
+
+  // Hide cancelled campaigns from the calendar by default.
+  const visibleCampaigns = campaigns.filter((c) => c.status !== 'cancelled');
 
   return (
     <CalendarView
       coaches={coaches}
-      campaigns={campaigns}
+      campaigns={visibleCampaigns}
       blocks={blocks}
+      dealers={dealers}
+      styles={styles}
+      sources={sources}
       mode="app"
     />
   );

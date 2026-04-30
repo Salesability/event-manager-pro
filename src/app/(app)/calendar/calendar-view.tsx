@@ -8,7 +8,16 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { AvailabilityBlock, Campaign, Coach } from '@/features/schedule/queries';
+import { Dialog } from '@/components/ui/dialog';
+import type {
+  AvailabilityBlock,
+  Campaign,
+  Coach,
+  Dealer,
+  LookupOption,
+} from '@/features/schedule/queries';
+import { BookingForm } from './booking-form';
+import { EventDetail } from './event-detail';
 
 type Mode = 'app' | 'share';
 
@@ -18,7 +27,16 @@ type Props = {
   blocks: AvailabilityBlock[];
   mode: Mode;
   forcedCoachId?: number;
+  dealers?: Dealer[];
+  styles?: LookupOption[];
+  sources?: LookupOption[];
 };
+
+type DialogState =
+  | { kind: 'closed' }
+  | { kind: 'detail'; campaign: Campaign }
+  | { kind: 'create'; date?: string }
+  | { kind: 'edit'; campaign: Campaign };
 
 const MONTHS = [
   'January',
@@ -59,7 +77,18 @@ function isoDate(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }: Props) {
+export function CalendarView({
+  coaches,
+  campaigns,
+  blocks,
+  mode,
+  forcedCoachId,
+  dealers = [],
+  styles = [],
+  sources = [],
+}: Props) {
+  const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
+  const closeDialog = useCallback(() => setDialog({ kind: 'closed' }), []);
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -314,6 +343,10 @@ export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }
 
         if (mode === 'app') {
           bar.title = `${clientName}${coachName ? ` · ${coachName}` : ''} · ${ev.startDate} → ${ev.endDate}`;
+          bar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setDialog({ kind: 'detail', campaign: ev });
+          });
         }
 
         overlay.appendChild(bar);
@@ -380,10 +413,19 @@ export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }
           <p className="mt-1 text-sm text-stone-600">
             {mode === 'share'
               ? `${forcedCoachId ? coaches.find((c) => c.id === forcedCoachId)?.displayName ?? 'Coach' : 'Coach'} — booked sales events.`
-              : 'Click any campaign to inspect — booking will land in a later phase.'}
+              : 'Click a date to book a campaign, or any ribbon for details.'}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {mode === 'app' && (
+            <button
+              type="button"
+              onClick={() => setDialog({ kind: 'create' })}
+              className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+            >
+              + Book Event
+            </button>
+          )}
           <button
             type="button"
             onClick={() => changeMonth(-1)}
@@ -455,13 +497,18 @@ export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }
             const row = Math.floor(i / 7);
             const blocked = blockedByDate[c.date];
             const isSelected = selectedDates.has(c.date);
+            const clickable = mode === 'app' && !c.otherMonth && !blocked;
             return (
               <div
                 key={c.date + ':' + i}
                 data-date={c.date}
                 style={{ height: rowHeights[row] }}
+                onClick={
+                  clickable ? () => setDialog({ kind: 'create', date: c.date }) : undefined
+                }
                 className={[
                   'relative bg-white p-2 text-left transition-colors',
+                  clickable ? 'cursor-pointer hover:bg-navy-pale/60' : '',
                   c.otherMonth ? 'bg-stone-100' : '',
                   c.isToday ? 'bg-navy-pale' : '',
                   blocked ? 'bg-red-50' : '',
@@ -496,6 +543,52 @@ export function CalendarView({ coaches, campaigns, blocks, mode, forcedCoachId }
           className="pointer-events-none absolute inset-0 z-10"
         />
       </div>
+
+      {mode === 'app' && (
+        <Dialog.Root open={dialog.kind !== 'closed'} onClose={closeDialog}>
+          <Dialog.Backdrop />
+          <Dialog.Panel>
+            {dialog.kind === 'detail' && (
+              <>
+                <Dialog.Title>Campaign Detail</Dialog.Title>
+                <EventDetail
+                  campaign={dialog.campaign}
+                  onEdit={() => setDialog({ kind: 'edit', campaign: dialog.campaign })}
+                  onClose={closeDialog}
+                />
+              </>
+            )}
+            {dialog.kind === 'create' && (
+              <>
+                <Dialog.Title>Book Event</Dialog.Title>
+                <BookingForm
+                  mode="create"
+                  dealers={dealers}
+                  coaches={coaches}
+                  styles={styles}
+                  sources={sources}
+                  defaultStartDate={dialog.date}
+                  onSuccess={closeDialog}
+                />
+              </>
+            )}
+            {dialog.kind === 'edit' && (
+              <>
+                <Dialog.Title>Edit Campaign</Dialog.Title>
+                <BookingForm
+                  mode="edit"
+                  campaign={dialog.campaign}
+                  dealers={dealers}
+                  coaches={coaches}
+                  styles={styles}
+                  sources={sources}
+                  onSuccess={closeDialog}
+                />
+              </>
+            )}
+          </Dialog.Panel>
+        </Dialog.Root>
+      )}
     </div>
   );
 }
