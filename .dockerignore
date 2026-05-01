@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+npm-debug.log
+.DS_Store
+README.md
+docs
+deprecated
+drizzle
+.vscode
+.idea
+coverage
