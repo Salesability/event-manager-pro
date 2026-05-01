@@ -53,6 +53,12 @@ export function parseOptionalInt(formData: FormData, name: string): number | nul
   return Number.isInteger(n) ? n : null;
 }
 
+// Postgres `integer` is signed 32-bit. Volume fields can't be negative.
+const MAX_PG_INT = 2_147_483_647;
+function isValidVolume(n: number | null): boolean {
+  return n == null || (n >= 0 && n <= MAX_PG_INT);
+}
+
 export type CampaignInput = {
   startDate: string;
   endDate: string;
@@ -84,6 +90,19 @@ export function parseCampaignInput(formData: FormData): CampaignInput | { error:
     return { error: 'Contact email looks invalid.' };
   }
 
+  const qtyRecords = parseOptionalInt(formData, 'qtyRecords');
+  const smsEmail = parseOptionalInt(formData, 'smsEmail');
+  const letters = parseOptionalInt(formData, 'letters');
+  const bdc = parseOptionalInt(formData, 'bdc');
+  if (
+    !isValidVolume(qtyRecords) ||
+    !isValidVolume(smsEmail) ||
+    !isValidVolume(letters) ||
+    !isValidVolume(bdc)
+  ) {
+    return { error: 'Volume fields must be non-negative whole numbers.' };
+  }
+
   return {
     startDate,
     endDate,
@@ -91,10 +110,10 @@ export function parseCampaignInput(formData: FormData): CampaignInput | { error:
     coachId: parseOptionalId(formData, 'coachId'),
     styleId: parseOptionalId(formData, 'styleId'),
     salesLeadSourceId: parseOptionalId(formData, 'salesLeadSourceId'),
-    qtyRecords: parseOptionalInt(formData, 'qtyRecords'),
-    smsEmail: parseOptionalInt(formData, 'smsEmail'),
-    letters: parseOptionalInt(formData, 'letters'),
-    bdc: parseOptionalInt(formData, 'bdc'),
+    qtyRecords,
+    smsEmail,
+    letters,
+    bdc,
     contact: field(formData, 'contact') || null,
     phone: field(formData, 'phone') || null,
     email: email || null,

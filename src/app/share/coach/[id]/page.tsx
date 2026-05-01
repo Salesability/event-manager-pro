@@ -28,7 +28,9 @@ export default async function CoachSharePage({ params }: Props) {
   const coach = coaches.find((c) => c.id === coachId);
   if (!coach) notFound();
 
-  const coachCampaigns = campaigns.filter((c) => c.coachId === coachId);
+  const coachCampaigns = campaigns.filter(
+    (c) => c.coachId === coachId && c.status !== 'cancelled'
+  );
   const coachBlocks = blocks.filter(
     (b) => b.kind !== 'coach_unavailable' || b.coachId === coachId
   );

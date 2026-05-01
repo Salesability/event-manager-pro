@@ -1,28 +1,28 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 
 export function ProductionFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
 
-  const initialQ = params.get('q') ?? '';
-  const initialStatus = params.get('status') ?? '';
-  const initialCancelled = params.get('cancelled') === '1';
+  const qFromUrl = params.get('q') ?? '';
+  const status = params.get('status') ?? '';
+  const showCancelled = params.get('cancelled') === '1';
 
-  const [q, setQ] = useState(initialQ);
-  const [status, setStatus] = useState(initialStatus);
-  const [showCancelled, setShowCancelled] = useState(initialCancelled);
+  // Local mirror for the debounced search input. Status / showCancelled push to
+  // the URL synchronously, so they're derived directly from `params` above.
+  const [q, setQ] = useState(qFromUrl);
+  const [prevQFromUrl, setPrevQFromUrl] = useState(qFromUrl);
+  if (qFromUrl !== prevQFromUrl) {
+    setPrevQFromUrl(qFromUrl);
+    setQ(qFromUrl);
+  }
+
   const [, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    setQ(params.get('q') ?? '');
-    setStatus(params.get('status') ?? '');
-    setShowCancelled(params.get('cancelled') === '1');
-  }, [params]);
 
   function pushParams(next: { q?: string; status?: string; cancelled?: boolean }) {
     const sp = new URLSearchParams(params.toString());
@@ -48,12 +48,10 @@ export function ProductionFilters() {
   }
 
   function onStatusChange(value: string) {
-    setStatus(value);
     pushParams({ status: value });
   }
 
   function onCancelledToggle(value: boolean) {
-    setShowCancelled(value);
     pushParams({ cancelled: value });
   }
 

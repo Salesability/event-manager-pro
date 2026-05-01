@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The browse tool ships its own TypeScript build under .claude/tools/browse;
+    // it has its own conventions and isn't part of the Next.js app surface.
+    ".claude/tools/**",
   ]),
 ]);
 

@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { and, eq, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   campaigns,
@@ -365,6 +365,8 @@ export async function archiveDealer(formData: FormData): Promise<ActionResult> {
 function revalidateCampaignViews() {
   revalidatePath('/calendar');
   revalidatePath('/production');
+  // [id] placeholder revalidates every coach-share page variant.
+  revalidatePath('/share/coach/[id]', 'page');
 }
 
 export async function createCampaign(formData: FormData): Promise<ActionResult> {
@@ -428,9 +430,12 @@ export async function cancelCampaign(formData: FormData): Promise<ActionResult> 
   const result = await db
     .update(campaigns)
     .set({ status: 'cancelled', updatedById: userId })
-    .where(eq(campaigns.id, id))
+    .where(and(eq(campaigns.id, id), inArray(campaigns.status, ['draft', 'booked'])))
     .returning({ id: campaigns.id });
-  if (!result.length) return { error: 'Campaign not found.' };
+  if (!result.length) {
+    // Either the row doesn't exist, or it's already cancelled / completed.
+    return { error: 'Campaign cannot be cancelled in its current state.' };
+  }
 
   revalidateCampaignViews();
   return { ok: true };

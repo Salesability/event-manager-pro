@@ -304,4 +304,16 @@ describe('parseCampaignInput', () => {
       error: 'Contact email looks invalid.',
     });
   });
+
+  it('rejects negative volume fields', () => {
+    expect(parseCampaignInput(makeForm({ qtyRecords: '-1' }))).toEqual({
+      error: 'Volume fields must be non-negative whole numbers.',
+    });
+  });
+
+  it('rejects volume fields above the 32-bit signed-int ceiling', () => {
+    expect(parseCampaignInput(makeForm({ smsEmail: '2147483648' }))).toEqual({
+      error: 'Volume fields must be non-negative whole numbers.',
+    });
+  });
 });
