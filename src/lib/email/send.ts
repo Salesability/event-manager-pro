@@ -20,8 +20,16 @@ function client(): Resend | { error: string } {
   return cached;
 }
 
-function isProduction(): boolean {
-  return (process.env.APP_ENV ?? process.env.NODE_ENV) === 'production';
+// Real-send is the default. The redirect is opt-in via an explicit boolean,
+// so an EMAIL_DEV_TO that accidentally leaks into a production env config
+// can never silently route customer mail to a dev inbox. The APP_ENV guard
+// is a redundant second check — production deploys should set APP_ENV=production
+// AND should not set EMAIL_FORCE_DEV_REDIRECT=true.
+function shouldRedirect(): boolean {
+  if (process.env.APP_ENV === 'production') return false;
+  return (
+    process.env.EMAIL_FORCE_DEV_REDIRECT === 'true' && !!process.env.EMAIL_DEV_TO
+  );
 }
 
 export async function sendEmail(input: SendInput): Promise<SendResult> {
@@ -32,8 +40,8 @@ export async function sendEmail(input: SendInput): Promise<SendResult> {
   if ('error' in resend) return resend;
 
   let { to, subject } = input;
-  const devTo = process.env.EMAIL_DEV_TO;
-  if (!isProduction() && devTo) {
+  if (shouldRedirect()) {
+    const devTo = process.env.EMAIL_DEV_TO!;
     subject = `[DEV→${to}] ${subject}`;
     to = devTo;
   }
