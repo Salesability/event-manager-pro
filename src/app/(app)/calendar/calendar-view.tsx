@@ -16,6 +16,7 @@ import type {
   Dealer,
   LookupOption,
 } from '@/features/schedule/queries';
+import { AvailabilityAdmin } from '@/features/schedule/availability-admin';
 import { BookingForm } from './booking-form';
 import { EventDetail } from './event-detail';
 
@@ -36,7 +37,8 @@ type DialogState =
   | { kind: 'closed' }
   | { kind: 'detail'; campaign: Campaign }
   | { kind: 'create'; date?: string }
-  | { kind: 'edit'; campaign: Campaign };
+  | { kind: 'edit'; campaign: Campaign }
+  | { kind: 'availability' };
 
 const MONTHS = [
   'January',
@@ -100,6 +102,7 @@ export function CalendarView({
   const [activeCoachFilter, setActiveCoachFilter] = useState<number | null>(
     forcedCoachId ?? null
   );
+  const scopedCoachId = forcedCoachId ?? activeCoachFilter;
 
   // Stable per-coach color assignment in encounter order.
   const coachColorMap = useMemo(() => {
@@ -171,6 +174,11 @@ export function CalendarView({
   const blockedByDate = useMemo(() => {
     const map: Record<string, AvailabilityBlock> = {};
     for (const b of blocks) {
+      const appliesToCalendar =
+        b.kind !== 'coach_unavailable' ||
+        (scopedCoachId != null && b.coachId === scopedCoachId);
+      if (!appliesToCalendar) continue;
+
       // Iterate every date in the block range; for the visible window only.
       const start = new Date(`${b.startDate}T12:00:00`);
       const end = new Date(`${b.endDate}T12:00:00`);
@@ -182,14 +190,13 @@ export function CalendarView({
       }
     }
     return map;
-  }, [blocks, cellIndexMap]);
+  }, [blocks, cellIndexMap, scopedCoachId]);
 
   const visibleEvents = useMemo(() => {
-    const filterCoach = forcedCoachId ?? activeCoachFilter;
-    return filterCoach == null
+    return scopedCoachId == null
       ? campaigns
-      : campaigns.filter((c) => c.coachId === filterCoach);
-  }, [campaigns, activeCoachFilter, forcedCoachId]);
+      : campaigns.filter((c) => c.coachId === scopedCoachId);
+  }, [campaigns, scopedCoachId]);
 
   // Slot assignment, verbatim translation of legacy renderCalendar slot-packing.
   const slotAssignment = useMemo(() => {
@@ -418,13 +425,22 @@ export function CalendarView({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {mode === 'app' && (
-            <button
-              type="button"
-              onClick={() => setDialog({ kind: 'create' })}
-              className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              + Book Event
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setDialog({ kind: 'availability' })}
+                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
+              >
+                Block Date
+              </button>
+              <button
+                type="button"
+                onClick={() => setDialog({ kind: 'create' })}
+                className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                + Book Event
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -547,7 +563,7 @@ export function CalendarView({
       {mode === 'app' && (
         <Dialog.Root open={dialog.kind !== 'closed'} onClose={closeDialog}>
           <Dialog.Backdrop />
-          <Dialog.Panel>
+          <Dialog.Panel className={dialog.kind === 'availability' ? 'max-w-[780px]' : undefined}>
             {dialog.kind === 'detail' && (
               <>
                 <Dialog.Title>Campaign Detail</Dialog.Title>
@@ -584,6 +600,15 @@ export function CalendarView({
                   sources={sources}
                   onSuccess={closeDialog}
                 />
+              </>
+            )}
+            {dialog.kind === 'availability' && (
+              <>
+                <Dialog.Title>Block Out Dates</Dialog.Title>
+                <Dialog.Description>
+                  Add, edit, or remove calendar blocks for holidays, closures, and coach time off.
+                </Dialog.Description>
+                <AvailabilityAdmin blocks={blocks} coaches={coaches} />
               </>
             )}
           </Dialog.Panel>

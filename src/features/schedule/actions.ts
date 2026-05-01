@@ -3,14 +3,17 @@
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
+  availabilityBlocks,
   campaigns,
+  campaignStyles,
   contactIdentifiers,
   contacts,
   dealerContacts,
   dealers,
+  salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
 import { getUser } from '@/lib/supabase/session';
@@ -18,11 +21,15 @@ import {
   EMAIL_RE,
   field,
   parseCampaignInput,
+  parseDate,
   parseId,
+  parseOptionalId,
   validateContactInputs,
 } from './validators';
 
 type ActionResult = { ok: true } | { error: string };
+type ActionError = { error: string };
+type AvailabilityKind = 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
 
 const generatePublicId = () => randomBytes(9).toString('base64url');
 
@@ -365,8 +372,18 @@ export async function archiveDealer(formData: FormData): Promise<ActionResult> {
 function revalidateCampaignViews() {
   revalidatePath('/calendar');
   revalidatePath('/production');
+  revalidatePath('/admin/lookups');
   // [id] placeholder revalidates every coach-share page variant.
   revalidatePath('/share/coach/[id]', 'page');
+}
+
+function revalidateAvailabilityViews() {
+  revalidatePath('/calendar');
+  revalidatePath('/share/coach/[id]', 'page');
+}
+
+function revalidateLookupViews() {
+  revalidateCampaignViews();
 }
 
 export async function createCampaign(formData: FormData): Promise<ActionResult> {
@@ -438,6 +455,262 @@ export async function cancelCampaign(formData: FormData): Promise<ActionResult> 
   }
 
   revalidateCampaignViews();
+  return { ok: true };
+}
+
+// ---------- Lookups (5.3) ----------
+
+function parseLookupLabel(formData: FormData): string | ActionResult {
+  const label = field(formData, 'label');
+  if (!label) return { error: 'Label is required.' };
+  if (label.length > 120) return { error: 'Label must be 120 characters or fewer.' };
+  return label;
+}
+
+function lookupActionResult(err: unknown): ActionResult {
+  if (err instanceof Error && err.message.includes('duplicate key')) {
+    return { error: 'That label already exists.' };
+  }
+  throw err;
+}
+
+export async function createCampaignStyle(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const label = parseLookupLabel(formData);
+  if (typeof label !== 'string') return label;
+
+  try {
+    const restored = await db
+      .update(campaignStyles)
+      .set({ archivedAt: null })
+      .where(and(eq(campaignStyles.label, label), isNotNull(campaignStyles.archivedAt)))
+      .returning({ id: campaignStyles.id });
+    if (!restored.length) {
+      await db.insert(campaignStyles).values({ label });
+    }
+  } catch (err) {
+    return lookupActionResult(err);
+  }
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+export async function updateCampaignStyle(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid style id.' };
+  const label = parseLookupLabel(formData);
+  if (typeof label !== 'string') return label;
+
+  try {
+    const result = await db
+      .update(campaignStyles)
+      .set({ label })
+      .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)))
+      .returning({ id: campaignStyles.id });
+    if (!result.length) return { error: 'Style not found.' };
+  } catch (err) {
+    return lookupActionResult(err);
+  }
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+export async function archiveCampaignStyle(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid style id.' };
+
+  await db
+    .update(campaignStyles)
+    .set({ archivedAt: new Date() })
+    .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)));
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+export async function createSalesLeadSource(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const label = parseLookupLabel(formData);
+  if (typeof label !== 'string') return label;
+
+  try {
+    const restored = await db
+      .update(salesLeadSources)
+      .set({ archivedAt: null })
+      .where(and(eq(salesLeadSources.label, label), isNotNull(salesLeadSources.archivedAt)))
+      .returning({ id: salesLeadSources.id });
+    if (!restored.length) {
+      await db.insert(salesLeadSources).values({ label });
+    }
+  } catch (err) {
+    return lookupActionResult(err);
+  }
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+export async function updateSalesLeadSource(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid data source id.' };
+  const label = parseLookupLabel(formData);
+  if (typeof label !== 'string') return label;
+
+  try {
+    const result = await db
+      .update(salesLeadSources)
+      .set({ label })
+      .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)))
+      .returning({ id: salesLeadSources.id });
+    if (!result.length) return { error: 'Data source not found.' };
+  } catch (err) {
+    return lookupActionResult(err);
+  }
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+export async function archiveSalesLeadSource(formData: FormData): Promise<ActionResult> {
+  await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid data source id.' };
+
+  await db
+    .update(salesLeadSources)
+    .set({ archivedAt: new Date() })
+    .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)));
+
+  revalidateLookupViews();
+  return { ok: true };
+}
+
+// ---------- Availability blocks (5.4) ----------
+
+const AVAILABILITY_KINDS: AvailabilityKind[] = [
+  'statutory_holiday',
+  'company_closure',
+  'coach_unavailable',
+];
+
+type AvailabilityInput = {
+  startDate: string;
+  endDate: string;
+  kind: AvailabilityKind;
+  coachId: number | null;
+  reason: string | null;
+};
+
+function parseAvailabilityInput(formData: FormData): AvailabilityInput | ActionError {
+  const startDate = parseDate(formData, 'startDate');
+  const endDate = parseDate(formData, 'endDate') ?? startDate;
+  if (!startDate || !endDate) return { error: 'Start date is required.' };
+  if (endDate < startDate) return { error: 'End date must be on or after start date.' };
+
+  const kind = field(formData, 'kind') as AvailabilityKind;
+  if (!AVAILABILITY_KINDS.includes(kind)) return { error: 'Invalid block type.' };
+
+  const coachId = parseOptionalId(formData, 'coachId');
+  if (kind === 'coach_unavailable' && coachId == null) {
+    return { error: 'Coach is required for coach unavailability.' };
+  }
+  if (kind !== 'coach_unavailable' && coachId != null) {
+    return { error: 'Coach can only be set for coach unavailability.' };
+  }
+
+  const reason = field(formData, 'reason');
+  if (reason.length > 200) return { error: 'Reason must be 200 characters or fewer.' };
+
+  return {
+    startDate,
+    endDate,
+    kind,
+    coachId,
+    reason: reason || null,
+  };
+}
+
+async function validateAvailabilityCoach(input: AvailabilityInput): Promise<ActionResult | null> {
+  if (input.coachId == null) return null;
+  const [coach] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .innerJoin(
+      teamMemberRoles,
+      and(
+        eq(teamMemberRoles.contactId, contacts.id),
+        eq(teamMemberRoles.role, 'coach'),
+        isNull(teamMemberRoles.archivedAt)
+      )
+    )
+    .where(and(eq(contacts.id, input.coachId), isNull(contacts.archivedAt)))
+    .limit(1);
+  return coach ? null : { error: 'Coach not found.' };
+}
+
+export async function createAvailabilityBlock(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const input = parseAvailabilityInput(formData);
+  if ('error' in input) return input;
+  const coachError = await validateAvailabilityCoach(input);
+  if (coachError) return coachError;
+
+  await db.insert(availabilityBlocks).values({
+    ...input,
+    source: 'admin',
+    createdById: userId,
+    updatedById: userId,
+  });
+
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+export async function updateAvailabilityBlock(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid availability block id.' };
+  const input = parseAvailabilityInput(formData);
+  if ('error' in input) return input;
+  const coachError = await validateAvailabilityCoach(input);
+  if (coachError) return coachError;
+
+  const result = await db
+    .update(availabilityBlocks)
+    .set({ ...input, updatedById: userId })
+    .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+    .returning({ id: availabilityBlocks.id });
+  if (!result.length) return { error: 'Availability block not found.' };
+
+  revalidateAvailabilityViews();
+  return { ok: true };
+}
+
+export async function archiveAvailabilityBlock(formData: FormData): Promise<ActionResult> {
+  const userId = await requireUserId();
+
+  const id = parseId(formData);
+  if (id == null) return { error: 'Invalid availability block id.' };
+
+  await db
+    .update(availabilityBlocks)
+    .set({ archivedAt: new Date(), updatedById: userId })
+    .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)));
+
+  revalidateAvailabilityViews();
   return { ok: true };
 }
 

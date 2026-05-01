@@ -1,8 +1,10 @@
 'use client';
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
+import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
 import { createCampaign, updateCampaign } from '@/features/schedule/actions';
+import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
 
 type Mode = 'create' | 'edit';
@@ -61,6 +63,8 @@ export function BookingForm({
 
   const [startDate, setStartDate] = useState(initialStart);
   const [duration, setDuration] = useState(Math.min(Math.max(initialDuration, 1), 5));
+  const [stylesOpen, setStylesOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const endDate = useMemo(
     () => (startDate ? addDays(startDate, duration - 1) : ''),
     [startDate, duration],
@@ -101,7 +105,8 @@ export function BookingForm({
   }, [state, mode, onSuccess]);
 
   return (
-    <form action={formAction} className="mt-4 flex flex-col gap-4">
+    <>
+      <form action={formAction} className="mt-4 flex flex-col gap-4">
       {mode === 'edit' && campaign && <input type="hidden" name="id" value={campaign.id} />}
       <input type="hidden" name="endDate" value={endDate} />
 
@@ -205,7 +210,19 @@ export function BookingForm({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Event Format" htmlFor="bk-style">
+        <Field
+          label="Event Format"
+          htmlFor="bk-style"
+          action={
+            <button
+              type="button"
+              onClick={() => setStylesOpen(true)}
+              className="text-xs font-semibold normal-case text-accent transition hover:text-navy"
+            >
+              Manage
+            </button>
+          }
+        >
           <select
             id="bk-style"
             name="styleId"
@@ -220,7 +237,19 @@ export function BookingForm({
             ))}
           </select>
         </Field>
-        <Field label="Data Source" htmlFor="bk-source">
+        <Field
+          label="Data Source"
+          htmlFor="bk-source"
+          action={
+            <button
+              type="button"
+              onClick={() => setSourcesOpen(true)}
+              className="text-xs font-semibold normal-case text-accent transition hover:text-navy"
+            >
+              Manage
+            </button>
+          }
+        >
           <select
             id="bk-source"
             name="salesLeadSourceId"
@@ -323,6 +352,27 @@ export function BookingForm({
         </button>
       </div>
     </form>
+      <Dialog.Root open={stylesOpen} onClose={setStylesOpen}>
+        <Dialog.Backdrop />
+        <Dialog.Panel>
+          <Dialog.Title>Manage Event Styles</Dialog.Title>
+          <Dialog.Description>
+            Add, rename, or archive event formats used by bookings.
+          </Dialog.Description>
+          {stylesOpen && <LookupAdmin kind="styles" items={styles} compact />}
+        </Dialog.Panel>
+      </Dialog.Root>
+      <Dialog.Root open={sourcesOpen} onClose={setSourcesOpen}>
+        <Dialog.Backdrop />
+        <Dialog.Panel>
+          <Dialog.Title>Manage Data Sources</Dialog.Title>
+          <Dialog.Description>
+            Add, rename, or archive campaign data-source labels.
+          </Dialog.Description>
+          {sourcesOpen && <LookupAdmin kind="sources" items={sources} compact />}
+        </Dialog.Panel>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -330,22 +380,27 @@ function Field({
   label,
   htmlFor,
   required,
+  action,
   children,
 }: {
   label: string;
   htmlFor: string;
   required?: boolean;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="text-xs font-semibold uppercase tracking-wide text-stone-600"
-      >
-        {label}
-        {required && <span className="ml-1 text-status-red">*</span>}
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor={htmlFor}
+          className="text-xs font-semibold uppercase tracking-wide text-stone-600"
+        >
+          {label}
+          {required && <span className="ml-1 text-status-red">*</span>}
+        </label>
+        {action}
+      </div>
       {children}
     </div>
   );

@@ -7,6 +7,7 @@ const TABS = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List' },
   { href: '/lists', label: 'Manage Lists' },
+  { href: '/admin/lookups', label: 'Lookups' },
 ] as const;
 
 export function AppNav() {
