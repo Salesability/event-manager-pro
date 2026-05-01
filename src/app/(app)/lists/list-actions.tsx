@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
 import { archiveCoach, archiveDealer } from '@/features/schedule/actions';
+import { sendCoachShareLinkEmail } from '@/features/email/actions';
 import type { Coach, Dealer } from '@/features/schedule/queries';
 import { CoachForm } from './coach-form';
 import { DealerForm } from './dealer-form';
@@ -110,8 +111,31 @@ export function CoachRowActions({ coach }: { coach: Coach }) {
     });
   }
 
+  function onEmailLink() {
+    if (!coach.primaryEmail) {
+      toast.error('No email on file for this coach.');
+      return;
+    }
+    if (!confirm(`Email share link to ${coach.firstName} <${coach.primaryEmail}>?`)) return;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('coachId', String(coach.id));
+      const result = await sendCoachShareLinkEmail(fd);
+      if ('ok' in result) toast.success('Share link sent');
+      else toast.error(result.error);
+    });
+  }
+
   return (
     <div className="flex shrink-0 items-center gap-1">
+      <button
+        onClick={onEmailLink}
+        disabled={pending || !coach.primaryEmail}
+        title={coach.primaryEmail ? 'Email this coach their personal schedule link' : 'No email on file'}
+        className={rowEditClass}
+      >
+        Email link
+      </button>
       <button onClick={() => setOpen(true)} className={rowEditClass}>
         Edit
       </button>

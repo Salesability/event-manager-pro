@@ -3,6 +3,10 @@
 import { useTransition } from 'react';
 import { toast } from '@/components/ui/toaster';
 import { cancelCampaign } from '@/features/schedule/actions';
+import {
+  sendClientCampaignConfirmation,
+  sendCoachCampaignConfirmation,
+} from '@/features/email/actions';
 import type { Campaign } from '@/features/schedule/queries';
 
 type EventDetailProps = {
@@ -27,6 +31,37 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
       } else {
         toast.error(result.error);
       }
+    });
+  }
+
+  function onEmailClient() {
+    if (!campaign.email) {
+      toast.error('No client email on file for this campaign.');
+      return;
+    }
+    if (!confirm(`Send confirmation to ${campaign.contact || 'the dealer contact'} <${campaign.email}>?`))
+      return;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('campaignId', String(campaign.id));
+      const result = await sendClientCampaignConfirmation(fd);
+      if ('ok' in result) toast.success('Confirmation sent');
+      else toast.error(result.error);
+    });
+  }
+
+  function onEmailCoach() {
+    if (!campaign.coachName) {
+      toast.error('No coach assigned to this campaign.');
+      return;
+    }
+    if (!confirm(`Send assignment confirmation to ${campaign.coachName}?`)) return;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('campaignId', String(campaign.id));
+      const result = await sendCoachCampaignConfirmation(fd);
+      if ('ok' in result) toast.success('Confirmation sent');
+      else toast.error(result.error);
     });
   }
 
@@ -80,17 +115,19 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-4">
         <button
           type="button"
-          disabled
-          title="Coming soon (chunk 5.5)"
-          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-400"
+          onClick={onEmailClient}
+          disabled={pending || !campaign.email}
+          title={campaign.email ? 'Send the dealer contact a booking confirmation' : 'No client email on file'}
+          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
         >
           Email Client
         </button>
         <button
           type="button"
-          disabled
-          title="Coming soon (chunk 5.5)"
-          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-400"
+          onClick={onEmailCoach}
+          disabled={pending || !campaign.coachId}
+          title={campaign.coachId ? 'Send the assigned coach a booking confirmation' : 'No coach assigned'}
+          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
         >
           Email Coach
         </button>
