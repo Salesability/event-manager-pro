@@ -62,11 +62,25 @@ const Panel = React.forwardRef<HTMLDivElement, PanelContainerProps>(function Pan
         ref={ref}
         transition
         className={cx(
-          'w-full max-w-[560px] rounded-2xl border border-stone-200 bg-white p-6 shadow-[0_8px_32px_rgba(15,30,60,0.18)] outline-none transition duration-150 ease-out data-closed:scale-95 data-closed:opacity-0',
+          'relative w-full max-w-[560px] rounded-2xl border border-stone-200 bg-white p-6 shadow-[0_8px_32px_rgba(15,30,60,0.18)] outline-none transition duration-150 ease-out data-closed:scale-95 data-closed:opacity-0',
           className,
         )}
         {...props}
       >
+        <CloseButton
+          aria-label="Close"
+          className="absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 hover:text-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-navy"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L8.94 10l-4.72 4.72a.75.75 0 1 0 1.06 1.06L10 11.06l4.72 4.72a.75.75 0 1 0 1.06-1.06L11.06 10l4.72-4.72a.75.75 0 0 0-1.06-1.06L10 8.94 5.28 4.22Z" />
+          </svg>
+        </CloseButton>
         {children}
       </HUIPanel>
     </div>
