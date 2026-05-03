@@ -6,6 +6,9 @@ import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/url';
 
 async function siteUrl() {
+  const explicit = process.env.SITE_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, '');
+
   const headerList = await headers();
   const host = headerList.get('host') ?? 'localhost:3000';
   const proto =
