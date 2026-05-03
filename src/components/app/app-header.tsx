@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { signOut } from '@/features/auth/actions';
 import { AppNav } from './app-nav';
@@ -11,11 +12,15 @@ export function AppHeader({ email }: AppHeaderProps) {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-navy px-8 shadow-[0_4px_16px_rgba(15,30,60,0.12)] print:hidden">
-      <Link href="/calendar" className="flex items-center gap-3 text-white">
-        <span className="font-display text-xl tracking-tight">Event Manager</span>
-        <span className="rounded bg-stone-400/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/90">
-          Pro
-        </span>
+      <Link href="/calendar" className="flex items-center" aria-label="SaleDay Events — home">
+        <Image
+          src="/saleday-logo.jpg"
+          alt="SaleDay Events — Automotive Marketing"
+          width={246}
+          height={155}
+          priority
+          className="h-10 w-auto rounded"
+        />
       </Link>
 
       <div className="flex items-center gap-4">

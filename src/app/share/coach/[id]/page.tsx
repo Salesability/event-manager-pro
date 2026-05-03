@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { CalendarView } from '@/app/(app)/calendar/calendar-view';
 import {
@@ -39,10 +40,14 @@ export default async function CoachSharePage({ params }: Props) {
     <div className="min-h-screen bg-cream">
       <header className="bg-navy px-8 py-4">
         <div className="mx-auto flex max-w-[1440px] items-center gap-3 text-white">
-          <span className="font-display text-xl tracking-tight">Event Manager</span>
-          <span className="rounded bg-stone-400/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/90">
-            Pro
-          </span>
+          <Image
+            src="/saleday-logo.jpg"
+            alt="SaleDay Events — Automotive Marketing"
+            width={246}
+            height={155}
+            priority
+            className="h-10 w-auto rounded"
+          />
           <span className="ml-3 text-sm text-white/70">
             Personal schedule for {coach.firstName} {coach.lastName}
           </span>

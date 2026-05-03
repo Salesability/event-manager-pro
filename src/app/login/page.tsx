@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { signInWithGoogle, signInWithMagicLink } from '@/features/auth/actions';
 import { getUser } from '@/lib/supabase/session';
@@ -19,8 +20,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-cream px-8 py-16">
       <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-stone-200 bg-white p-8 shadow-[0_8px_32px_rgba(15,30,60,0.18)]">
-        <div className="flex flex-col gap-2 text-center">
-          <h1 className="font-display text-3xl text-navy">Event Manager Pro</h1>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Image
+            src="/saleday-logo.jpg"
+            alt="SaleDay Events — Automotive Marketing"
+            width={246}
+            height={155}
+            priority
+            className="h-16 w-auto"
+          />
           <p className="text-sm text-stone-600">Sign-in is invitation only.</p>
         </div>
 
