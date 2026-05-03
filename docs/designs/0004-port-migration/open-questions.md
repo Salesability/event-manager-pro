@@ -6,6 +6,32 @@ When a question is resolved, move the entry into the body of the umbrella plan (
 
 ---
 
+## Summary — who needs to weigh in on what
+
+Triage layer for the questions below, so we can selectively share with the business without overloading or diluting them with internal-only concerns. Update this list whenever a question is added, resolved, or its audience changes.
+
+### Decisions to share with the business (Shannon / whoever owns brand + DNS)
+
+These need a real outside-engineering call. The detail in the body below is the long form; the one-liner is enough to start a conversation.
+
+- **Q10 — Branding.** Does the app render "SaleDay Events" or "Salesability Events"? Today it's SaleDay (legacy mark from `deprecated/index.html`); marketing site at `salesability.ca` says Salesability. Gates the [`0016-book-your-event-intake`](../0016-book-your-event-intake/plan.md) work — without alignment, the seam between the marketing site and the app reads as two different products.
+- **Q8 — Editable email preview modal.** When a coach or rep clicks "Email Client" / "Email Coach", do they get a confirm-and-send dialog (current behaviour), a *preview* of the rendered template, or a fully *editable* modal where they can tweak `To` / `Subject` / `Body` before send? Decision affects how much trust we put in template defaults vs. operator judgment.
+- **Q6 — Cutover plan for `events.salesability.ca`.** Maintenance window vs. blue/green; whether the legacy spreadsheet stays writable as a fallback; named owner watching the new app for the first ~week; rollback signal definition.
+- **Q5 — Resend domain verification.** Whoever owns the `salesability.ca` DNS zone needs to add SPF / DKIM / DMARC records before we can send mail from a real `@salesability.ca` address. Until then we ship from the Resend sandbox sender.
+- *(Optional context, not required)* **Q1 — Share-link enumeration risk.** Today `/share/coach/1`, `/2`, ... — anyone iterating IDs can see every coach's schedule. Migration to unguessable tokens is a small engineering task, but if the business has an opinion on whether old links should keep working through the migration, that's worth surfacing.
+
+### Engineering-only (don't share, no business input needed)
+
+These are internal hygiene / sequencing trade-offs. Listed for completeness so it's clear nothing's been forgotten.
+
+- Q2 — Dev-environment email fail-closed default
+- Q3 — Email URL canonical origin (configured base URL vs request `Host:` header)
+- Q4 — Edit-on-cancelled-campaign TOCTOU UX
+- Q7 — `messages_sent` audit-table sequencing (own chunk vs. bundle with 5.7 vs. defer to Phase 7)
+- Q9 — Which sub-plan is next
+
+---
+
 ## 1. Should `/share/coach/[id]` keep using sequential IDs?
 
 **Current state.** `src/app/share/coach/[id]/page.tsx:15` accepts a numeric `contacts.id`. The route is in `PUBLIC_PATHS` (no auth). Anyone who knows the URL can see the coach's name + every non-cancelled campaign assigned to them (dealer, dates, ribbons). Today the URL doubles as the authorization — "if you got the link, you're allowed to see it" — but the link is `/share/coach/1`, `/share/coach/2`, …, so it isn't a secret.
