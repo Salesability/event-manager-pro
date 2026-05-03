@@ -18,7 +18,9 @@ This file is the pointer to the plan currently being worked on. It exists becaus
 
 ## History
 
-When the active plan or sub-plan changes, prepend a one-line entry below (newest first) noting the date, what changed, and where it ended up (Done → `shipped/`, Paused, Abandoned, etc.). `git log` shows file edits to this pointer; the narrative below tells you *which plan was active when* in one place, without having to chase commits.
+For the raw "when was X active" — `git log -- docs/designs/CURRENT.md` shows every transition as a separate commit (since this file is tracked as of `bc450ad`). Reach for that first if you just need sequencing.
+
+The bullets below are a *curated* layer over that log: same dates, but with the eval verdict, why the slot vacated, what got requeued, etc. — the context a commit message wouldn't carry. When the active plan or sub-plan changes, prepend a one-line entry (newest first) noting date, what changed, where it ended up (Done → `shipped/`, Paused, Abandoned), and any non-obvious context.
 
 - **2026-05-03** — Phase 5.6 (Production export + print) → Done in commit `2a42c93`; pushed to `origin/main`; sub-plan moved to `shipped/0013-production-export/`. Eval-smoke PASS with warnings (1 medium CSV-injection + 3 low — captured in eval-2026-05-03-1024.md, parked for follow-up). Active sub-plan slot vacated; queued options remain 5.7 / 5.8 / slot-pack clamp.
 - **2026-05-03** — Phase 5.6 (Production export + print) picked from Parked → in flight at `0013-production-export/plan.md`.
