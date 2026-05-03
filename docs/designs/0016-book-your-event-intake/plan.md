@@ -8,14 +8,29 @@ The "Book Your Event" CTA on [`salesability.ca/book-your-event`](https://www.sal
 
 ## Decisions needed (flush these before Phase 2)
 
-These are real forks. Most should be raised with the user before the public form is locked in.
+These are real forks. Most should be raised with the user before the public form is locked in. **#1 is the gating decision** — without brand alignment, the seam between the marketing site and the app reads as two different products and "tight integration" doesn't deliver its promise.
 
-1. **Form fields.** The Squarespace form's actual fields aren't visible in the public HTML (web fetch couldn't introspect the widget). Need to either: (a) ask Shannon what fields the current form collects, or (b) propose a minimal set (dealership name, contact name, email, phone, requested-date range, notes) and confirm. The schema in Phase 1 needs this answer.
-2. **Domain.** Where does the form live — `events.salesability.ca/book-your-event` (subdomain, current Cloud Run cutover plan) or `salesability.ca/book-your-event` (Squarespace replaced with a reverse-proxy / iframe)? Subdomain is far simpler — Squarespace just changes the button's `href`. Same-domain requires DNS/proxy work.
-3. **Squarespace cutover mechanics.** Once our form is live, the Squarespace `/book-your-event` page either (a) redirects to ours, (b) gets deleted entirely, or (c) keeps running in parallel as a fallback for a grace period. Affects the Phase 5 messaging.
-4. **Dealer/contact dedup on convert.** When staff converts an intake to a campaign, do we look up the dealer by name and reuse, prompt to choose between "match existing dealer X" vs "create new", or always create new? Affects the Phase 4 UX.
-5. **Anti-bot.** Public unauthenticated form on a brand surface — needs at minimum a honeypot, ideally Turnstile or hCaptcha. Squarespace had basic spam filtering; our form is starting from zero.
-6. **Branding.** This work depends on Q10 in `0004-port-migration/open-questions.md` (SaleDay vs Salesability mark) — prospects landing here from a Salesability marketing page should see Salesability branding. Either resolve Q10 before Phase 2 or accept the SaleDay mark for the launch.
+1. **Branding (gating).** This work depends on Q10 in [`../0004-port-migration/open-questions.md`](../0004-port-migration/open-questions.md) (SaleDay vs Salesability mark). A prospect on a "Salesability Events" marketing page who clicks "Book Your Event" must not land on a "SaleDay Events"-branded form — that breaks the integration premise. Resolve Q10 *before* Phase 2 starts, or accept the brand mismatch as a temporary state with a planned swap before Phase 5 cutover. Per the user 2026-05-03, this is the *more important* of the two open threads here.
+2. **Form fields — confirm vs the current Squarespace form.** Snapshot of the live form taken 2026-05-03 (see [`squarespace-form-2026-05-03.png`](squarespace-form-2026-05-03.png)):
+
+   | Field | Type | Required? |
+   |---|---|---|
+   | First Name | text | yes |
+   | Last Name | text | yes |
+   | Dealership | text | no (no "required" marker) |
+   | Email | email | yes |
+   | Sign up for news and updates | checkbox | no |
+   | Phone | text | no |
+   | Event Date | date (`yyyy-mm-dd`) | no — labeled "preferred event start date" |
+   | Hosted vs Virtual | two checkboxes (binary choice) | no — UX quirk, both can be checked in source |
+   | Message | textarea | yes |
+
+   Helper copy above the form: *"Enter your details below and we will reach out to confirm your date."* The user has flagged this snapshot as *possibly stale relative to what the app actually wants* — confirm with Shannon whether to (a) port verbatim, (b) trim (e.g. drop the news-signup, drop hosted/virtual since it's better captured later in the booking flow), or (c) extend (e.g. add an end-date / duration, add a budget hint). Phase 1 schema follows whatever we land on.
+
+3. **Domain.** Where does our form live — `events.salesability.ca/book-your-event` (subdomain, current Cloud Run cutover plan) or `salesability.ca/book-your-event` (Squarespace path replaced with a reverse-proxy / iframe)? Subdomain is far simpler — Squarespace just changes the button's `href`. Same-domain requires DNS / proxy work and intersects with the Phase 6 cutover-runbook in the port-migration tracker.
+4. **Squarespace cutover mechanics.** Once our form is live, the Squarespace `/book-your-event` page either (a) redirects to ours, (b) gets deleted entirely, or (c) keeps running in parallel as a fallback for a grace period. Affects Phase 5 messaging and what we tell Shannon about Squarespace cleanup.
+5. **Dealer/contact dedup on convert.** When staff converts an intake to a campaign, do we look up the dealer by name (case-insensitive, fuzzy?) and reuse, prompt the operator to choose between "match existing dealer X" vs "create new", or always create new? Affects the Phase 4 UX.
+6. **Anti-bot.** Public unauthenticated form on a brand surface — needs at minimum a honeypot, ideally Turnstile / hCaptcha. Squarespace had basic spam filtering; our form starts from zero.
 
 ## Progress Tracker
 
