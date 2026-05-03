@@ -55,8 +55,10 @@ export function ProductionFilters() {
     pushParams({ cancelled: value });
   }
 
+  const exportHref = `/production/export${params.toString() ? `?${params.toString()}` : ''}`;
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 print:hidden">
       <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-1.5 transition focus-within:border-accent">
         <span className="text-stone-400">🔍</span>
         <input
@@ -85,6 +87,19 @@ export function ProductionFilters() {
         />
         Show cancelled
       </label>
+      <a
+        href={exportHref}
+        className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition hover:border-navy hover:text-navy"
+      >
+        ⬇ Export CSV
+      </a>
+      <button
+        type="button"
+        onClick={() => window.print()}
+        className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 transition hover:border-navy hover:text-navy"
+      >
+        🖨 Print
+      </button>
     </div>
   );
 }

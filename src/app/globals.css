@@ -32,3 +32,28 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+@media print {
+  @page {
+    margin: 0.5in;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  /* Avoid rows splitting across pages — readability beats packing density. */
+  tr {
+    page-break-inside: avoid;
+  }
+  /* Drop card chrome (rounded border + shadow) on the table wrapper so the
+     printed page renders flat. */
+  section {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+}

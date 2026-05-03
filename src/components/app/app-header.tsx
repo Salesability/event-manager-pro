@@ -10,7 +10,7 @@ export function AppHeader({ email }: AppHeaderProps) {
   const initials = email.slice(0, 2).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-navy px-8 shadow-[0_4px_16px_rgba(15,30,60,0.12)]">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-navy px-8 shadow-[0_4px_16px_rgba(15,30,60,0.12)] print:hidden">
       <Link href="/calendar" className="flex items-center gap-3 text-white">
         <span className="font-display text-xl tracking-tight">Event Manager</span>
         <span className="rounded bg-stone-400/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/90">

@@ -9,6 +9,7 @@ import {
   type Dealer,
   type LookupOption,
 } from '@/features/schedule/queries';
+import { filterCampaigns, todayIso } from './filter';
 import { ProductionFilters } from './production-filters';
 import { RowActions } from './row-actions';
 
@@ -50,7 +51,7 @@ export default async function ProductionPage({ searchParams }: Props) {
               <span className="text-xs">Adjust the search or status filter to see more.</span>
             </div>
           ) : (
-            <table className="min-w-[1100px] table-auto border-separate border-spacing-0 text-sm">
+            <table className="min-w-[1100px] table-auto border-separate border-spacing-0 text-sm print:min-w-0 print:text-[10px]">
               <thead>
                 <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
                   <th className="px-3 py-2.5">Date Range</th>
@@ -64,7 +65,7 @@ export default async function ProductionPage({ searchParams }: Props) {
                   <th className="px-3 py-2.5 text-right">BDC</th>
                   <th className="px-3 py-2.5">Coach</th>
                   <th className="px-3 py-2.5">Notes</th>
-                  <th className="px-3 py-2.5"></th>
+                  <th className="px-3 py-2.5 print:hidden"></th>
                 </tr>
               </thead>
               <tbody>
@@ -165,7 +166,7 @@ function CampaignRow({
       <td className="max-w-[200px] border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
         {campaign.notes ?? '—'}
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+      <td className="border-b border-stone-200 px-3 py-2.5 align-top print:hidden">
         <RowActions
           campaign={campaign}
           dealers={dealers}
@@ -178,30 +179,6 @@ function CampaignRow({
   );
 }
 
-function filterCampaigns(
-  rows: Campaign[],
-  { q, status, showCancelled }: { q: string; status: string; showCancelled: boolean }
-) {
-  const today = todayIso();
-  let out = rows;
-  if (!showCancelled) out = out.filter((c) => c.status !== 'cancelled');
-  if (status === 'upcoming') out = out.filter((c) => c.endDate >= today);
-  if (status === 'past') out = out.filter((c) => c.endDate < today);
-  if (q) {
-    const needle = q.toLowerCase();
-    out = out.filter((c) => {
-      return (
-        c.dealerName.toLowerCase().includes(needle) ||
-        (c.coachName?.toLowerCase().includes(needle) ?? false) ||
-        (c.styleLabel?.toLowerCase().includes(needle) ?? false) ||
-        (c.notes?.toLowerCase().includes(needle) ?? false) ||
-        (c.contact?.toLowerCase().includes(needle) ?? false)
-      );
-    });
-  }
-  return out;
-}
-
 function fmtDate(iso: string) {
   const d = new Date(`${iso}T12:00:00`);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -209,9 +186,4 @@ function fmtDate(iso: string) {
 
 function fmtNum(n: number | null) {
   return n == null ? <span className="text-stone-400">—</span> : n.toLocaleString();
-}
-
-function todayIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
