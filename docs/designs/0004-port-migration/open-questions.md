@@ -14,7 +14,7 @@ Triage layer for the questions below, so we can selectively share with the busin
 
 Only the questions where the *business call* is the fork. Everything else has an engineering default.
 
-- **Q10 — Branding.** Does the app render "SaleDay Events" or "Salesability Events"? Today it's SaleDay (legacy mark from `deprecated/index.html`); marketing site at `salesability.ca` says Salesability. Gates the [`0016-book-your-event-intake`](../0016-book-your-event-intake/plan.md) work — without alignment, the seam between the marketing site and the app reads as two different products.
+- **Q10 — Branding.** Does the app render "SaleDay Events" or "Salesability Events"? Today it's SaleDay (legacy mark from `deprecated/index.html`); marketing site at `salesability.ca` says Salesability. Without alignment, the seam between the marketing site and the app reads as two different products.
 - **Q1 — Coach-schedule share pages: authenticated or open?** A coach's schedule (today at `/share/coach/<id>`) can either *require login* (only signed-in staff/coach see it) or stay *open* (anyone with the link can see it). Pure business call about how the link is shared and who's expected to view it. If the answer is "open", how we keep the link from being enumerable (sequential IDs vs. unguessable tokens) is an engineering follow-up, not a business question.
 
 ### Engineering-only (no business input needed)
