@@ -50,7 +50,12 @@ const Backdrop = React.forwardRef<
   );
 });
 
-type PanelContainerProps = React.ComponentPropsWithoutRef<typeof HUIPanel>;
+type PanelContainerProps = Omit<
+  React.ComponentPropsWithoutRef<typeof HUIPanel>,
+  'children'
+> & {
+  children?: React.ReactNode;
+};
 
 const Panel = React.forwardRef<HTMLDivElement, PanelContainerProps>(function Panel(
   { className, children, ...props },
