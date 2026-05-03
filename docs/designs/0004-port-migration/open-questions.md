@@ -10,46 +10,47 @@ When a question is resolved, move the entry into the body of the umbrella plan (
 
 Triage layer for the questions below, so we can selectively share with the business without overloading or diluting them with internal-only concerns. Update this list whenever a question is added, resolved, or its audience changes.
 
-### Decisions to share with the business (Shannon / whoever owns brand + DNS)
+### To pose to the business (Shannon)
 
-These need a real outside-engineering call. The detail in the body below is the long form; the one-liner is enough to start a conversation.
+Only the questions where the *business call* is the fork. Everything else has an engineering default.
 
 - **Q10 — Branding.** Does the app render "SaleDay Events" or "Salesability Events"? Today it's SaleDay (legacy mark from `deprecated/index.html`); marketing site at `salesability.ca` says Salesability. Gates the [`0016-book-your-event-intake`](../0016-book-your-event-intake/plan.md) work — without alignment, the seam between the marketing site and the app reads as two different products.
-- **Q8 — Editable email preview modal.** When a coach or rep clicks "Email Client" / "Email Coach", do they get a confirm-and-send dialog (current behaviour), a *preview* of the rendered template, or a fully *editable* modal where they can tweak `To` / `Subject` / `Body` before send? Decision affects how much trust we put in template defaults vs. operator judgment.
-- **Q6 — Cutover plan for `events.salesability.ca`.** Maintenance window vs. blue/green; whether the legacy spreadsheet stays writable as a fallback; named owner watching the new app for the first ~week; rollback signal definition.
-- **Q5 — Resend domain verification.** Whoever owns the `salesability.ca` DNS zone needs to add SPF / DKIM / DMARC records before we can send mail from a real `@salesability.ca` address. Until then we ship from the Resend sandbox sender.
-- *(Optional context, not required)* **Q1 — Share-link enumeration risk.** Today `/share/coach/1`, `/2`, ... — anyone iterating IDs can see every coach's schedule. Migration to unguessable tokens is a small engineering task, but if the business has an opinion on whether old links should keep working through the migration, that's worth surfacing.
+- **Q1 — Coach-schedule share pages: authenticated or open?** A coach's schedule (today at `/share/coach/<id>`) can either *require login* (only signed-in staff/coach see it) or stay *open* (anyone with the link can see it). Pure business call about how the link is shared and who's expected to view it. If the answer is "open", how we keep the link from being enumerable (sequential IDs vs. unguessable tokens) is an engineering follow-up, not a business question.
 
-### Engineering-only (don't share, no business input needed)
+### Engineering-only (no business input needed)
 
-These are internal hygiene / sequencing trade-offs. Listed for completeness so it's clear nothing's been forgotten.
+These are internal hygiene / sequencing / vendor-mechanics trade-offs. Listed for completeness so it's clear nothing's been forgotten.
 
 - Q2 — Dev-environment email fail-closed default
 - Q3 — Email URL canonical origin (configured base URL vs request `Host:` header)
 - Q4 — Edit-on-cancelled-campaign TOCTOU UX
+- Q5 — Resend domain verification mechanics (paired with Phase 6 cutover sequencing)
+- Q6 — Cutover plan details (maintenance window, rollback signal, owners — operational checklist, not a business decision)
 - Q7 — `messages_sent` audit-table sequencing (own chunk vs. bundle with 5.7 vs. defer to Phase 7)
+- Q8 — Editable email preview modal (UX call, but driven by post-cutover user feedback, not pre-flight business approval)
 - Q9 — Which sub-plan is next
 
 ---
 
-## 1. Should `/share/coach/[id]` keep using sequential IDs?
+## 1. Coach-schedule share pages: authenticated or open?
 
-**Current state.** `src/app/share/coach/[id]/page.tsx:15` accepts a numeric `contacts.id`. The route is in `PUBLIC_PATHS` (no auth). Anyone who knows the URL can see the coach's name + every non-cancelled campaign assigned to them (dealer, dates, ribbons). Today the URL doubles as the authorization — "if you got the link, you're allowed to see it" — but the link is `/share/coach/1`, `/share/coach/2`, …, so it isn't a secret.
+**Current state.** `src/app/share/coach/[id]/page.tsx:15` is open — anyone with the URL sees the coach's name + every non-cancelled campaign assigned to them. The link `/share/coach/<id>` doubles as the only authorization. The link is meant to be sent to the coach (and possibly to dealers / partners) so they can check their schedule without signing in.
 
-**Question.** Do we keep ID-based URLs and accept the enumeration risk, or migrate to unguessable tokens before flipping `events.salesability.ca` to the new app?
+**Question (for the business).** Should this page require sign-in, or stay open?
 
 **Options.**
-- **A. Unguessable share token** (Codex's recommendation, my default). Add `share_token` column on `contacts`, generate at coach-create / backfill once, change the route param to `[token]`, update all URL builders (`src/features/email/actions.ts`, `coachShareLink` template, any UI that surfaces the URL). Old `/share/coach/<numeric-id>` URLs break.
-  - **Pro:** enumeration impossible. Tokens rotatable. No password / no auth flow needed.
-  - **Con:** requires a small migration + URL-builder sweep. Old links in coach inboxes (sent during the legacy era) stop working.
-- **B. Auth the route.** Require sign-in to see anyone's schedule. Coaches access their own via the regular `(app)/calendar` filter.
-  - **Pro:** strongest. No leak surface at all.
-  - **Con:** coaches don't sign in today. Legacy share-link UX disappears entirely. Material UX change.
-- **C. Status quo.** Document the trade-off, accept it, monitor.
-  - **Pro:** zero work.
-  - **Con:** the bet is "no one will scrape." Once `events.salesability.ca` flips, the URL space is publicly crawlable.
+- **A. Open (status quo).** Anyone with the link sees the coach's schedule. No login. Convenient for coaches who don't want to sign in, and for sharing read-only schedules with dealers.
+  - **Pro:** zero friction. Matches how coaches use the legacy app today.
+  - **Con:** schedule is visible to anyone with the URL — and if links can be guessed, anyone iterating URLs.
+- **B. Authenticated.** Require sign-in to see any coach's schedule. Coaches access their own through the regular `(app)/calendar` filter.
+  - **Pro:** schedule is only visible to authenticated staff/coaches. No leak surface.
+  - **Con:** every coach now needs to sign in to check their own schedule. Material change in how the share-link UX has worked to date.
 
-**Recommendation.** **A.** It's a small chunk (schema + backfill + route param + 3 URL-builder sites) and removes a Phase-6 blocker. Keep ID-based URLs working for ~30 days as a redirect (`/share/coach/<id>` → 404 or → 410 Gone) so we get telemetry on whether old links are still being clicked, but don't render the schedule for them.
+**Recommendation.** Pose the trade-off as written. The right answer depends on how coaches actually use the link today — if they treat it as "my schedule, sent by Shannon, glance and go", then A is the model; if they're comfortable signing in (or already do via Google), B is straightforwardly safer.
+
+**If A wins — engineering follow-up (not a business question).** Today the URL is `/share/coach/1`, `/2`, …, so anyone iterating IDs can scrape every coach's schedule. We'd want to migrate to unguessable share tokens before Phase 6 cutover (small chunk: add `share_token` column, generate per coach, change route param to `[token]`, update URL builders in `src/features/email/actions.ts` and the `coachShareLink` email template). This is engineering's call once the business locks in "open."
+
+**If B wins — engineering follow-up.** Auth the route, redirect unauthenticated `/share/coach/<id>` to `/login?next=…`. Coaches who don't currently sign in need an onboarding pass.
 
 **Decision needed by.** Phase 6 cutover.
 
