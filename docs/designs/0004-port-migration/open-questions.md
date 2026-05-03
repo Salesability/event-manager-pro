@@ -14,8 +14,8 @@ Triage layer for the questions below, so we can selectively share with the busin
 
 Only the questions where the *business call* is the fork. Everything else has an engineering default.
 
-- **Q10 — Branding.** Does the app render "SaleDay Events" or "Salesability Events"? Today it's SaleDay (legacy mark from `deprecated/index.html`); marketing site at `salesability.ca` says Salesability. Without alignment, the seam between the marketing site and the app reads as two different products.
-- **Q1 — Coach-schedule share pages: authenticated or open?** A coach's schedule (today at `/share/coach/<id>`) can either *require login* (only signed-in staff/coach see it) or stay *open* (anyone with the link can see it). Pure business call about how the link is shared and who's expected to view it. If the answer is "open", how we keep the link from being enumerable (sequential IDs vs. unguessable tokens) is an engineering follow-up, not a business question.
+- **Q10 — Marketing-site brand alignment.**
+- **Q1 — Coach-schedule share pages: authenticated or open?**
 
 ### Engineering-only (no business input needed)
 
@@ -198,28 +198,31 @@ These are internal hygiene / sequencing / vendor-mechanics trade-offs. Listed fo
 
 ---
 
-## 10. Which brand does the app render — "SaleDay Events" or "Salesability Events"?
+## 10. Marketing-site brand alignment for the app
 
-**Current state.** Today the app renders the **SaleDay Events** mark across the gated header (`src/components/app/app-header.tsx`), the login card (`src/app/login/page.tsx`), the `/share/coach/[id]` public header, and the favicon (`src/app/favicon.ico`) — all sourced from the legacy `deprecated/index.html` (commits `796138d` + `f85fc0b` on 2026-05-03). Meanwhile the live marketing site at [salesability.ca](https://www.salesability.ca/) brands itself as **Salesability Events** with the tagline "Helping dealers connect with their customers" — no "SaleDay" anywhere. The `salesability.ca` favicon is the Squarespace `default-favicon.ico`, so we can't lift it.
+**Why this is here.** The "Book Your Event" CTA on [salesability.ca](https://www.salesability.ca/book-your-event) is the planned entry point into this app. A prospect clicks the button on a Salesability-branded marketing page and lands in our app — that's a single user journey across two systems. For the integration to feel coherent (not "wait, what app is this?"), the app needs to wear the same brand the marketing site wears.
 
-User has confirmed (2026-05-03) that the **"Book Your Event" CTA on `salesability.ca/book-your-event` will be the entry point into this app.** Prospects transition straight from the marketing site into our app, so visual continuity matters.
+**Current state.**
+- **Marketing site** (`salesability.ca`): brands as **Salesability Events**, tagline *"Helping dealers connect with their customers"*. The site's own favicon is the Squarespace `default-favicon.ico` — there's no real mark to lift.
+- **App** (this repo): renders the legacy **SaleDay Events** mark across the gated header (`src/components/app/app-header.tsx`), login card (`src/app/login/page.tsx`), `/share/coach/[id]` public header, and favicon (`src/app/favicon.ico`) — all sourced from `deprecated/index.html` (commits `796138d` + `f85fc0b` on 2026-05-03).
+- **Result of the mismatch:** the seam between the marketing site and the app reads as two different products. Acceptable today (the app isn't yet the entry point); not acceptable once the integration is live.
 
-**Question.** Which brand does this app render once it goes live at `events.salesability.ca`?
+**Question.** What brand assets do we use across the app so the marketing→app journey feels like one product?
 
 **Options.**
-- **A. Match the marketing site — Salesability Events.** Get a real Salesability mark + favicon from whoever owns the `salesability.ca` brand assets. Swap header, login, share, favicon.
-  - **Pro:** continuity with the entry-point CTA. No "wait, what app is this?" moment for prospects.
-  - **Con:** depends on brand assets that don't exist publicly today (`salesability.ca` itself is using the Squarespace default favicon).
-- **B. Keep SaleDay.** Treat "SaleDay Events" as a sub-brand or product line under Salesability — the booking app retains its own identity.
-  - **Pro:** matches what the legacy app shipped with. Zero work.
-  - **Con:** nothing on `salesability.ca` references the SaleDay name. Reads as a different product.
-- **C. Strip branding to text-only.** Remove the SaleDay mark, render "Salesability Events" as plain typography, ship a generic-letter favicon. Defer the real brand mark.
-  - **Pro:** doesn't lock us into the wrong brand. Easy to swap later.
-  - **Con:** less polished.
+- **A. Salesability brand assets, sourced.** Get a real Salesability Events logo + favicon (and ideally a colour palette + typography note) from whoever owns the brand. Swap header, login, share, favicon to use them. The marketing site can adopt the same favicon at the same time, fixing its current Squarespace-default state.
+  - **Pro:** true alignment. The integration looks like one product.
+  - **Con:** requires brand assets that don't exist publicly today.
+- **B. Bridge — text-only Salesability typography.** Drop the SaleDay mark, render "Salesability Events" as plain typography, ship a generic-letter ("S") favicon. Defer the real mark.
+  - **Pro:** name aligns with the marketing site immediately. Easy to swap to A when assets land.
+  - **Con:** less polished than a real mark, but matches the marketing site's own (currently mark-less) visual treatment.
+- **C. Status quo — keep SaleDay until cutover forces a decision.** Acceptable while the app is invitation-only and not the entry point. Stops being acceptable the day the marketing-site CTA points at us.
+  - **Pro:** zero work.
+  - **Con:** breaks the integration premise. Prospects see a brand mismatch the moment they cross the seam.
 
-**Recommendation.** **A**, contingent on getting brand assets. **C** as the bridge if assets are not forthcoming. **B** is the de-facto state today and works as long as Phase 6 cutover doesn't depend on visual continuity with the marketing site — which the entry-point CTA decision ([memory: salesability.ca → app entry point](#)) suggests it does.
+**Recommendation.** **B** as the immediate move (text-only Salesability) — it aligns the *name* without waiting for assets, and is reversible. **A** as the target state once assets are sourced. Hold **C** only as long as the marketing-site CTA still points at the Squarespace form.
 
-**Decision needed by.** Same window as the entry-point chunk and Phase 6 cutover. The app should not flip to `events.salesability.ca` rendering a brand the marketing site doesn't acknowledge.
+**Decision needed by.** Before the marketing-site CTA is repointed at this app — i.e. before the [`0016-book-your-event-intake`](../0016-book-your-event-intake/plan.md) cutover phase, and before Phase 6 (`events.salesability.ca` flip), whichever lands first.
 
 ---
 
