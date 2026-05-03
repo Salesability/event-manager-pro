@@ -25,6 +25,10 @@ DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-database-url}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
 
+# Public origin used by server actions to build OAuth/magic-link redirect URLs.
+# Override via PROD_SITE_URL if the service hostname changes.
+PROD_SITE_URL="${PROD_SITE_URL:-https://${SERVICE_NAME}-248904507231.${REGION}.run.app}"
+
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
 # because Next.js inlines them into the client bundle.
@@ -83,6 +87,8 @@ ENV_DELIM='@@'
 ENV_VARS="^${ENV_DELIM}^"
 ENV_VARS+="NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}"
 ENV_VARS+="${ENV_DELIM}NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+ENV_VARS+="${ENV_DELIM}SITE_URL=${PROD_SITE_URL}"
+ENV_VARS+="${ENV_DELIM}APP_ENV=production"
 
 echo "🚀 Deploying ${IMAGE} to Cloud Run service ${SERVICE_NAME} in ${REGION}..."
 gcloud run deploy "${SERVICE_NAME}" \
