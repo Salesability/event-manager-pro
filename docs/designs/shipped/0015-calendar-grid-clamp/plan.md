@@ -6,10 +6,10 @@ The calendar's slot-packing drops any campaign whose `startDate` or `endDate` fa
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Clamp helper + grid bounds extraction | Pending | - |
-| 2: Apply clamp in `slotAssignment` slot packer | Pending | - |
-| 3: Apply clamp in `drawRibbons` overlay positioning | Pending | - |
-| 4: Unit tests for the clamp helper + dev-server visual smoke | Pending | - |
+| 1: Clamp helper + grid bounds extraction | Done | - |
+| 2: Apply clamp in `slotAssignment` slot packer | Done | - |
+| 3: Apply clamp in `drawRibbons` overlay positioning | Done | - |
+| 4: Unit tests for the clamp helper + dev-server visual smoke | Done | - |
 
 ## Code Anchors
 
@@ -26,7 +26,14 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/architecture.md` — calendar uses a 42-cell grid (6 weeks × 7 days) regardless of month length; leading days come from the prior month, trailing from the next. The clamp is what lets that decision survive multi-week events.
 - `CLAUDE.md` — "Don't add features beyond what the task requires." Scope here is the clamp only; do not refactor the slot packer, do not extract `calendar-utils.ts` unless a second use site materializes.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
+
+### Implementation notes (2026-05-03)
+
+- Helper extracted to `src/app/(app)/calendar/calendar-grid.ts` (`clampToGrid(startDate, endDate, grid)` + `GRID_LAST_INDEX = 41`). Sibling test `calendar-grid.test.ts` covers the seven boundary cases from the checklist below.
+- `calendar-view.tsx` derives a `grid = { firstDate, lastDate, indexOf }` once from `cells` + `cellIndexMap`, runs `clampToGrid` once per visible event up front, and stashes the clamped `_si`/`_ei` on each slotted record. Both the slot packer and `drawRibbons` then read the precomputed indices, which guarantees the two passes agree on the clamped range.
+- Updated the legacy-port comments at the slot-packer and `drawRibbons` blocks to call out the deliberate departure (legacy dropped these events; we render the visible slice).
+- `pnpm tsc --noEmit` clean. `pnpm test` 42/42 (35 prior + 7 new).
 
 **Note:**
 - Pure rendering bug; no schema, no migration, no server-action change.
@@ -36,26 +43,27 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Clamp helper + grid bounds extraction
-- [ ] Task 1
-- [ ] Task 2
+- [x] Add `calendar-grid.ts` with `clampToGrid` + `GRID_LAST_INDEX`
+- [x] Derive `grid = { firstDate, lastDate, indexOf }` in `calendar-view.tsx`
 
 #### Phase 2: Apply clamp in `slotAssignment` slot packer
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+- [x] Replace the early-out at the entry pass with a clamped record
+- [x] Use the precomputed `_si`/`_ei` in the per-row slot search and `rowMaxSlots` pass
+- [x] Update the legacy-port comment to call out the deliberate departure
 
 #### Phase 3: Apply clamp in `drawRibbons` overlay positioning
-- [ ] Task 1
-- [ ] Task 2
+- [x] Read `_si`/`_ei` from slotted records instead of looking up `cellIndexMap`
+- [x] Update the legacy-port comment
 
 #### Phase 4: Unit tests for the clamp helper + dev-server visual smoke
-- [ ] Test: range entirely before grid → returns null (skip)
-- [ ] Test: range entirely after grid → returns null (skip)
-- [ ] Test: range starts before grid, ends inside → clamped to `[0, ei]`
-- [ ] Test: range starts inside, ends after grid → clamped to `[si, 41]`
-- [ ] Test: range fully encloses grid → clamped to `[0, 41]`
-- [ ] Test: single-cell event inside grid → unchanged
-- [ ] Test: zero-day event (start == end) at boundary → unchanged
-- [ ] Visual smoke: insert a fixture campaign spanning the prior-month leading days into May 2026; verify ribbon renders on the visible portion only
-- [ ] Visual smoke: same fixture spanning trailing days of May 2026 into June 2026
-- [ ] Tear down the fixture
+- [x] Test: range entirely before grid → returns null (skip)
+- [x] Test: range entirely after grid → returns null (skip)
+- [x] Test: range starts before grid, ends inside → clamped to `[0, ei]`
+- [x] Test: range starts inside, ends after grid → clamped to `[si, 41]`
+- [x] Test: range fully encloses grid → clamped to `[0, 41]`
+- [x] Test: single-cell event inside grid → unchanged
+- [x] Test: zero-day event (start == end) at boundary → unchanged
+- [x] Test: range overlaps only the prior-month leading strip → clamped to `[0, n]` (added 2026-05-04 per Codex Low from `eval-2026-05-04-0804.md`)
+- [x] Test: range overlaps only the next-month trailing strip → clamped to `[n, 41]` (added 2026-05-04)
+- [x] Visual smoke: leading-clamp fixture (Apr 15 → May 4) renders correctly across April + May 2026 grids (4 ribbon segments per view); trailing-clamp fixture (May 28 → Jun 25) renders correctly across May + June 2026 grids (4 ribbon segments per view). No console / network errors during month-stepping.
+- [x] Tear down the fixture (throwaway smoke script — `scripts/calendar-clamp-smoke.ts` — deleted with this chunk).

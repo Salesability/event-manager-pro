@@ -18,6 +18,7 @@ import type {
 } from '@/features/schedule/queries';
 import { AvailabilityAdmin } from '@/features/schedule/availability-admin';
 import { BookingForm } from './booking-form';
+import { clampToGrid, GRID_LAST_INDEX } from './calendar-grid';
 import { EventDetail } from './event-detail';
 
 type Mode = 'app' | 'share';
@@ -171,6 +172,15 @@ export function CalendarView({
     return map;
   }, [cells]);
 
+  const grid = useMemo(
+    () => ({
+      firstDate: cells[0].date,
+      lastDate: cells[GRID_LAST_INDEX].date,
+      indexOf: cellIndexMap,
+    }),
+    [cells, cellIndexMap]
+  );
+
   const blockedByDate = useMemo(() => {
     const map: Record<string, AvailabilityBlock> = {};
     for (const b of blocks) {
@@ -198,20 +208,26 @@ export function CalendarView({
       : campaigns.filter((c) => c.coachId === scopedCoachId);
   }, [campaigns, scopedCoachId]);
 
-  // Slot assignment, verbatim translation of legacy renderCalendar slot-packing.
+  // Slot assignment, ported from legacy renderCalendar slot-packing. Departs
+  // from legacy by clamping events that overlap but extend past the grid
+  // (legacy dropped them entirely).
   const slotAssignment = useMemo(() => {
-    type Slotted = Campaign & { _rowSlotAssigned: Record<number, number> };
-    const slotted = visibleEvents.map(
-      (c): Slotted => ({ ...c, _rowSlotAssigned: {} })
-    );
+    type Slotted = Campaign & {
+      _rowSlotAssigned: Record<number, number>;
+      _si: number;
+      _ei: number;
+    };
+    const slotted: Slotted[] = [];
+    for (const c of visibleEvents) {
+      if (!c.startDate || !c.endDate) continue;
+      const clamped = clampToGrid(c.startDate, c.endDate, grid);
+      if (!clamped) continue;
+      slotted.push({ ...c, _rowSlotAssigned: {}, _si: clamped.si, _ei: clamped.ei });
+    }
 
     const rowEvents: Record<number, Slotted[]> = {};
     for (const ev of slotted) {
-      if (!ev.startDate || !ev.endDate) continue;
-      const si = cellIndexMap[ev.startDate];
-      const ei = cellIndexMap[ev.endDate];
-      if (si === undefined || ei === undefined) continue;
-      for (let row = Math.floor(si / 7); row <= Math.floor(ei / 7); row++) {
+      for (let row = Math.floor(ev._si / 7); row <= Math.floor(ev._ei / 7); row++) {
         if (!rowEvents[row]) rowEvents[row] = [];
         if (!rowEvents[row].includes(ev)) rowEvents[row].push(ev);
       }
@@ -224,14 +240,14 @@ export function CalendarView({
       const rowStart = row * 7;
       const rowEnd = rowStart + 6;
       for (const ev of evs) {
-        const si = Math.max(cellIndexMap[ev.startDate] ?? 0, rowStart);
-        const ei = Math.min(cellIndexMap[ev.endDate] ?? 0, rowEnd);
+        const si = Math.max(ev._si, rowStart);
+        const ei = Math.min(ev._ei, rowEnd);
         const usedSlots = new Set<number>();
         for (const other of evs) {
           if (other === ev) continue;
           if (other._rowSlotAssigned[row] === undefined) continue;
-          const osi = Math.max(cellIndexMap[other.startDate] ?? 0, rowStart);
-          const oei = Math.min(cellIndexMap[other.endDate] ?? 0, rowEnd);
+          const osi = Math.max(other._si, rowStart);
+          const oei = Math.min(other._ei, rowEnd);
           if (si <= oei && ei >= osi) usedSlots.add(other._rowSlotAssigned[row]);
         }
         let slot = 0;
@@ -242,18 +258,14 @@ export function CalendarView({
 
     const rowMaxSlots: Record<number, number> = {};
     for (const ev of slotted) {
-      if (!ev.startDate || !ev.endDate) continue;
-      const si = cellIndexMap[ev.startDate];
-      const ei = cellIndexMap[ev.endDate];
-      if (si === undefined || ei === undefined) continue;
-      for (let row = Math.floor(si / 7); row <= Math.floor(ei / 7); row++) {
+      for (let row = Math.floor(ev._si / 7); row <= Math.floor(ev._ei / 7); row++) {
         const slot = ev._rowSlotAssigned[row] ?? 0;
         rowMaxSlots[row] = Math.max(rowMaxSlots[row] ?? 0, slot + 1);
       }
     }
 
     return { slotted, rowMaxSlots };
-  }, [visibleEvents, cellIndexMap]);
+  }, [visibleEvents, grid]);
 
   // Compute per-row cell heights from row max slots.
   const rowHeights = useMemo(() => {
@@ -279,7 +291,10 @@ export function CalendarView({
     return set;
   }, [visibleEvents]);
 
-  // Ribbon overlay positioning. Verbatim port of legacy drawRibbons.
+  // Ribbon overlay positioning. Ported from legacy drawRibbons; uses the
+  // clamped indices precomputed by slotAssignment so ribbons line up with the
+  // slots they were assigned (and don't fall off when the range extends past
+  // the visible grid).
   const wrapperRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -303,10 +318,8 @@ export function CalendarView({
     const offY = gridRect.top - wrapRect.top;
 
     for (const ev of evs) {
-      if (!ev.startDate || !ev.endDate) continue;
-      const si = cellIndexMap[ev.startDate];
-      const ei = cellIndexMap[ev.endDate];
-      if (si === undefined || ei === undefined) continue;
+      const si = ev._si;
+      const ei = ev._ei;
       const color = getCoachColor(ev.coachId);
       const clientName = ev.dealerName || 'Event';
       const coachName = ev.coachName ?? '';
@@ -359,7 +372,7 @@ export function CalendarView({
         overlay.appendChild(bar);
       }
     }
-  }, [slotAssignment, cellIndexMap, getCoachColor, mode]);
+  }, [slotAssignment, getCoachColor, mode]);
 
   useLayoutEffect(() => {
     drawRibbons();
