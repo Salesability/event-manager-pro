@@ -4,7 +4,6 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
   loadCurrentMembership: vi.fn(),
-  dealerContactRows: [] as Array<{ id: number }>,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -19,18 +18,6 @@ vi.mock('@/lib/auth/load-team-membership', () => ({
   loadCurrentMembership: mocks.loadCurrentMembership,
 }));
 
-vi.mock('@/lib/db', () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => mocks.dealerContactRows,
-        }),
-      }),
-    }),
-  },
-}));
-
 import { GET } from './route';
 
 function makeRequest(qs: Record<string, string>): NextRequest {
@@ -43,7 +30,6 @@ describe('/auth/callback role-aware routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
-    mocks.dealerContactRows = [];
   });
 
   it('missing code → redirects to auth-error', async () => {
@@ -64,6 +50,7 @@ describe('/auth/callback role-aware routing', () => {
       contactId: 7,
       roles: ['admin'],
       coachContactId: null,
+      hasDealerContact: false,
     });
     const res = await GET(makeRequest({ code: 'abc', next: '/calendar' }));
     expect(res.headers.get('location')).toContain('/calendar');
@@ -74,9 +61,9 @@ describe('/auth/callback role-aware routing', () => {
       contactId: 8,
       roles: ['coach'],
       coachContactId: 8,
+      hasDealerContact: false,
     });
     const res = await GET(makeRequest({ code: 'abc' }));
-    // safeNextPath default falls to '/'
     const loc = res.headers.get('location') ?? '';
     expect(loc).not.toContain('/auth/auth-error');
   });
@@ -86,8 +73,8 @@ describe('/auth/callback role-aware routing', () => {
       contactId: 9,
       roles: [],
       coachContactId: null,
+      hasDealerContact: true,
     });
-    mocks.dealerContactRows = [{ id: 100 }];
     const res = await GET(makeRequest({ code: 'abc' }));
     expect(res.headers.get('location')).toContain(
       '/auth/auth-error?reason=Portal+not+yet+available',
@@ -107,8 +94,8 @@ describe('/auth/callback role-aware routing', () => {
       contactId: 11,
       roles: [],
       coachContactId: null,
+      hasDealerContact: false,
     });
-    mocks.dealerContactRows = [];
     const res = await GET(makeRequest({ code: 'abc' }));
     expect(res.headers.get('location')).toContain(
       '/auth/auth-error?reason=Account+not+provisioned',

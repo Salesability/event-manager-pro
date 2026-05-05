@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+// React's `cache()` is a no-op identity wrapper outside a Server Components
+// runtime; the function we wrap stays callable, just without per-request memo.
+vi.mock('react', async (importActual) => {
+  const actual = await importActual<typeof import('react')>();
+  return { ...actual, cache: <T,>(fn: T): T => fn };
+});
 vi.mock('@/lib/supabase/session', () => ({ getUser: mocks.getUser }));
 
 vi.mock('@/lib/db', () => ({
@@ -48,11 +54,13 @@ describe('loadCurrentMembership', () => {
     mocks.selectResults = [
       [{ id: 7 }], // contact row
       [{ role: 'coach' }], // team_member_roles
+      [], // dealer_contacts probe
     ];
     expect(await loadCurrentMembership()).toEqual({
       contactId: 7,
       roles: ['coach'],
       coachContactId: 7,
+      hasDealerContact: false,
     });
   });
 
@@ -61,11 +69,13 @@ describe('loadCurrentMembership', () => {
     mocks.selectResults = [
       [{ id: 9 }],
       [{ role: 'admin' }],
+      [],
     ];
     expect(await loadCurrentMembership()).toEqual({
       contactId: 9,
       roles: ['admin'],
       coachContactId: null,
+      hasDealerContact: false,
     });
   });
 
@@ -74,24 +84,43 @@ describe('loadCurrentMembership', () => {
     mocks.selectResults = [
       [{ id: 12 }],
       [{ role: 'admin' }, { role: 'coach' }],
+      [],
     ];
     expect(await loadCurrentMembership()).toEqual({
       contactId: 12,
       roles: ['admin', 'coach'],
       coachContactId: 12,
+      hasDealerContact: false,
     });
   });
 
-  it('returns coachContactId null when the contact has no team_member_roles', async () => {
+  it('reports hasDealerContact when the contact has only them-side rows', async () => {
     mocks.getUser.mockResolvedValue({ id: 'user-1' });
     mocks.selectResults = [
       [{ id: 5 }],
+      [], // no team_member_roles
+      [{ id: 99 }], // active dealer_contacts row
+    ];
+    expect(await loadCurrentMembership()).toEqual({
+      contactId: 5,
+      roles: [],
+      coachContactId: null,
+      hasDealerContact: true,
+    });
+  });
+
+  it('returns coachContactId null when the contact has no team_member_roles or dealer_contacts', async () => {
+    mocks.getUser.mockResolvedValue({ id: 'user-1' });
+    mocks.selectResults = [
+      [{ id: 5 }],
+      [],
       [],
     ];
     expect(await loadCurrentMembership()).toEqual({
       contactId: 5,
       roles: [],
       coachContactId: null,
+      hasDealerContact: false,
     });
   });
 });

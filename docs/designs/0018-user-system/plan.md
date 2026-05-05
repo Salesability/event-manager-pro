@@ -29,7 +29,7 @@ This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../shipp
    |---|---|---|
    | `admin` | **Live** — `app_metadata.role = 'admin'` + `team_member_roles(role='admin')` written together. Unlocks `/admin/*` (user mgmt, lookups). | Yes — gate on every admin route + action. |
    | `coach` | **Live** — `team_member_roles(role='coach')`. Triggers calendar auto-filter (Phase 4) and is the coach-share-link audience. | Yes — calendar pre-filter; can email own share link. |
-   | `staff` | **Reserved** — enum value stays in the schema, but no row is written by the v1 admin UI. The default for any signed-in non-admin (no `team_member_roles` row at all) IS the "staff" experience. | No — wire when "staff vs viewer" matters. |
+   | `staff` | **Reserved** — enum value stays in the schema, but no row is written by the v1 admin UI. ~~The default for any signed-in non-admin (no `team_member_roles` row at all) IS the "staff" experience.~~ **Updated 2026-05-05 (eval follow-up):** the staff-app gate now requires a `team_member_roles` row OR `app_metadata.role === 'admin'` — the "no role = implicit staff" default was a Codex Critical (post-callback URL bypass). Use `coach` for coaches; admins use `admin`; reserve `staff`/`viewer` for explicit future wiring. | No — wire when "staff vs viewer" matters. |
    | `viewer` | **Reserved** — same status as `staff`. Wire when a real read-only stakeholder shows up (e.g., a finance manager who needs visibility but not edit access). | No. |
 
    **Them-side (`dealer_contacts.role` + optional `contacts.user_id`):** these gate **portal** access, not staff app. 0018 doesn't ship the portal — Phase 5 routes them-side users to a placeholder. The taxonomy is locked here so the portal plan inherits it.

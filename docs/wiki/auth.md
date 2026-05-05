@@ -79,9 +79,14 @@ When an admin promotes a user via `/admin/users`, both surfaces are written in t
 
 ## Login routing: staff vs portal contacts
 
-`src/app/auth/callback/route.ts` runs the decision tree after `exchangeCodeForSession`:
+The decision tree runs in **two places** so it's durable, not just a one-shot greeting:
 
-- **`team_member_roles` rows exist** (any role) → redirect to safe `next` (default `/`).
+1. `src/app/auth/callback/route.ts` — *first* request after `exchangeCodeForSession`. Picks the landing URL.
+2. `src/app/(app)/layout.tsx` — every subsequent request to a gated `(app)/*` route. Re-runs the same gate so a contact-only auth user can't bypass the callback redirect by typing `/calendar` directly.
+
+Both consult `loadCurrentMembership()` (wrapped in React's `cache()` so the per-request DB read is shared with `/calendar`'s `viewerCoachId` fetch). The branches:
+
+- **`team_member_roles` rows exist** (any role) → staff app at `next` (default `/`). Admins also pass on `app_metadata.role === 'admin'` alone, so a fresh admin can operate before any role row is written (bootstrap path).
 - **No `team_member_roles`, ≥1 active `dealer_contacts` row** → `/auth/auth-error?reason=Portal+not+yet+available`. The portal isn't built yet (0018 routes the *decision* but not the *destination*); when the portal ships, swap this redirect to `/portal`.
 - **No contacts row, OR contacts but neither table** → `/auth/auth-error?reason=Account+not+provisioned`. Defensive — shouldn't happen with signups disabled.
 

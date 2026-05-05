@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
   adminUpdateUserById: vi.fn(),
   // Queue of arrays returned by successive `db.select(...).from(...).where(...).limit(...)` calls.
   selectResults: [] as unknown[][],
+  // For conditional UPDATE … RETURNING: queue of returned-row arrays. If empty,
+  // an unconditional `await` on a `update().set().where()` resolves with no rows.
+  updateReturning: [] as unknown[][],
   updateCalls: [] as unknown[],
 }));
 
@@ -54,8 +57,18 @@ vi.mock('@/lib/db', () => ({
     }),
     update: () => ({
       set: (patch: unknown) => ({
-        where: async () => {
+        where: () => {
           mocks.updateCalls.push(patch);
+          const returnRows = () =>
+            Promise.resolve(mocks.updateReturning.shift() ?? [{ id: 0 }]);
+          // Both shapes are used: bare `await update().set().where()` and the
+          // conditional `update().set().where().returning(...)`. The thenable
+          // is the bare path; `.returning()` is the conditional path.
+          const chain = {
+            returning: () => returnRows(),
+            then: (onFulfilled: (v: unknown) => unknown) => returnRows().then(onFulfilled),
+          };
+          return chain;
         },
       }),
     }),
@@ -71,6 +84,7 @@ describe('createUser', () => {
     mocks.requireAdmin.mockResolvedValue({ id: 'admin-id', app_metadata: { role: 'admin' } });
     mocks.adminUpdateUserById.mockResolvedValue({ error: null });
     mocks.selectResults = [];
+    mocks.updateReturning = [];
     mocks.updateCalls = [];
   });
 
@@ -122,6 +136,7 @@ describe('linkUserToContact', () => {
     vi.clearAllMocks();
     mocks.requireAdmin.mockResolvedValue({ id: 'admin-id', app_metadata: { role: 'admin' } });
     mocks.selectResults = [];
+    mocks.updateReturning = [];
     mocks.updateCalls = [];
   });
 
@@ -129,16 +144,36 @@ describe('linkUserToContact', () => {
     // Calls in order:
     // 1) fetch target contact → unarchived, user_id null
     // 2) check user not already linked elsewhere → empty
+    // 3) conditional UPDATE … RETURNING returns the row id (we won the race)
     mocks.selectResults = [
       [{ id: 42, userId: null, archivedAt: null }],
       [],
     ];
+    mocks.updateReturning = [[{ id: 42 }]];
     const fd = new FormData();
     fd.set('userId', 'user-uuid-1');
     fd.set('contactId', '42');
     const result = await linkUserToContact(fd);
     expect(result).toEqual({ ok: true });
     expect(mocks.updateCalls).toEqual([{ userId: 'user-uuid-1' }]);
+  });
+
+  it('returns a refresh prompt when a concurrent writer won the race', async () => {
+    // Pre-checks pass, but the conditional UPDATE returns zero rows because
+    // another admin set user_id between the read and the write.
+    mocks.selectResults = [
+      [{ id: 42, userId: null, archivedAt: null }],
+      [],
+    ];
+    mocks.updateReturning = [[]];
+    const fd = new FormData();
+    fd.set('userId', 'user-uuid-1');
+    fd.set('contactId', '42');
+    const result = await linkUserToContact(fd);
+    expect(result).toEqual({
+      error:
+        'Contact was just linked to another user (or archived) by someone else. Refresh and retry.',
+    });
   });
 
   it('errors when the contact is linked to a different user', async () => {

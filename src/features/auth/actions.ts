@@ -164,7 +164,26 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
       };
     }
     if (!autoLinked) {
-      await db.update(contacts).set({ userId }).where(eq(contacts.id, contactId));
+      // Conditional UPDATE so a concurrent admin can't overwrite a fresh link
+      // (TOCTOU between the pre-check at the top of this function and here).
+      // RETURNING zero rows means another writer beat us; surface explicitly.
+      const updated = await db
+        .update(contacts)
+        .set({ userId })
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            isNull(contacts.userId),
+            isNull(contacts.archivedAt),
+          ),
+        )
+        .returning({ id: contacts.id });
+      if (updated.length === 0) {
+        return {
+          error:
+            'The selected contact was just linked to another user (or archived). Refresh and pick again.',
+        };
+      }
     }
   } else if (linkMode === 'create') {
     if (!autoLinked) {
@@ -240,7 +259,27 @@ export async function linkUserToContact(formData: FormData): Promise<ActionResul
     return { error: `User is already linked to contact ${existing.id}.` };
   }
 
-  await db.update(contacts).set({ userId }).where(eq(contacts.id, contactId));
+  // Conditional UPDATE — predicate moves into the write so two admins racing
+  // on the same unlinked contact can't both report success while one silently
+  // overwrites the other. Zero rows returned ⇒ a concurrent writer won; surface
+  // it as a refresh prompt rather than pretending we won.
+  const updated = await db
+    .update(contacts)
+    .set({ userId })
+    .where(
+      and(
+        eq(contacts.id, contactId),
+        isNull(contacts.userId),
+        isNull(contacts.archivedAt),
+      ),
+    )
+    .returning({ id: contacts.id });
+  if (updated.length === 0) {
+    return {
+      error:
+        'Contact was just linked to another user (or archived) by someone else. Refresh and retry.',
+    };
+  }
   revalidateUserAdmin();
   return { ok: true };
 }

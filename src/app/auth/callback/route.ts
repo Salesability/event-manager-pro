@@ -1,7 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { and, eq, isNull } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { dealerContacts } from '@/lib/db/schema';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/url';
@@ -33,29 +30,18 @@ export async function GET(request: NextRequest) {
   //   - Neither → defensive "not provisioned" error. Shouldn't happen with
   //     project-level signups disabled, but if a stray auth.users row exists
   //     we'd rather flag it than render a half-broken staff app.
+  //
+  // Note: the same decision tree runs in `(app)/layout.tsx` so it stays
+  // durable after this first redirect — see docs/wiki/auth.md "Login routing".
   const membership = await loadCurrentMembership();
   if (membership && membership.roles.length > 0) {
     return NextResponse.redirect(new URL(next, url));
   }
 
-  const contactId = membership?.contactId ?? null;
-  const hasDealerContact =
-    contactId != null
-      ? (
-          await db
-            .select({ id: dealerContacts.id })
-            .from(dealerContacts)
-            .where(
-              and(eq(dealerContacts.contactId, contactId), isNull(dealerContacts.archivedAt)),
-            )
-            .limit(1)
-        ).length > 0
-      : false;
-
   const errorUrl = new URL('/auth/auth-error', url);
   errorUrl.searchParams.set(
     'reason',
-    hasDealerContact ? 'Portal not yet available' : 'Account not provisioned',
+    membership?.hasDealerContact ? 'Portal not yet available' : 'Account not provisioned',
   );
   return NextResponse.redirect(errorUrl);
 }
