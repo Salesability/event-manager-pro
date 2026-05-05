@@ -52,13 +52,7 @@ export function PeopleAdmin({
   );
 
   function archive(person: AdminPersonRow) {
-    if (
-      !confirm(
-        `Archive ${person.displayName}? Their team-member roles and dealer relationships will be archived. ${
-          person.hasAppAccess ? 'Their sign-in account will also be banned.' : ''
-        } The contact record itself stays for historical references.`,
-      )
-    ) {
+    if (!confirm(buildArchiveConfirmMessage(person))) {
       return;
     }
     startTransition(async () => {
@@ -134,6 +128,32 @@ export function PeopleAdmin({
       </Dialog.Root>
     </section>
   );
+}
+
+// Compose the archive confirm message from the row's actual facets so the
+// admin sees exactly what's about to disappear: each active role, each
+// dealer relationship (with role), and the auth-side ban if applicable.
+// Falls back to a "nothing to remove" phrasing for orphan contacts.
+function buildArchiveConfirmMessage(person: AdminPersonRow): string {
+  const facets: string[] = [];
+  for (const role of person.roles) facets.push(`drop ${role} role`);
+  for (const link of person.dealerLinks) {
+    facets.push(`end relationship with ${link.dealerName} (${link.role})`);
+  }
+  if (person.hasAppAccess) {
+    const email = person.authUser?.email ?? person.email;
+    facets.push(email ? `ban sign-in for ${email}` : 'ban sign-in account');
+  }
+  if (facets.length === 0) {
+    return `Archive ${person.displayName}? No active roles or relationships to remove. The contact record stays.`;
+  }
+  const list =
+    facets.length === 1
+      ? facets[0]
+      : facets.length === 2
+        ? `${facets[0]} and ${facets[1]}`
+        : `${facets.slice(0, -1).join(', ')}, and ${facets[facets.length - 1]}`;
+  return `This archive will: ${list}. The contact record stays. Continue?`;
 }
 
 type DealerLinkDraft = { dealerId: string; role: DealerContactRole };
