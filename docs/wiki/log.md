@@ -13,9 +13,17 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-05 — 0018 user-system: shipped + durable staff-app gate
+
+- Plan moved to `docs/designs/shipped/0018-user-system/`. Final eval `eval-2026-05-05-1341.md` PASS with warnings; both Codex Critical findings resolved across two follow-up commits (`b4e3b6a`, `9231bd8`).
+- New helper [`src/lib/auth/require-staff-access.ts`](../../src/lib/auth/require-staff-access.ts) is the single source of truth for staff-app gating; called from `(app)/layout.tsx` and from `(app)/production/export/route.ts` (Route Handlers don't run through layouts, so the export was a CSV-exfil path the first round missed).
+- Conditional UPDATE pattern (`WHERE id = ? AND user_id IS NULL AND archived_at IS NULL RETURNING id`) shipped on `linkUserToContact` and the `createUser` pick-existing path — replaces the prior check-then-write TOCTOU window.
+- 81/81 vitest, tsc + lint clean.
+- Two known follow-ups remain (Medium: `createUser` partial-success; Low: test-mock predicate-blindness). Captured in `CURRENT.md` Parked, not in flight.
+
 ## 2026-05-05 — 0018 user-system: full RBAC + role-aware login + auto-link trigger
 
-- Phases 3-5 of [`docs/designs/0018-user-system/plan.md`](../designs/0018-user-system/plan.md) landed in working tree. End-to-end: an admin can provision a user *and* link them to a `contacts` row + `team_member_roles` rows in one Server Action call; a coach signing in lands on `/calendar` already pre-filtered to their own bookings; an unprovisioned auth user gets a clean error rather than a half-rendered staff app.
+- Phases 3-5 of [`docs/designs/shipped/0018-user-system/plan.md`](../designs/shipped/0018-user-system/plan.md) landed in working tree. End-to-end: an admin can provision a user *and* link them to a `contacts` row + `team_member_roles` rows in one Server Action call; a coach signing in lands on `/calendar` already pre-filtered to their own bookings; an unprovisioned auth user gets a clean error rather than a half-rendered staff app.
 - **Auth wiki rewrite** ([auth.md](auth.md)) — provisioning section now describes the `/admin/users` flow (dashboard is fallback only); new "Route gating (RBAC)" section names the two-layer gate (middleware `ADMIN_PATHS` + page-level `requireAdmin()`) plus the hybrid `app_metadata.role` ↔ `team_member_roles` write-time consistency model; "Login routing" section spells out the three-branch decision tree from `src/app/auth/callback/route.ts`. Removed the `profiles` mention; `team_member_roles` is the staff-side role table.
 - **Data-model** ([data-model.md](data-model.md)) — open Q #4 (signup trigger) resolved as shipped. Open Q #15 (role-junction integrity) resolved app-enforced for the `team_member_roles ↔ user_id` half. Inline reference at line 29 fixed to point at Q #15.
 - **Trigger details:** `drizzle/0002_contact_user_backfill_trigger.sql` — `AFTER INSERT ON auth.users` (had to flip from BEFORE — FK from `contacts.user_id → auth.users.id` requires the parent row to exist before the trigger updates `contacts`), `SECURITY DEFINER` with locked `search_path`, idempotent. Smoke against dev DB on 2026-05-05 confirmed auto-link fires correctly.

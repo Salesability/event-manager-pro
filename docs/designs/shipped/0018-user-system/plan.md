@@ -4,7 +4,7 @@
 
 The repo already has the *data model* for a real user system — `contacts.user_id` (nullable UNIQUE FK to `auth.users`), `team_member_roles` (admin / staff / coach / viewer), `dealer_contacts` (customer-side relationships), all wired in `docs/wiki/data-model.md:9-29`. What's missing is the *application wiring*: `src/proxy.ts` gates only "logged in vs not", there is no `requireAdmin()`, no `/admin/users` UI, no contact↔user linkage on signup, no role-aware routing after callback, and no coach auto-filter on `/calendar` (which legacy `deprecated/index.html` did at line 702-710 of `doLogin()`). This plan closes that gap end-to-end. **Done =** an admin can provision a user *and* link them to a `contacts` row + `team_member_roles` row in a single flow; non-admins can't reach `/admin/*`; a signed-in coach lands on `/calendar` already filtered to their own bookings; an unrecognised auth.users post-callback gets a clean error rather than a half-rendered staff app; the `auth.md` wiki "RBAC" open item is resolved.
 
-This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../shipped/0017-user-admin/plan.md). 0017 covered provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It was parked and unstarted, so its content folded into Phase 1 below; 0017 moved to `shipped/` on 2026-05-05 with a supersession note.
+This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../0017-user-admin/plan.md). 0017 covered provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It was parked and unstarted, so its content folded into Phase 1 below; 0017 moved to `shipped/` on 2026-05-05 with a supersession note.
 
 ## Decisions
 
@@ -55,12 +55,12 @@ This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../shipp
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Provisioning + admin page (subsumes 0017) | Done | working tree |
-| 2: RBAC enforcement — `requireAdmin()` consistently applied + admin-route gate + admin-only nav link | Done | working tree |
-| 3: Contact↔user linkage — admin-add-user form picks/creates contact + role; SQL trigger to back-fill `contacts.user_id` on signup | Done | working tree |
-| 4: Coach auto-filter on `/calendar` (legacy parity) | Done | working tree |
-| 5: Role-aware login routing — callback decides staff vs portal vs error | Done | working tree |
-| 6: Wiki updates + verification (tsc + tests + /eval + smoke) | Doc + tests done; /eval + browser smoke pending | working tree |
+| 1: Provisioning + admin page (subsumes 0017) | Done | `259015f` |
+| 2: RBAC enforcement — `requireAdmin()` consistently applied + admin-route gate + admin-only nav link | Done | `d868e26` |
+| 3: Contact↔user linkage — admin-add-user form picks/creates contact + role; SQL trigger to back-fill `contacts.user_id` on signup | Done | `a20b8e9` |
+| 4: Coach auto-filter on `/calendar` (legacy parity) | Done | `420a0fb` |
+| 5: Role-aware login routing — callback decides staff vs portal vs error | Done | `01b344c` |
+| 6: Wiki updates + verification (tsc + tests + /eval + smoke) | Done | `55c8e0f` (docs) + `b4e3b6a` + `9231bd8` (eval follow-ups) |
 
 ## Code Anchors
 
@@ -93,7 +93,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/conventions.md` — admin-only routes follow the same gate-at-page + gate-in-action defence-in-depth pattern.
 - `db-conventions` skill — Drizzle migration generation; the hand-written trigger SQL bypasses `pnpm db:generate` and lives in a numbered file directly. Document this in Phase 3.
 
-**Overall Progress:** 83% (5/6 phases complete)
+**Overall Progress:** 100% — shipped 2026-05-05.
 
 **Note:**
 - Service-role client must never be imported into a Client Component. The `'server-only'` import at the top of `src/lib/supabase/admin.ts` makes that mechanically enforced — Next throws a build error if a Client Component reaches for it.

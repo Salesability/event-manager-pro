@@ -1,6 +1,6 @@
 # User admin — provision Supabase Auth users from the app
 
-> **Superseded by [`0018-user-system`](../../0018-user-system/plan.md) on 2026-05-05.** This chunk was scaffolded but never started; its full scope (provisioning UI, `app_metadata.role`, `requireAdmin()`, bootstrap script) folded verbatim into Phase 1 of 0018, which then extended to RBAC enforcement, contact↔user linkage, the auto-link trigger, coach auto-filter, and role-aware login routing. Kept for the planning audit trail; do not use as a current reference.
+> **Superseded by [`0018-user-system`](../0018-user-system/plan.md) on 2026-05-05.** This chunk was scaffolded but never started; its full scope (provisioning UI, `app_metadata.role`, `requireAdmin()`, bootstrap script) folded verbatim into Phase 1 of 0018, which then extended to RBAC enforcement, contact↔user linkage, the auto-link trigger, coach auto-filter, and role-aware login routing. Kept for the planning audit trail; do not use as a current reference.
 
 **Started:** 2026-05-03
 
