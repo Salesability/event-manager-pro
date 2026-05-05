@@ -11,7 +11,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 2. **`createPerson` is the single Server Action.** It always creates a `contacts` row + email/phone identifiers. Optional flags toggle: `appAccess` (creates `auth.users` row + sets `contacts.user_id`), `roles[]` (writes `team_member_roles`), `dealerLinks[]` (writes `dealer_contacts`). One transaction; rollback on any failure.
    - `auth.admin.createUser` is *not* transactional with Drizzle. Mitigation: create the auth user **last** so a Drizzle failure rolls back without leaving an orphan auth row. If `auth.admin.createUser` itself fails, the contact + roles are already committed but the admin can edit/delete via the same UI — no orphan auth row.
 
-3. **`linkUserToContact` becomes an "edit" path, not an "add" path.** It stays as the Server Action that handles the *existing* unlinked-auth-user case (Tilley today). After Phase 2 ships, the only way to land in that state is a manual Supabase dashboard creation, which is the documented fallback. The action keeps its TOCTOU-safe conditional UPDATE.
+3. **`linkUserToContact` is deleted, not relabelled.** "Link contact" is a DB-implementation-detail concept (the `contacts.user_id` FK) that should never have surfaced in admin UI. The unified Add/Edit Person flow covers every primary case: admin creates a person → toggling **App access** atomically writes `auth.users` + `contacts.user_id` in one server-side step. No "now go link them" second action. **Existing orphan auth users (Tilley today) are an exception** handled out-of-band via a one-time adoption script — see Phase 4 below — not a recurring UI concept.
 
 4. **`createUser` (the 0018 action) folds into `createPerson`.** The "Add user" dialog tabs (Create new / Pick existing / No link) collapse into the new Add Person form, which has a single "Has app access" checkbox. The Pick-existing case becomes "find the contact in the list, click Edit, toggle App access on" — different UI path, same DB result. `createUser` is deleted; nothing external calls it.
 
@@ -27,8 +27,8 @@ The data model already says "every human is one `contacts` row, with optional fa
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: `loadAdminPeople` query + types | Done | working tree |
-| 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Pending | - |
+| 1: `loadAdminPeople` query + types | Done | `82e3564` |
+| 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | working tree |
 | 3: `/admin/people` page + Add/Edit Person dialog | Pending | - |
 | 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Pending | - |
 | 5: Wiki updates + verification | Pending | - |
@@ -57,7 +57,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/lifecycle.md` — Archive the relationship (`team_member_roles`), not the master record (`contacts`). `archivePerson` follows this strictly.
 - `docs/wiki/conventions.md` — Server Actions for our-UI mutations; the new actions are no exception. Service-role admin SDK stays server-only.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Phase 2 is the load-bearing one — the merged transaction has to roll back cleanly across the contacts + identifiers + roles + auth-user create, plus optional dealer links. Auth-user create goes last so a Drizzle failure rolls back without leaving an orphan.
@@ -72,10 +72,12 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Vitest: 6 cases — empty contacts list, Shaye state (contact + identifier, no auth user), David state (contact + auth user + admin role + email+phone), dealer-only customer-side person, magic-link auth user with no identities array (provider fallback to `['email']`), `admin.listUsers` error propagation.
 
 #### Phase 2: `createPerson` + `updatePerson` + `archivePerson` Server Actions
-- [ ] `src/features/people/actions.ts:createPerson` — `requireAdmin()`, parse FormData (firstName, lastName, optional email/phone, `appAccess: bool`, `roles[]`, `dealerLinks[]`), single transaction: insert contacts → insert identifiers → insert team_member_roles → insert dealer_contacts → if `appAccess`: `auth.admin.createUser({email, email_confirm: true})` then `UPDATE contacts SET user_id = ... WHERE id = ... RETURNING` → if `roles` includes `admin`: set `app_metadata.role = 'admin'`.
-- [ ] `updatePerson` — `requireAdmin()`, same field set, syncs each facet incrementally (idempotent role-set sync from 0018, dealer-link diff, identifier swap). Toggling `appAccess` from off→on is allowed; off→on→off is supported. Off→on→off doesn't delete the auth user (irreversible-style) — it bans + strips `app_metadata.role` (matches 0018's `deactivateUser`).
-- [ ] `archivePerson` — `requireAdmin()`, archives `team_member_roles` rows + `dealer_contacts` rows + bans the auth user if linked. **Does not archive the contacts row** (lifecycle.md). Self-archive guarded.
-- [ ] Vitest: createPerson with no app access, with app access, with admin role, role + dealer combo. updatePerson role-set diff. updatePerson app-access toggle. archivePerson preserves contacts row. createPerson rolls back on `auth.admin.createUser` failure.
+- [x] `src/features/people/actions.ts:createPerson` — `requireAdmin()`, parses firstName, lastName, optional email/phone, `appAccess: bool`, `roles[]`, `dealerLinks[]` (encoded as `<dealerId>:<role>`). Single Drizzle transaction (contact + identifiers + roles + dealer links), then `auth.admin.createUser` + conditional `UPDATE contacts SET user_id = ... WHERE id = ? AND user_id IS NULL` + `app_metadata.role` sync. Auth-side failure returns partial-success error (the contact row remains, admin can retry from Edit Person).
+- [x] `updatePerson` — `requireAdmin()`, parses contactId + the same field set, validates the contact is unarchived, runs one transaction over all facets, then handles the four `appAccess × user_id` quadrants in the auth-side step: off→on provisions, on→off bans (Supabase soft-delete idiom), already-on syncs `app_metadata.role` to the role set, already-off no-ops. `contacts.user_id` is *not* dropped on the on→off transition — the FK preserves audit-column history (`actor_id` references on existing rows).
+- [x] `archivePerson` — `requireAdmin()`, refuses self-archive, archives `team_member_roles` + `dealer_contacts` in one transaction, bans the linked auth user if any. **Does not archive the contacts row** (per [`docs/wiki/lifecycle.md`](../../wiki/lifecycle.md) — historical FKs keep resolving).
+- [x] Helpers folded in: `swapPrimaryIdentifier` (duplicated from `schedule/actions.ts:718` for now; Phase 4 retires the schedule copy), `syncTeamMemberRoles`, `syncDealerLinks`, `syncAuthMetadata`, `IdentifierConflictError` + `toActionResult`, `parseRolesField`, `parseDealerLinksField`. All inside `actions.ts` for the moment; can extract on demand.
+- [x] Vitest 24 cases — admin-gate, name validation, email validation, role-without-app-access rejection, unsupported-role rejection (`staff`), app-access-without-email rejection, malformed dealer link, invalid dealer-contact role, no-app-access happy path, full create+admin+auth happy path, partial-success on `auth.admin.createUser` failure, **createPerson race-loss compensating ban (Codex High follow-up)**, **createPerson trigger-won link is no-op**, updatePerson admin gate, missing contact, archived contact, off→on transition provisions auth user, **off→on race-loss compensating ban**, **stale-UI roles=coach + appAccess=off coerces roles to []**, on→off bans, archivePerson admin gate, archivePerson self-archive guard, archivePerson preserves contacts row + bans auth user, archivePerson no-auth-user no-op.
+- [x] TOCTOU follow-up commit: conditional `UPDATE contacts SET user_id = ? WHERE id = ? AND user_id IS NULL RETURNING id` on both `createPerson` (trigger-won case treated as same outcome) and `updatePerson` off→on (race loser bans the just-created auth user). Force `roles = []` when `appAccess = false` in `updatePerson` so a stale UI submission can't leave a dangling `team_member_roles(role='coach')` paired with a banned auth user.
 
 #### Phase 3: `/admin/people` page + Add/Edit Person dialog
 - [ ] `src/app/(app)/admin/people/page.tsx` — Server Component, `requireAdmin()`, `Promise.all` over `loadAdminPeople()` + `loadDealers()` + `loadUnlinkedContacts()` (the last is for the rare back-door "manually adopt an unlinked contact" case — keep as a fallback panel).
@@ -92,7 +94,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] `src/app/(app)/lists/list-actions.tsx` — delete `+ Add Coach` block.
 - [ ] `src/app/(app)/lists/coach-form.tsx` — delete file (its shape is folded into people-admin.tsx).
 - [ ] `src/features/schedule/actions.ts` — delete `createCoach`, `updateCoach`, `archiveCoach`. Keep `loadCoaches` (it's the read path used by booking-form / calendar / share).
-- [ ] `src/features/auth/actions.ts` — delete `createUser`, `linkUserToContact`. Keep `setUserRoles` and `deactivateUser` for now? **Decision deferred to Phase 4 — likely also delete (folded into `updatePerson` / `archivePerson`).**
+- [ ] `src/features/auth/actions.ts` — delete `createUser`, `linkUserToContact`, `setUserRoles`, `deactivateUser`. All four fold into `createPerson` / `updatePerson` / `archivePerson`. Keep only the login actions (`signInWithGoogle`, `signInWithMagicLink`, `signOut`).
+- [ ] `scripts/adopt-orphan-auth-users.ts` — one-time migration. Walks `auth.users`, finds rows whose UUID has no matching `contacts.user_id`, and either (a) auto-creates a contacts row with firstName=`<auth.users.email>` local-part, lastName=`"(orphan)"` or (b) prints them for the admin to adopt one-by-one via `/admin/people` (the page lists them in a small "Unprovisioned auth users" panel). Idempotent. Tilley is the one known orphan today; verify she's adopted after the run.
+- [ ] `/admin/people` page modification — small bottom panel "Unprovisioned auth users" listing any `auth.users` rows without a linked contact, with a per-row "Adopt" button that calls a thin `adoptOrphanAuthUser(authUserId, firstName, lastName)` action (creates a contacts row + email identifier + sets `user_id`). Only shows when the panel has rows; invisible in the steady state. Keeps the People page as the *only* admin entry point even for the rare exception.
 - [ ] Vitest: `loadCoaches` still returns the right shape (regression check — booking form depends on it).
 - [ ] Smoke (web-test): `goto /admin/users` → redirects to `/admin/people`; `goto /lists` → no Sales Coaches section; `goto /calendar` → coach pills still populate; `+ Book Event` → coach picker still shows everyone with the coach role.
 
