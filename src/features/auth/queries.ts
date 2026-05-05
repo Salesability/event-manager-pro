@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, inArray, isNull } from 'drizzle-orm';
+import { and, asc, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contacts, teamMemberRoles } from '@/lib/db/schema';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -15,6 +15,23 @@ export type AdminUserRow = {
   displayName: string | null;
   roles: ('admin' | 'staff' | 'coach' | 'viewer')[];
 };
+
+export type UnlinkedContactOption = {
+  id: number;
+  displayName: string;
+};
+
+export async function loadUnlinkedContacts(): Promise<UnlinkedContactOption[]> {
+  const rows = await db
+    .select({
+      id: contacts.id,
+      displayName: contacts.displayName,
+    })
+    .from(contacts)
+    .where(and(isNull(contacts.userId), isNull(contacts.archivedAt)))
+    .orderBy(asc(contacts.displayName));
+  return rows;
+}
 
 export async function loadAdminUsers(): Promise<AdminUserRow[]> {
   const admin = createAdminClient();

@@ -7,9 +7,10 @@ import { toast } from '@/components/ui/toaster';
 import {
   createUser,
   deactivateUser,
+  linkUserToContact,
   setUserRoles,
 } from '@/features/auth/actions';
-import type { AdminUserRow } from '@/features/auth/queries';
+import type { AdminUserRow, UnlinkedContactOption } from '@/features/auth/queries';
 
 const inputClass =
   'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
@@ -44,7 +45,13 @@ function isActive(u: AdminUserRow) {
   return Number.isFinite(t) && t < Date.now();
 }
 
-export function UsersAdmin({ users }: { users: AdminUserRow[] }) {
+export function UsersAdmin({
+  users,
+  unlinkedContacts,
+}: {
+  users: AdminUserRow[];
+  unlinkedContacts: UnlinkedContactOption[];
+}) {
   const [addOpen, setAddOpen] = useState(false);
 
   return (
@@ -79,7 +86,9 @@ export function UsersAdmin({ users }: { users: AdminUserRow[] }) {
                 </td>
               </tr>
             ) : (
-              users.map((u) => <UserRow key={u.id} user={u} />)
+              users.map((u) => (
+                <UserRow key={u.id} user={u} unlinkedContacts={unlinkedContacts} />
+              ))
             )}
           </tbody>
         </table>
@@ -92,16 +101,28 @@ export function UsersAdmin({ users }: { users: AdminUserRow[] }) {
           <Dialog.Description>
             Creates an auth account with no password. The user signs in via magic link or Google.
           </Dialog.Description>
-          {addOpen && <AddUserForm onSuccess={() => setAddOpen(false)} />}
+          {addOpen && (
+            <AddUserForm
+              unlinkedContacts={unlinkedContacts}
+              onSuccess={() => setAddOpen(false)}
+            />
+          )}
         </Dialog.Panel>
       </Dialog.Root>
     </section>
   );
 }
 
-function UserRow({ user }: { user: AdminUserRow }) {
+function UserRow({
+  user,
+  unlinkedContacts,
+}: {
+  user: AdminUserRow;
+  unlinkedContacts: UnlinkedContactOption[];
+}) {
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const active = isActive(user);
 
@@ -169,10 +190,24 @@ function UserRow({ user }: { user: AdminUserRow }) {
       </td>
       <td className="px-2 py-2 align-middle">
         <div className="flex shrink-0 items-center justify-end gap-1">
+          {!user.contactId && (
+            <button
+              onClick={() => setLinkOpen(true)}
+              disabled={unlinkedContacts.length === 0}
+              title={
+                unlinkedContacts.length === 0
+                  ? 'No unlinked contacts available. Create a contact via Manage Lists, then link.'
+                  : 'Link this user to an existing contact'
+              }
+              className={rowEditClass}
+            >
+              Link contact
+            </button>
+          )}
           <button
             onClick={() => setEditOpen(true)}
             disabled={!user.contactId}
-            title={user.contactId ? 'Edit roles' : 'Link this user to a contact (Phase 3) before assigning roles.'}
+            title={user.contactId ? 'Edit roles' : 'Link a contact before assigning roles.'}
             className={rowEditClass}
           >
             Roles
@@ -195,16 +230,108 @@ function UserRow({ user }: { user: AdminUserRow }) {
             {editOpen && <RolesForm user={user} onSuccess={() => setEditOpen(false)} />}
           </Dialog.Panel>
         </Dialog.Root>
+        <Dialog.Root open={linkOpen} onClose={setLinkOpen}>
+          <Dialog.Backdrop />
+          <Dialog.Panel>
+            <Dialog.Title>Link contact — {user.email}</Dialog.Title>
+            <Dialog.Description>
+              Pick the contact this user represents. Only contacts not yet linked to another user
+              are shown.
+            </Dialog.Description>
+            {linkOpen && (
+              <LinkContactForm
+                user={user}
+                unlinkedContacts={unlinkedContacts}
+                onSuccess={() => setLinkOpen(false)}
+              />
+            )}
+          </Dialog.Panel>
+        </Dialog.Root>
       </td>
     </tr>
   );
 }
 
-function AddUserForm({ onSuccess }: { onSuccess: () => void }) {
+function LinkContactForm({
+  user,
+  unlinkedContacts,
+  onSuccess,
+}: {
+  user: AdminUserRow;
+  unlinkedContacts: UnlinkedContactOption[];
+  onSuccess: () => void;
+}) {
+  const router = useRouter();
+  const [contactId, setContactId] = useState<string>('');
+  const [pending, startTransition] = useTransition();
+
+  function submit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!contactId) {
+      toast.error('Pick a contact to link.');
+      return;
+    }
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('userId', user.id);
+      fd.set('contactId', contactId);
+      const result = await linkUserToContact(fd);
+      if ('ok' in result) {
+        toast.success('Contact linked');
+        router.refresh();
+        onSuccess();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
+      <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
+        Contact
+        <select
+          value={contactId}
+          onChange={(e) => setContactId(e.target.value)}
+          className={inputClass}
+          autoFocus
+          required
+        >
+          <option value="">Pick a contact…</option>
+          {unlinkedContacts.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="mt-2 flex justify-end gap-2">
+        <Dialog.Close className={rowEditClass}>Cancel</Dialog.Close>
+        <button type="submit" disabled={pending} className={submitClass}>
+          {pending ? 'Linking…' : 'Link contact'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+type LinkTab = 'create' | 'pick' | 'none';
+
+function AddUserForm({
+  unlinkedContacts,
+  onSuccess,
+}: {
+  unlinkedContacts: UnlinkedContactOption[];
+  onSuccess: () => void;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [admin, setAdmin] = useState(false);
   const [coach, setCoach] = useState(false);
+  const [tab, setTab] = useState<LinkTab>('create');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [contactId, setContactId] = useState<string>('');
   const [pending, startTransition] = useTransition();
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -214,9 +341,27 @@ function AddUserForm({ onSuccess }: { onSuccess: () => void }) {
       toast.error('Email is required.');
       return;
     }
+    if (tab === 'create' && (!firstName.trim() || !lastName.trim())) {
+      toast.error('First and last name are both required.');
+      return;
+    }
+    if (tab === 'pick' && !contactId) {
+      toast.error('Pick a contact to link.');
+      return;
+    }
+    if (tab === 'none' && (admin || coach)) {
+      toast.error('Roles need a contact link. Pick or create a contact first.');
+      return;
+    }
     startTransition(async () => {
       const fd = new FormData();
       fd.set('email', trimmed);
+      if (tab === 'create') {
+        fd.set('firstName', firstName.trim());
+        fd.set('lastName', lastName.trim());
+      } else if (tab === 'pick') {
+        fd.set('contactId', contactId);
+      }
       if (admin) fd.append('roles', 'admin');
       if (coach) fd.append('roles', 'coach');
       const result = await createUser(fd);
@@ -244,6 +389,77 @@ function AddUserForm({ onSuccess }: { onSuccess: () => void }) {
         />
       </label>
 
+      <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
+        <span className="text-xs font-medium text-stone-600">Contact link</span>
+        <div role="tablist" className="flex gap-1">
+          <TabButton active={tab === 'create'} onClick={() => setTab('create')}>
+            Create new
+          </TabButton>
+          <TabButton active={tab === 'pick'} onClick={() => setTab('pick')}>
+            Pick existing
+          </TabButton>
+          <TabButton active={tab === 'none'} onClick={() => setTab('none')}>
+            No link
+          </TabButton>
+        </div>
+
+        {tab === 'create' && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
+              First name
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className={inputClass}
+                required
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
+              Last name
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className={inputClass}
+                required
+              />
+            </label>
+          </div>
+        )}
+
+        {tab === 'pick' && (
+          <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
+            Contact
+            <select
+              value={contactId}
+              onChange={(e) => setContactId(e.target.value)}
+              className={inputClass}
+              required
+            >
+              <option value="">Pick an unlinked contact…</option>
+              {unlinkedContacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.displayName}
+                </option>
+              ))}
+            </select>
+            {unlinkedContacts.length === 0 && (
+              <p className="text-[11px] text-stone-500">
+                No unlinked contacts. Use &quot;Create new&quot; instead, or add a contact via
+                Manage Lists.
+              </p>
+            )}
+          </label>
+        )}
+
+        {tab === 'none' && (
+          <p className="text-[11px] text-stone-500">
+            Creates an auth user with no contact link. You can link one later from the row.
+          </p>
+        )}
+      </div>
+
       <div className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
         <span className="text-xs font-medium text-stone-600">Roles</span>
         <label className="flex items-center gap-2 text-sm text-stone-700">
@@ -254,10 +470,6 @@ function AddUserForm({ onSuccess }: { onSuccess: () => void }) {
           <input type="checkbox" checked={coach} onChange={(e) => setCoach(e.target.checked)} />
           Coach — auto-filters their <code className="text-xs">/calendar</code>
         </label>
-        <p className="text-[11px] text-stone-500">
-          Roles can only be assigned to a user already linked to a contact. (Contact linkage ships in
-          Phase 3.) For a brand-new email, create the user first, then link a contact and edit roles.
-        </p>
       </div>
 
       <div className="mt-2 flex justify-end gap-2">
@@ -267,6 +479,32 @@ function AddUserForm({ onSuccess }: { onSuccess: () => void }) {
         </button>
       </div>
     </form>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`rounded-md px-3 py-1 text-xs font-semibold transition ${
+        active
+          ? 'bg-navy text-white'
+          : 'border border-stone-200 bg-white text-stone-600 hover:border-navy hover:text-navy'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

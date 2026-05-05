@@ -1,10 +1,13 @@
 import { requireAdmin } from '@/lib/auth/require-admin';
-import { loadAdminUsers } from '@/features/auth/queries';
+import { loadAdminUsers, loadUnlinkedContacts } from '@/features/auth/queries';
 import { UsersAdmin } from '@/features/auth/users-admin';
 
 export default async function UsersAdminPage() {
   await requireAdmin();
-  const users = await loadAdminUsers();
+  const [users, unlinkedContacts] = await Promise.all([
+    loadAdminUsers(),
+    loadUnlinkedContacts(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -16,7 +19,7 @@ export default async function UsersAdminPage() {
         </p>
       </div>
 
-      <UsersAdmin users={users} />
+      <UsersAdmin users={users} unlinkedContacts={unlinkedContacts} />
     </div>
   );
 }

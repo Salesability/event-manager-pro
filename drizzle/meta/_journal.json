@@ -15,6 +15,13 @@
       "when": 1777576271434,
       "tag": "0001_seed_lookups",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778328000000,
+      "tag": "0002_contact_user_backfill_trigger",
+      "breakpoints": true
     }
   ]
 }

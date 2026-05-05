@@ -5,12 +5,12 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { contacts, teamMemberRoles } from '@/lib/db/schema';
+import { contactIdentifiers, contacts, teamMemberRoles } from '@/lib/db/schema';
 import { requireAdmin } from '@/lib/auth/require-admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/url';
-import { EMAIL_RE, field } from '@/features/schedule/validators';
+import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -111,6 +111,32 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
   const roles = parseRolesField(formData);
   if ('error' in roles) return roles;
 
+  // Linkage is optional: pick an existing unlinked contact, OR create a new
+  // one inline. If neither, the auth user is created without a contact link
+  // and the admin can attach one later via `linkUserToContact`.
+  const contactId = parseOptionalId(formData, 'contactId');
+  const firstName = field(formData, 'firstName');
+  const lastName = field(formData, 'lastName');
+  const linkMode: 'pick' | 'create' | 'none' =
+    contactId != null ? 'pick' : firstName || lastName ? 'create' : 'none';
+
+  if (linkMode === 'create' && (!firstName || !lastName)) {
+    return { error: 'First and last name are both required to create a new contact.' };
+  }
+  if (linkMode === 'pick') {
+    const [target] = await db
+      .select({ id: contacts.id, userId: contacts.userId, archivedAt: contacts.archivedAt })
+      .from(contacts)
+      .where(eq(contacts.id, contactId!))
+      .limit(1);
+    if (!target || target.archivedAt != null) {
+      return { error: 'The selected contact does not exist.' };
+    }
+    if (target.userId != null) {
+      return { error: 'The selected contact is already linked to another user.' };
+    }
+  }
+
   const admin = createAdminClient();
   const { data, error } = await admin.auth.admin.createUser({
     email,
@@ -119,15 +145,102 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
   if (error || !data.user) {
     return { error: error?.message ?? 'Could not create user.' };
   }
+  const userId = data.user.id;
+
+  // The 0002 trigger may have already auto-linked a contact whose
+  // contact_identifiers email matches `email`. If it did, prefer that link
+  // unless the admin explicitly picked a different contact (which would
+  // conflict — surface a clear error rather than silently override).
+  const [autoLinked] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), isNull(contacts.archivedAt)))
+    .limit(1);
+
+  if (linkMode === 'pick' && contactId != null) {
+    if (autoLinked && autoLinked.id !== contactId) {
+      return {
+        error: `Email matched contact ${autoLinked.id} via the auto-link trigger; cannot also link to ${contactId}. Resolve the conflict and use Roles to assign.`,
+      };
+    }
+    if (!autoLinked) {
+      await db.update(contacts).set({ userId }).where(eq(contacts.id, contactId));
+    }
+  } else if (linkMode === 'create') {
+    if (!autoLinked) {
+      try {
+        await db.transaction(async (tx) => {
+          const [row] = await tx
+            .insert(contacts)
+            .values({ firstName, lastName, userId })
+            .returning({ id: contacts.id });
+          await tx.insert(contactIdentifiers).values({
+            contactId: row.id,
+            kind: 'email',
+            value: email,
+            isPrimary: true,
+            source: 'admin-users',
+          });
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Could not create contact.';
+        return { error: msg };
+      }
+    }
+    // If autoLinked is set, the trigger matched an existing contact by email.
+    // Trust the trigger — don't create a duplicate. The admin can rename via
+    // the contact UI if the identity mismatched.
+  }
 
   if (roles.length > 0) {
-    const result = await applyRoleSet(data.user.id, roles);
+    const result = await applyRoleSet(userId, roles);
     if ('error' in result) return result;
   } else {
     // Strip any previous app_metadata.role if present (defensive).
-    await admin.auth.admin.updateUserById(data.user.id, { app_metadata: { role: null } });
+    await admin.auth.admin.updateUserById(userId, { app_metadata: { role: null } });
   }
 
+  revalidateUserAdmin();
+  return { ok: true };
+}
+
+export async function linkUserToContact(formData: FormData): Promise<ActionResult> {
+  await requireAdmin();
+
+  const userId = field(formData, 'userId');
+  const contactId = parseOptionalId(formData, 'contactId');
+  if (!userId) return { error: 'Invalid user id.' };
+  if (contactId == null) return { error: 'Invalid contact id.' };
+
+  const [contact] = await db
+    .select({ id: contacts.id, userId: contacts.userId, archivedAt: contacts.archivedAt })
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1);
+  if (!contact || contact.archivedAt != null) {
+    return { error: 'Contact not found.' };
+  }
+  if (contact.userId === userId) {
+    revalidateUserAdmin();
+    return { ok: true };
+  }
+  if (contact.userId != null) {
+    return { error: `Contact ${contactId} is already linked to a different user.` };
+  }
+
+  // The unique index `contacts_user_id_unique` would also fail this server-side
+  // — check first so the admin sees a friendly message instead of a Postgres
+  // constraint error.
+  const [existing] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), isNull(contacts.archivedAt)))
+    .limit(1);
+  if (existing) {
+    return { error: `User is already linked to contact ${existing.id}.` };
+  }
+
+  await db.update(contacts).set({ userId }).where(eq(contacts.id, contactId));
   revalidateUserAdmin();
   return { ok: true };
 }
