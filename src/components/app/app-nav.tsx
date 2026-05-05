@@ -10,6 +10,8 @@ const TABS: readonly Tab[] = [
   { href: '/production', label: 'Production List' },
   { href: '/lists', label: 'Manage Lists' },
   { href: '/admin/lookups', label: 'Lookups', admin: true },
+  { href: '/admin/people', label: 'People', admin: true },
+  // `Users` retires in 0020 Phase 4 — kept alongside People for one transitional release.
   { href: '/admin/users', label: 'Users', admin: true },
 ];
 

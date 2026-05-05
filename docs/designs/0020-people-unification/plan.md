@@ -29,7 +29,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 |-------|--------|--------|
 | 1: `loadAdminPeople` query + types | Done | `82e3564` |
 | 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | `1053257` |
-| 3: `/admin/people` page + Add/Edit Person dialog | Pending | - |
+| 3: `/admin/people` page + Add/Edit Person dialog | Done | working tree |
 | 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Pending | - |
 | 5: Wiki updates + verification | Pending | - |
 
@@ -57,7 +57,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/lifecycle.md` — Archive the relationship (`team_member_roles`), not the master record (`contacts`). `archivePerson` follows this strictly.
 - `docs/wiki/conventions.md` — Server Actions for our-UI mutations; the new actions are no exception. Service-role admin SDK stays server-only.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Phase 2 is the load-bearing one — the merged transaction has to roll back cleanly across the contacts + identifiers + roles + auth-user create, plus optional dealer links. Auth-user create goes last so a Drizzle failure rolls back without leaving an orphan.
@@ -80,12 +80,16 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] TOCTOU follow-up commit: conditional `UPDATE contacts SET user_id = ? WHERE id = ? AND user_id IS NULL RETURNING id` on both `createPerson` (trigger-won case treated as same outcome) and `updatePerson` off→on (race loser bans the just-created auth user). Force `roles = []` when `appAccess = false` in `updatePerson` so a stale UI submission can't leave a dangling `team_member_roles(role='coach')` paired with a banned auth user.
 
 #### Phase 3: `/admin/people` page + Add/Edit Person dialog
-- [ ] `src/app/(app)/admin/people/page.tsx` — Server Component, `requireAdmin()`, `Promise.all` over `loadAdminPeople()` + `loadDealers()` + `loadUnlinkedContacts()` (the last is for the rare back-door "manually adopt an unlinked contact" case — keep as a fallback panel).
-- [ ] `src/features/people/people-admin.tsx` — table: Name / Email (auth or identifier) / Roles chips / Dealers chips / Last sign-in (if app access) / Status. Columns adapt to the row's facets.
-- [ ] Add Person dialog: `firstName`, `lastName`, `email`, `phone`, `App access` checkbox, `Admin` checkbox, `Coach` checkbox, dealer multi-picker.
-- [ ] Edit Person dialog: same fields, pre-populated from the row. Toggling App access from off → on triggers the auth-user create in the same submit.
-- [ ] Per-row "Archive" button (`✕`) confirms + calls `archivePerson`.
-- [ ] Smoke (web-test): `goto /admin/people`; expect heading "People" + table + `+ Add Person` button. Click `+ Add Person`; dialog with the field set above.
+- [x] `src/app/(app)/admin/people/page.tsx` — Server Component, `requireAdmin()`, `Promise.all` over `loadAdminPeople()` + `loadDealers()`. (`loadUnlinkedContacts` was dropped — the unlinked-contacts panel concept was retired in the plan Decision 3 update; orphan-auth-users handling lands separately in Phase 4.)
+- [x] `src/features/people/people-admin.tsx` — table: Name / Email (identifier or auth fallback) / Roles chips (incl. `app` chip when app access is on) / Dealers chips (`<dealer name> · <role>`) / Last sign-in (when app access) / Status (active / banned / archived). 30 people render correctly in dev.
+- [x] Add Person dialog: `firstName`, `lastName`, `email`, `phone`, `App access` checkbox, `Admin` + `Coach` checkboxes (disabled when no app access), `+ Link dealer` panel that adds dealer/role rows with a `✕` per-row remove. Form-level guards reject unsupported combos client-side; server still validates.
+- [x] Edit Person dialog: same form, prefilled from the row. Toggling App access off→on at submit time triggers the off→on path in `updatePerson` (which is TOCTOU-safe per the Phase 2 fix).
+- [x] Per-row Archive (`✕`) — confirms with a clear message ("relationships archived; contact stays for historical references"), calls `archivePerson`, refreshes.
+- [x] Nav: added `People` link alongside `Users` in `app-nav.tsx`. Phase 4 retires `Users`.
+- [x] Smoke (web-test) — `/admin/people` 200, heading "People", "Team & contacts" subhead, "+ Add Person" button. Dialog opens with First name / Last name / Email / Phone / App access / Admin / Coach / dealer panel. Screenshots `/tmp/web-test-people-list.png` + `/tmp/web-test-people-dialog.png`.
+- [x] Eval follow-up: Codex flagged two blockers — both fixed in working tree before commit:
+   - **Lifecycle status helper** — replaced `isActive` (which only knew about auth bans) with a three-state `lifecycle()` derivation: `active` (any live facet), `banned` (auth user banned), `inactive` (no auth, no roles, no dealer links). Status chip + Archive button visibility both drive off this. A contact-only person archived now correctly drops to `inactive` and hides the Archive button.
+   - **Partial-success contract** — `ActionResult` is now `{ ok: true, contactId, warning?: string } | { error: string }`. DB-committed-but-auth-side-failed cases (`auth.admin.createUser` fail, `auth.admin.updateUserById` ban fail, `syncAuthMetadata` fail) return `{ ok: true, warning }` so the UI can close + refresh + surface a warning toast. The race-loss errors keep the `{ error }` shape but now revalidate before returning so the table reflects the post-compensation state when the admin retries. Test for the partial-success case updated to expect the new shape; full suite still 111/111.
 
 #### Phase 4: Retire Sales Coaches + redirect `/admin/users`
 - [ ] `src/app/(app)/admin/users/page.tsx` — replace with a `redirect('/admin/people')` Server Component (3 lines). Keep the file as a 410-style breadcrumb for one release; delete in a future cleanup.

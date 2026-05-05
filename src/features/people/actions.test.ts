@@ -286,7 +286,7 @@ describe('createPerson', () => {
     );
   });
 
-  it('returns partial-success error if auth.admin.createUser fails post-DB-commit', async () => {
+  it('returns partial-success warning if auth.admin.createUser fails post-DB-commit', async () => {
     mocks.adminCreateUser.mockResolvedValue({
       data: { user: null },
       error: { message: 'Service unavailable' },
@@ -298,9 +298,13 @@ describe('createPerson', () => {
     fd.set('appAccess', '1');
     mocks.selectResults = [[], []];
 
+    // Partial success: contact was committed, auth-side failed. The UI must
+    // refresh and close (the row exists), with a warning toast.
     const result = await createPerson(fd);
     expect(result).toEqual({
-      error:
+      ok: true,
+      contactId: 999,
+      warning:
         'Person created, but app access did not provision: Service unavailable. Open the row and retry.',
     });
   });

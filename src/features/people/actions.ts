@@ -13,7 +13,14 @@ import { requireAdmin } from '@/lib/auth/require-admin';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
 
-type ActionResult = { ok: true; contactId?: number } | { error: string };
+// Three-state result so the UI can distinguish a clean success from a partial
+// success — e.g. the contact committed but the auth-side `auth.admin.createUser`
+// failed, which leaves a real DB row the admin needs to see in the table even
+// though the operation didn't fully succeed. Codex Medium follow-up to the
+// 0020 Phase 3 eval.
+type ActionResult =
+  | { ok: true; contactId?: number; warning?: string }
+  | { error: string };
 
 // V1 us-side roles surfaced in the UI. `staff` and `viewer` stay reserved per
 // the 0018 plan decision (auth.md "v1 wired roles").
@@ -350,8 +357,11 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
       email_confirm: true,
     });
     if (error || !data.user) {
+      revalidatePeopleViews();
       return {
-        error: `Person created, but app access did not provision: ${
+        ok: true,
+        contactId: newContactId,
+        warning: `Person created, but app access did not provision: ${
           error?.message ?? 'unknown error'
         }. Open the row and retry.`,
       };
@@ -381,6 +391,7 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
           ban_duration: '876000h',
           app_metadata: { role: null },
         });
+        revalidatePeopleViews();
         return {
           error:
             'Auth user provisioning raced with another writer; the new auth user has been disabled. Refresh and check the People page.',
@@ -390,7 +401,10 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
 
     if (roles.length > 0) {
       const result = await syncAuthMetadata(authUserId, roles);
-      if ('error' in result) return result;
+      if ('error' in result) {
+        revalidatePeopleViews();
+        return { ok: true, contactId: newContactId, warning: result.error };
+      }
     }
   }
 
@@ -482,8 +496,11 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
       email_confirm: true,
     });
     if (error || !data.user) {
+      revalidatePeopleViews();
       return {
-        error: `Person updated, but app access did not provision: ${
+        ok: true,
+        contactId,
+        warning: `Person updated, but app access did not provision: ${
           error?.message ?? 'unknown error'
         }. Retry from Edit Person.`,
       };
@@ -504,6 +521,7 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
         ban_duration: '876000h',
         app_metadata: { role: null },
       });
+      revalidatePeopleViews();
       return {
         error:
           'App access was just provisioned by another admin. Refresh and re-check the row.',
@@ -512,7 +530,10 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
 
     if (roles.length > 0) {
       const result = await syncAuthMetadata(authUserId, roles);
-      if ('error' in result) return result;
+      if ('error' in result) {
+        revalidatePeopleViews();
+        return { ok: true, contactId, warning: result.error };
+      }
     }
   } else if (!appAccess && current.userId != null) {
     // on → off: ban the auth user (Supabase soft-delete idiom). Don't drop
@@ -523,14 +544,20 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
       app_metadata: { role: null },
     });
     if (error) {
+      revalidatePeopleViews();
       return {
-        error: `Person updated, but auth ban failed: ${error.message}.`,
+        ok: true,
+        contactId,
+        warning: `Person updated, but auth ban failed: ${error.message}.`,
       };
     }
   } else if (appAccess && current.userId != null) {
     // Already on; just keep app_metadata.role in sync with the role set.
     const result = await syncAuthMetadata(current.userId, roles);
-    if ('error' in result) return result;
+    if ('error' in result) {
+      revalidatePeopleViews();
+      return { ok: true, contactId, warning: result.error };
+    }
   }
 
   revalidatePeopleViews();
@@ -594,8 +621,11 @@ export async function archivePerson(formData: FormData): Promise<ActionResult> {
       app_metadata: { role: null },
     });
     if (error) {
+      revalidatePeopleViews();
       return {
-        error: `Person archived, but auth ban failed: ${error.message}.`,
+        ok: true,
+        contactId,
+        warning: `Person archived, but auth ban failed: ${error.message}.`,
       };
     }
   }
