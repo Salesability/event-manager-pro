@@ -23,7 +23,7 @@ The 0020 People page (`/admin/people`) ships the structural unification — one 
 |-------|--------|--------|
 | 1: TanStack Table foundation on `/admin/people` (sortable headers + pagination) | Done | d0c6f04 |
 | 2: Field exposure + drop chrome + App-access toggle removal | Done | d0c6f04 |
-| 3: Confirm dialogs (disable app access, per-row archive preview) + auto-uncheck on App-access flip | Pending | - |
+| 3: Confirm dialogs (disable app access, per-row archive preview) + auto-uncheck on App-access flip | In Progress | aab1755 (confirm + unban) |
 | 4: Search + role filter pills (TanStack global filter + faceted filters) | Pending | - |
 | 5: Verification | Pending | - |
 
