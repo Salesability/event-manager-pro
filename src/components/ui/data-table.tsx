@@ -3,6 +3,7 @@
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -40,8 +41,10 @@ type DataTableProps<TData, TValue> = {
   onGlobalFilterChange?: (value: string) => void;
   columnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (updater: Updater<ColumnFiltersState>) => void;
-  // Optional global filter function — defaults to row-built-in fuzzy match.
-  globalFilterFn?: (row: TData, columnIds: string[], filterValue: string) => boolean;
+  // Optional cross-column global filter. Defaults to TanStack's built-in
+  // per-column fuzzy match — pass one for queries that span multiple fields
+  // (e.g. name + email + dealer name in a single textbox).
+  globalFilterFn?: FilterFn<TData>;
   // Default page size. Caller can drive a different value via the page-size
   // dropdown after mount.
   initialPageSize?: number;
@@ -57,6 +60,7 @@ export function DataTable<TData, TValue>({
   onGlobalFilterChange,
   columnFilters,
   onColumnFiltersChange,
+  globalFilterFn,
   initialPageSize = 25,
   emptyState,
 }: DataTableProps<TData, TValue>) {
@@ -92,6 +96,7 @@ export function DataTable<TData, TValue>({
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: initialPageSize, pageIndex: 0 } },
+    ...(globalFilterFn != null && { globalFilterFn }),
   });
 
   const rows = table.getRowModel().rows;
@@ -142,7 +147,7 @@ export function DataTable<TData, TValue>({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={table.getAllLeafColumns().length}
+                  colSpan={table.getVisibleLeafColumns().length}
                   className="px-2 py-6 text-center text-sm text-stone-500"
                 >
                   {emptyState ?? 'No rows.'}

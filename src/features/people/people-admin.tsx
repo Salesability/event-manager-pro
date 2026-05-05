@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
@@ -13,6 +14,43 @@ import type {
 } from '@/features/people/queries';
 import { buildPeopleColumns } from '@/features/people/people-columns';
 import type { Dealer } from '@/features/schedule/queries';
+
+// Cross-column substring search for the toolbar input. Hits displayName,
+// primary email, and any linked dealer name — dealer search by typing the
+// dealership name was a stated muscle-memory want.
+const peopleGlobalFilterFn: FilterFn<AdminPersonRow> = (row, _columnId, filterValue) => {
+  const q = String(filterValue ?? '').toLowerCase().trim();
+  if (!q) return true;
+  const p = row.original;
+  if (p.displayName.toLowerCase().includes(q)) return true;
+  if (p.email && p.email.toLowerCase().includes(q)) return true;
+  if (p.dealerLinks.some((l) => l.dealerName.toLowerCase().includes(q))) return true;
+  return false;
+};
+
+function toggleRoleFilter(
+  prev: ColumnFiltersState,
+  role: 'coach' | 'admin',
+  enabled: boolean,
+): ColumnFiltersState {
+  const others = prev.filter((f) => f.id !== 'roles');
+  const current =
+    (prev.find((f) => f.id === 'roles')?.value as string[] | undefined) ?? [];
+  const next = enabled
+    ? Array.from(new Set([...current, role]))
+    : current.filter((r) => r !== role);
+  if (next.length === 0) return others;
+  return [...others, { id: 'roles', value: next }];
+}
+
+function toggleCustomerFilter(
+  prev: ColumnFiltersState,
+  enabled: boolean,
+): ColumnFiltersState {
+  const others = prev.filter((f) => f.id !== 'dealerLinks');
+  if (enabled) return [...others, { id: 'dealerLinks', value: 'has-customer' }];
+  return others;
+}
 
 const inputClass =
   'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
@@ -29,6 +67,12 @@ const rowDeleteClass =
 const submitClass =
   'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
 
+function pillClass(active: boolean): string {
+  return active
+    ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
+    : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+}
+
 const DEALER_CONTACT_ROLES: DealerContactRole[] = ['customer', 'staff', 'prospect'];
 
 export function PeopleAdmin({
@@ -41,6 +85,8 @@ export function PeopleAdmin({
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<AdminPersonRow | null>(null);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [, startTransition] = useTransition();
 
   // Hide the `Last sign-in` column when no row in the population has app
@@ -50,6 +96,19 @@ export function PeopleAdmin({
     () => ({ lastSignInAt: people.some((p) => p.hasAppAccess) }),
     [people],
   );
+
+  const rolesFilterValue =
+    (columnFilters.find((f) => f.id === 'roles')?.value as string[] | undefined) ?? [];
+  const coachActive = rolesFilterValue.includes('coach');
+  const adminActive = rolesFilterValue.includes('admin');
+  const customerActive = columnFilters.some(
+    (f) => f.id === 'dealerLinks' && f.value === 'has-customer',
+  );
+  const isFiltered = globalFilter.trim().length > 0 || columnFilters.length > 0;
+  const clearFilters = () => {
+    setGlobalFilter('');
+    setColumnFilters([]);
+  };
 
   function archive(person: AdminPersonRow) {
     if (!confirm(buildArchiveConfirmMessage(person))) {
@@ -91,13 +150,74 @@ export function PeopleAdmin({
         </button>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          type="search"
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          placeholder="Search by name, email, or dealer…"
+          aria-label="Search people"
+          className="min-w-[16rem] flex-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+        />
+        <button
+          type="button"
+          aria-pressed={coachActive}
+          onClick={() =>
+            setColumnFilters((prev) => toggleRoleFilter(prev, 'coach', !coachActive))
+          }
+          className={pillClass(coachActive)}
+        >
+          Coach
+        </button>
+        <button
+          type="button"
+          aria-pressed={adminActive}
+          onClick={() =>
+            setColumnFilters((prev) => toggleRoleFilter(prev, 'admin', !adminActive))
+          }
+          className={pillClass(adminActive)}
+        >
+          Admin
+        </button>
+        <button
+          type="button"
+          aria-pressed={customerActive}
+          onClick={() =>
+            setColumnFilters((prev) => toggleCustomerFilter(prev, !customerActive))
+          }
+          className={pillClass(customerActive)}
+        >
+          Customer-side
+        </button>
+      </div>
+
+      <div className="mt-3">
         <DataTable
           columns={columns}
           data={people}
           initialSorting={[{ id: 'displayName', desc: false }]}
           columnVisibility={columnVisibility}
-          emptyState="No people yet."
+          globalFilter={globalFilter}
+          onGlobalFilterChange={setGlobalFilter}
+          columnFilters={columnFilters}
+          onColumnFiltersChange={setColumnFilters}
+          globalFilterFn={peopleGlobalFilterFn}
+          emptyState={
+            isFiltered ? (
+              <span className="inline-flex items-center gap-2">
+                <span>No people match.</span>
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+                >
+                  Clear filters
+                </button>
+              </span>
+            ) : (
+              'No people yet.'
+            )
+          }
         />
       </div>
 

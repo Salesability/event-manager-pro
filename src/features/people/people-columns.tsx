@@ -80,6 +80,10 @@ export function buildPeopleColumns(
       id: 'roles',
       accessorFn: (p) => roleRank(p),
       header: 'Roles',
+      filterFn: (row, _columnId, filterValue: string[]) => {
+        if (!Array.isArray(filterValue) || filterValue.length === 0) return true;
+        return row.original.roles.some((r) => filterValue.includes(r));
+      },
       cell: ({ row }) => {
         const p = row.original;
         const chips: React.ReactNode[] = [];
@@ -110,6 +114,12 @@ export function buildPeopleColumns(
       id: 'dealerLinks',
       accessorFn: (p) => p.dealerLinks.length,
       header: 'Dealers',
+      // Only filter we need today is "has any customer-side relationship".
+      // Generalize when a per-dealer filter shows up.
+      filterFn: (row, _columnId, filterValue: string) => {
+        if (filterValue !== 'has-customer') return true;
+        return row.original.dealerLinks.some((l) => l.role === 'customer');
+      },
       cell: ({ row }) => {
         const p = row.original;
         if (p.dealerLinks.length === 0) {

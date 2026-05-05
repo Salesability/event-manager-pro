@@ -23,9 +23,9 @@ The 0020 People page (`/admin/people`) ships the structural unification — one 
 |-------|--------|--------|
 | 1: TanStack Table foundation on `/admin/people` (sortable headers + pagination) | Done | d0c6f04 |
 | 2: Field exposure + drop chrome + App-access toggle removal | Done | d0c6f04 |
-| 3: Confirm dialogs (disable app access, per-row archive preview) + auto-uncheck on App-access flip | In Progress | aab1755 (confirm + unban) |
-| 4: Search + role filter pills (TanStack global filter + faceted filters) | Pending | - |
-| 5: Verification | Pending | - |
+| 3: Confirm dialogs (disable app access, per-row archive preview) + auto-uncheck on App-access flip | Done | aab1755 + 646e16a |
+| 4: Search + role filter pills (TanStack global filter + faceted filters) | Done | working tree |
+| 5: Verification | Done | working tree |
 
 ## Code Anchors
 
@@ -51,7 +51,7 @@ The 0020 People page (`/admin/people`) ships the structural unification — one 
 - `docs/wiki/lifecycle.md` — the lifecycle helper landed in 0020 Phase 3 (`active` / `banned` / `inactive`); this chunk doesn't change it but the archive-confirm message draws on the same facet model.
 - `docs/wiki/auth.md` — toggling App access off is documented as banning the auth user via Supabase soft-delete idiom; the new confirm dialog should mirror that wording.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Phases 2–4 are `people-admin.tsx`-local work plus the column-defs file. Phase 1 introduces a project-wide primitive (`<DataTable>`) that future polish chunks can reuse on Production + Lookups.
@@ -88,20 +88,20 @@ The 0020 People page (`/admin/people`) ships the structural unification — one 
 
 ### Phase 4: Search + role filter pills (TanStack-native)
 
-- [ ] `src/features/people/people-admin.tsx:PeopleAdmin` — `useState` for `globalFilter: string` and `columnFilters: ColumnFiltersState`. Wire to `table.setGlobalFilter` / `table.setColumnFilters` (both API'd by TanStack).
-- [ ] Custom `globalFilterFn` in `<DataTable>` wrapper: case-insensitive substring across `displayName`, `email`, `dealerLinks[].dealerName`. Default TanStack global-filter is per-column; we need cross-column.
-- [ ] Render: text `<input>` placeholder="Search by name, email, or dealer…" + three pill buttons (`Coach`, `Admin`, `Customer-side`). Pills are `aria-pressed` toggles that flip a `columnFilters` entry on the relevant column (`roles` / `dealerLinks`).
-- [ ] `Coach` ⇒ `columnFilter on 'roles' { value: ['coach'] }`; `Admin` ⇒ `{ value: ['admin'] }`; `Customer-side` ⇒ `columnFilter on 'dealerLinks' { mode: 'has-customer' }`. Filter functions live in the column defs.
-- [ ] Empty-state row when `table.getRowModel().rows.length === 0`: `No people match.` + a `Clear filters` button (resets both `globalFilter` and `columnFilters`).
-- [ ] Smoke (web-test): `goto /admin/people`; type "shannon" in the search box; expect 1 visible row. Click `Coach` pill; only coach rows visible. Clear search; click `Customer-side`; only rows with a customer dealer link.
+- [x] `src/features/people/people-admin.tsx:PeopleAdmin` — `useState` for `globalFilter: string` and `columnFilters: ColumnFiltersState`. Hoisted to the DataTable's `globalFilter` / `onGlobalFilterChange` / `columnFilters` / `onColumnFiltersChange` props.
+- [x] Cross-column `globalFilterFn` defined in `people-admin.tsx` (substring across `displayName`, `email`, and any `dealerLinks[].dealerName`). DataTable wrapper now actually wires the prop into `useReactTable` (Codex Low #3 closed).
+- [x] Search `<input type="search">` + three pills (`Coach`, `Admin`, `Customer-side`) rendered above the table. `aria-pressed` reflects active state.
+- [x] `Coach` and `Admin` toggles both touch the `roles` column filter — combined into a single `columnFilters` entry whose value is the union of active roles. `Customer-side` toggles a `dealerLinks` column filter with value `'has-customer'`. Filter fns live in the column defs (`people-columns.tsx`); each is a 2-line predicate.
+- [x] Empty state composed dynamically: `No people match.` + `Clear filters` button when filters are active; otherwise `No people yet.` Empty-state colSpan now uses `getVisibleLeafColumns().length` (Codex Low #5 closed).
+- [x] Smoke (web-test): `goto /admin/people`; type "shannon" → 1 row (Shannon Tilley); clear & click Coach → 5 coach rows; toggle off & click Customer-side → 23 customer-side rows. Screenshot `/tmp/web-test-people-phase4.png`.
 
 ### Phase 5: Verification
 
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm test` clean (the new vitest case from Phase 1 passes).
-- [ ] `pnpm lint` clean (no new warnings; pre-existing 4 stay).
-- [ ] /eval against `0021-people-polish/plan.md`.
-- [ ] Smoke (web-test): all of Phase 1 / Phase 3 driveable checks pass; Phase 2 dialogs captured as visual screenshots.
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm test` clean (100/100; firstName/lastName-on-AdminPersonRow case from Phase 2 passes).
+- [x] `pnpm lint` clean (0 errors; 4 pre-existing warnings unchanged).
+- [x] /eval against `0021-people-polish/plan.md` — see `eval-2026-05-05-1711.md` (Phase 2) and `eval-2026-05-05-1751.md` (Phase 4 + 5). Both verdicts PASS / PASS-with-caveats; all blockers and Codex high/critical fixed pre-commit.
+- [x] Smoke (web-test): Phase 1 (TanStack foundation), Phase 2 (chrome drop), Phase 4 (search + pills) all driveable and verified; Phase 3 confirm dialogs (`window.confirm`) are not driveable but the message-builder is a pure function and the pre-submit guard is a trivial branch.
 
 ## Out of scope
 
