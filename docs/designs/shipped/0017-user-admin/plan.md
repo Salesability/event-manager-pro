@@ -1,5 +1,7 @@
 # User admin — provision Supabase Auth users from the app
 
+> **Superseded by [`0018-user-system`](../../0018-user-system/plan.md) on 2026-05-05.** This chunk was scaffolded but never started; its full scope (provisioning UI, `app_metadata.role`, `requireAdmin()`, bootstrap script) folded verbatim into Phase 1 of 0018, which then extended to RBAC enforcement, contact↔user linkage, the auto-link trigger, coach auto-filter, and role-aware login routing. Kept for the planning audit trail; do not use as a current reference.
+
 **Started:** 2026-05-03
 
 Today, every new user has to be added through the Supabase dashboard (per `docs/wiki/auth.md:22`). That's fine for the David + Shannon two-row state, but ugly when onboarding the rest of the team — Scott, Adam, Brian — and any future coaches, plus any `salesability.ca` staff who need access. This chunk adds an in-app **User Admin** page (`/admin/users`) that lists existing users, lets an admin add a new one (auto-confirmed so Google auth attaches on first sign-in), and lets an admin deactivate one.
@@ -20,7 +22,7 @@ Today, every new user has to be added through the Supabase dashboard (per `docs/
 | 2: `createUser` / `deactivateUser` Server Actions | Pending | - |
 | 3: `/admin/users` page + list + add/deactivate UI | Pending | - |
 | 4: Wiki update — `auth.md` "To add a user" section + RBAC note | Pending | - |
-| 5: Verification — tsc + tests + eval-smoke + manual e2e | Pending | - |
+| 5: Verification — tsc + tests + /eval + manual e2e | Pending | - |
 
 ## Code Anchors
 
@@ -73,7 +75,7 @@ Today, every new user has to be added through the Supabase dashboard (per `docs/
 #### Phase 5: Verification
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm test` clean (new tests pass).
-- [ ] eval-smoke: gated `/admin/users` shows up, non-admin gets 403/redirect, admin can add a user.
+- [ ] /eval: gated `/admin/users` shows up, non-admin gets 403/redirect, admin can add a user.
 - [ ] Manual e2e: as David, add Shannon → Shannon's row appears confirmed → Shannon clicks "Continue with Google" → succeeds, providers column shows `Email, Google`.
 
 ## Out of scope (for this chunk)

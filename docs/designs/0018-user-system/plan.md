@@ -4,7 +4,7 @@
 
 The repo already has the *data model* for a real user system — `contacts.user_id` (nullable UNIQUE FK to `auth.users`), `team_member_roles` (admin / staff / coach / viewer), `dealer_contacts` (customer-side relationships), all wired in `docs/wiki/data-model.md:9-29`. What's missing is the *application wiring*: `src/proxy.ts` gates only "logged in vs not", there is no `requireAdmin()`, no `/admin/users` UI, no contact↔user linkage on signup, no role-aware routing after callback, and no coach auto-filter on `/calendar` (which legacy `deprecated/index.html` did at line 702-710 of `doLogin()`). This plan closes that gap end-to-end. **Done =** an admin can provision a user *and* link them to a `contacts` row + `team_member_roles` row in a single flow; non-admins can't reach `/admin/*`; a signed-in coach lands on `/calendar` already filtered to their own bookings; an unrecognised auth.users post-callback gets a clean error rather than a half-rendered staff app; the `auth.md` wiki "RBAC" open item is resolved.
 
-This plan **subsumes** [`docs/designs/0017-user-admin/plan.md`](../0017-user-admin/plan.md). 0017 covers provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It's parked and not started, so its content folds into Phase 1 below; once 0018 lands as the active plan, 0017 moves to `shipped/0017-user-admin/` as historical (annotated *"Superseded by 0018-user-system"*).
+This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../shipped/0017-user-admin/plan.md). 0017 covered provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It was parked and unstarted, so its content folded into Phase 1 below; 0017 moved to `shipped/` on 2026-05-05 with a supersession note.
 
 ## Decisions
 
@@ -57,10 +57,10 @@ This plan **subsumes** [`docs/designs/0017-user-admin/plan.md`](../0017-user-adm
 |-------|--------|--------|
 | 1: Provisioning + admin page (subsumes 0017) | Done | working tree |
 | 2: RBAC enforcement — `requireAdmin()` consistently applied + admin-route gate + admin-only nav link | Done | working tree |
-| 3: Contact↔user linkage — admin-add-user form picks/creates contact + role; SQL trigger to back-fill `contacts.user_id` on signup | Pending | - |
-| 4: Coach auto-filter on `/calendar` (legacy parity) | Pending | - |
-| 5: Role-aware login routing — callback decides staff vs portal vs error | Pending | - |
-| 6: Wiki updates + verification (tsc + tests + /eval + smoke) | Pending | - |
+| 3: Contact↔user linkage — admin-add-user form picks/creates contact + role; SQL trigger to back-fill `contacts.user_id` on signup | Done | working tree |
+| 4: Coach auto-filter on `/calendar` (legacy parity) | Done | working tree |
+| 5: Role-aware login routing — callback decides staff vs portal vs error | Done | working tree |
+| 6: Wiki updates + verification (tsc + tests + /eval + smoke) | Doc + tests done; /eval + browser smoke pending | working tree |
 
 ## Code Anchors
 
@@ -93,7 +93,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/conventions.md` — admin-only routes follow the same gate-at-page + gate-in-action defence-in-depth pattern.
 - `db-conventions` skill — Drizzle migration generation; the hand-written trigger SQL bypasses `pnpm db:generate` and lives in a numbered file directly. Document this in Phase 3.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Service-role client must never be imported into a Client Component. The `'server-only'` import at the top of `src/lib/supabase/admin.ts` makes that mechanically enforced — Next throws a build error if a Client Component reaches for it.
@@ -126,35 +126,38 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Smoke (web-test) as non-admin `david.hogan@networknode.ca`: `/admin/users` and `/admin/lookups` both redirect to `/` (cascades to `/calendar`); nav shows only Calendar / Production List / Manage Lists.
 
 #### Phase 3: Contact↔user linkage
-- [ ] Extend `createUser` Server Action: FormData carries optional `contactId` (existing) or `firstName`/`lastName` (create new); if neither, the user is created without a contacts link and the admin can attach one later via a separate action.
-- [ ] Extend `users-admin.tsx` "Add user" form: tabbed picker — "Pick existing contact" (combobox over `contacts` filtered by no-existing-`user_id`) or "Create new". Coach role checkbox optional.
-- [ ] `src/features/auth/actions.ts:linkUserToContact` — set `contacts.user_id = <auth.users.id>` for an existing contact, idempotent (no-op if already set to that user; error if set to a different user).
-- [ ] `drizzle/0002_contact_user_backfill_trigger.sql` — hand-written SQL: `BEFORE INSERT ON auth.users` → look up `contact_identifiers` where `kind='email'` and `value=NEW.email`, find the `contact_id`, set `contacts.user_id = NEW.id` if `contacts.user_id IS NULL`. Idempotent. Wrap in `CREATE OR REPLACE FUNCTION` + `DROP TRIGGER IF EXISTS` so re-runs are clean.
-- [ ] `pnpm db:migrate` against dev; smoke that an `auth.admin.createUser` call with an email that *matches* an existing `contact_identifiers` row results in `contacts.user_id` being set automatically (without `linkUserToContact` being called from app code).
-- [ ] Vitest test for `linkUserToContact` action: existing-contact happy path, contact-already-has-different-user → error, contact-already-set-to-same-user → idempotent ok.
+- [x] Extend `createUser` Server Action: FormData carries optional `contactId` (existing) or `firstName`/`lastName` (create new); if neither, the user is created without a contacts link and the admin can attach one later via `linkUserToContact`. Conflict-aware against the auto-link trigger (refuses to override a different contact picked up by email match).
+- [x] Extend `users-admin.tsx` "Add user" form: tabbed picker — *Create new* (firstName/lastName) / *Pick existing* (combobox over unlinked contacts) / *No link*. Coach + Admin checkboxes optional; submitting with roles but no link is rejected client-side.
+- [x] Per-row "Link contact" action on `users-admin.tsx` — opens a picker dialog that calls `linkUserToContact`. Visible only when the row has no contact link.
+- [x] `src/features/auth/actions.ts:linkUserToContact` — set `contacts.user_id` for an existing contact, idempotent (no-op if already same user; error if different user; error if the user is already linked elsewhere).
+- [x] `src/features/auth/queries.ts:loadUnlinkedContacts` — feeds the picker (`contacts WHERE user_id IS NULL AND archived_at IS NULL`).
+- [x] `drizzle/0002_contact_user_backfill_trigger.sql` — hand-written SQL: `AFTER INSERT ON auth.users` (changed from BEFORE — the FK from `contacts.user_id → auth.users.id` requires the parent row to exist before the trigger updates `contacts`) → look up `contact_identifiers` where `kind='email'` and `value=lower(NEW.email)`, find the `contact_id`, set `contacts.user_id = NEW.id` if `contacts.user_id IS NULL`. `SECURITY DEFINER` with locked `search_path`. Wrapped in `CREATE OR REPLACE FUNCTION` + `DROP TRIGGER IF EXISTS` so re-runs are clean. Journal + snapshot wired for `pnpm db:migrate`.
+- [x] Vitest tests for `linkUserToContact` action: existing-contact happy path, contact-already-has-different-user → error, contact-already-set-to-same-user → idempotent ok, user-already-linked-to-another-contact → error, non-admin caller → redirect, missing contactId → invalid.
+- [x] `pnpm db:migrate` against dev — `0002_contact_user_backfill_trigger` applied 2026-05-05; `DROP TRIGGER IF EXISTS` returned the expected `does not exist, skipping` notice on first apply.
+- [x] Smoke (throwaway `scripts/smoke-contact-user-trigger.ts`, deleted after pass): inserted contact + email identifier, called `auth.admin.createUser({email})`, asserted `contacts.user_id` auto-set to the new auth UUID. PASS. Fixtures cleaned up (auth user deleted, contact + identifier rows deleted).
 
 #### Phase 4: Coach auto-filter on `/calendar`
-- [ ] `src/lib/auth/load-team-membership.ts` — server helper returning `{ contactId, roles: TeamMemberRole[], coachContactId: number | null }`. `coachContactId` is the contact id IFF the current user has a `team_member_roles(role='coach')` row, else null.
-- [ ] `src/app/(app)/calendar/page.tsx` — add `loadCurrentMembership()` to the existing `Promise.all`; pass the resolved `coachContactId` into `<CalendarView viewerCoachId={...}>`.
-- [ ] `src/app/(app)/calendar/calendar-view.tsx` — accept `viewerCoachId?: number | null` prop; initialise `activeCoachFilter` to `viewerCoachId ?? null`. Existing manual filter pills still work — the user can override the auto-filter.
-- [ ] Vitest test: `loadCurrentMembership` returns `coachContactId: null` for an admin-only user; returns the contact id for a coach user; returns `null` for a user with no contacts row.
-- [ ] Smoke (web-test): `inject-supabase` as a coach (after Phase 1 + 3 land); `goto /calendar`; the coach's name pill shows as `active` and the visible ribbons are only their own. (Skip until a coach user exists in dev DB.)
+- [x] `src/lib/auth/load-team-membership.ts` — server helper returning `{ contactId, roles, coachContactId | null }`. Returns `null` when not signed in or no contacts row exists.
+- [x] `src/app/(app)/calendar/page.tsx` — `loadCurrentMembership()` added to the existing `Promise.all`; resolved `coachContactId` passed as `<CalendarView viewerCoachId={...}>`.
+- [x] `src/app/(app)/calendar/calendar-view.tsx` — accepts `viewerCoachId?: number | null` prop; `activeCoachFilter` initialises to `forcedCoachId ?? viewerCoachId ?? null`. Existing manual filter pills still work — the user can override the auto-filter.
+- [x] Vitest tests for `loadCurrentMembership` — six cases: not-signed-in, no-contacts-row, coach user, admin-only, admin+coach combo, no-roles-yet contact. All pass (71/71).
+- [ ] Smoke (web-test): `inject-supabase` as a coach; `goto /calendar`; the coach's name pill shows as `active` and the visible ribbons are only their own. (Deferred to Phase 6 verification — needs a coach user in dev DB; will pair with the full /eval pass.)
 
 #### Phase 5: Role-aware login routing
-- [ ] `src/app/auth/callback/route.ts` — after `exchangeCodeForSession`, call `loadCurrentMembership()`. Decision tree:
-  - `roles.length > 0` (any team-member role) → redirect to safe `next` (existing path).
-  - No team-member role, but `dealer_contacts` rows exist → redirect to `/auth/auth-error?reason=Portal+not+yet+available` (placeholder until portal ships).
-  - Neither → redirect to `/auth/auth-error?reason=Account+not+provisioned` (defensive — shouldn't happen with signups-disabled).
-- [ ] Vitest test for the callback handler: mock the membership loader, assert the three branches dispatch to the right URLs.
+- [x] `src/app/auth/callback/route.ts` — after `exchangeCodeForSession`, calls `loadCurrentMembership()` then runs the decision tree:
+  - `roles.length > 0` → redirect to safe `next`.
+  - No team-member roles, ≥1 active `dealer_contacts` row → `/auth/auth-error?reason=Portal+not+yet+available`.
+  - No contacts row, OR contacts but no roles and no dealer_contacts → `/auth/auth-error?reason=Account+not+provisioned`.
+- [x] Vitest tests for the callback handler — seven cases (missing code, exchange error, admin, coach, dealer-contact-only, no-contacts-row, contacts-but-orphan). All pass (78/78).
 
 #### Phase 6: Wiki updates + verification
-- [ ] Rewrite `docs/wiki/auth.md` — provisioning section (dashboard → in-app `/admin/users` is the new default; dashboard is the fallback); RBAC section (now real, references `app_metadata.role` + `requireAdmin()` + `ADMIN_PATHS`); resolve open `:93` (trigger shipped) and `:96` (RBAC shipped).
-- [ ] Remove the `profiles` mention from `auth.md:74` and `data-model.md` if any — `team_member_roles` is the staff-side role table.
-- [ ] Update `docs/wiki/data-model.md` Q #16 (the `contacts.user_id` ↔ `team_member_roles` coupling) — resolve to "app-enforced; verified by trigger + tests; not a DB CHECK constraint because we want the flexibility."
-- [ ] Append to `docs/wiki/log.md`: dated entry summarising the user-system landing.
-- [ ] Move `docs/designs/0017-user-admin/` to `docs/designs/shipped/0017-user-admin/`; add a one-line addendum to its `plan.md` body: *"Superseded by `0018-user-system` on 2026-05-NN; phases here folded into Phase 1 of 0018."*
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm test` clean.
+- [x] Rewrote `docs/wiki/auth.md` — provisioning section now describes `/admin/users` (dashboard fallback noted); new "Route gating (RBAC)" section names the two-layer gate (middleware `ADMIN_PATHS` + page-level `requireAdmin()`) and the hybrid `app_metadata.role` ↔ `team_member_roles` write-time consistency model; "Login routing" rewritten to reflect the implemented decision tree. Removed the `profiles` mention. Resolved both open items (trigger shipped, RBAC shipped).
+- [x] Removed the `profiles` mention from `auth.md`. None present in `data-model.md`.
+- [x] Updated `docs/wiki/data-model.md` Q #15 (the actual `team_member_roles ↔ user_id` coupling question — Q #16 is the schema-rename pass) — resolved app-enforced, with rationale (cross-table predicates would need a trigger; we want flexibility to seed staff records ahead of provisioning; deactivation flow archives roles without orphaning the link). Q #4 (signup trigger) also resolved as shipped. Inline reference at line 29 fixed to point at Q #15.
+- [x] Appended to `docs/wiki/log.md`: dated entry "0018 user-system: full RBAC + role-aware login + auto-link trigger".
+- [x] Moved `docs/designs/0017-user-admin/` to `docs/designs/shipped/0017-user-admin/` with a top-of-body supersession blockquote on 2026-05-05.
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm test` clean (78/78).
 - [ ] /eval against `0018-user-system/plan.md`.
 - [ ] Smoke (web-test):
   - `goto /admin/users` (as admin): heading "Users", table with email / role / providers / last sign-in, "Add user" button, "Promote" / "Demote" / "Deactivate" per-row actions.

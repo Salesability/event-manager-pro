@@ -2,7 +2,7 @@
 
 Identity and session for both staff (the internal app) and customer-side contacts (a future client portal).
 
-> Part of `docs/wiki/`. See [data-model.md](data-model.md) for the `auth.users` ↔ `profiles` ↔ `contacts` relationship, [architecture.md](architecture.md) for where the auth code lives.
+> Part of `docs/wiki/`. See [data-model.md](data-model.md) for the `auth.users` ↔ `contacts` ↔ `team_member_roles` / `dealer_contacts` relationships, [architecture.md](architecture.md) for where the auth code lives.
 
 ## Identity
 
@@ -19,7 +19,9 @@ Both providers fan into the same `/auth/callback` route, the same session, and t
 
 The Supabase project-level **"Allow new users to sign up"** toggle is **off**. This single switch gates both Google OAuth and magic link — an unrecognized email hitting either entry point gets rejected with `Signups not allowed`. No silent auto-provisioning when someone clicks "Continue with Google" with a brand-new address.
 
-**To add a user:** admin pre-creates them via the Supabase dashboard (Auth → Users → Add user → "Create new user" with email **pre-confirmed**, *not* "Send invitation"). Pre-confirmed lets them sign in via Google immediately without an extra email round-trip. After that, they can sign in via either Google or magic link with that email.
+**To add a user:** admins use the in-app `/admin/users` page (gated by `requireAdmin()`). The "Add user" dialog calls `auth.admin.createUser({ email, email_confirm: true })` via the service-role client and links the new user to a `contacts` row in the same Server Action — either by creating a fresh contact (firstName/lastName) or by picking an existing unlinked one. `email_confirm: true` lets them sign in via Google immediately without an extra email round-trip. After that, they can sign in via either Google or magic link with that email.
+
+The Supabase dashboard (Auth → Users → Add user) still works as a fallback when the in-app UI is unreachable — but it skips the contact linkage. If you provision that way, follow up with "Link contact" on the row in `/admin/users`.
 
 This mirrors the curated `Users!A:E` sheet from the legacy app — controlled signups, not open registration.
 
@@ -57,32 +59,35 @@ The `next` param is passed through `safeNextPath()` (in `src/lib/auth/`) to prev
 - `signOut()` Server Action (`src/features/auth/actions.ts`) → `supabase.auth.signOut()` → redirect to `/login`.
 - `<SessionBanner />` (`src/components/auth/session-banner.tsx`) is a server component rendering the logged-in email and a logout form button. Wired into `src/app/layout.tsx` so it appears on every gated page.
 
-## Route gating
+## Route gating (RBAC)
 
-`src/proxy.ts` is the single gate. By default it sends unauthenticated requests to `/login?next=<original-path>`. The whitelist of public routes:
+Two layers of gating, defence-in-depth:
 
-- `/login`
-- `/auth/callback`
-- `/auth/auth-error`
+1. **`src/proxy.ts` + `src/lib/supabase/middleware.ts`** — single edge gate.
+   - Sends unauthenticated requests to `/login?next=<original-path>` (whitelist: `/login`, `/auth/callback`, `/auth/auth-error`, plus public `/share/coach/[id]` per-coach share links).
+   - Sends signed-in non-admins hitting `/admin/*` (matched against the `ADMIN_PATHS` constant) back to `/` — gate is `user.app_metadata?.role === 'admin'`.
+2. **Per-page / per-Server-Action `requireAdmin()`** (`src/lib/auth/require-admin.ts`) — defensive: every admin Server Component calls it at the top, every admin Server Action calls it before the first DB read. Survives a missed middleware match.
 
-Future per-coach share links (legacy `?coach=<id>`) will extend the whitelist when that view ports. RBAC beyond "logged in vs not" doesn't exist yet — see *Roles* below.
+**Two surfaces, kept consistent at write time:**
+
+- **`auth.users.app_metadata.role`** — single string, lives on the JWT. Cheap to read in middleware via `getUser()` with no DB hit. Powers the gate.
+- **`team_member_roles` table** — N rows per contact (admin / staff / coach / viewer enum). Powers per-feature semantics (calendar coach auto-filter, etc.). Multiple roles per person allowed (admin + coach is a valid combo).
+
+When an admin promotes a user via `/admin/users`, both surfaces are written in the same Server Action: `team_member_roles` first inside a DB transaction, then `app_metadata.role = 'admin'` (or `null`) via the service-role client. If the auth-side update fails after the DB commit, the action returns a "Re-submit to retry" error — the gate cache is stale but no privilege escalation occurred.
+
+**v1 wired roles:** only `admin` and `coach` are selectable in the UI. `staff` and `viewer` are reserved enum values for future use; "signed-in non-admin" *is* the v1 staff experience (no `team_member_roles` row required).
 
 ## Login routing: staff vs portal contacts
 
-Two extension tables hang off `auth.users`:
+`src/app/auth/callback/route.ts` runs the decision tree after `exchangeCodeForSession`:
 
-- `profiles` — staff users only (admin / staff / coach / viewer roles)
-- `contacts` — customer-side people, with an optional `user_id` FK for those who log in to the client portal
+- **`team_member_roles` rows exist** (any role) → redirect to safe `next` (default `/`).
+- **No `team_member_roles`, ≥1 active `dealer_contacts` row** → `/auth/auth-error?reason=Portal+not+yet+available`. The portal isn't built yet (0018 routes the *decision* but not the *destination*); when the portal ships, swap this redirect to `/portal`.
+- **No contacts row, OR contacts but neither table** → `/auth/auth-error?reason=Account+not+provisioned`. Defensive — shouldn't happen with signups disabled.
 
-After auth resolves, the app decides where to send the user based on which extension row exists:
+A contact can have rows in both tables (per [data-model.md](data-model.md)). Routing precedence: any us-side role wins → staff app. The portal wouldn't show their own dealer to them anyway.
 
-- **Profile row exists** → internal app (`/`).
-- **No profile, but a `contacts` row links to this `auth.users.id`** → client portal (TBD path).
-- **Neither** → shouldn't happen with signups-disabled, but defensively → `/auth/auth-error`.
-
-The contact-side branch isn't wired yet — there's no portal route, and the `contacts.user_id` back-fill trigger hasn't shipped (see *Open* below).
-
-See [data-model.md](data-model.md) for why profiles is staff-only and contacts is customer-side.
+**Auto-link trigger** (`drizzle/0002_contact_user_backfill_trigger.sql`): an `AFTER INSERT ON auth.users` trigger matches `NEW.email` against `contact_identifiers(kind='email', value=…)`; if a match exists and that contact's `user_id` is null, the trigger sets `contacts.user_id = NEW.id`. Idempotent. Today (signups-disabled) it's mostly insurance — the in-app provisioning flow already links explicitly. It earns its keep the day a self-signup portal opens.
 
 ## Email sender
 
@@ -90,7 +95,5 @@ Supabase **default SMTP** for now. Free-tier rate limit is ~4 emails/hour — ad
 
 ## Open
 
-- **Signup-trigger to back-fill `contacts.user_id`.** When a contact signs up via either provider, a `BEFORE INSERT` trigger on `auth.users` should match `NEW.email` against `contacts.email` and populate `contacts.user_id`. SQL-only (Drizzle doesn't model triggers); goes in a hand-written migration. Not yet drafted.
-- **Email-confirmation guarantee for Google.** The trigger's safety depends on Supabase requiring confirmed email. Magic link confirms by definition. For Google OAuth, Supabase trusts Google's `email_verified` claim — fine for Workspace/Gmail, but worth re-confirming if any non-Google IdPs get added.
-- **Client portal route.** Once a portal exists, the post-callback router needs to actually send `contacts`-only users there. Today they'd land on `/` and hit the staff app, which assumes a profile row.
-- **RBAC.** Currently middleware gates "logged in vs not" only. Per-route role checks land with the user-table chunk via Supabase Auth `app_metadata` or by reading `profiles.role` server-side.
+- **Email-confirmation guarantee for Google.** The auto-link trigger's safety depends on Supabase requiring confirmed email. Magic link confirms by definition. For Google OAuth, Supabase trusts Google's `email_verified` claim — fine for Workspace/Gmail, but worth re-confirming if any non-Google IdPs get added.
+- **Client portal route.** The post-callback router *decides* the staff/portal/error split, but the portal destination is a placeholder (`/auth/auth-error?reason=Portal+not+yet+available`) until that chunk ships. Day-it-opens change is a one-line redirect swap.
