@@ -37,6 +37,8 @@ export type OrphanAuthUser = {
 
 export type AdminPersonRow = {
   contactId: number;
+  firstName: string;
+  lastName: string;
   displayName: string;
   email: string | null;
   phone: string | null;
@@ -185,6 +187,8 @@ export async function loadAdminPeople(): Promise<AdminPersonRow[]> {
     const authUser = p.userId ? authByUser.get(p.userId) ?? null : null;
     return {
       contactId: p.contactId,
+      firstName: p.firstName,
+      lastName: p.lastName,
       displayName: p.displayName,
       email: emailByContact.get(p.contactId) ?? authUser?.email ?? null,
       phone: phoneByContact.get(p.contactId) ?? null,

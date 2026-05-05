@@ -14,14 +14,7 @@ export default async function PeopleAdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-3xl text-navy">People</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          One row per person. Toggle <strong>App access</strong> to grant them a sign-in. Add{' '}
-          <strong>Coach</strong> to make them assignable on the calendar. Add{' '}
-          <strong>Admin</strong> to grant management rights.
-        </p>
-      </div>
+      <h1 className="font-display text-3xl text-navy">People</h1>
 
       <PeopleAdmin people={people} dealers={dealers} />
 

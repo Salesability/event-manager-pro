@@ -71,6 +71,8 @@ describe('loadAdminPeople', () => {
     expect(result).toEqual([
       {
         contactId: 5,
+        firstName: 'Tilley',
+        lastName: 'Shaye',
         displayName: 'Tilley Shaye',
         email: 'tilleyshaye@gmail.com',
         phone: null,
@@ -121,6 +123,8 @@ describe('loadAdminPeople', () => {
     const [row] = await loadAdminPeople();
     expect(row).toEqual({
       contactId: 1,
+      firstName: 'David',
+      lastName: 'Hogan',
       displayName: 'David Hogan',
       email: 'david.hogan@networknode.ca',
       phone: '555-0100',
