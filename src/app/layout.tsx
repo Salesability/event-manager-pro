@@ -15,8 +15,8 @@ const dmSerif = DM_Serif_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Event Manager Pro",
-  description: "Sales event scheduling for Salesability",
+  title: "SaleDay Events",
+  description: "Sales event scheduling for SaleDay",
 };
 
 export default function RootLayout({

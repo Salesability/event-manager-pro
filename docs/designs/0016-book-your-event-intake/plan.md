@@ -41,7 +41,7 @@ These are real forks. Most should be raised with the user before the public form
 | 3: Confirmation UX — thank-you screen + Resend email to Shannon | Pending | - |
 | 4: Staff `/admin/intakes` list + "Convert to campaign" flow | Pending | - |
 | 5: Marketing-site cutover — change Squarespace button `href` (or DNS proxy) | Pending | - |
-| 6: Verification — eval-smoke + e2e manual smoke | Pending | - |
+| 6: Verification — /eval + e2e manual smoke | Pending | - |
 
 ## Code Anchors
 
@@ -105,7 +105,7 @@ For each new file or method below, the builder reads the anchor first and matche
 #### Phase 6: Verification
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm test` clean.
-- [ ] eval-smoke green (will need a Phase 1-aware update to its public-surface table — `/book-your-event` becomes a new expected public route).
+- [ ] /eval green (will need a Phase 1-aware update to web-test's public-surface table — `/book-your-event` becomes a new expected public route).
 - [ ] Manual e2e: anonymous submit → row in DB → email lands → log in as staff → see intake in `/admin/intakes` → click `Convert` → resulting campaign visible on `/calendar` and `/production`.
 - [ ] Spam smoke: submit with the honeypot field filled → no DB row, no email.
 
