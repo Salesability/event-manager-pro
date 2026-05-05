@@ -28,7 +28,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: `loadAdminPeople` query + types | Done | `82e3564` |
-| 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | working tree |
+| 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | `1053257` |
 | 3: `/admin/people` page + Add/Edit Person dialog | Pending | - |
 | 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Pending | - |
 | 5: Wiki updates + verification | Pending | - |
