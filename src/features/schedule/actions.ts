@@ -19,7 +19,6 @@ import {
 import { requireAdmin } from '@/lib/auth/require-admin';
 import { getUser } from '@/lib/supabase/session';
 import {
-  EMAIL_RE,
   field,
   parseCampaignInput,
   parseDate,
@@ -223,134 +222,11 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
   return { ok: true };
 }
 
-function revalidateCoachViews() {
-  revalidatePath('/lists');
-  revalidatePath('/calendar');
-  revalidatePath('/production');
-}
-
-export async function createCoach(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
-
-  const firstName = field(formData, 'firstName');
-  const lastName = field(formData, 'lastName');
-  const specialty = field(formData, 'specialty');
-  const email = field(formData, 'email').toLowerCase();
-  const phone = field(formData, 'phone');
-
-  if (!firstName || !lastName) return { error: 'First and last name are required.' };
-  if (email && !EMAIL_RE.test(email)) return { error: 'Email looks invalid.' };
-
-  try {
-    await db.transaction(async (tx) => {
-      const [contactRow] = await tx
-        .insert(contacts)
-        .values({
-          firstName,
-          lastName,
-          createdById: userId,
-          updatedById: userId,
-        })
-        .returning({ id: contacts.id });
-
-      await tx.insert(teamMemberRoles).values({
-        contactId: contactRow.id,
-        role: 'coach',
-        specialty: specialty || null,
-        createdById: userId,
-        updatedById: userId,
-      });
-
-      await swapPrimaryIdentifier(tx, contactRow.id, 'email', email, userId);
-      await swapPrimaryIdentifier(tx, contactRow.id, 'phone', phone, userId);
-    });
-  } catch (err) {
-    return toActionResult(err);
-  }
-
-  revalidateCoachViews();
-  return { ok: true };
-}
-
-export async function updateCoach(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
-
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid coach id.' };
-
-  const firstName = field(formData, 'firstName');
-  const lastName = field(formData, 'lastName');
-  const specialty = field(formData, 'specialty');
-  const email = field(formData, 'email').toLowerCase();
-  const phone = field(formData, 'phone');
-
-  if (!firstName || !lastName) return { error: 'First and last name are required.' };
-  if (email && !EMAIL_RE.test(email)) return { error: 'Email looks invalid.' };
-
-  const [coach] = await db
-    .select({ id: contacts.id })
-    .from(contacts)
-    .innerJoin(
-      teamMemberRoles,
-      and(
-        eq(teamMemberRoles.contactId, contacts.id),
-        eq(teamMemberRoles.role, 'coach'),
-        isNull(teamMemberRoles.archivedAt)
-      )
-    )
-    .where(and(eq(contacts.id, id), isNull(contacts.archivedAt)))
-    .limit(1);
-  if (!coach) return { error: 'Coach not found.' };
-
-  try {
-    await db.transaction(async (tx) => {
-      await tx
-        .update(contacts)
-        .set({ firstName, lastName, updatedById: userId })
-        .where(eq(contacts.id, id));
-
-      await tx
-        .update(teamMemberRoles)
-        .set({ specialty: specialty || null, updatedById: userId })
-        .where(
-          and(
-            eq(teamMemberRoles.contactId, id),
-            eq(teamMemberRoles.role, 'coach'),
-            isNull(teamMemberRoles.archivedAt)
-          )
-        );
-
-      await swapPrimaryIdentifier(tx, id, 'email', email, userId);
-      await swapPrimaryIdentifier(tx, id, 'phone', phone, userId);
-    });
-  } catch (err) {
-    return toActionResult(err);
-  }
-
-  revalidateCoachViews();
-  return { ok: true };
-}
-
-export async function archiveCoach(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
-
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid coach id.' };
-
-  await db
-    .update(teamMemberRoles)
-    .set({ archivedAt: new Date(), updatedById: userId })
-    .where(
-      and(
-        eq(teamMemberRoles.contactId, id),
-        eq(teamMemberRoles.role, 'coach'),
-        isNull(teamMemberRoles.archivedAt)
-      )
-    );
-
-  revalidateCoachViews();
-  return { ok: true };
-}
+// `createCoach` / `updateCoach` / `archiveCoach` retired in 0020 Phase 4 —
+// the People page (`/admin/people`) handles all three via `createPerson` /
+// `updatePerson` / `archivePerson` in `src/features/people/actions.ts`. The
+// read path (`loadCoaches` in `queries.ts`) stays — it's used by `/calendar`,
+// `/production`, `/share/coach/[id]`, and the booking-form coach picker.
 
 export async function archiveDealer(formData: FormData): Promise<ActionResult> {
   const userId = await requireUserId();

@@ -1,11 +1,16 @@
 import { requireAdmin } from '@/lib/auth/require-admin';
-import { loadAdminPeople } from '@/features/people/queries';
+import { loadAdminPeople, loadOrphanAuthUsers } from '@/features/people/queries';
 import { loadDealers } from '@/features/schedule/queries';
+import { OrphanAuthUsers } from '@/features/people/orphan-auth-users';
 import { PeopleAdmin } from '@/features/people/people-admin';
 
 export default async function PeopleAdminPage() {
   await requireAdmin();
-  const [people, dealers] = await Promise.all([loadAdminPeople(), loadDealers()]);
+  const [people, dealers, orphans] = await Promise.all([
+    loadAdminPeople(),
+    loadDealers(),
+    loadOrphanAuthUsers(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,6 +24,11 @@ export default async function PeopleAdminPage() {
       </div>
 
       <PeopleAdmin people={people} dealers={dealers} />
+
+      {/* Hidden in the steady state — only renders when there's at least one
+          orphan auth.users row (someone created via the Supabase dashboard
+          fallback, or a legacy account from before the auto-link trigger). */}
+      {orphans.length > 0 && <OrphanAuthUsers orphans={orphans} />}
     </div>
   );
 }

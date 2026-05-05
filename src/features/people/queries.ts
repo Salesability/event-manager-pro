@@ -28,6 +28,13 @@ export type AdminPersonAuth = {
   appMetadataRole: string | null;
 };
 
+export type OrphanAuthUser = {
+  userId: string;
+  email: string | null;
+  lastSignInAt: string | null;
+  providers: string[];
+};
+
 export type AdminPersonRow = {
   contactId: number;
   displayName: string;
@@ -187,4 +194,39 @@ export async function loadAdminPeople(): Promise<AdminPersonRow[]> {
       dealerLinks: dealerLinksByContact.get(p.contactId) ?? [],
     };
   });
+}
+
+// `auth.users` rows with no matching `contacts.user_id` link — i.e., people
+// who can sign in but don't exist in the domain. Created either before 0018's
+// auto-link trigger shipped (Tilley state) or via the Supabase dashboard
+// fallback path. Surfaced on `/admin/people` as an "Unprovisioned auth users"
+// panel so an admin can adopt them. Empty list 99% of the time — the panel
+// should hide when this returns `[]`.
+export async function loadOrphanAuthUsers(): Promise<OrphanAuthUser[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) throw error;
+  if (data.users.length === 0) return [];
+
+  const userIds = data.users.map((u) => u.id);
+  const linked = await db
+    .select({ userId: contacts.userId })
+    .from(contacts)
+    .where(and(inArray(contacts.userId, userIds), isNull(contacts.archivedAt)));
+  const linkedSet = new Set(linked.map((l) => l.userId));
+
+  return data.users
+    .filter((u) => !linkedSet.has(u.id))
+    .map<OrphanAuthUser>((u) => {
+      const providers = (u.identities ?? [])
+        .map((i) => i.provider)
+        .filter((p): p is string => Boolean(p));
+      return {
+        userId: u.id,
+        email: u.email ?? null,
+        lastSignInAt: u.last_sign_in_at ?? null,
+        providers: providers.length ? Array.from(new Set(providers)) : ['email'],
+      };
+    })
+    .sort((a, b) => (a.email ?? '').localeCompare(b.email ?? ''));
 }

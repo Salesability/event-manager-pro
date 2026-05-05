@@ -3,10 +3,8 @@
 import { useState, useTransition } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
-import { archiveCoach, archiveDealer } from '@/features/schedule/actions';
-import { sendCoachShareLinkEmail } from '@/features/email/actions';
-import type { Coach, Dealer } from '@/features/schedule/queries';
-import { CoachForm } from './coach-form';
+import { archiveDealer } from '@/features/schedule/actions';
+import type { Dealer } from '@/features/schedule/queries';
 import { DealerForm } from './dealer-form';
 
 const headerAddClass =
@@ -76,84 +74,6 @@ export function DealerRowActions({ dealer }: { dealer: Dealer }) {
   );
 }
 
-export function AddCoachButton() {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button onClick={() => setOpen(true)} className={headerAddClass}>
-        + Add Coach
-      </button>
-      <Dialog.Root open={open} onClose={setOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Add Coach</Dialog.Title>
-          <Dialog.Description>Create a new sales coach.</Dialog.Description>
-          {open && <CoachForm mode="create" onSuccess={() => setOpen(false)} />}
-        </Dialog.Panel>
-      </Dialog.Root>
-    </>
-  );
-}
-
-export function CoachRowActions({ coach }: { coach: Coach }) {
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-
-  function onDelete() {
-    if (!confirm(`Archive ${coach.displayName}? Existing campaigns will keep their reference.`))
-      return;
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('id', String(coach.id));
-      const result = await archiveCoach(fd);
-      if ('ok' in result) toast.success('Coach removed');
-      else toast.error(result.error);
-    });
-  }
-
-  function onEmailLink() {
-    if (!coach.primaryEmail) {
-      toast.error('No email on file for this coach.');
-      return;
-    }
-    if (!confirm(`Email share link to ${coach.firstName} <${coach.primaryEmail}>?`)) return;
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('coachId', String(coach.id));
-      const result = await sendCoachShareLinkEmail(fd);
-      if ('ok' in result) toast.success('Share link sent');
-      else toast.error(result.error);
-    });
-  }
-
-  return (
-    <div className="flex shrink-0 items-center gap-1">
-      <button
-        onClick={onEmailLink}
-        disabled={pending || !coach.primaryEmail}
-        title={coach.primaryEmail ? 'Email this coach their personal schedule link' : 'No email on file'}
-        className={rowEditClass}
-      >
-        Email link
-      </button>
-      <button onClick={() => setOpen(true)} className={rowEditClass}>
-        Edit
-      </button>
-      <button
-        onClick={onDelete}
-        disabled={pending}
-        aria-label={`Remove ${coach.displayName}`}
-        className={rowDeleteClass}
-      >
-        ✕
-      </button>
-      <Dialog.Root open={open} onClose={setOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Edit Coach</Dialog.Title>
-          {open && <CoachForm mode="edit" coach={coach} onSuccess={() => setOpen(false)} />}
-        </Dialog.Panel>
-      </Dialog.Root>
-    </div>
-  );
-}
+// AddCoachButton + CoachRowActions retired in 0020 Phase 4 — coaches are
+// managed on /admin/people now. The "Email share link" affordance still
+// matters; it'll move to a per-row action on the People page if/when needed.

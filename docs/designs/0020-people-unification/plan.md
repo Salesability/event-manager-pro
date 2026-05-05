@@ -30,7 +30,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 | 1: `loadAdminPeople` query + types | Done | `82e3564` |
 | 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | `1053257` |
 | 3: `/admin/people` page + Add/Edit Person dialog | Done | `33bfc51` |
-| 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Pending | - |
+| 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Done | working tree |
 | 5: Wiki updates + verification | Pending | - |
 
 ## Code Anchors
@@ -57,7 +57,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/lifecycle.md` — Archive the relationship (`team_member_roles`), not the master record (`contacts`). `archivePerson` follows this strictly.
 - `docs/wiki/conventions.md` — Server Actions for our-UI mutations; the new actions are no exception. Service-role admin SDK stays server-only.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Phase 2 is the load-bearing one — the merged transaction has to roll back cleanly across the contacts + identifiers + roles + auth-user create, plus optional dealer links. Auth-user create goes last so a Drizzle failure rolls back without leaving an orphan.
@@ -92,17 +92,25 @@ For each new file or method below, the builder reads the anchor first and matche
    - **Partial-success contract** — `ActionResult` is now `{ ok: true, contactId, warning?: string } | { error: string }`. DB-committed-but-auth-side-failed cases (`auth.admin.createUser` fail, `auth.admin.updateUserById` ban fail, `syncAuthMetadata` fail) return `{ ok: true, warning }` so the UI can close + refresh + surface a warning toast. The race-loss errors keep the `{ error }` shape but now revalidate before returning so the table reflects the post-compensation state when the admin retries. Test for the partial-success case updated to expect the new shape; full suite still 111/111.
 
 #### Phase 4: Retire Sales Coaches + redirect `/admin/users`
-- [ ] `src/app/(app)/admin/users/page.tsx` — replace with a `redirect('/admin/people')` Server Component (3 lines). Keep the file as a 410-style breadcrumb for one release; delete in a future cleanup.
-- [ ] `src/components/app/app-nav.tsx` — change the "Users" label to "People" and the href to `/admin/people`.
-- [ ] `src/app/(app)/lists/page.tsx` — delete the Sales Coaches section. Page becomes Dealerships-only.
-- [ ] `src/app/(app)/lists/list-actions.tsx` — delete `+ Add Coach` block.
-- [ ] `src/app/(app)/lists/coach-form.tsx` — delete file (its shape is folded into people-admin.tsx).
-- [ ] `src/features/schedule/actions.ts` — delete `createCoach`, `updateCoach`, `archiveCoach`. Keep `loadCoaches` (it's the read path used by booking-form / calendar / share).
-- [ ] `src/features/auth/actions.ts` — delete `createUser`, `linkUserToContact`, `setUserRoles`, `deactivateUser`. All four fold into `createPerson` / `updatePerson` / `archivePerson`. Keep only the login actions (`signInWithGoogle`, `signInWithMagicLink`, `signOut`).
-- [ ] `scripts/adopt-orphan-auth-users.ts` — one-time migration. Walks `auth.users`, finds rows whose UUID has no matching `contacts.user_id`, and either (a) auto-creates a contacts row with firstName=`<auth.users.email>` local-part, lastName=`"(orphan)"` or (b) prints them for the admin to adopt one-by-one via `/admin/people` (the page lists them in a small "Unprovisioned auth users" panel). Idempotent. Tilley is the one known orphan today; verify she's adopted after the run.
-- [ ] `/admin/people` page modification — small bottom panel "Unprovisioned auth users" listing any `auth.users` rows without a linked contact, with a per-row "Adopt" button that calls a thin `adoptOrphanAuthUser(authUserId, firstName, lastName)` action (creates a contacts row + email identifier + sets `user_id`). Only shows when the panel has rows; invisible in the steady state. Keeps the People page as the *only* admin entry point even for the rare exception.
-- [ ] Vitest: `loadCoaches` still returns the right shape (regression check — booking form depends on it).
-- [ ] Smoke (web-test): `goto /admin/users` → redirects to `/admin/people`; `goto /lists` → no Sales Coaches section; `goto /calendar` → coach pills still populate; `+ Book Event` → coach picker still shows everyone with the coach role.
+- [x] `src/app/(app)/admin/users/page.tsx` — now a 4-line redirect to `/admin/people`. Kept as a breadcrumb for one transitional release; future cleanup will delete the file.
+- [x] `src/components/app/app-nav.tsx` — "Users" tab removed. "People" remains (added in Phase 3).
+- [x] `src/app/(app)/lists/page.tsx` — Sales Coaches section deleted. Page is now Dealerships-only with a one-line pointer to /admin/people for "people (including coaches)."
+- [x] `src/app/(app)/lists/list-actions.tsx` — `AddCoachButton` + `CoachRowActions` removed; imports trimmed.
+- [x] `src/app/(app)/lists/coach-form.tsx` — file deleted.
+- [x] `src/features/schedule/actions.ts` — `createCoach`, `updateCoach`, `archiveCoach` deleted (one-comment placeholder remains pointing at the People page). `loadCoaches` (read path) untouched. Unused `EMAIL_RE` import trimmed.
+- [x] `src/features/auth/actions.ts` — file rewritten as login-only (`signInWithGoogle`, `signInWithMagicLink`, `signOut`). `createUser`, `linkUserToContact`, `setUserRoles`, `deactivateUser` and the helpers `applyRoleSet` + `parseRolesField` deleted along with `revalidateUserAdmin`.
+- [x] `src/features/auth/users-admin.tsx` — file deleted (only consumer of the removed actions).
+- [x] `src/features/auth/queries.ts` — file deleted (only consumers — `users-admin.tsx`, the legacy admin page — are gone).
+- [x] `src/features/auth/actions.test.ts` — file deleted (tested the removed actions; coverage moved to `src/features/people/actions.test.ts`).
+- [x] `scripts/adopt-orphan-auth-users.ts` — one-time CLI. Default lists orphans (dry-run); `--auto` adopts each with stub names (`firstName=<email-local-part>`, `lastName=(orphan <uuid-prefix>)`). Idempotent. Admin can rename via Edit Person.
+- [x] `/admin/people` modification — small `<OrphanAuthUsers />` panel renders only when `loadOrphanAuthUsers` returns rows. Each row has an Adopt dialog (firstName + lastName) that calls `adoptOrphanAuthUser`. Hidden in the steady state.
+- [x] `src/features/people/actions.ts:adoptOrphanAuthUser` — new Server Action, `requireAdmin`, refuses if a contact is already linked, otherwise transactional contacts insert + email identifier swap.
+- [x] `src/features/people/queries.ts:loadOrphanAuthUsers` — single `auth.admin.listUsers` round-trip + LEFT-anti-join via in-memory set difference against `contacts.user_id`.
+- [x] Smoke (web-test): `/admin/users` → 307 → `/admin/people`. `/lists` shows only Dealerships ("People (including coaches) live on the People page"). `/admin/people` 200, no orphan panel rendered (all auth users currently linked). Nav: Calendar / Production List / Manage Lists / Lookups / People — no Users tab. `/calendar` → "Master Schedule" intact (regression).
+- [x] Tests: 100/100 (was 111; -11 for the deleted `src/features/auth/actions.test.ts` which tested the removed actions). tsc clean. lint clean (4 pre-existing warnings).
+- [x] Eval follow-up — Codex flagged two Mediums as commit-blockers, both fixed in working tree:
+   - **`adoptOrphanAuthUser` UUID validation + Postgres error mapping.** `userId` now goes through a `UUID_RE` regex check, then `toActionResult` maps codes `22P02` (invalid UUID), `23503` (FK to missing auth user), `23505` (race-into unique-index) to admin-readable toasts instead of bubbling raw constraint errors.
+   - **`scripts/adopt-orphan-auth-users.ts --auto` per-orphan transaction.** Wrapped contact insert + email-identifier insert in `db.transaction(...)` so an identifier-uniqueness conflict rolls back the stub contact (which would otherwise silently link the auth user and hide it from future dry-runs). Per-orphan errors are now caught + logged so one failure doesn't abort the batch.
 
 #### Phase 5: Wiki updates + verification
 - [ ] Rewrite `docs/wiki/auth.md` provisioning section — `/admin/people` is the new entry point; the dashboard fallback line stays.

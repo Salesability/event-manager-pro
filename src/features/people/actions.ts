@@ -49,8 +49,31 @@ function toActionResult(err: unknown): ActionResult {
     const noun = err.kind === 'email' ? 'email address' : 'phone number';
     return { error: `That ${noun} is already linked to another contact.` };
   }
+  // Map common Postgres error codes that bubble up from Drizzle to friendly
+  // messages so the admin sees a toast, not a server-action stack trace.
+  // Codes: 22P02 invalid_text_representation (e.g. malformed UUID), 23503
+  // foreign_key_violation (auth.users.id missing), 23505 unique_violation
+  // (race-into `contacts_user_id_unique` etc.).
+  if (typeof err === 'object' && err != null) {
+    const code = (err as { code?: string }).code;
+    if (code === '22P02') return { error: 'Invalid id format.' };
+    if (code === '23503') {
+      return { error: 'Referenced row no longer exists. Refresh the page.' };
+    }
+    if (code === '23505') {
+      return {
+        error:
+          'Another writer just made the same change. Refresh and check the row.',
+      };
+    }
+  }
   throw err;
 }
+
+// Supabase auth.users.id is a v4 UUID. Validate format before letting Postgres
+// reject it with a less-friendly 22P02 — saves a round-trip and produces a
+// cleaner message even if the DB layer's error mapping changes.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function revalidatePeopleViews() {
   revalidatePath('/admin/people');
@@ -632,4 +655,52 @@ export async function archivePerson(formData: FormData): Promise<ActionResult> {
 
   revalidatePeopleViews();
   return { ok: true, contactId };
+}
+
+// Adopt an orphan auth user — an `auth.users` row that has no matching
+// `contacts.user_id`. Materializes a contacts row + email identifier, then
+// links via `contacts.user_id`. Exception path for the Tilley-style legacy
+// state and for any future Supabase-dashboard fallback path. The People
+// page surfaces orphans in a small bottom panel; this action takes a row.
+export async function adoptOrphanAuthUser(formData: FormData): Promise<ActionResult> {
+  await requireAdmin();
+
+  const userId = field(formData, 'userId');
+  const firstName = field(formData, 'firstName');
+  const lastName = field(formData, 'lastName');
+  const email = field(formData, 'email').toLowerCase();
+  if (!userId || !UUID_RE.test(userId)) return { error: 'Invalid auth user id.' };
+  if (!firstName || !lastName) {
+    return { error: 'First and last name are both required to adopt this user.' };
+  }
+  if (email && !EMAIL_RE.test(email)) {
+    return { error: 'Email looks invalid.' };
+  }
+
+  // Refuse if a contact is already linked to this auth user.
+  const [existing] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.userId, userId), isNull(contacts.archivedAt)))
+    .limit(1);
+  if (existing) {
+    return { error: `This auth user is already linked to contact ${existing.id}.` };
+  }
+
+  let newContactId: number;
+  try {
+    newContactId = await db.transaction(async (tx) => {
+      const [contactRow] = await tx
+        .insert(contacts)
+        .values({ firstName, lastName, userId })
+        .returning({ id: contacts.id });
+      if (email) await swapPrimaryIdentifier(tx, contactRow.id, 'email', email);
+      return contactRow.id;
+    });
+  } catch (err) {
+    return toActionResult(err);
+  }
+
+  revalidatePeopleViews();
+  return { ok: true, contactId: newContactId };
 }
