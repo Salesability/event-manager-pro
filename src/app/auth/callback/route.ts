@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { dealerContacts } from '@/lib/db/schema';
+import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/url';
 
@@ -20,5 +24,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorUrl);
   }
 
-  return NextResponse.redirect(new URL(next, url));
+  // Decide where to land the user based on their domain role.
+  //   - Any team_member_roles row → staff app at `next` (default `/`).
+  //   - No team_member_roles but ≥1 active dealer_contacts row → them-side
+  //     (portal). The portal route doesn't ship in 0018, so for now we land
+  //     them on a friendly "not yet available" page — when the portal opens
+  //     this redirect target swaps to `/portal` (one-line change).
+  //   - Neither → defensive "not provisioned" error. Shouldn't happen with
+  //     project-level signups disabled, but if a stray auth.users row exists
+  //     we'd rather flag it than render a half-broken staff app.
+  const membership = await loadCurrentMembership();
+  if (membership && membership.roles.length > 0) {
+    return NextResponse.redirect(new URL(next, url));
+  }
+
+  const contactId = membership?.contactId ?? null;
+  const hasDealerContact =
+    contactId != null
+      ? (
+          await db
+            .select({ id: dealerContacts.id })
+            .from(dealerContacts)
+            .where(
+              and(eq(dealerContacts.contactId, contactId), isNull(dealerContacts.archivedAt)),
+            )
+            .limit(1)
+        ).length > 0
+      : false;
+
+  const errorUrl = new URL('/auth/auth-error', url);
+  errorUrl.searchParams.set(
+    'reason',
+    hasDealerContact ? 'Portal not yet available' : 'Account not provisioned',
+  );
+  return NextResponse.redirect(errorUrl);
 }
