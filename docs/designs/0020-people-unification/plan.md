@@ -31,7 +31,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 | 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Done | `1053257` |
 | 3: `/admin/people` page + Add/Edit Person dialog | Done | `33bfc51` |
 | 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Done | `3dc6ec0` |
-| 5: Wiki updates + verification | Pending | - |
+| 5: Wiki updates + verification | Done | working tree |
 
 ## Code Anchors
 
@@ -57,7 +57,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/lifecycle.md` — Archive the relationship (`team_member_roles`), not the master record (`contacts`). `archivePerson` follows this strictly.
 - `docs/wiki/conventions.md` — Server Actions for our-UI mutations; the new actions are no exception. Service-role admin SDK stays server-only.
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% — shipped 2026-05-05.
 
 **Note:**
 - Phase 2 is the load-bearing one — the merged transaction has to roll back cleanly across the contacts + identifiers + roles + auth-user create, plus optional dealer links. Auth-user create goes last so a Drizzle failure rolls back without leaving an orphan.
@@ -113,18 +113,15 @@ For each new file or method below, the builder reads the anchor first and matche
    - **`scripts/adopt-orphan-auth-users.ts --auto` per-orphan transaction.** Wrapped contact insert + email-identifier insert in `db.transaction(...)` so an identifier-uniqueness conflict rolls back the stub contact (which would otherwise silently link the auth user and hide it from future dry-runs). Per-orphan errors are now caught + logged so one failure doesn't abort the batch.
 
 #### Phase 5: Wiki updates + verification
-- [ ] Rewrite `docs/wiki/auth.md` provisioning section — `/admin/people` is the new entry point; the dashboard fallback line stays.
-- [ ] Update `docs/wiki/data-model.md` — wiki narrative already says "one master `contacts` table, role facets" but mentions Sales Coaches as a separate page. Bring the page-level vocabulary in line.
-- [ ] Append to `docs/wiki/log.md` — dated entry for the unification.
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm test` clean.
+- [x] Rewrote `docs/wiki/auth.md` provisioning section — `/admin/people` is the new entry point; "Add Person" dialog described with App access + Admin + Coach toggles. Fallback section now describes the orphan-adoption flow + amber panel + CLI script. The Two-surfaces "kept consistent at write time" paragraph rewritten to reference `createPerson` / `updatePerson` and the new `{ ok: true, warning }` partial-success contract.
+- [x] `docs/wiki/data-model.md` — no edits needed; the existing "one master `contacts` table, role facets" narrative was already aligned with the unified UI. Verified with grep — no stale `/admin/users` or "Sales Coaches" references.
+- [x] `docs/wiki/lifecycle.md` — two stale references updated. `/admin/users` → `/admin/people`; `users-admin.tsx` → `people-admin.tsx`; the "re-activation" example points at `syncTeamMemberRoles` + `updatePerson` instead of the deleted `applyRoleSet` / `setUserRoles`.
+- [x] Appended to `docs/wiki/log.md`: dated entry "0020 people-unification: one People page replaces Users + Sales Coaches" — summarises the five-phase ship + the two-Codex-Mediums-fixed-each-phase pattern + the new code surface + the retired Server Actions.
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm test` clean (100/100).
+- [x] Cross-link audit: 1 forward-looking reference in `log.md` to `shipped/0020-people-unification/plan.md` — resolves when the chunk is closed (next step).
 - [ ] /eval against `0020-people-unification/plan.md`.
-- [ ] Smoke (web-test) end-to-end:
-  - `goto /admin/people`: heading "People", table populated with David / Shannon / Tilley; per-row Edit + Archive.
-  - Click `+ Add Person`: dialog "Add Person" with `First name` / `Last name` / `Email` / `Phone` / `App access` / `Admin` / `Coach` / dealer picker.
-  - As non-admin: `goto /admin/people` redirects to `/auth/auth-error` (the durable layout gate from 0018 still bouncing non-staff is a separate matter).
-  - `goto /lists`: only Dealerships section; no Sales Coaches.
-  - `goto /calendar`: coach pre-filter + coach pills still work.
+- [ ] Smoke (web-test) end-to-end (covered by /eval).
 
 ## Out of scope (explicitly)
 

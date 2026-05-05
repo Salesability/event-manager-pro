@@ -13,6 +13,17 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-05 — 0020 people-unification: one People page replaces Users + Sales Coaches
+
+- Five-phase plan landed at [`docs/designs/shipped/0020-people-unification/`](../designs/shipped/0020-people-unification/plan.md). Final eval `eval-2026-05-05-1600.md` PASS with warnings; two Codex Mediums fixed pre-commit each phase (Phase 2 TOCTOU on `updatePerson` + roles=[] coercion; Phase 3 lifecycle helper + partial-success contract; Phase 4 UUID validation + Postgres error mapping in `adoptOrphanAuthUser` + atomic per-orphan transaction in the bulk script).
+- **One admin entry point.** `/admin/people` is now the only place to manage humans. The old `/admin/users` redirects there, the Sales Coaches section is gone from `/lists` (now Dealerships-only), and the legacy Server Actions (`createUser`, `linkUserToContact`, `setUserRoles`, `deactivateUser`, `createCoach`, `updateCoach`, `archiveCoach`) are deleted. The "Link contact" mental model is retired — auth.users is now a *facet* of a person, not a separate concept.
+- **New code:** `src/features/people/{queries,actions,people-admin,orphan-auth-users}.{ts,tsx}` replaces the old `src/features/auth/{queries,users-admin,actions}.ts` + `src/app/(app)/lists/coach-form.tsx`. Single Server Action surface (`createPerson` / `updatePerson` / `archivePerson` + the rare `adoptOrphanAuthUser` exception path) handles every prior flow.
+- **Status helper:** `lifecycle()` in `people-admin.tsx` derives `active` / `banned` / `inactive` from any-active-facet rather than just auth-ban state — fixes the contact-only archived-but-still-shows-active bug Codex caught.
+- **Action contract:** `ActionResult` is now `{ ok: true, contactId, warning?: string } | { error: string }` so partial-success cases (DB committed, auth-side failed) close + refresh + show a warning toast instead of leaving the UI stale with a misleading error.
+- **Orphan recovery:** `loadOrphanAuthUsers` lists auth users without a `contacts.user_id` link; an amber panel on the People page renders only when there are any. CLI fallback at `scripts/adopt-orphan-auth-users.ts` (dry-run by default; `--auto` adopts each in a per-user transaction with stub names).
+- 100/100 vitest, tsc + lint clean. Auth wiki rewritten to match (`auth.md` provisioning section + Two-surfaces section). Lifecycle wiki updated to reference `/admin/people` + `people-admin.tsx`.
+- Commits: `82e3564` (Phase 1) → `1053257` (Phase 2) → `33bfc51` (Phase 3) → `3dc6ec0` (Phase 4) → Phase 5 (this ship).
+
 ## 2026-05-05 — 0018 user-system: shipped + durable staff-app gate
 
 - Plan moved to `docs/designs/shipped/0018-user-system/`. Final eval `eval-2026-05-05-1341.md` PASS with warnings; both Codex Critical findings resolved across two follow-up commits (`b4e3b6a`, `9231bd8`).

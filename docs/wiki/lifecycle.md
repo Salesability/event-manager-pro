@@ -55,7 +55,7 @@ Examples: `loadCoaches()` for the booking form, `loadDealers()` for the dealer d
 
 The view is asking "what happened?" The answer doesn't change just because someone left the team last month.
 
-Examples: `loadCampaigns()` left-joins `contacts` for `coachName` without filtering `contacts.archivedAt` — that's intentional. The `lastSignInAt` column in `/admin/users` shows banned users with their full history.
+Examples: `loadCampaigns()` left-joins `contacts` for `coachName` without filtering `contacts.archivedAt` — that's intentional. The `Last sign-in` column in `/admin/people` shows banned users with their full history.
 
 ### Workflow target (acting on a stored FK)
 
@@ -70,12 +70,12 @@ Examples: `loadCoach(id)` used by `sendCoachShareLinkEmail`, the `/share/coach/[
 The same three buckets, mapped to UI:
 
 - **Pick lists / autocompletes:** active only. Same as the selection-query rule.
-- **Display rows:** show the name; if the underlying relationship is archived, mark with a muted "(deactivated)" affordance — `users-admin.tsx` already uses `opacity-60` on the row for banned users; that's the pattern.
+- **Display rows:** show the name; if the underlying relationship is archived, mark with a muted "(deactivated)" affordance — `people-admin.tsx` uses `opacity-60` on the row for banned/inactive people; that's the pattern.
 - **Action buttons on stored FKs:** still functional. The button doesn't lie about availability; the action's underlying server function decides whether to proceed and surfaces a clear message if it shouldn't.
 
 ## Re-activating
 
-The principle makes re-activation cheap: insert (or restore via `archivedAt = NULL`) the `team_member_roles` rows, lift the `auth.users` ban, and the contact — which was never touched — is unchanged. No data has to be reconstructed. This is the `setUserRoles` "restore archived row" branch already implemented in `applyRoleSet` (`src/features/auth/actions.ts`).
+The principle makes re-activation cheap: insert (or restore via `archivedAt = NULL`) the `team_member_roles` rows, lift the `auth.users` ban, and the contact — which was never touched — is unchanged. No data has to be reconstructed. This is the "restore archived row" branch in `syncTeamMemberRoles` (`src/features/people/actions.ts`), and the `updatePerson` on→off→on appAccess transition handles the auth-side ban lift symmetrically.
 
 ## Open follow-ups (not yet aligned with this principle)
 
