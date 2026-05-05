@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-05 — New concept page: lifecycle.md (archive the relationship, not the entity)
+
+- Surfaced by Codex Medium #2 in `docs/designs/0018-user-system/eval-2026-05-05-0945.md` — `deactivateUser` was archiving the linked `contacts` row, which silently broke `loadCoach()`, `/share/coach/[id]`, and "email assigned coach" workflows for already-assigned campaigns.
+- Fix landed in `src/features/auth/actions.ts:deactivateUser` (working tree): it now archives only `team_member_roles`, not `contacts`. The auth user is still banned + `app_metadata.role` cleared.
+- New wiki page [lifecycle.md](lifecycle.md) names the principle: master records (contacts, dealers, campaigns) are the historical anchor and rarely archived; relationships (`team_member_roles`, `dealer_contacts`, `contact_identifiers`) are what get archived. Documents the three query buckets — selection (active only), display (no filter), workflow-target (resolve regardless) — and lists the workflow-target reads (`loadCoach`, `/share/coach/[id]`) that still filter `archivedAt` and should be relaxed in a follow-up.
+
 ## 2026-05-01 — Phase 5.2 shipped: Campaign CRUD (booking modal + event detail)
 
 - `/calendar` and `/production` now CRUD-complete for campaigns. Server actions `createCampaign`, `updateCampaign`, `cancelCampaign` in `src/features/schedule/actions.ts`; same `{ ok } | { error }` contract as 5.1. Cancel is a guarded transition (`status IN ('draft','booked')` only) — already-cancelled or completed rows return a friendly error.

@@ -15,7 +15,9 @@ Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf5
 
 ## Concept pages
 
-Cross-cutting topics that span multiple tables/features. None yet.
+Cross-cutting topics that span multiple tables/features.
+
+- [lifecycle.md](lifecycle.md) — record lifecycle and dependency: archive the relationship, not the entity. Selection vs display vs workflow-target query semantics.
 
 (Candidate future pages: `calendar-algorithm.md` once the legacy ribbon-packing ports; `quote-lifecycle.md` once quote → contract → invoice → payment ships.)
 
