@@ -71,10 +71,27 @@ async function findContactByEmail(authUserId: string): Promise<number | null> {
 async function ensureContact(authUserId: string): Promise<number> {
   const existing = await findContactByEmail(authUserId);
   if (existing != null) {
-    await db
-      .update(contacts)
-      .set({ userId: authUserId })
-      .where(and(eq(contacts.id, existing), isNull(contacts.userId)));
+    // Don't silently no-op the link if contacts.user_id already points elsewhere.
+    // Otherwise we'd grant `app_metadata.role='admin'` to authUserId while the
+    // matching team_member_roles row stays attached to a different person.
+    const [current] = await db
+      .select({ userId: contacts.userId })
+      .from(contacts)
+      .where(eq(contacts.id, existing))
+      .limit(1);
+    if (current.userId != null && current.userId !== authUserId) {
+      throw new Error(
+        `Contact ${existing} (${email}) is already linked to a different auth user ` +
+          `(${current.userId}). Refusing to promote ${authUserId} — resolve the link manually first ` +
+          `(e.g. unset contacts.user_id on contact ${existing}, or pick a different email).`,
+      );
+    }
+    if (current.userId == null) {
+      await db
+        .update(contacts)
+        .set({ userId: authUserId })
+        .where(eq(contacts.id, existing));
+    }
     return existing;
   }
 
@@ -130,15 +147,20 @@ async function main() {
       process.exit(1);
     }
 
+    // Resolve the contact + verify it's not already linked to a different auth
+    // user BEFORE mutating app_metadata. Otherwise a split-ownership scenario
+    // (contact's user_id points elsewhere) would grant admin gate access to
+    // this auth user while the matching team_member_roles row stays bound to
+    // the other person.
+    const contactId = await ensureContact(user.id);
+    const status = await ensureAdminRoleRow(contactId);
+    console.log(`✓ team_member_roles(contact_id=${contactId}, role='admin'): ${status}`);
+
     const { error: metaErr } = await admin.auth.admin.updateUserById(user.id, {
       app_metadata: { role: 'admin' },
     });
     if (metaErr) throw metaErr;
     console.log(`✓ app_metadata.role = 'admin' on ${email} (${user.id})`);
-
-    const contactId = await ensureContact(user.id);
-    const status = await ensureAdminRoleRow(contactId);
-    console.log(`✓ team_member_roles(contact_id=${contactId}, role='admin'): ${status}`);
     console.log('Done.');
   } finally {
     await pg.end();

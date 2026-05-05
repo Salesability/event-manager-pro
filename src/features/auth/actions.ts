@@ -196,8 +196,6 @@ async function applyRoleSet(
   userId: string,
   desired: V1TeamRole[],
 ): Promise<ActionResult> {
-  const admin = createAdminClient();
-
   const [linked] = await db
     .select({ id: contacts.id })
     .from(contacts)
@@ -211,47 +209,71 @@ async function applyRoleSet(
     };
   }
 
+  // Order: DB transaction first, then app_metadata. If the DB sync fails, the
+  // function returns the error before any auth-side mutation, so the gate
+  // (app_metadata.role) never drifts ahead of the relationship truth
+  // (team_member_roles). If the auth update fails afterwards the DB already
+  // reflects the desired state and the admin can retry — only the gate cache
+  // is stale, no privilege escalation has occurred.
+  if (linked) {
+    const contactId = linked.id;
+    try {
+      await db.transaction(async (tx) => {
+        const existing = await tx
+          .select({
+            id: teamMemberRoles.id,
+            role: teamMemberRoles.role,
+            archivedAt: teamMemberRoles.archivedAt,
+          })
+          .from(teamMemberRoles)
+          .where(eq(teamMemberRoles.contactId, contactId));
+
+        const desiredSet = new Set<string>(desired);
+        const existingByRole = new Map(existing.map((r) => [r.role, r]));
+
+        for (const role of desired) {
+          const row = existingByRole.get(role);
+          if (!row) {
+            await tx.insert(teamMemberRoles).values({ contactId, role });
+          } else if (row.archivedAt != null) {
+            await tx
+              .update(teamMemberRoles)
+              .set({ archivedAt: null })
+              .where(eq(teamMemberRoles.id, row.id));
+          }
+        }
+
+        const toArchive = existing
+          .filter(
+            (r) =>
+              r.archivedAt == null &&
+              !desiredSet.has(r.role) &&
+              (V1_TEAM_ROLES as readonly string[]).includes(r.role),
+          )
+          .map((r) => r.id);
+        if (toArchive.length) {
+          await tx
+            .update(teamMemberRoles)
+            .set({ archivedAt: new Date() })
+            .where(inArray(teamMemberRoles.id, toArchive));
+        }
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Could not sync team_member_roles.';
+      return { error: msg };
+    }
+  }
+
+  const admin = createAdminClient();
   const { error: metaErr } = await admin.auth.admin.updateUserById(userId, {
     app_metadata: { role: desired.includes('admin') ? 'admin' : null },
   });
-  if (metaErr) return { error: metaErr.message };
-
-  if (!linked) return { ok: true };
-  const contactId = linked.id;
-
-  await db.transaction(async (tx) => {
-    const existing = await tx
-      .select({ id: teamMemberRoles.id, role: teamMemberRoles.role, archivedAt: teamMemberRoles.archivedAt })
-      .from(teamMemberRoles)
-      .where(eq(teamMemberRoles.contactId, contactId));
-
-    const desiredSet = new Set<string>(desired);
-    const existingByRole = new Map(existing.map((r) => [r.role, r]));
-
-    // Insert or restore desired roles.
-    for (const role of desired) {
-      const row = existingByRole.get(role);
-      if (!row) {
-        await tx.insert(teamMemberRoles).values({ contactId, role });
-      } else if (row.archivedAt != null) {
-        await tx
-          .update(teamMemberRoles)
-          .set({ archivedAt: null })
-          .where(eq(teamMemberRoles.id, row.id));
-      }
-    }
-
-    // Archive active rows whose role is no longer desired (only roles we manage in v1).
-    const toArchive = existing
-      .filter((r) => r.archivedAt == null && !desiredSet.has(r.role) && (V1_TEAM_ROLES as readonly string[]).includes(r.role))
-      .map((r) => r.id);
-    if (toArchive.length) {
-      await tx
-        .update(teamMemberRoles)
-        .set({ archivedAt: new Date() })
-        .where(inArray(teamMemberRoles.id, toArchive));
-    }
-  });
+  if (metaErr) {
+    // DB already committed; surface the auth-side error so the admin can retry.
+    return {
+      error: `Roles saved, but the auth gate did not update: ${metaErr.message}. Re-submit to retry.`,
+    };
+  }
 
   return { ok: true };
 }
