@@ -21,8 +21,8 @@ The 0020 People page (`/admin/people`) ships the structural unification — one 
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: TanStack Table foundation on `/admin/people` (sortable headers + pagination) | Done | working tree |
-| 2: Field exposure + drop chrome + App-access toggle removal | Done | working tree |
+| 1: TanStack Table foundation on `/admin/people` (sortable headers + pagination) | Done | d0c6f04 |
+| 2: Field exposure + drop chrome + App-access toggle removal | Done | d0c6f04 |
 | 3: Confirm dialogs (disable app access, per-row archive preview) + auto-uncheck on App-access flip | Pending | - |
 | 4: Search + role filter pills (TanStack global filter + faceted filters) | Pending | - |
 | 5: Verification | Pending | - |
