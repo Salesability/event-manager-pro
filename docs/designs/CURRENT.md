@@ -2,7 +2,7 @@
 
 **Plan:** [`docs/designs/0004-port-migration/plan.md`](0004-port-migration/plan.md) — umbrella tracker for the legacy `deprecated/index.html` → Next.js port
 
-**Active sub-plan:** _None — pick from Parked or scaffold a new sub-plan_
+**Active sub-plan:** People unification → [`0020-people-unification/plan.md`](0020-people-unification/plan.md) — *outside* the port-migration umbrella; folds `/admin/users` + Manage Lists Sales Coaches into a single `/admin/people` flow that abstracts away `auth.users`. Surfaced while provisioning Tilley Shaye.
 
 **Parked:**
 - Phase 5.7 — Booking summary & reports → [`0014-summary-reports/plan.md`](0014-summary-reports/plan.md)
@@ -12,7 +12,7 @@
 - Secure architecture (RLS defence-in-depth + sensitive-op audit log) → [`0019-security-architecture/plan.md`](0019-security-architecture/plan.md) — unblocked now that `0018-user-system` shipped (2026-05-05); ready to pick whenever.
 - 0018 follow-ups (not blockers): `createUser` partial-success after auth-side success (Codex Medium); test-mock predicate-blindness (Codex Low). Not yet scaffolded; small chunk if/when revisited.
 
-**Status:** Slot vacated 2026-05-05 after `0018-user-system` shipped. Re-eval `eval-2026-05-05-1341.md` PASS with warnings; all Critical + High Codex findings resolved across two follow-up commits.
+**Status:** `0020-people-unification` scaffolded 2026-05-05 — phases not yet started.
 
 ---
 
@@ -24,6 +24,7 @@ For the raw "when was X active" — `git log -- docs/designs/CURRENT.md` shows e
 
 The bullets below are a *curated* layer over that log: same dates, but with the eval verdict, why the slot vacated, what got requeued, etc. — the context a commit message wouldn't carry. When the active plan or sub-plan changes, prepend a one-line entry (newest first) noting date, what changed, where it ended up (Done → `shipped/`, Paused, Abandoned), and any non-obvious context.
 
+- **2026-05-05** — Scaffolded `0020-people-unification/plan.md` and picked it up as the active sub-plan. Folds `/admin/users` + Manage Lists Sales Coaches into a single `/admin/people` flow; the data model already supports the unification (one `contacts` table, role facets) but the UI fragments the human across three pages. Surfaced while walking through the Tilley Shaye provisioning UX with the user — "yuck, the supabase user should be abstracted away."
 - **2026-05-05** — `0018-user-system` → Done; sub-plan moved to `shipped/0018-user-system/`. End-to-end: in-app `/admin/users` provisioning with three-tab Add User dialog (Create new / Pick existing / No link); `linkUserToContact` Server Action with TOCTOU-safe conditional UPDATE; auto-link trigger on `auth.users` insert; coach auto-filter on `/calendar` for signed-in coaches; role-aware `/auth/callback` routing PLUS a durable `requireStaffAccess()` gate in `(app)/layout.tsx` and `/production/export` that re-runs the same decision tree on every request. Two follow-up commits (`b4e3b6a`, `9231bd8`) closed Codex Critical + High + a new Critical (Route Handler bypass on `/production/export`); final eval PASS with warnings (81/81 tests, tsc + lint clean). 0017-user-admin moved to `shipped/` as superseded. Two known follow-ups remain (Medium: `createUser` partial-success; Low: test-mock predicate-blindness) — not blockers.
 - **2026-05-05** — Scaffolded `0019-security-architecture/plan.md` (RLS defence-in-depth + sensitive-op audit log + per-action role audit + email-send hardening + MFA enablement). Parked behind 0018 since it depends on the role taxonomy + `requireRole` helper that 0018 establishes. Surfaced after a discussion of the Drizzle-direct-vs-PostgREST trade-off — the staff app's drift from the original "Drizzle owns SQL, supabase-js owns RLS-bound reads" intent (`0002-nextjs-scaffold/decision.md:10`) is now an explicit re-alignment plan.
 - **2026-05-05** — Scaffolded `0018-user-system/plan.md` and picked it up as the active sub-plan. Subsumes the parked `0017-user-admin` (which was unstarted) and extends to RBAC enforcement, contact-user linkage, coach auto-filter, role-aware login routing. Surfaced while provisioning Tilley Shaye and discussing the legacy `Users!A:E` parity gap. 0017 stays in Parked as `subsumed`; will be moved to `shipped/` with a supersession note when 0018's Phase 6 ships.
