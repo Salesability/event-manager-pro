@@ -575,7 +575,22 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
       };
     }
   } else if (appAccess && current.userId != null) {
-    // Already on; just keep app_metadata.role in sync with the role set.
+    // Already linked. Lift any active ban first (idempotent on already-active
+    // users) — this is the restore path when an earlier accidental ban is
+    // reversed by re-ticking a role on Edit. Then keep app_metadata.role in
+    // sync with the role set.
+    const { error: unbanErr } = await admin.auth.admin.updateUserById(
+      current.userId,
+      { ban_duration: 'none' },
+    );
+    if (unbanErr) {
+      revalidatePeopleViews();
+      return {
+        ok: true,
+        contactId,
+        warning: `Person updated, but lifting the auth-user ban failed: ${unbanErr.message}.`,
+      };
+    }
     const result = await syncAuthMetadata(current.userId, roles);
     if ('error' in result) {
       revalidatePeopleViews();

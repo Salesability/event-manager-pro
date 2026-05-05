@@ -197,6 +197,16 @@ function PersonForm({
       toast.error('Email is required for Admin or Coach roles.');
       return;
     }
+    // Guard the destructive transition: a coach/admin (or even role-less
+    // legacy sign-in) being saved with both checkboxes unticked will ban
+    // their auth user via `updatePerson`. Cheap UX confirm prevents the
+    // silent footgun.
+    if (mode === 'edit' && person?.hasAppAccess && !wantsAppAccess) {
+      const ok = window.confirm(
+        `Saving with no roles will end app access for ${firstName.trim()} ${lastName.trim()} and ban their sign-in account. The contact record stays. Continue?`,
+      );
+      if (!ok) return;
+    }
     const filledLinks = dealerLinks.filter((l) => l.dealerId);
     if (filledLinks.some((l) => !l.dealerId || !l.role)) {
       toast.error('Each dealer link needs both a dealer and a role.');
