@@ -27,7 +27,7 @@ The data model already says "every human is one `contacts` row, with optional fa
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: `loadAdminPeople` query + types | Pending | - |
+| 1: `loadAdminPeople` query + types | Done | working tree |
 | 2: `createPerson` + `updatePerson` Server Actions (folds `createUser` + `createCoach`) | Pending | - |
 | 3: `/admin/people` page + Add/Edit Person dialog | Pending | - |
 | 4: Retire Sales Coaches section + redirect `/admin/users` → `/admin/people` | Pending | - |
@@ -57,7 +57,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/lifecycle.md` — Archive the relationship (`team_member_roles`), not the master record (`contacts`). `archivePerson` follows this strictly.
 - `docs/wiki/conventions.md` — Server Actions for our-UI mutations; the new actions are no exception. Service-role admin SDK stays server-only.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Phase 2 is the load-bearing one — the merged transaction has to roll back cleanly across the contacts + identifiers + roles + auth-user create, plus optional dealer links. Auth-user create goes last so a Drizzle failure rolls back without leaving an orphan.
@@ -67,9 +67,9 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: `loadAdminPeople` query + types
-- [ ] `src/features/people/queries.ts` — new file. `loadAdminPeople(): AdminPersonRow[]` joins `contacts` × `team_member_roles` × `dealer_contacts` × `auth.admin.listUsers`. Sorted by display name.
-- [ ] `AdminPersonRow` type — `{ contactId, displayName, identifiers: { email?, phone? }, hasAppAccess: boolean, authUser?: { id, email, lastSignInAt, bannedUntil, providers, appMetadataRole }, roles: TeamMemberRole[], dealerLinks: { dealerId, dealerName, role }[] }`.
-- [ ] Vitest: query returns the right shape for a contact with no auth user (Shaye state), with auth + role (David/Shannon state), and with dealer-only relationships.
+- [x] `src/features/people/queries.ts` — new file. `loadAdminPeople(): AdminPersonRow[]` queries `contacts` (spine) + bulk reads `team_member_roles`, `dealer_contacts ⋈ dealers`, primary `contact_identifiers`, then plucks the auth-user facet from a single `auth.admin.listUsers()` round-trip filtered to linked `user_id`s. Sorted by `displayName`.
+- [x] `AdminPersonRow` type — `{ contactId, displayName, email, phone, hasAppAccess, authUser: { userId, email, lastSignInAt, bannedUntil, providers, appMetadataRole } | null, roles: TeamMemberRole[], dealerLinks: { dealerId, dealerName, role }[] }`. `email` falls back to the linked auth-user email when no primary identifier exists. (Slightly flatter than the original sketch — `identifiers: { email?, phone? }` collapsed into top-level `email` / `phone` since the page only ever needs the primary.)
+- [x] Vitest: 6 cases — empty contacts list, Shaye state (contact + identifier, no auth user), David state (contact + auth user + admin role + email+phone), dealer-only customer-side person, magic-link auth user with no identities array (provider fallback to `['email']`), `admin.listUsers` error propagation.
 
 #### Phase 2: `createPerson` + `updatePerson` + `archivePerson` Server Actions
 - [ ] `src/features/people/actions.ts:createPerson` — `requireAdmin()`, parse FormData (firstName, lastName, optional email/phone, `appAccess: bool`, `roles[]`, `dealerLinks[]`), single transaction: insert contacts → insert identifiers → insert team_member_roles → insert dealer_contacts → if `appAccess`: `auth.admin.createUser({email, email_confirm: true})` then `UPDATE contacts SET user_id = ... WHERE id = ... RETURNING` → if `roles` includes `admin`: set `app_metadata.role = 'admin'`.
