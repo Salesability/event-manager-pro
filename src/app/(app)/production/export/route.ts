@@ -1,5 +1,6 @@
 import 'server-only';
 import { type NextRequest } from 'next/server';
+import { requireStaffAccess } from '@/lib/auth/require-staff-access';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { filterCampaigns, todayIso } from '../filter';
 
@@ -19,6 +20,12 @@ const HEADERS = [
 ];
 
 export async function GET(request: NextRequest) {
+  // Route Handlers don't run through `(app)/layout.tsx`, so the staff-app
+  // gate has to be re-asserted explicitly here. Without this, a contact-only
+  // auth user blocked from `/production` could still GET `/production/export`
+  // and exfil the campaign CSV.
+  await requireStaffAccess();
+
   const sp = request.nextUrl.searchParams;
   const q = sp.get('q') ?? '';
   const status = sp.get('status') ?? '';

@@ -75,7 +75,7 @@ Two layers of gating, defence-in-depth:
 
 When an admin promotes a user via `/admin/users`, both surfaces are written in the same Server Action: `team_member_roles` first inside a DB transaction, then `app_metadata.role = 'admin'` (or `null`) via the service-role client. If the auth-side update fails after the DB commit, the action returns a "Re-submit to retry" error — the gate cache is stale but no privilege escalation occurred.
 
-**v1 wired roles:** only `admin` and `coach` are selectable in the UI. `staff` and `viewer` are reserved enum values for future use; "signed-in non-admin" *is* the v1 staff experience (no `team_member_roles` row required).
+**v1 wired roles:** only `admin` and `coach` are selectable in the UI. `staff` and `viewer` are reserved enum values for future use. Staff-app access requires *either* `app_metadata.role === 'admin'` (bootstrap path) *or* at least one active `team_member_roles` row — the older "signed-in non-admin = staff by default" was retracted as a Codex Critical (post-callback URL bypass) on 2026-05-05.
 
 ## Login routing: staff vs portal contacts
 

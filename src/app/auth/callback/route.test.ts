@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   exchangeCodeForSession: vi.fn(),
   loadCurrentMembership: vi.fn(),
+  getUser: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -13,6 +14,8 @@ vi.mock('@/lib/supabase/server', () => ({
     auth: { exchangeCodeForSession: mocks.exchangeCodeForSession },
   }),
 }));
+
+vi.mock('@/lib/supabase/session', () => ({ getUser: mocks.getUser }));
 
 vi.mock('@/lib/auth/load-team-membership', () => ({
   loadCurrentMembership: mocks.loadCurrentMembership,
@@ -30,6 +33,7 @@ describe('/auth/callback role-aware routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
+    mocks.getUser.mockResolvedValue({ id: 'user-uuid', app_metadata: { role: null } });
   });
 
   it('missing code → redirects to auth-error', async () => {
@@ -43,6 +47,15 @@ describe('/auth/callback role-aware routing', () => {
     mocks.exchangeCodeForSession.mockResolvedValue({ error: { message: 'Code expired' } });
     const res = await GET(makeRequest({ code: 'abc' }));
     expect(res.headers.get('location')).toMatch(/\/auth\/auth-error\?reason=Code\+expired/);
+  });
+
+  it('admin (app_metadata.role) with no team_member_roles → still redirects to safe `next` (bootstrap path)', async () => {
+    mocks.getUser.mockResolvedValue({ id: 'admin-uuid', app_metadata: { role: 'admin' } });
+    mocks.loadCurrentMembership.mockResolvedValue(null);
+    const res = await GET(makeRequest({ code: 'abc', next: '/admin/users' }));
+    expect(res.headers.get('location')).toContain('/admin/users');
+    // Confirm we short-circuit before touching the membership loader.
+    expect(mocks.loadCurrentMembership).not.toHaveBeenCalled();
   });
 
   it('staff role → redirects to safe `next`', async () => {
