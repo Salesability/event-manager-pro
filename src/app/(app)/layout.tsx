@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { AppHeader } from '@/components/app/app-header';
 import { Toaster } from '@/components/ui/toaster';
+import { isAdmin } from '@/lib/auth/require-admin';
 import { getUser } from '@/lib/supabase/session';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,7 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen flex-col">
-      <AppHeader email={user.email ?? 'unknown'} />
+      <AppHeader email={user.email ?? 'unknown'} isAdmin={isAdmin(user)} />
       <main className="mx-auto w-full max-w-[1440px] px-8 py-8">{children}</main>
       <Toaster />
     </div>

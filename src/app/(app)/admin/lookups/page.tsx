@@ -1,7 +1,9 @@
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import { loadCampaignStyles, loadSalesLeadSources } from '@/features/schedule/queries';
 
 export default async function LookupsPage() {
+  await requireAdmin();
   const [styles, sources] = await Promise.all([loadCampaignStyles(), loadSalesLeadSources()]);
 
   return (

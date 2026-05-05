@@ -56,7 +56,7 @@ This plan **subsumes** [`docs/designs/0017-user-admin/plan.md`](../0017-user-adm
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Provisioning + admin page (subsumes 0017) | Done | working tree |
-| 2: RBAC enforcement — `requireAdmin()` consistently applied + admin-route gate + admin-only nav link | Pending | - |
+| 2: RBAC enforcement — `requireAdmin()` consistently applied + admin-route gate + admin-only nav link | Done | working tree |
 | 3: Contact↔user linkage — admin-add-user form picks/creates contact + role; SQL trigger to back-fill `contacts.user_id` on signup | Pending | - |
 | 4: Coach auto-filter on `/calendar` (legacy parity) | Pending | - |
 | 5: Role-aware login routing — callback decides staff vs portal vs error | Pending | - |
@@ -93,7 +93,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/conventions.md` — admin-only routes follow the same gate-at-page + gate-in-action defence-in-depth pattern.
 - `db-conventions` skill — Drizzle migration generation; the hand-written trigger SQL bypasses `pnpm db:generate` and lives in a numbered file directly. Document this in Phase 3.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - Service-role client must never be imported into a Client Component. The `'server-only'` import at the top of `src/lib/supabase/admin.ts` makes that mechanically enforced — Next throws a build error if a Client Component reaches for it.
@@ -117,12 +117,13 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Vitest tests: `isAdmin` (admin → true; coach/staff/missing/null → false); `createUser` non-admin → throws redirect, no Supabase call; invalid email → rejected pre-Supabase; duplicate-email → Supabase error surfaced verbatim; unsupported role (`staff`) → rejected with clear message.
 
 #### Phase 2: RBAC enforcement
-- [ ] `src/lib/supabase/middleware.ts` — add `ADMIN_PATHS = ['/admin']` constant; after the existing auth check, gate any `pathname` matching `ADMIN_PATHS` on `user.app_metadata?.role === 'admin'`. Non-admin → redirect to `/`.
-- [ ] `src/components/app/app-nav.tsx` — accept `isAdmin` prop from the `(app)/layout.tsx`; render `Users` and `Lookups` links only when true.
-- [ ] `src/app/(app)/layout.tsx` — read `app_metadata.role` once, pass `isAdmin` to nav.
-- [ ] Apply `requireAdmin()` to every existing `/admin/*` page (today only `/admin/lookups`).
-- [ ] Vitest test: middleware gate redirects non-admin from `/admin/users` to `/`.
-- [ ] Smoke (web-test): `inject-supabase` as a non-admin email; `goto /admin/users` redirects (final URL = `/`); `goto /admin/lookups` redirects too.
+- [x] `src/lib/supabase/middleware.ts` — `ADMIN_PATHS = ['/admin']` constant + pure helpers `isAdminPath` / `isAdminUser`; after the auth check, gate any `pathname` matching `ADMIN_PATHS` on `user.app_metadata?.role === 'admin'`. Non-admin → redirect to `/`.
+- [x] `src/components/app/app-nav.tsx` — accepts `isAdmin` prop; `TABS` flag entries `admin: true` (Lookups + Users); filtered out when `isAdmin` is false.
+- [x] `src/app/(app)/layout.tsx` — passes `isAdmin(user)` (from `@/lib/auth/require-admin`) into `AppHeader`, threaded through to `AppNav`.
+- [x] `src/app/(app)/admin/lookups/page.tsx` — added `await requireAdmin()` at the top.
+- [x] **Server Action defence-in-depth:** the six lookup actions (`createCampaignStyle` / `updateCampaignStyle` / `archiveCampaignStyle` / `createSalesLeadSource` / `updateSalesLeadSource` / `archiveSalesLeadSource`) switched from `requireUserId()` to `requireAdmin()`. Staff-side actions (dealers/coaches/campaigns/availability) keep `requireUserId()` because they're not admin-only.
+- [x] Vitest tests: `isAdminPath` (matches `/admin`, `/admin/*`; doesn't match `/administrative` etc.); `isAdminUser` (only the literal string `'admin'`; defensive against null/undefined/non-strings).
+- [x] Smoke (web-test) as non-admin `david.hogan@networknode.ca`: `/admin/users` and `/admin/lookups` both redirect to `/` (cascades to `/calendar`); nav shows only Calendar / Production List / Manage Lists.
 
 #### Phase 3: Contact↔user linkage
 - [ ] Extend `createUser` Server Action: FormData carries optional `contactId` (existing) or `firstName`/`lastName` (create new); if neither, the user is created without a contacts link and the admin can attach one later via a separate action.

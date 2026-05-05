@@ -16,6 +16,7 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
+import { requireAdmin } from '@/lib/auth/require-admin';
 import { getUser } from '@/lib/supabase/session';
 import {
   EMAIL_RE,
@@ -475,7 +476,7 @@ function lookupActionResult(err: unknown): ActionResult {
 }
 
 export async function createCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -498,7 +499,7 @@ export async function createCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function updateCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -521,7 +522,7 @@ export async function updateCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function archiveCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -536,7 +537,7 @@ export async function archiveCampaignStyle(formData: FormData): Promise<ActionRe
 }
 
 export async function createSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -559,7 +560,7 @@ export async function createSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function updateSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };
@@ -582,7 +583,7 @@ export async function updateSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function archiveSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireUserId();
+  await requireAdmin();
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };

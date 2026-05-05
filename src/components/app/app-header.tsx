@@ -5,9 +5,10 @@ import { AppNav } from './app-nav';
 
 type AppHeaderProps = {
   email: string;
+  isAdmin: boolean;
 };
 
-export function AppHeader({ email }: AppHeaderProps) {
+export function AppHeader({ email, isAdmin }: AppHeaderProps) {
   const initials = email.slice(0, 2).toUpperCase();
 
   return (
@@ -24,7 +25,7 @@ export function AppHeader({ email }: AppHeaderProps) {
       </Link>
 
       <div className="flex items-center gap-4">
-        <AppNav />
+        <AppNav isAdmin={isAdmin} />
         <div className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3">
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-400 text-[11px] font-bold text-white">
             {initials}

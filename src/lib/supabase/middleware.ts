@@ -2,9 +2,18 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/auth-error', '/share/coach'];
+const ADMIN_PATHS = ['/admin'];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export function isAdminPath(pathname: string): boolean {
+  return ADMIN_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export function isAdminUser(role: unknown): boolean {
+  return role === 'admin';
 }
 
 export async function updateSession(request: NextRequest) {
@@ -41,6 +50,16 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', request.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // First defence-in-depth gate for /admin/*. Page-level requireAdmin() and
+  // each Server Action's requireAdmin() are the deeper layers — same role
+  // string consulted everywhere.
+  if (user && isAdminPath(request.nextUrl.pathname) && !isAdminUser(user.app_metadata?.role)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    url.search = '';
     return NextResponse.redirect(url);
   }
 

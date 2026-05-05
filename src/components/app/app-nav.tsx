@@ -3,19 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const TABS = [
+type Tab = { href: string; label: string; admin?: true };
+
+const TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List' },
   { href: '/lists', label: 'Manage Lists' },
-  { href: '/admin/lookups', label: 'Lookups' },
-] as const;
+  { href: '/admin/lookups', label: 'Lookups', admin: true },
+  { href: '/admin/users', label: 'Users', admin: true },
+];
 
-export function AppNav() {
+export function AppNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const tabs = TABS.filter((t) => !t.admin || isAdmin);
 
   return (
     <nav className="flex gap-1">
-      {TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
         return (
           <Link
