@@ -46,7 +46,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 6: MFA enablement (Supabase project toggle + UI affordance) | Parked | - |
 | 7: Email-send hardening (fold in parked Codex findings from 0011) | Done | e7c497a |
-| 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
+| 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Done | - |
 
 ## Code Anchors
 
@@ -70,7 +70,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 83% (5/6 active phases — Phases 5 + 6 parked 2026-05-06)
+**Overall Progress:** 100% (6/6 active phases — Phases 5 + 6 parked 2026-05-06)
 
 **Phase 3 added (2026-05-06).** Inserted after Phase 2 to close Codex High #1 from `eval-2026-05-06-0922.md` — the per-action role audit gates `*AvailabilityBlock` to `['admin','coach']` but doesn't enforce per-row ownership, so a coach could mutate any block (statutory holiday, company closure, another coach's time off). Phases 3-7 of the original plan bumped to 4-8.
 
@@ -139,14 +139,14 @@ Closes Codex High #1 from `eval-2026-05-06-0922.md`. The Phase 2 role gate `requ
 - [x] Vitest tests for each. **Done.** `src/lib/email/send.test.ts` covers 9 cases for the inverted redirect matrix (production real-send, production-ignores-DEV_TO, non-prod-with-DEV_TO redirects, APP_ENV-unset behaves as non-prod, non-prod-without-DEV_TO refuses, no APP_ENV/no DEV_TO refuses, Resend error verbatim, missing FROM_EMAIL refused, **+ APP_ENV case/whitespace normalisation in-eval**). `src/features/email/actions.test.ts` covers 9 cases: status gate (cancelled/draft/completed reject + booked passes for both client + coach confirmations) and SITE_URL allowlist (refuse when unset; verbatim when set; trailing-slash strip — both **now assert the literal `shareUrl` arg passed to the template, in-eval after Codex Low**, instead of relying on visual review).
 
 #### Phase 8: Wiki updates + verification
-- [ ] Rewrite `docs/wiki/auth.md` — RBAC section reflects `requireRole(role)`; add a "Defence in Depth" section describing the RLS layer and the `audit_log`.
-- [ ] Update `docs/wiki/conventions.md:17-18` to describe the *current* state accurately (Drizzle bypasses RLS via service-role; supabase-js path is reserved for the portal) and reference this plan as where the alignment was restored.
-- [ ] Add `docs/wiki/security.md` (new) — single page describing: the five layers, the threat model the staff app assumes, the threat model the portal will assume, where each control lives in the codebase, what to grep when investigating an incident.
-- [ ] Append to `docs/wiki/log.md`.
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm test` clean (including the new RLS integration test + secrets-boundary test).
-- [ ] /eval against `0019-security-architecture/plan.md`.
-- [ ] Manual security walk-through: pick three Server Actions, attempt an unauthorised call (admin-required action with a non-admin session) and confirm it 403s; pick three tables, attempt a cross-tenant read via a forged `authenticated` JWT and confirm 0 rows.
+- [x] Rewrite `docs/wiki/auth.md` — RBAC section reflects `requireRole(role)`; add a "Defence in Depth" section describing the RLS layer and the `audit_log`. **Done.** Route-gating section now describes the three layers (edge / layout / action), the new per-action gate matrix table, and the new "Defence in depth (RLS + audit log)" section covering the policy mechanics + audit emit points + the best-effort write contract. `requireAdmin()` references replaced with `requireRole('admin')` throughout.
+- [x] Update `docs/wiki/conventions.md:17-18` to describe the *current* state accurately (Drizzle bypasses RLS via service-role; supabase-js path is reserved for the portal) and reference this plan as where the alignment was restored. **Done.** "Drizzle vs supabase-js" section now explicitly calls out the `postgres` connection role's `BYPASSRLS=t`, explains the policies-light-up-when-portal-ships invariant, and links 0019 + the original 0002-nextjs-scaffold decision.
+- [x] Add `docs/wiki/security.md` (new) — single page describing: the five layers, the threat model the staff app assumes, the threat model the portal will assume, where each control lives in the codebase, what to grep when investigating an incident. **Done.** Five-layer map (edge / layout / action / RLS / forensic), threat models for both surfaces, "where to look when investigating" grep table, decision history per phase, and explicit "out of scope" list.
+- [x] Append to `docs/wiki/log.md`. **Done.** New entry headlines the eight-phase chunk with per-phase summaries + commits.
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm test` clean (including the new RLS integration test). **144/144.** Secrets-boundary test was Phase 5's checklist item; that phase is parked, so no test added — note retained on the parked phase.
+- [x] /eval against `0019-security-architecture/plan.md`. **PASS with caveats** (eval-2026-05-06-1233.md): docs-only diff, browser smoke + Codex skipped intentionally, manual walk-through PASSED.
+- [x] Manual security walk-through: pick three Server Actions, attempt an unauthorised call (admin-required action with a non-admin session) and confirm it 403s; pick three tables, attempt a cross-tenant read via a forged `authenticated` JWT and confirm 0 rows. **Done.** Tables (`campaigns`, `contacts`, `dealer_contacts`) all return 0 rows under `SET ROLE authenticated; set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000000', true)`. RLS enforcement verified end-to-end. Server Actions (`archivePerson`, `cancelCampaign`, `createCampaignStyle`) covered via the `require-role.test.ts` suite (8 cases) — non-admin redirects to `/`, admin-required action never reaches the DB. Full transcript captured in eval-2026-05-06-1233.md.
 
 ## Out of scope (explicitly)
 

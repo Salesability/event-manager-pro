@@ -19,7 +19,7 @@ Both providers fan into the same `/auth/callback` route, the same session, and t
 
 The Supabase project-level **"Allow new users to sign up"** toggle is **off**. This single switch gates both Google OAuth and magic link — an unrecognized email hitting either entry point gets rejected with `Signups not allowed`. No silent auto-provisioning when someone clicks "Continue with Google" with a brand-new address.
 
-**To add a person:** admins use the in-app `/admin/people` page (gated by `requireAdmin()`). The "Add Person" dialog always creates a `contacts` row (firstName + lastName, optional email/phone, optional dealer relationships); toggling **App access** also creates an `auth.users` row via `auth.admin.createUser({ email, email_confirm: true })` and links it via `contacts.user_id` in the same Server Action transaction. Toggle **Admin** to write `app_metadata.role = 'admin'`; toggle **Coach** to write a `team_member_roles(role='coach')` row. `email_confirm: true` lets them sign in via Google immediately without an extra round-trip.
+**To add a person:** admins use the in-app `/admin/people` page (gated by `requireRole('admin')`). The "Add Person" dialog always creates a `contacts` row (firstName + lastName, optional email/phone, optional dealer relationships); toggling **App access** also creates an `auth.users` row via `auth.admin.createUser({ email, email_confirm: true })` and links it via `contacts.user_id` in the same Server Action transaction. Toggle **Admin** to write `app_metadata.role = 'admin'`; toggle **Coach** to write a `team_member_roles(role='coach')` row. `email_confirm: true` lets them sign in via Google immediately without an extra round-trip.
 
 **Fallback path:** the Supabase dashboard (Auth → Users → Add user) still works for emergencies, but it bypasses the People page and creates an orphan auth user (no `contacts` row). When that happens, the `/admin/people` page surfaces the orphan in an amber **Unprovisioned auth users** panel with a per-row Adopt button (creates the contact + email identifier + links). The CLI script `scripts/adopt-orphan-auth-users.ts` covers the bulk-adopt case for legacy state.
 
@@ -61,21 +61,44 @@ The `next` param is passed through `safeNextPath()` (in `src/lib/auth/`) to prev
 
 ## Route gating (RBAC)
 
-Two layers of gating, defence-in-depth:
+Three layers of gating, defence-in-depth (top to bottom: cheapest, most-likely-to-be-bypassed-first):
 
 1. **`src/proxy.ts` + `src/lib/supabase/middleware.ts`** — single edge gate.
    - Sends unauthenticated requests to `/login?next=<original-path>` (whitelist: `/login`, `/auth/callback`, `/auth/auth-error`, plus public `/share/coach/[id]` per-coach share links).
    - Sends signed-in non-admins hitting `/admin/*` (matched against the `ADMIN_PATHS` constant) back to `/` — gate is `user.app_metadata?.role === 'admin'`.
-2. **Per-page / per-Server-Action `requireAdmin()`** (`src/lib/auth/require-admin.ts`) — defensive: every admin Server Component calls it at the top, every admin Server Action calls it before the first DB read. Survives a missed middleware match.
+2. **Page-level `requireStaffAccess()`** (`src/lib/auth/require-staff-access.ts`) — runs in `(app)/layout.tsx` and from any `(app)/*` Route Handler that doesn't route through the layout (e.g. `/production/export`). Single staff-access decision: admin-via-JWT-fast-path or any active `team_member_roles` row. Anyone else lands on `/auth/auth-error?reason=...`.
+3. **Per-page / per-Server-Action `requireRole(role | role[])`** (`src/lib/auth/require-role.ts`) — the deepest layer. Every admin page calls `requireRole('admin')` at the top; every Server Action calls one of the role-list variants (`requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])`) before its first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout gate, so action-level gating is load-bearing, not just defence-in-depth. Pure `isAdmin(user)` predicate (same module that `requireRole` reads) is exposed for ad-hoc decisions like "admin skips the row-ownership check."
 
 **Two surfaces, kept consistent at write time:**
 
-- **`auth.users.app_metadata.role`** — single string, lives on the JWT. Cheap to read in middleware via `getUser()` with no DB hit. Powers the gate.
-- **`team_member_roles` table** — N rows per contact (admin / staff / coach / viewer enum). Powers per-feature semantics (calendar coach auto-filter, etc.). Multiple roles per person allowed (admin + coach is a valid combo).
+- **`auth.users.app_metadata.role`** — single string, lives on the JWT. Cheap to read in middleware via `getUser()` with no DB hit. Powers the JWT-fast-path branch in `requireRole`/`isAdmin`.
+- **`team_member_roles` table** — N rows per contact (admin / staff / coach / viewer enum). Powers per-feature semantics (calendar coach auto-filter, etc.). Multiple roles per person allowed (admin + coach is a valid combo). Read by `loadCurrentMembership()` (React `cache()`-wrapped, request-scoped).
 
 When an admin saves a person via `/admin/people`, both surfaces are written in the same Server Action (`updatePerson` / `createPerson` in `src/features/people/actions.ts`): `team_member_roles` first inside a DB transaction, then `app_metadata.role = 'admin'` (or `null`) via the service-role client. If the auth-side update fails after the DB commit, the action returns `{ ok: true, warning }` — the row is committed, the warning is surfaced as a toast, and the admin can retry. No privilege escalation occurs because the gate trusts `app_metadata.role`, which only changes after a successful update.
 
 **v1 wired roles:** only `admin` and `coach` are selectable in the UI. `staff` and `viewer` are reserved enum values for future use. Staff-app access requires *either* `app_metadata.role === 'admin'` (bootstrap path) *or* at least one active `team_member_roles` row — the older "signed-in non-admin = staff by default" was retracted as a Codex Critical (post-callback URL bypass) on 2026-05-05.
+
+**Per-action gate matrix** (set by 0019 Phase 2's audit; see `shipped/0019-security-architecture/plan.md`):
+
+| Action surface | Gate |
+|---|---|
+| Admin-only mutations (lookups, archive, lifecycle transitions) | `requireRole('admin')` |
+| Mutating dealer / campaign CRUD | `requireRole(['admin','staff','coach'])` |
+| Availability blocks (create / update / archive) | `requireRole(['admin','coach'])` plus a row-level "is this your own block?" check via `ensureAvailabilityOwnership` |
+| Outbound email (client / coach confirmations, share-link) | `requireRole(['admin','staff','coach'])` |
+| Auth flow (`signIn*`, `signOut`) | none — these IS the auth flow |
+
+## Defence in depth (RLS + audit log)
+
+Beyond the action-level gates, two layers below them harden the picture:
+
+**Row Level Security on every public table** (drizzle/0003_enable_rls.sql, 2026-05-06). Every domain table has RLS enabled with two policies: `<table>_service_role_all` (FOR ALL TO `service_role` USING true) and `<table>_staff_all` (FOR ALL TO `authenticated` USING `public.is_staff_member()`). Today this is invisible to the staff app — Drizzle connects as the `postgres` Postgres role, which has `BYPASSRLS=t` (verified at write time), so policies don't run on the Drizzle path. The point is the day a JWT-bearing query path exists (the dealer portal): PostgREST sets the role to `authenticated`, the policies run, and a coach-with-no-membership (or anon) sees zero rows — even if a route handler forgot to filter. `is_staff_member()` is `STABLE, SECURITY DEFINER, search_path=''` so it can answer the question even when its underlying tables are RLS-locked against the calling role.
+
+**Forensic `audit_log`** (drizzle/0004_worthless_titanium_man.sql, 2026-05-06). Append-only table written by `recordAudit({ action, targetTable, targetId, payload? })` from inside sensitive Server Actions. Today the wired emit-points are: `archivePerson` → `user.deactivated`; `updatePerson` (when roles changed) → `user.role_changed` with `payload: { before, after }`; `updatePerson` on→off auth-ban → `user.deactivated`; `createPerson` (with non-empty roles) → `user.role_changed` with `before: []`; `archiveDealer` → `dealer.archived`; `cancelCampaign` → `campaign.cancelled`. `actorRole` is denormalised at write time. The helper is **best-effort**: insert failures log via `console.error` rather than rejecting the action — the wired actions span DB+auth boundaries, so wrapping audit in the mutation tx wouldn't actually buy atomicity. Forensic gaps are visible in deploy logs (grep `audit insert failed`).
+
+`audit_log` itself is RLS-enabled: `service_role` permits all (the writer + future audit-UI loads); `authenticated` may SELECT only their own actions (`actor_user_id = auth.uid()`); anon falls through to default-deny.
+
+**The threat model the staff app assumes** is "ten internal employees, all admins-or-trusted-staff, on a closed-signup auth surface." RLS is invisible defence-in-depth for the day-the-portal-ships invariant; audit_log is forensics, not enforcement. See [security.md](security.md) for the layered overview.
 
 ## Login routing: staff vs portal contacts
 
