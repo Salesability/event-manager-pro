@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist | Done | d2a1344 |
-| 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Done | - |
+| 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Done | c8c586e |
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | cdf554b |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Pending | - |
 | 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Pending | - |
