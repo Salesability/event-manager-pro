@@ -350,6 +350,15 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
 
   const roles = parseRolesField(formData);
   if ('error' in roles) return roles;
+  // 0023 Phase 5 invariant: every contact has at least one role. Mirrors
+  // the form-level ≥1-role guard at `people-admin.tsx`; the action-layer
+  // assertion is load-bearing because Server Actions are public-API-shaped
+  // (see 0019 Phase 2 finding) — a direct POST bypasses the form. The
+  // `adoptOrphanAuthUser` legacy-recovery path is the documented carve-out;
+  // see docs/wiki/data-model.md.
+  if (roles.length === 0) {
+    return { error: 'At least one role is required.' };
+  }
   // createPerson rejects (vs updatePerson's silent coerce) because here the
   // admin is in the act of setting up the row: an explicit error is more
   // helpful than silently dropping the role. Only the staff-app-implying
@@ -505,6 +514,13 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
   const roles = appAccess
     ? rolesParsed
     : rolesParsed.filter((r) => !ROLES_REQUIRING_APP_ACCESS.has(r));
+  // 0023 Phase 5 invariant: every contact has at least one role. The
+  // form-level guard rejects empty submissions, but a direct POST or a
+  // stale-form submission could still reach here with no roles after
+  // coercion (e.g. appAccess=off + roles=['admin'] coerces to []).
+  if (roles.length === 0) {
+    return { error: 'At least one role is required.' };
+  }
 
   // Look up current state — needed for the appAccess transition + the
   // not-archived guard.

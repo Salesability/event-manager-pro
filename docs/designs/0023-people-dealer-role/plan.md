@@ -10,7 +10,7 @@
 | 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Done | c8c586e |
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | cdf554b |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Done | ea3f522 |
-| 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Pending | - |
+| 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Done | - |
 | 6: Tests + smoke verification | Pending | - |
 
 Today the system has two disjoint role surfaces — `team_member_roles` (us-side: `admin`/`coach` live; `staff`/`viewer` reserved) and `dealer_contacts` (them-side: `customer`/`staff`/`prospect`). Dealer staff land in `dealer_contacts` with NO `team_member_roles` row, so they're "roleless" from the People-admin perspective. This chunk closes that gap by introducing a `dealer` role on `team_member_roles`, backfilling existing dealer-side contacts onto it, and enforcing "every person has at least one role" both at the form level and (TBD Phase 5) at the DB level. The Person edit dialog's Dealers section becomes conditional on the `dealer` role, so the link UI matches the person's classification instead of being a free-floating panel on every record.
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
 - `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
-**Overall Progress:** 67% (4/6 phases complete — Phase 3 was picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
+**Overall Progress:** 83% (5/6 phases complete — Phase 3 was picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -79,10 +79,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: editing an EXISTING staff link's name does NOT duplicate the `team_member_roles` row (uniqueness index already protects, but verify the action handles the conflict gracefully). **`.onConflictDoNothing({ target: [teamMemberRoles.contactId, teamMemberRoles.role] })` handles this.** Verified by code inspection; Phase 6's integration smoke will exercise the path against real data.
 
 #### Phase 5: Invariant — DB trigger or app-level guard for "every contact has a role"
-- [ ] **Decide route** (Open Question, see below): DB trigger that rejects a `contacts` row without a corresponding `team_member_roles` row, vs. app-level enforcement only via `parseRolesField` rejecting empty + `createDealer` always inserting
-- [ ] If DB-level: write `drizzle/0005_contact_role_required_trigger.sql` matching the shape of `drizzle/0002_contact_user_backfill_trigger.sql` — deferrable trigger that fires `AFTER` insert/update on `contacts` and checks for a non-archived `team_member_roles` row
-- [ ] If app-level: document the boundaries in `docs/wiki/data-model.md` and add a single helper that asserts the invariant in any new contact-creating action
-- [ ] Either route: handle the "needs human triage" list from Phase 2 — orphaned roleless contacts must either be assigned a role, archived, or deleted before this lands, or the trigger will reject any update to them
+- [x] **Decide route** — **app-level chosen.** Trigger was the plan's working lean but app-level is simpler to roll out and easier to teardown in test fixtures; trigger debugging is also harder. With Phase 2's clean backfill (zero truly-orphan contacts) and Phase 4's auto-assign already covering `createDealer`/`updateDealer`, the only remaining write paths needing the assertion are `createPerson` and `updatePerson`. A DB trigger remains a future option if a regression slips past the app-layer.
+- [x] ~~If DB-level: write `drizzle/0005_contact_role_required_trigger.sql`~~ **Skipped — chose app-level.**
+- [x] If app-level: document the boundaries in `docs/wiki/data-model.md` and add a single helper that asserts the invariant in any new contact-creating action. **Done.** Inline `if (roles.length === 0) return { error: 'At least one role is required.' };` assertions added to `createPerson` (after `parseRolesField`) and `updatePerson` (after the appAccess coercion). Wiki updated: `data-model.md` Overview section now documents the invariant + two carve-outs (`archivePerson` archives all roles in a tx; `adoptOrphanAuthUser` creates a roleless stub for legacy-recovery, admin must edit immediately after). `auth.md` v1-wired-roles section updated to list `admin`, `coach`, `dealer` (was admin + coach only) and clarifies the `STAFF_APP_ROLES` whitelist that filters dealer out of the staff-app gate.
+- [x] Either route: handle the "needs human triage" list from Phase 2 — orphaned roleless contacts must either be assigned a role, archived, or deleted before this lands, or the trigger will reject any update to them. **Phase 2's eval already showed zero truly-orphan contacts on dev.** App-level enforcement only fires on writes, so existing roleless rows aren't immediately rejected anyway — they'd surface only on the next `updatePerson` call against them. Production data will need a re-run of the Phase 2 dry-run before the chunk closes.
 
 #### Phase 6: Tests + smoke verification
 - [ ] Unit test for `parseRolesField` accepting `dealer`, rejecting unknown

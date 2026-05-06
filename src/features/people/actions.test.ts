@@ -190,10 +190,21 @@ describe('createPerson', () => {
     });
   });
 
+  it('rejects without any role (0023 Phase 5 invariant)', async () => {
+    const fd = new FormData();
+    fd.set('firstName', 'Roleless');
+    fd.set('lastName', 'Contact');
+    expect(await createPerson(fd)).toEqual({
+      error: 'At least one role is required.',
+    });
+    expect(mocks.inserts).toHaveLength(0);
+  });
+
   it('rejects malformed dealer link', async () => {
     const fd = new FormData();
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
+    fd.append('roles', 'dealer');
     fd.append('dealerLinks', 'not-a-link');
     expect(await createPerson(fd)).toEqual({
       error: "Invalid dealer link: 'not-a-link'.",
@@ -204,25 +215,26 @@ describe('createPerson', () => {
     const fd = new FormData();
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
+    fd.append('roles', 'dealer');
     fd.append('dealerLinks', '100:bogus');
     expect(await createPerson(fd)).toEqual({
       error: "Invalid dealer-contact role: 'bogus'.",
     });
   });
 
-  it('creates a contact with no app access (Sales-Coach-style flow)', async () => {
+  it('creates a dealer-only contact with no app access', async () => {
     const fd = new FormData();
     fd.set('firstName', 'New');
-    fd.set('lastName', 'Coach');
-    // identifier swap reads its current state (no existing primary)
+    fd.set('lastName', 'DealerStaff');
+    fd.append('roles', 'dealer');
     mocks.selectResults = [
       [], // swap email: no existing
-      [], // swap email: no conflict — actually swap returns early without inserting if empty value, so we won't reach here for missing email
+      [], // syncTeamMemberRoles: existing
+      [], // syncDealerLinks: existing
     ];
     const result = await createPerson(fd);
     expect(result).toEqual({ ok: true, contactId: 999 });
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
-    // Inserted contacts row.
     expect(mocks.inserts.some((i) => i.values && (i.values as { firstName?: string }).firstName === 'New')).toBe(true);
   });
 
@@ -291,10 +303,11 @@ describe('createPerson', () => {
     fd.set('lastName', 'New');
     fd.set('email', 'brand@example.test');
     fd.set('appAccess', '1');
+    fd.append('roles', 'admin');
 
-    // No roles → no syncTeamMemberRoles consumption inside the tx.
     mocks.selectResults = [
       [], [], // swap email existing + conflict
+      [], // syncTeamMemberRoles: existing (no syncDealerLinks — dealerLinks empty)
       [], // Conditional UPDATE → 0 rows
       [{ userId: 'new-auth-uuid' }], // linkedNow → same auth user (trigger won)
     ];
@@ -318,7 +331,8 @@ describe('createPerson', () => {
     fd.set('lastName', 'New');
     fd.set('email', 'brand@example.test');
     fd.set('appAccess', '1');
-    mocks.selectResults = [[], []];
+    fd.append('roles', 'admin');
+    mocks.selectResults = [[], [], [], []];
 
     // Partial success: contact was committed, auth-side failed. The UI must
     // refresh and close (the row exists), with a warning toast.
@@ -344,11 +358,22 @@ describe('updatePerson', () => {
     await expect(updatePerson(fd)).rejects.toThrow('REDIRECT:/');
   });
 
+  it('rejects without any role (0023 Phase 5 invariant)', async () => {
+    const fd = new FormData();
+    fd.set('contactId', '1');
+    fd.set('firstName', 'X');
+    fd.set('lastName', 'Y');
+    expect(await updatePerson(fd)).toEqual({
+      error: 'At least one role is required.',
+    });
+  });
+
   it('rejects when contact is missing', async () => {
     const fd = new FormData();
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
+    fd.append('roles', 'dealer');
     mocks.selectResults = [[]]; // current-state lookup returns no row
     expect(await updatePerson(fd)).toEqual({ error: 'Person not found.' });
   });
@@ -358,6 +383,7 @@ describe('updatePerson', () => {
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
+    fd.append('roles', 'dealer');
     mocks.selectResults = [
       [{ id: 1, userId: null, archivedAt: '2026-01-01T00:00:00Z' }],
     ];
@@ -427,35 +453,26 @@ describe('updatePerson', () => {
     });
   });
 
-  it('coerces roles=[] when appAccess is being toggled off (stale UI defence)', async () => {
+  it('rejects stale-UI coach-without-appAccess (post-coercion empty roles)', async () => {
+    // Pre-Phase-5 this was the "coerces roles=[] + bans auth" silent-defence
+    // path. Post-Phase-5 the role-count assertion fires after coercion, so
+    // a stale form submission of `roles=coach&appAccess=` is now rejected
+    // outright. The destructive ban path is no longer reachable through
+    // this combination — the admin must explicitly tick `dealer` (or none
+    // at all → form-level guard blocks them) to land on the on→off branch.
     const fd = new FormData();
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
-    fd.append('roles', 'coach'); // stale: UI didn't clear when toggling off
-    // appAccess unset → off
+    fd.append('roles', 'coach');
+    // appAccess unset → coercion drops `coach` → empty → assertion rejects.
     mocks.selectResults = [
       [{ id: 1, userId: 'existing-auth', archivedAt: null }],
-      [{ role: 'coach' }], // existingRoles snapshot — pre-mutation roles
-      [], [], [], [], [], // identifier swaps + role/dealer sync
     ];
     const result = await updatePerson(fd);
-    expect(result).toEqual({ ok: true, contactId: 1 });
-    // The on→off branch bans the auth user. The role-set is the empty list,
-    // so syncTeamMemberRoles archives the coach row rather than restoring it.
-    expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
-      ban_duration: '876000h',
-      app_metadata: { role: null },
-    });
-    // No new auth user created from this stale state.
+    expect(result).toEqual({ error: 'At least one role is required.' });
+    expect(mocks.adminUpdateUserById).not.toHaveBeenCalled();
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
-    // Audit emitted: roles changed from ['coach'] to [].
-    expect(mocks.recordAudit).toHaveBeenCalledWith({
-      action: 'user.role_changed',
-      targetTable: 'contacts',
-      targetId: 1,
-      payload: { before: ['coach'], after: [] },
-    });
   });
 
   it('preserves dealer role when appAccess is off, drops only admin/coach (0023 Phase 3)', async () => {
@@ -491,21 +508,26 @@ describe('updatePerson', () => {
     });
   });
 
-  it('on→off app access bans the auth user and clears app_metadata.role', async () => {
+  it('on→off app access bans the auth user when role transitions admin → dealer', async () => {
+    // Post-Phase-5: the on→off auth-ban path is reached when the admin
+    // demotes a person to dealer-only (a role that doesn't grant app access).
+    // The previous "no roles at all" path is now rejected by the role-count
+    // assertion, so the destructive ban requires an explicit dealer-only
+    // role choice.
     const fd = new FormData();
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
-    // appAccess unset → off
+    fd.append('roles', 'dealer');
+    // appAccess unset → off; dealer survives coercion; role-count assertion
+    // passes; on→off ban path runs.
     mocks.selectResults = [
       [{ id: 1, userId: 'existing-auth', archivedAt: null }],
-      [], // existingRoles snapshot for audit (Phase 4)
-      [],
-      [],
-      [],
-      [],
-      [],
-      [],
+      [{ role: 'admin' }], // existingRoles snapshot
+      [], // tx.update contacts
+      [], [], // swap email + phone
+      [], // syncTeamMemberRoles
+      [], // syncDealerLinks
     ];
     const result = await updatePerson(fd);
     expect(result).toEqual({ ok: true, contactId: 1 });
@@ -514,12 +536,18 @@ describe('updatePerson', () => {
       app_metadata: { role: null },
     });
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
-    // Audit emitted: deactivation event (Phase 4).
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'user.deactivated',
       targetTable: 'contacts',
       targetId: 1,
       payload: { authUserId: 'existing-auth', via: 'updatePerson' },
+    });
+    // Role transition emitted too: admin → dealer.
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: 1,
+      payload: { before: ['admin'], after: ['dealer'] },
     });
   });
 });

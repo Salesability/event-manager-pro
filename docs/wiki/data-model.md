@@ -8,7 +8,7 @@ Reference for the current Postgres schema. Source of truth is `src/lib/db/schema
 > - `dealers` ← STAR *Dealer Profile* (Bounded Context 1, Party & Identity)
 > - `contacts` ← STAR *Customer Profile* / *Party* root (BC 1) — every person known to the system, regardless of side. The single master person record.
 > - `dealer_contacts` (junction) — them-side role-tagged dealer↔contact relationships (`customer | staff | prospect`)
-> - `team_member_roles` (junction) — us-side role assignments on a contact (STAR *Staff Member*, BC 12; `admin | staff | coach | viewer`)
+> - `team_member_roles` (junction) — us-side role assignments on a contact (STAR *Staff Member*, BC 12; `admin | staff | coach | viewer | dealer`)
 > - `contact_identifiers` ← STAR *Identifier* (BC 7, Core & Common Entities)
 > - `vehicles` ← STAR *Vehicle* (BC 2, Inventory & Vehicle Management)
 > - `campaigns` ← STAR *Marketing Campaign* (BC 6, Marketing & Loyalty) — what we run for the dealer
@@ -21,10 +21,21 @@ Reference for the current Postgres schema. Source of truth is `src/lib/db/schema
 Three things to know up front:
 
 1. **One master person table — `contacts` — covers everyone.** Us-side staff and them-side dealer audiences are the same kind of entity (a person), distinguished only by their *role assignments*:
-   - `team_member_roles` — us-side internal-app roles (`admin | staff | coach | viewer`). One row per (contact, role).
+   - `team_member_roles` — us-side internal-app roles (`admin | staff | coach | viewer | dealer`). One row per (contact, role).
    - `dealer_contacts` — them-side per-dealer role-tagged relationships (`customer | staff | prospect`). One row per (dealer, contact, role).
 
    A single contact can have rows in both tables (e.g. a coach we hired from a dealership: one `team_member_roles(role='coach')` row + one historical `dealer_contacts(role='staff')` row from the dealership-employment days). Identity is never duplicated. This mirrors STAR's *Party* root abstraction — every identity-bearing entity flows through one master record.
+
+   **Every contact has at least one active role** (0023 Phase 5 invariant). The role is what classifies the person — admin, coach, dealer, etc. Enforced app-layer:
+   - `createPerson` / `updatePerson` reject when the desired role set is empty (after the appAccess coercion that drops admin/coach without app access).
+   - `createDealer` / `updateDealer` auto-assign `dealer` whenever a staff link is created (with `onConflictDoUpdate` un-archiving the role if it was previously archived).
+   - The Phase 2 backfill (`scripts/backfill-dealer-role.ts`) ensured every existing dealer-side contact got a `dealer` row; re-running is a no-op.
+
+   **Two carve-outs:**
+   - `archivePerson` archives all active `team_member_roles` rows in a single tx. The contact stays unarchived (so historical FKs keep resolving), so it temporarily has zero active roles. The invariant is "every NEW or UPDATED contact carries a role," not "every active contact at every moment." Reactivating a person via `updateDealer` un-archives the dealer role per Phase 4's upsert.
+   - `adoptOrphanAuthUser` creates a roleless stub contact for an orphan `auth.users` row (legacy-recovery path). The admin must edit the adopted person via `/admin/people` immediately afterward — the form's ≥1-role guard enforces a role pick.
+
+   `dealer` is for them-side staff at customer dealerships and is filtered out of the staff-app gates (`is_staff_member()` SQL helper, `STAFF_APP_ROLES` constant in `src/lib/auth/load-team-membership.ts`, `requireStaffAccess()` page gate, `auth/callback` routing). Adding `dealer` to a contact does NOT promote them into the staff app.
 
    `contacts.user_id` (nullable, UNIQUE FK to `auth.users`) is the optional Supabase Auth link. It's populated for everyone with internal-app or dealer-portal access — typically every `team_member_roles` row implies a populated `user_id`, and most `dealer_contacts` rows do not (until a contact signs up to the portal). The schema does not enforce that coupling at the DB level — kept app-layer (Q #15) so we retain the flexibility to seed staff records ahead of provisioning, and so the deactivation flow can drop `app_metadata.role` and archive `team_member_roles` rows without orphaning the `contacts.user_id` link.
 
@@ -129,7 +140,7 @@ Edges left out of the diagrams for clarity:
 |---|---|---|
 | `auth.users` | `id` uuid | (Supabase-managed; identity only) |
 | `contacts` | `id` bigint | `first_name`, `last_name`, `display_name` (computed), `user_id` (FK auth.users, nullable, UNIQUE) — master person record, both sides |
-| `team_member_roles` | `id` bigint | `contact_id` (FK contacts, cascade), `role` enum (`admin\|staff\|coach\|viewer`), `specialty` (nullable, used when `role='coach'`) — UNIQUE on `(contact_id, role)` |
+| `team_member_roles` | `id` bigint | `contact_id` (FK contacts, cascade), `role` enum (`admin\|staff\|coach\|viewer\|dealer`), `specialty` (nullable, used when `role='coach'`) — UNIQUE on `(contact_id, role)` |
 | `dealer_contacts` | `id` bigint | `dealer_id` (FK dealers), `contact_id` (FK contacts), `role` enum (`customer\|staff\|prospect`), `do_not_contact`, `since` date, `source` text, `last_contacted_at`, `title` text (used when `role='staff'`) — UNIQUE on `(dealer_id, contact_id, role)` |
 | `contact_identifiers` | `id` bigint | `contact_id` (FK contacts, cascade), `kind` enum (`email\|phone`), `value` (normalized), `is_primary` |
 | `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address` |
@@ -196,7 +207,7 @@ The signup-trigger pattern depends on email confirmation: magic link confirms by
 The internal-team analogue of `dealer_contacts`. One row per (contact, role).
 
 - `contact_id` (FK contacts, `ON DELETE CASCADE`)
-- `role` enum: `admin | staff | coach | viewer`
+- `role` enum: `admin | staff | coach | viewer | dealer`
 - `specialty` text (nullable) — coach-only field, e.g. "lease retention", "service drive". Sparse on non-coach rows; pragmatic over a separate `coach_details` side table at this scale (same trade-off as `dealer_contacts.title` for staff rows).
 - mixins: `timestamps`, `actors`, `archivable`
 
