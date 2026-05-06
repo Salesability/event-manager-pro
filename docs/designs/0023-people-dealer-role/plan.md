@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist | Done | d2a1344 |
 | 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Pending | - |
-| 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Pending | - |
+| 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | - |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Pending | - |
 | 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
 - `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete — Phase 3 picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -60,13 +60,15 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Run the dry-run, hand the list to the user, then run live
 
 #### Phase 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role
-- [ ] Add `dealer` state + checkbox to the Roles fieldset at `src/features/people/people-admin.tsx:433-457` (mirror the Admin/Coach controls verbatim — same markup, same state hook, same `name="roles"` repeated input wiring)
-- [ ] Wrap the Dealers section (`src/features/people/people-admin.tsx:459-507`) in `{dealer && (…)}` — when the role is unchecked, the section is gone, and any pending `dealerLinks` are cleared on uncheck (so the form doesn't submit stale rows)
-- [ ] Form-level guard: Save button disabled (or `<form noValidate>` with a friendly inline error) when `!admin && !coach && !dealer`. Match the existing pending-state pattern at `src/features/people/people-admin.tsx:511-519`
-- [ ] Edit-mode default: `dealer` checkbox `defaultChecked` from `person.roles` already containing `'dealer'`
-- [ ] Decide checkbox ordering and copy: "Dealer" label, helper text "External dealer-side contact" (TBD — confirm with user during Phase 3)
-- [ ] Test: open Add Person → no roles selected → Save disabled; tick Dealer → Dealers section appears and Save enables; tick Dealer + Coach → both sections coexist (until the mutual-exclusion question is decided — see Open Questions)
-- [ ] Test: edit an existing dealer-side person (post-Phase-2 backfill) → dealer ticked, Dealers section visible with their links
+- [x] Add `dealer` state + checkbox to the Roles fieldset at `src/features/people/people-admin.tsx:433-457` (mirror the Admin/Coach controls verbatim — same markup, same state hook, same `name="roles"` repeated input wiring). **Done. Discovered + fixed a precondition regression in-phase:** the React 19 form-migration commit `4a4afbd refactor(forms)` removed the imperative `fd.append('roles', 'admin'|'coach')` lines from the onSubmit handler when switching to `<form action>` + `useActionState`, but didn't replace them with hidden `<input name="roles">` elements — so PersonForm has been silently submitting `roles=[]` on every save since then. Phase 3 restores the wire format declaratively: hidden `<input type="hidden" name="roles" value="...">` rendered for each ticked role (admin / coach / dealer). Comment in code points back to the regressing commit so future readers know.
+- [x] Wrap the Dealers section (`src/features/people/people-admin.tsx:459-507`) in `{dealer && (…)}` — when the role is unchecked, the section is gone, and any pending `dealerLinks` are cleared on uncheck (so the form doesn't submit stale rows). **Done.** Single `setDealerChecked(checked)` helper toggles the role state AND clears `dealerLinks` to `[]` on uncheck.
+- [x] Form-level guard: Save button disabled (or `<form noValidate>` with a friendly inline error) when `!admin && !coach && !dealer`. Match the existing pending-state pattern at `src/features/people/people-admin.tsx:511-519`. **Done.** `hasAnyRole = admin || coach || dealer`; Save is `disabled={pending || !hasAnyRole}`. Inline `Pick at least one role.` error shows in the Roles fieldset when `!hasAnyRole`.
+- [x] Edit-mode default: `dealer` checkbox `defaultChecked` from `person.roles` already containing `'dealer'`. **Done.** `useState(person?.roles.includes('dealer') ?? false)` mirrors the existing admin/coach pattern.
+- [x] Decide checkbox ordering and copy: "Dealer" label, helper text "External dealer-side contact". **Done.** Label is `<strong>Dealer</strong>` followed by helper text inline; ordering: Admin → Coach → Dealer (matches existing fieldset top-to-bottom).
+- [x] Action-side coercion fix (in-phase): `updatePerson`'s `appAccess ? rolesParsed : []` would have wiped a `dealer` role on save when appAccess was off (which it always is for a dealer-only contact). Updated to filter only `ROLES_REQUIRING_APP_ACCESS = {admin, coach}`, preserving `dealer`. `createPerson`'s "App access is required" rejection updated similarly to fire only on admin/coach.
+- [x] Test: open Add Person → no roles selected → Save disabled; tick Dealer → Dealers section appears and Save enables; tick Dealer + Coach → both sections coexist. **Browser smoke green:** dialog renders all three checkboxes with helper text; ticking Dealer surfaces the Dealers section with `+ Link dealer` button and "No dealer relationships." empty state; unticking removes the section and re-displays the inline `Pick at least one role.` error. Mutual-exclusion question still open in plan; current behaviour is "allow combinations." Tested via `/admin/people` Add Person dialog (read-only, no submit).
+- [x] Test: edit an existing dealer-side person (post-Phase-2 backfill) → dealer ticked, Dealers section visible with their links. **Deferred to Phase 6 smoke** (no dealer-role rows exist until Phase 2 backfill runs; can't verify edit-mode default until then). Edit-mode `useState(person?.roles.includes('dealer') ?? false)` is the same pattern as admin/coach, so the precondition test (post-Phase-2 backfill) is the right time.
+- [x] Vitest: 147/147 (added `allows dealer-only role without app access` for `createPerson`, plus `preserves dealer role when appAccess is off, drops only admin/coach` for `updatePerson`); tsc clean; lint clean. **In-eval Codex Medium fix:** the destructive-edit confirm copy at `people-admin.tsx:319` previously said "Saving with no roles…" but it fires whenever `wantsAppAccess` is false (admin || coach unchecked) — a contact saved with dealer ticked but admin/coach unchecked still has a role, just not an app-access role. Updated to "Saving will end app access for X and ban their sign-in account…" without the inaccurate "no roles" preamble.
 
 #### Phase 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)`
 - [ ] In `createDealer` (`src/features/schedule/actions.ts:60-124`), after the `dealer_contacts` insert at line 105-112, insert a `team_member_roles` row with `role='dealer'` for the same `contactId`. Same transaction. Use the existing `userId` for `createdById`/`updatedById`

@@ -31,6 +31,16 @@ type ActionResult =
 const V1_TEAM_ROLES = ['admin', 'coach', 'dealer'] as const;
 type V1TeamRole = (typeof V1_TEAM_ROLES)[number];
 
+// Roles that imply staff-app sign-in (and thus require an `auth.users` row +
+// an `appAccess=1` form field). `dealer` is excluded — dealer-side staff are
+// them-side and don't get app access. Mirrors `STAFF_APP_ROLES` in
+// src/lib/auth/load-team-membership.ts; the auth-side gate filters dealer
+// out of staff routing for the same reason.
+const ROLES_REQUIRING_APP_ACCESS: ReadonlySet<V1TeamRole> = new Set([
+  'admin',
+  'coach',
+]);
+
 const DEALER_CONTACT_ROLES = ['customer', 'staff', 'prospect'] as const;
 type DealerContactRole = (typeof DEALER_CONTACT_ROLES)[number];
 
@@ -340,11 +350,18 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
 
   const roles = parseRolesField(formData);
   if ('error' in roles) return roles;
-  if (roles.length > 0 && !appAccess) {
-    // createPerson rejects (vs updatePerson's silent coerce) because here the
-    // admin is in the act of setting up the row: an explicit error is more
-    // helpful than silently dropping the role.
-    return { error: 'App access is required to assign roles.' };
+  // createPerson rejects (vs updatePerson's silent coerce) because here the
+  // admin is in the act of setting up the row: an explicit error is more
+  // helpful than silently dropping the role. Only the staff-app-implying
+  // roles trigger the rejection — `dealer` is an "external contact" role
+  // and creates a contacts row without an auth.users row.
+  if (
+    !appAccess &&
+    roles.some((r) => ROLES_REQUIRING_APP_ACCESS.has(r))
+  ) {
+    return {
+      error: 'App access is required to assign Admin or Coach roles.',
+    };
   }
 
   const dealerLinks = parseDealerLinksField(formData);
@@ -483,7 +500,11 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
   // App access off — without it, the role row would survive the auth-side
   // ban and leave a dangling `team_member_roles(role='coach')` pointing at a
   // banned auth user. Server is the source of truth; UI is hint-only.
-  const roles = appAccess ? rolesParsed : [];
+  // `dealer` survives — it doesn't require app access, so it's preserved
+  // even when the appAccess flag is off.
+  const roles = appAccess
+    ? rolesParsed
+    : rolesParsed.filter((r) => !ROLES_REQUIRING_APP_ACCESS.has(r));
 
   // Look up current state — needed for the appAccess transition + the
   // not-archived guard.

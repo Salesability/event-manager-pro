@@ -305,6 +305,7 @@ function PersonForm({
   const router = useRouter();
   const [admin, setAdmin] = useState(person?.roles.includes('admin') ?? false);
   const [coach, setCoach] = useState(person?.roles.includes('coach') ?? false);
+  const [dealer, setDealer] = useState(person?.roles.includes('dealer') ?? false);
   const [dealerLinks, setDealerLinks] = useState<DealerLinkDraft[]>(
     dealerLinksFromPerson(person),
   );
@@ -312,20 +313,33 @@ function PersonForm({
   // App access is derived, not toggled. The convention going forward is
   // "everyone who needs a sign-in has one by default" — picking Admin or
   // Coach implies App access, leaving both unchecked (e.g. a dealer-side
-  // contact) leaves the contact sign-in-less.
+  // contact) leaves the contact sign-in-less. The `dealer` role is
+  // deliberately excluded — dealer-side staff are them-side and don't
+  // get auth.users rows.
   const wantsAppAccess = admin || coach;
+  const hasAnyRole = admin || coach || dealer;
+
+  function setDealerChecked(checked: boolean) {
+    setDealer(checked);
+    // Clear pending dealer-link rows so a stale draft doesn't survive when
+    // the role is unticked — the section is hidden and the form should not
+    // submit links the user can no longer see.
+    if (!checked) setDealerLinks([]);
+  }
 
   const action = mode === 'create' ? createPerson : updatePerson;
   const [state, formAction, pending] = useActionState<PersonFormState, FormData>(
     async (_prev, fd) => {
-      // Destructive-edit guard: saving with no roles bans the existing auth
-      // user. Confirm before letting the action run. Returning null leaves
-      // state unchanged so no toast fires.
+      // Destructive-edit guard: saving with neither Admin nor Coach checked
+      // bans the existing auth user. Triggered even if `dealer` is ticked,
+      // because dealer alone doesn't grant app access. Confirm before
+      // letting the action run. Returning null leaves state unchanged so
+      // no toast fires.
       if (mode === 'edit' && person?.hasAppAccess && !wantsAppAccess) {
         const firstName = String(fd.get('firstName') ?? '').trim();
         const lastName = String(fd.get('lastName') ?? '').trim();
         const ok = window.confirm(
-          `Saving with no roles will end app access for ${firstName} ${lastName} and ban their sign-in account. The contact record stays. Continue?`,
+          `Saving will end app access for ${firstName} ${lastName} and ban their sign-in account. The contact record stays. Continue?`,
         );
         if (!ok) return null;
       }
@@ -374,6 +388,15 @@ function PersonForm({
         <input type="hidden" name="contactId" value={person.contactId} />
       )}
       {wantsAppAccess && <input type="hidden" name="appAccess" value="1" />}
+      {/* Hidden role inputs — restore the wire format `parseRolesField` reads
+          in `src/features/people/actions.ts`. The 0020 Phase 3 form built
+          these via `FormData.append` inside an onSubmit handler; the React 19
+          migration (4a4afbd) switched to `<form action>` and dropped the
+          imperative build without adding hidden inputs, silently submitting
+          `roles=[]`. 0023 Phase 3 restores the contract declaratively. */}
+      {admin && <input type="hidden" name="roles" value="admin" />}
+      {coach && <input type="hidden" name="roles" value="coach" />}
+      {dealer && <input type="hidden" name="roles" value="dealer" />}
       {dealerLinks
         .filter((l) => l.dealerId)
         .map((l, i) => (
@@ -454,61 +477,85 @@ function PersonForm({
             <strong>Coach</strong>
           </span>
         </label>
+        <label className="flex items-center gap-2 text-sm text-stone-700">
+          <input
+            type="checkbox"
+            checked={dealer}
+            onChange={(e) => setDealerChecked(e.target.checked)}
+          />
+          <span>
+            <strong>Dealer</strong>{' '}
+            <span className="text-xs text-stone-500">
+              External dealer-side contact
+            </span>
+          </span>
+        </label>
+        {!hasAnyRole && (
+          <p className="text-[11px] text-status-red">
+            Pick at least one role.
+          </p>
+        )}
       </div>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-stone-600">Dealers</span>
-          <button type="button" onClick={addDealerLink} className={rowEditClass}>
-            + Link dealer
-          </button>
-        </div>
-        {dealerLinks.length === 0 && (
-          <p className="text-[11px] text-stone-500">No dealer relationships.</p>
-        )}
-        {dealerLinks.map((link, i) => (
-          <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-            <select
-              value={link.dealerId}
-              onChange={(e) => setDealerLink(i, { dealerId: e.target.value })}
-              className={inputClass}
-              required
-            >
-              <option value="">Pick a dealer…</option>
-              {dealers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={link.role}
-              onChange={(e) =>
-                setDealerLink(i, { role: e.target.value as DealerContactRole })
-              }
-              className={inputClass}
-            >
-              {DEALER_CONTACT_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => removeDealerLink(i)}
-              aria-label="Remove dealer link"
-              className={rowDeleteClass}
-            >
-              ✕
+      {dealer && (
+        <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-stone-600">Dealers</span>
+            <button type="button" onClick={addDealerLink} className={rowEditClass}>
+              + Link dealer
             </button>
           </div>
-        ))}
-      </div>
+          {dealerLinks.length === 0 && (
+            <p className="text-[11px] text-stone-500">No dealer relationships.</p>
+          )}
+          {dealerLinks.map((link, i) => (
+            <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
+              <select
+                value={link.dealerId}
+                onChange={(e) => setDealerLink(i, { dealerId: e.target.value })}
+                className={inputClass}
+                required
+              >
+                <option value="">Pick a dealer…</option>
+                {dealers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={link.role}
+                onChange={(e) =>
+                  setDealerLink(i, { role: e.target.value as DealerContactRole })
+                }
+                className={inputClass}
+              >
+                {DEALER_CONTACT_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => removeDealerLink(i)}
+                aria-label="Remove dealer link"
+                className={rowDeleteClass}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2 flex justify-end gap-2">
         <Dialog.Close className={rowEditClass}>Cancel</Dialog.Close>
-        <button type="submit" disabled={pending} className={submitClass}>
+        <button
+          type="submit"
+          disabled={pending || !hasAnyRole}
+          className={submitClass}
+        >
           {pending
             ? mode === 'create'
               ? 'Creating…'

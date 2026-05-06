@@ -146,14 +146,26 @@ describe('createPerson', () => {
     expect(await createPerson(fd)).toEqual({ error: 'Email looks invalid.' });
   });
 
-  it('rejects roles without app access', async () => {
+  it('rejects admin/coach roles without app access', async () => {
     const fd = new FormData();
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.append('roles', 'coach');
     expect(await createPerson(fd)).toEqual({
-      error: 'App access is required to assign roles.',
+      error: 'App access is required to assign Admin or Coach roles.',
     });
+  });
+
+  it('allows dealer-only role without app access', async () => {
+    const fd = new FormData();
+    fd.set('firstName', 'External');
+    fd.set('lastName', 'Contact');
+    fd.append('roles', 'dealer');
+    // Drizzle mocks: insert contact + syncTeamMemberRoles existing-empty.
+    mocks.selectResults = [[]];
+    expect(await createPerson(fd)).toEqual({ ok: true, contactId: 999 });
+    // No auth user provisioned (dealer doesn't imply app access).
+    expect(mocks.adminCreateUser).not.toHaveBeenCalled();
   });
 
   it('rejects an unsupported role like "staff"', async () => {
@@ -443,6 +455,39 @@ describe('updatePerson', () => {
       targetTable: 'contacts',
       targetId: 1,
       payload: { before: ['coach'], after: [] },
+    });
+  });
+
+  it('preserves dealer role when appAccess is off, drops only admin/coach (0023 Phase 3)', async () => {
+    const fd = new FormData();
+    fd.set('contactId', '1');
+    fd.set('firstName', 'X');
+    fd.set('lastName', 'Y');
+    // Form submitted admin + dealer with no appAccess (admin/coach UI-state
+    // could legitimately submit this if the destructive-edit confirm path
+    // fired and the user proceeded). updatePerson should drop admin (requires
+    // app access), preserve dealer.
+    fd.append('roles', 'admin');
+    fd.append('roles', 'dealer');
+    mocks.selectResults = [
+      [{ id: 1, userId: 'existing-auth', archivedAt: null }],
+      [{ role: 'admin' }], // existingRoles snapshot — pre-mutation
+      [], [], [], [], [], // identifier swaps + role/dealer sync
+    ];
+    const result = await updatePerson(fd);
+    expect(result).toEqual({ ok: true, contactId: 1 });
+    // Auth banned because no admin/coach is in the surviving role set.
+    expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
+      ban_duration: '876000h',
+      app_metadata: { role: null },
+    });
+    expect(mocks.adminCreateUser).not.toHaveBeenCalled();
+    // Audit captures the role transition: admin → dealer (sorted).
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: 1,
+      payload: { before: ['admin'], after: ['dealer'] },
     });
   });
 
