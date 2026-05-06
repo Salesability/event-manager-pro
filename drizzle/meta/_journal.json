@@ -29,6 +29,13 @@
       "when": 1778414400000,
       "tag": "0003_enable_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778500800000,
+      "tag": "0004_worthless_titanium_man",
+      "breakpoints": true
     }
   ]
 }

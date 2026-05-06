@@ -1,3 +1,4 @@
+export * from './audit-log';
 export * from './auth';
 export * from './availability-blocks';
 export * from './campaign-styles';

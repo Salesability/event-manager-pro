@@ -18,6 +18,7 @@ import {
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { requireRole } from '@/lib/auth/require-role';
+import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import {
   field,
@@ -229,10 +230,20 @@ export async function archiveDealer(formData: FormData): Promise<ActionResult> {
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid dealer id.' };
 
-  await db
+  const result = await db
     .update(dealers)
     .set({ archivedAt: new Date(), updatedById: userId })
-    .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)));
+    .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+    .returning({ id: dealers.id });
+
+  if (result.length) {
+    await recordAudit({
+      action: 'dealer.archived',
+      targetTable: 'dealers',
+      targetId: id,
+      payload: null,
+    });
+  }
 
   revalidatePath('/lists');
   revalidatePath('/production');
@@ -325,6 +336,13 @@ export async function cancelCampaign(formData: FormData): Promise<ActionResult> 
     // Either the row doesn't exist, or it's already cancelled / completed.
     return { error: 'Campaign cannot be cancelled in its current state.' };
   }
+
+  await recordAudit({
+    action: 'campaign.cancelled',
+    targetTable: 'campaigns',
+    targetId: id,
+    payload: null,
+  });
 
   revalidateCampaignViews();
   return { ok: true };

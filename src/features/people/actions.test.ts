@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
+  recordAudit: vi.fn(),
   adminCreateUser: vi.fn(),
   adminUpdateUserById: vi.fn(),
   // Queue of arrays returned by successive `db.select(...).from(...).where(...).limit?(...)` calls.
@@ -20,6 +21,9 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/auth/require-role', () => ({
   requireRole: mocks.requireRole,
+}));
+vi.mock('@/features/audit/actions', () => ({
+  recordAudit: mocks.recordAudit,
 }));
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -234,6 +238,13 @@ describe('createPerson', () => {
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('new-auth-uuid', {
       app_metadata: { role: 'admin' },
     });
+    // Audit emitted: roles granted on creation (Phase 4).
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: 999,
+      payload: { before: [], after: ['admin'] },
+    });
   });
 
   it('compensates by banning the just-created auth user when the post-create link races and loses', async () => {
@@ -351,14 +362,16 @@ describe('updatePerson', () => {
     fd.append('roles', 'coach');
     // queue (each `await` on the chained Drizzle builder shifts one entry):
     // 1) current-state lookup → unarchived, no user_id yet
-    // 2) tx.update(contacts).set(firstName/lastName).where(...) — bare await
-    // 3,4) swap email: existing + conflict
-    // 5) swap phone (newValue=''): existing only, returns early
-    // 6) syncTeamMemberRoles: existing
-    // 7) syncDealerLinks: existing
-    // 8) Conditional UPDATE … RETURNING after auth.admin.createUser → won
+    // 2) existingRoles snapshot for audit (Phase 4): no current roles
+    // 3) tx.update(contacts).set(firstName/lastName).where(...) — bare await
+    // 4,5) swap email: existing + conflict
+    // 6) swap phone (newValue=''): existing only, returns early
+    // 7) syncTeamMemberRoles: existing
+    // 8) syncDealerLinks: existing
+    // 9) Conditional UPDATE … RETURNING after auth.admin.createUser → won
     mocks.selectResults = [
       [{ id: 1, userId: null, archivedAt: null }],
+      [],
       [],
       [],
       [],
@@ -385,6 +398,7 @@ describe('updatePerson', () => {
     fd.append('roles', 'admin');
     mocks.selectResults = [
       [{ id: 1, userId: null, archivedAt: null }],
+      [], // existingRoles snapshot for audit (Phase 4)
       [], [], [], [], [], [], // current update + 2 swap email + swap phone + sync roles + sync dealer (6 entries)
       [], // Conditional UPDATE … RETURNING → zero rows (raced)
     ];
@@ -410,6 +424,7 @@ describe('updatePerson', () => {
     // appAccess unset → off
     mocks.selectResults = [
       [{ id: 1, userId: 'existing-auth', archivedAt: null }],
+      [{ role: 'coach' }], // existingRoles snapshot — pre-mutation roles
       [], [], [], [], [], // identifier swaps + role/dealer sync
     ];
     const result = await updatePerson(fd);
@@ -422,6 +437,13 @@ describe('updatePerson', () => {
     });
     // No new auth user created from this stale state.
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
+    // Audit emitted: roles changed from ['coach'] to [].
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: 1,
+      payload: { before: ['coach'], after: [] },
+    });
   });
 
   it('on→off app access bans the auth user and clears app_metadata.role', async () => {
@@ -432,6 +454,7 @@ describe('updatePerson', () => {
     // appAccess unset → off
     mocks.selectResults = [
       [{ id: 1, userId: 'existing-auth', archivedAt: null }],
+      [], // existingRoles snapshot for audit (Phase 4)
       [],
       [],
       [],
@@ -446,6 +469,13 @@ describe('updatePerson', () => {
       app_metadata: { role: null },
     });
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
+    // Audit emitted: deactivation event (Phase 4).
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.deactivated',
+      targetTable: 'contacts',
+      targetId: 1,
+      payload: { authUserId: 'existing-auth', via: 'updatePerson' },
+    });
   });
 });
 
@@ -487,6 +517,13 @@ describe('archivePerson', () => {
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('someone-else', {
       ban_duration: '876000h',
       app_metadata: { role: null },
+    });
+    // Audit emitted (Phase 4).
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'user.deactivated',
+      targetTable: 'contacts',
+      targetId: 1,
+      payload: { authUserId: 'someone-else' },
     });
   });
 

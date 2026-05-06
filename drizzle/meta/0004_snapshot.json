@@ -1,9 +1,156 @@
 {
-  "id": "90e8534c-a0f2-4ec6-90d9-7808bfd0ab95",
-  "prevId": "5405f7d9-91a3-4122-9abb-4287f2f44665",
+  "id": "5ac5bfed-4d50-4f2f-a7d5-0e721b9e845e",
+  "prevId": "90e8534c-a0f2-4ec6-90d9-7808bfd0ab95",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.audit_log": {
+      "name": "audit_log",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "audit_log_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_role": {
+          "name": "actor_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "action": {
+          "name": "action",
+          "type": "audit_action",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_table": {
+          "name": "target_table",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "audit_log_actor_user_id_idx": {
+          "name": "audit_log_actor_user_id_idx",
+          "columns": [
+            {
+              "expression": "actor_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_action_occurred_at_idx": {
+          "name": "audit_log_action_occurred_at_idx",
+          "columns": [
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "audit_log_target_idx": {
+          "name": "audit_log_target_idx",
+          "columns": [
+            {
+              "expression": "target_table",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audit_log_actor_user_id_users_id_fk": {
+          "name": "audit_log_actor_user_id_users_id_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "auth.users": {
       "name": "users",
       "schema": "auth",
@@ -33,15 +180,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "availability_blocks_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "start_date": {
@@ -138,9 +285,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "availability_blocks_coach_id_start_date_idx": {
           "name": "availability_blocks_coach_id_start_date_idx",
@@ -159,10 +306,10 @@
             }
           ],
           "isUnique": false,
-          "with": {},
-          "method": "btree",
           "where": "coach_id IS NOT NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "availability_blocks_kind_start_date_idx": {
           "name": "availability_blocks_kind_start_date_idx",
@@ -181,9 +328,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "availability_blocks_created_by_id_idx": {
           "name": "availability_blocks_created_by_id_idx",
@@ -196,9 +343,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "availability_blocks_updated_by_id_idx": {
           "name": "availability_blocks_updated_by_id_idx",
@@ -211,52 +358,52 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "availability_blocks_coach_id_contacts_id_fk": {
           "name": "availability_blocks_coach_id_contacts_id_fk",
           "tableFrom": "availability_blocks",
+          "tableTo": "contacts",
           "columnsFrom": [
             "coach_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "availability_blocks_created_by_id_users_id_fk": {
           "name": "availability_blocks_created_by_id_users_id_fk",
           "tableFrom": "availability_blocks",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "availability_blocks_updated_by_id_users_id_fk": {
           "name": "availability_blocks_updated_by_id_users_id_fk",
           "tableFrom": "availability_blocks",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -280,15 +427,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "campaign_styles_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "label": {
@@ -317,10 +464,10 @@
       "uniqueConstraints": {
         "campaign_styles_label_unique": {
           "name": "campaign_styles_label_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "label"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -337,15 +484,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "campaigns_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -526,9 +673,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_coach_id_idx": {
           "name": "campaigns_coach_id_idx",
@@ -541,9 +688,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_style_id_idx": {
           "name": "campaigns_style_id_idx",
@@ -556,9 +703,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_sales_lead_source_id_idx": {
           "name": "campaigns_sales_lead_source_id_idx",
@@ -571,9 +718,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_start_date_idx": {
           "name": "campaigns_start_date_idx",
@@ -586,9 +733,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_created_by_id_idx": {
           "name": "campaigns_created_by_id_idx",
@@ -601,9 +748,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "campaigns_updated_by_id_idx": {
           "name": "campaigns_updated_by_id_idx",
@@ -616,101 +763,101 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "campaigns_dealer_id_dealers_id_fk": {
           "name": "campaigns_dealer_id_dealers_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "dealers",
           "columnsFrom": [
             "dealer_id"
           ],
-          "tableTo": "dealers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "restrict"
+          "onDelete": "restrict",
+          "onUpdate": "no action"
         },
         "campaigns_coach_id_contacts_id_fk": {
           "name": "campaigns_coach_id_contacts_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "contacts",
           "columnsFrom": [
             "coach_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "campaigns_style_id_campaign_styles_id_fk": {
           "name": "campaigns_style_id_campaign_styles_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "campaign_styles",
           "columnsFrom": [
             "style_id"
           ],
-          "tableTo": "campaign_styles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "campaigns_sales_lead_source_id_sales_lead_sources_id_fk": {
           "name": "campaigns_sales_lead_source_id_sales_lead_sources_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "sales_lead_sources",
           "columnsFrom": [
             "sales_lead_source_id"
           ],
-          "tableTo": "sales_lead_sources",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "campaigns_created_by_id_users_id_fk": {
           "name": "campaigns_created_by_id_users_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "campaigns_updated_by_id_users_id_fk": {
           "name": "campaigns_updated_by_id_users_id_fk",
           "tableFrom": "campaigns",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "campaigns_public_id_unique": {
           "name": "campaigns_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -732,15 +879,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "contact_identifiers_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "contact_id": {
@@ -826,10 +973,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "archived_at IS NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "contact_identifiers_contact_kind_primary_unique": {
           "name": "contact_identifiers_contact_kind_primary_unique",
@@ -848,10 +995,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "is_primary",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "contact_identifiers_contact_id_idx": {
           "name": "contact_identifiers_contact_id_idx",
@@ -864,9 +1011,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "contact_identifiers_created_by_id_idx": {
           "name": "contact_identifiers_created_by_id_idx",
@@ -879,9 +1026,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "contact_identifiers_updated_by_id_idx": {
           "name": "contact_identifiers_updated_by_id_idx",
@@ -894,52 +1041,52 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "contact_identifiers_contact_id_contacts_id_fk": {
           "name": "contact_identifiers_contact_id_contacts_id_fk",
           "tableFrom": "contact_identifiers",
+          "tableTo": "contacts",
           "columnsFrom": [
             "contact_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "contact_identifiers_created_by_id_users_id_fk": {
           "name": "contact_identifiers_created_by_id_users_id_fk",
           "tableFrom": "contact_identifiers",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "contact_identifiers_updated_by_id_users_id_fk": {
           "name": "contact_identifiers_updated_by_id_users_id_fk",
           "tableFrom": "contact_identifiers",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -958,15 +1105,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "contacts_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "first_name": {
@@ -987,8 +1134,8 @@
           "primaryKey": false,
           "notNull": true,
           "generated": {
-            "type": "stored",
-            "as": "first_name || ' ' || last_name"
+            "as": "first_name || ' ' || last_name",
+            "type": "stored"
           }
         },
         "user_id": {
@@ -1042,9 +1189,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "contacts_created_by_id_idx": {
           "name": "contacts_created_by_id_idx",
@@ -1057,9 +1204,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "contacts_updated_by_id_idx": {
           "name": "contacts_updated_by_id_idx",
@@ -1072,53 +1219,53 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "contacts_user_id_users_id_fk": {
           "name": "contacts_user_id_users_id_fk",
           "tableFrom": "contacts",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "contacts_created_by_id_users_id_fk": {
           "name": "contacts_created_by_id_users_id_fk",
           "tableFrom": "contacts",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "contacts_updated_by_id_users_id_fk": {
           "name": "contacts_updated_by_id_users_id_fk",
           "tableFrom": "contacts",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1137,15 +1284,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "dealer_contacts_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "dealer_id": {
@@ -1255,9 +1402,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "dealer_contacts_dealer_id_role_idx": {
           "name": "dealer_contacts_dealer_id_role_idx",
@@ -1276,9 +1423,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "dealer_contacts_contact_id_idx": {
           "name": "dealer_contacts_contact_id_idx",
@@ -1291,9 +1438,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "dealer_contacts_created_by_id_idx": {
           "name": "dealer_contacts_created_by_id_idx",
@@ -1306,9 +1453,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "dealer_contacts_updated_by_id_idx": {
           "name": "dealer_contacts_updated_by_id_idx",
@@ -1321,65 +1468,65 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "dealer_contacts_dealer_id_dealers_id_fk": {
           "name": "dealer_contacts_dealer_id_dealers_id_fk",
           "tableFrom": "dealer_contacts",
+          "tableTo": "dealers",
           "columnsFrom": [
             "dealer_id"
           ],
-          "tableTo": "dealers",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "dealer_contacts_contact_id_contacts_id_fk": {
           "name": "dealer_contacts_contact_id_contacts_id_fk",
           "tableFrom": "dealer_contacts",
+          "tableTo": "contacts",
           "columnsFrom": [
             "contact_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "dealer_contacts_created_by_id_users_id_fk": {
           "name": "dealer_contacts_created_by_id_users_id_fk",
           "tableFrom": "dealer_contacts",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "dealer_contacts_updated_by_id_users_id_fk": {
           "name": "dealer_contacts_updated_by_id_users_id_fk",
           "tableFrom": "dealer_contacts",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1398,15 +1545,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "dealers_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "public_id": {
@@ -1472,9 +1619,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "dealers_updated_by_id_idx": {
           "name": "dealers_updated_by_id_idx",
@@ -1487,49 +1634,49 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "dealers_created_by_id_users_id_fk": {
           "name": "dealers_created_by_id_users_id_fk",
           "tableFrom": "dealers",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "dealers_updated_by_id_users_id_fk": {
           "name": "dealers_updated_by_id_users_id_fk",
           "tableFrom": "dealers",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "dealers_public_id_unique": {
           "name": "dealers_public_id_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "public_id"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1546,15 +1693,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "sales_lead_sources_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "label": {
@@ -1583,10 +1730,10 @@
       "uniqueConstraints": {
         "sales_lead_sources_label_unique": {
           "name": "sales_lead_sources_label_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "label"
-          ],
-          "nullsNotDistinct": false
+          ]
         }
       },
       "policies": {},
@@ -1603,15 +1750,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "team_member_roles_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "contact_id": {
@@ -1684,9 +1831,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "team_member_roles_contact_id_idx": {
           "name": "team_member_roles_contact_id_idx",
@@ -1699,9 +1846,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "team_member_roles_created_by_id_idx": {
           "name": "team_member_roles_created_by_id_idx",
@@ -1714,9 +1861,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "team_member_roles_updated_by_id_idx": {
           "name": "team_member_roles_updated_by_id_idx",
@@ -1729,52 +1876,52 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "team_member_roles_contact_id_contacts_id_fk": {
           "name": "team_member_roles_contact_id_contacts_id_fk",
           "tableFrom": "team_member_roles",
+          "tableTo": "contacts",
           "columnsFrom": [
             "contact_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "team_member_roles_created_by_id_users_id_fk": {
           "name": "team_member_roles_created_by_id_users_id_fk",
           "tableFrom": "team_member_roles",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "team_member_roles_updated_by_id_users_id_fk": {
           "name": "team_member_roles_updated_by_id_users_id_fk",
           "tableFrom": "team_member_roles",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1793,15 +1940,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "vehicle_ownerships_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "vehicle_id": {
@@ -1879,10 +2026,10 @@
             }
           ],
           "isUnique": true,
-          "with": {},
-          "method": "btree",
           "where": "sold_at IS NULL AND archived_at IS NULL",
-          "concurrently": false
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "vehicle_ownerships_contact_id_idx": {
           "name": "vehicle_ownerships_contact_id_idx",
@@ -1895,9 +2042,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vehicle_ownerships_vehicle_id_acquired_idx": {
           "name": "vehicle_ownerships_vehicle_id_acquired_idx",
@@ -1916,9 +2063,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vehicle_ownerships_created_by_id_idx": {
           "name": "vehicle_ownerships_created_by_id_idx",
@@ -1931,9 +2078,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vehicle_ownerships_updated_by_id_idx": {
           "name": "vehicle_ownerships_updated_by_id_idx",
@@ -1946,65 +2093,65 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "vehicle_ownerships_vehicle_id_vehicles_id_fk": {
           "name": "vehicle_ownerships_vehicle_id_vehicles_id_fk",
           "tableFrom": "vehicle_ownerships",
+          "tableTo": "vehicles",
           "columnsFrom": [
             "vehicle_id"
           ],
-          "tableTo": "vehicles",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "vehicle_ownerships_contact_id_contacts_id_fk": {
           "name": "vehicle_ownerships_contact_id_contacts_id_fk",
           "tableFrom": "vehicle_ownerships",
+          "tableTo": "contacts",
           "columnsFrom": [
             "contact_id"
           ],
-          "tableTo": "contacts",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "vehicle_ownerships_created_by_id_users_id_fk": {
           "name": "vehicle_ownerships_created_by_id_users_id_fk",
           "tableFrom": "vehicle_ownerships",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "vehicle_ownerships_updated_by_id_users_id_fk": {
           "name": "vehicle_ownerships_updated_by_id_users_id_fk",
           "tableFrom": "vehicle_ownerships",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2023,15 +2170,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
+            "type": "always",
             "name": "vehicles_id_seq",
+            "schema": "public",
             "increment": "1",
+            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
-            "startWith": "1",
             "cache": "1",
-            "cycle": false,
-            "schema": "public",
-            "type": "always"
+            "cycle": false
           }
         },
         "vin": {
@@ -2109,9 +2256,9 @@
             }
           ],
           "isUnique": true,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vehicles_created_by_id_idx": {
           "name": "vehicles_created_by_id_idx",
@@ -2124,9 +2271,9 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         },
         "vehicles_updated_by_id_idx": {
           "name": "vehicles_updated_by_id_idx",
@@ -2139,39 +2286,39 @@
             }
           ],
           "isUnique": false,
-          "with": {},
+          "concurrently": false,
           "method": "btree",
-          "concurrently": false
+          "with": {}
         }
       },
       "foreignKeys": {
         "vehicles_created_by_id_users_id_fk": {
           "name": "vehicles_created_by_id_users_id_fk",
           "tableFrom": "vehicles",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "created_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         },
         "vehicles_updated_by_id_users_id_fk": {
           "name": "vehicles_updated_by_id_users_id_fk",
           "tableFrom": "vehicles",
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsFrom": [
             "updated_by_id"
           ],
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2182,6 +2329,16 @@
     }
   },
   "enums": {
+    "public.audit_action": {
+      "name": "audit_action",
+      "schema": "public",
+      "values": [
+        "user.role_changed",
+        "user.deactivated",
+        "dealer.archived",
+        "campaign.cancelled"
+      ]
+    },
     "public.availability_block_kind": {
       "name": "availability_block_kind",
       "schema": "public",
@@ -2232,10 +2389,10 @@
   "schemas": {
     "auth": "auth"
   },
-  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
+  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

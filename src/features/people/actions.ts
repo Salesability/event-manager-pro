@@ -11,6 +11,7 @@ import {
 } from '@/lib/db/schema';
 import { requireRole } from '@/lib/auth/require-role';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { recordAudit } from '@/features/audit/actions';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
 
 // Three-state result so the UI can distinguish a clean success from a partial
@@ -370,6 +371,18 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
     return toActionResult(err);
   }
 
+  // Audit the role grant. We emit even if the auth-side step below fails —
+  // the role rows are already committed, and that's the auditable event. The
+  // forensic intent is "the admin granted these roles to this contact."
+  if (roles.length > 0) {
+    await recordAudit({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: newContactId,
+      payload: { before: [], after: [...roles].sort() },
+    });
+  }
+
   // Step 2: Auth user. Best-effort — the contact + roles are already
   // committed. If this fails, surface a partial-success error so the admin
   // can either retry "Grant app access" from Edit Person, or delete the row.
@@ -486,8 +499,30 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
     return { error: 'Email is required when granting app access.' };
   }
 
+  // Closure-captured role diff for the post-tx audit emit. The snapshot read
+  // lives INSIDE the tx so a concurrent `updatePerson` between the read and
+  // `syncTeamMemberRoles` can't make `before` inaccurate.
+  let existingRoles: string[] = [];
+  let desiredRoles: string[] = [];
+  let rolesChanged = false;
+
   try {
     await db.transaction(async (tx) => {
+      const existingRoleRows = await tx
+        .select({ role: teamMemberRoles.role })
+        .from(teamMemberRoles)
+        .where(
+          and(
+            eq(teamMemberRoles.contactId, contactId),
+            isNull(teamMemberRoles.archivedAt),
+          ),
+        );
+      existingRoles = existingRoleRows.map((r) => r.role).sort();
+      desiredRoles = [...roles].sort();
+      rolesChanged =
+        existingRoles.length !== desiredRoles.length ||
+        existingRoles.some((r, i) => r !== desiredRoles[i]);
+
       await tx
         .update(contacts)
         .set({ firstName, lastName })
@@ -574,6 +609,12 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
         warning: `Person updated, but auth ban failed: ${error.message}.`,
       };
     }
+    await recordAudit({
+      action: 'user.deactivated',
+      targetTable: 'contacts',
+      targetId: contactId,
+      payload: { authUserId: current.userId, via: 'updatePerson' },
+    });
   } else if (appAccess && current.userId != null) {
     // Already linked. Lift any active ban first (idempotent on already-active
     // users) — this is the restore path when an earlier accidental ban is
@@ -596,6 +637,15 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
       revalidatePeopleViews();
       return { ok: true, contactId, warning: result.error };
     }
+  }
+
+  if (rolesChanged) {
+    await recordAudit({
+      action: 'user.role_changed',
+      targetTable: 'contacts',
+      targetId: contactId,
+      payload: { before: existingRoles, after: desiredRoles },
+    });
   }
 
   revalidatePeopleViews();
@@ -667,6 +717,13 @@ export async function archivePerson(formData: FormData): Promise<ActionResult> {
       };
     }
   }
+
+  await recordAudit({
+    action: 'user.deactivated',
+    targetTable: 'contacts',
+    targetId: contactId,
+    payload: { authUserId: current.userId },
+  });
 
   revalidatePeopleViews();
   return { ok: true, contactId };
