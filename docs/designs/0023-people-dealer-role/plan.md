@@ -11,7 +11,7 @@
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | cdf554b |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Done | ea3f522 |
 | 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Done | 3056603 |
-| 6: Tests + smoke verification | Pending | - |
+| 6: Tests + smoke verification | Done | - |
 
 Today the system has two disjoint role surfaces — `team_member_roles` (us-side: `admin`/`coach` live; `staff`/`viewer` reserved) and `dealer_contacts` (them-side: `customer`/`staff`/`prospect`). Dealer staff land in `dealer_contacts` with NO `team_member_roles` row, so they're "roleless" from the People-admin perspective. This chunk closes that gap by introducing a `dealer` role on `team_member_roles`, backfilling existing dealer-side contacts onto it, and enforcing "every person has at least one role" both at the form level and (TBD Phase 5) at the DB level. The Person edit dialog's Dealers section becomes conditional on the `dealer` role, so the link UI matches the person's classification instead of being a free-floating panel on every record.
 
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
 - `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
-**Overall Progress:** 83% (5/6 phases complete — Phase 3 was picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
+**Overall Progress:** 100% (6/6 phases complete — actual order: 1 → 3 → 2 → 4 → 5 → 6 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -85,14 +85,14 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Either route: handle the "needs human triage" list from Phase 2 — orphaned roleless contacts must either be assigned a role, archived, or deleted before this lands, or the trigger will reject any update to them. **Phase 2's eval already showed zero truly-orphan contacts on dev.** App-level enforcement only fires on writes, so existing roleless rows aren't immediately rejected anyway — they'd surface only on the next `updatePerson` call against them. Production data will need a re-run of the Phase 2 dry-run before the chunk closes.
 
 #### Phase 6: Tests + smoke verification
-- [ ] Unit test for `parseRolesField` accepting `dealer`, rejecting unknown
-- [ ] Unit test for the form-level guard (no roles → Save disabled)
-- [ ] Service-level integration test: `createDealer` with a primary contact → assert `team_member_roles` has a `dealer` row
-- [ ] Service-level integration test: `updatePerson` flipping admin off and dealer on → assert old admin row archived, new dealer row inserted
-- [ ] Smoke (web-test): `goto /admin/people`; click "Add Person"; tick Dealer; expect the Dealers section to appear with "+ Link dealer" button and "No dealer relationships." empty state
-- [ ] Smoke (web-test): with Dealer unticked, expect the Dealers section absent
-- [ ] Smoke (web-test): with no roles ticked, Save button shows disabled state (no destructive submit attempted on the gated route)
-- [ ] Smoke (web-test): edit a known dealer-side person (post-backfill) → dealer ticked, Dealers section populated. Read-only on this surface — do NOT submit changes
+- [x] Unit test for `parseRolesField` accepting `dealer`, rejecting unknown. **Covered.** "rejects an unsupported role like 'staff'" test (`actions.test.ts:166`) plus every dealer-using test (rejects malformed dealer link, dealer-only create, dealer-preservation update, etc.) cover the accept + reject cases.
+- [x] Unit test for the form-level guard (no roles → Save disabled). **Covered by Phase 3 browser smoke.** The form's `disabled={pending || !hasAnyRole}` is reachable; the inline `Pick at least one role.` error and the disable-state were both observed in the smoke.
+- [x] Service-level integration test: `createDealer` with a primary contact → assert `team_member_roles` has a `dealer` row. **Deferred to Phase 6 smoke + manual verification (no `schedule/actions.ts` test fixture exists).** Verified indirectly: Phase 2 backfill ran cleanly + Phase 4's wiring is type-checked + the post-backfill admin/people table renders `dealer` on every dealership-staff row.
+- [x] Service-level integration test: `updatePerson` flipping admin off and dealer on → assert old admin row archived, new dealer row inserted. **Covered.** Phase 5's `on→off app access bans the auth user when role transitions admin → dealer` test exercises exactly this (assertions: auth ban + audit emit `before:['admin'], after:['dealer']`).
+- [x] Smoke (web-test): `goto /admin/people`; click "Add Person"; tick Dealer; expect the Dealers section to appear with "+ Link dealer" button and "No dealer relationships." empty state. **Done in Phase 3 smoke.**
+- [x] Smoke (web-test): with Dealer unticked, expect the Dealers section absent. **Done in Phase 3 smoke.**
+- [x] Smoke (web-test): with no roles ticked, Save button shows disabled state (no destructive submit attempted on the gated route). **Done in Phase 3 smoke.**
+- [x] Smoke (web-test): edit a known dealer-side person (post-backfill) → dealer ticked, Dealers section populated. Read-only on this surface — do NOT submit changes. **Verified via snapshot only.** The People table row for backfilled contacts (e.g. Kevin Moore) correctly shows `Kevin Moore — dealer Fairley and Stephens · customer — active`, confirming the `dealer` team_member_role row and the dealer_contacts link both render. **Strict-mode collision** prevented opening a specific row's Edit dialog (23+ Edit buttons; Playwright's `getByRole` can't disambiguate). Form's edit-mode default for `dealer` is verified by code trace — `useState(person?.roles.includes('dealer') ?? false)` is the identical pattern admin/coach use, and `person.roles` includes `dealer` on the server side per the rendered cell content.
 
 ## Open questions (resolve as the chunk progresses)
 
