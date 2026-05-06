@@ -1,11 +1,11 @@
-import { requireAdmin } from '@/lib/auth/require-admin';
+import { requireRole } from '@/lib/auth/require-role';
 import { loadAdminPeople, loadOrphanAuthUsers } from '@/features/people/queries';
 import { loadDealers } from '@/features/schedule/queries';
 import { OrphanAuthUsers } from '@/features/people/orphan-auth-users';
 import { PeopleAdmin } from '@/features/people/people-admin';
 
 export default async function PeopleAdminPage() {
-  await requireAdmin();
+  await requireRole('admin');
   const [people, dealers, orphans] = await Promise.all([
     loadAdminPeople(),
     loadDealers(),

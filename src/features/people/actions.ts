@@ -9,7 +9,7 @@ import {
   dealerContacts,
   teamMemberRoles,
 } from '@/lib/db/schema';
-import { requireAdmin } from '@/lib/auth/require-admin';
+import { requireRole } from '@/lib/auth/require-role';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
 
@@ -314,7 +314,7 @@ async function syncAuthMetadata(authUserId: string, roles: V1TeamRole[]) {
 // ---------- Server Actions ----------
 
 export async function createPerson(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const firstName = field(formData, 'firstName');
   const lastName = field(formData, 'lastName');
@@ -436,7 +436,7 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updatePerson(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const contactId = parseOptionalId(formData, 'contactId');
   if (contactId == null) return { error: 'Invalid contact id.' };
@@ -603,7 +603,7 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
 }
 
 export async function archivePerson(formData: FormData): Promise<ActionResult> {
-  const adminUser = await requireAdmin();
+  const adminUser = await requireRole('admin');
 
   const contactId = parseOptionalId(formData, 'contactId');
   if (contactId == null) return { error: 'Invalid contact id.' };
@@ -678,7 +678,7 @@ export async function archivePerson(formData: FormData): Promise<ActionResult> {
 // state and for any future Supabase-dashboard fallback path. The People
 // page surfaces orphans in a small bottom panel; this action takes a row.
 export async function adoptOrphanAuthUser(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const userId = field(formData, 'userId');
   const firstName = field(formData, 'firstName');

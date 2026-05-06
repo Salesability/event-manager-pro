@@ -2,7 +2,6 @@
 
 import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -16,8 +15,7 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
-import { requireAdmin } from '@/lib/auth/require-admin';
-import { getUser } from '@/lib/supabase/session';
+import { requireRole } from '@/lib/auth/require-role';
 import {
   field,
   parseCampaignInput,
@@ -51,14 +49,8 @@ function toActionResult(err: unknown): ActionResult {
   throw err;
 }
 
-async function requireUserId(): Promise<string> {
-  const user = await getUser();
-  if (!user) redirect('/login');
-  return user.id;
-}
-
 export async function createDealer(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
 
   const name = field(formData, 'name');
   const address = field(formData, 'address');
@@ -124,7 +116,7 @@ export async function createDealer(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateDealer(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid dealer id.' };
@@ -229,7 +221,7 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
 // `/production`, `/share/coach/[id]`, and the booking-form coach picker.
 
 export async function archiveDealer(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole('admin')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid dealer id.' };
@@ -264,7 +256,7 @@ function revalidateLookupViews() {
 }
 
 export async function createCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
 
   const input = parseCampaignInput(formData);
   if ('error' in input) return input;
@@ -289,7 +281,7 @@ export async function createCampaign(formData: FormData): Promise<ActionResult> 
 }
 
 export async function updateCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid campaign id.' };
@@ -316,7 +308,7 @@ export async function updateCampaign(formData: FormData): Promise<ActionResult> 
 }
 
 export async function cancelCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole('admin')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid campaign id.' };
@@ -352,7 +344,7 @@ function lookupActionResult(err: unknown): ActionResult {
 }
 
 export async function createCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -375,7 +367,7 @@ export async function createCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function updateCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -398,7 +390,7 @@ export async function updateCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function archiveCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -413,7 +405,7 @@ export async function archiveCampaignStyle(formData: FormData): Promise<ActionRe
 }
 
 export async function createSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -436,7 +428,7 @@ export async function createSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function updateSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };
@@ -459,7 +451,7 @@ export async function updateSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function archiveSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  await requireRole('admin');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };
@@ -537,7 +529,7 @@ async function validateAvailabilityCoach(input: AvailabilityInput): Promise<Acti
 }
 
 export async function createAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'coach'])).id;
 
   const input = parseAvailabilityInput(formData);
   if ('error' in input) return input;
@@ -556,7 +548,7 @@ export async function createAvailabilityBlock(formData: FormData): Promise<Actio
 }
 
 export async function updateAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'coach'])).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid availability block id.' };
@@ -577,7 +569,7 @@ export async function updateAvailabilityBlock(formData: FormData): Promise<Actio
 }
 
 export async function archiveAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = await requireUserId();
+  const userId = (await requireRole(['admin', 'coach'])).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid availability block id.' };

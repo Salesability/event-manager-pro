@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { getUser } from '@/lib/supabase/session';
+import { requireRole } from '@/lib/auth/require-role';
 import { sendEmail } from '@/lib/email/send';
 import {
   clientConfirmation,
@@ -12,9 +12,9 @@ import { loadCampaign, loadCampaigns, loadCoach } from '@/features/schedule/quer
 
 type ActionResult = { ok: true } | { error: string };
 
-async function requireUserEmail(): Promise<string | { error: string }> {
-  const user = await getUser();
-  if (!user?.email) return { error: 'You must be signed in.' };
+async function requireSenderEmail(): Promise<string | { error: string }> {
+  const user = await requireRole(['admin', 'staff', 'coach']);
+  if (!user.email) return { error: 'No email on file for the signed-in account.' };
   return user.email;
 }
 
@@ -34,7 +34,7 @@ function parseId(formData: FormData, key: string): number | null {
 }
 
 export async function sendClientCampaignConfirmation(formData: FormData): Promise<ActionResult> {
-  const replyTo = await requireUserEmail();
+  const replyTo = await requireSenderEmail();
   if (typeof replyTo !== 'string') return replyTo;
 
   const id = parseId(formData, 'campaignId');
@@ -73,7 +73,7 @@ export async function sendClientCampaignConfirmation(formData: FormData): Promis
 }
 
 export async function sendCoachCampaignConfirmation(formData: FormData): Promise<ActionResult> {
-  const replyTo = await requireUserEmail();
+  const replyTo = await requireSenderEmail();
   if (typeof replyTo !== 'string') return replyTo;
 
   const id = parseId(formData, 'campaignId');
@@ -109,7 +109,7 @@ export async function sendCoachCampaignConfirmation(formData: FormData): Promise
 }
 
 export async function sendCoachShareLinkEmail(formData: FormData): Promise<ActionResult> {
-  const replyTo = await requireUserEmail();
+  const replyTo = await requireSenderEmail();
   if (typeof replyTo !== 'string') return replyTo;
 
   const id = parseId(formData, 'coachId');

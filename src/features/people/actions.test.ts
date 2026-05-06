@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  requireAdmin: vi.fn(),
+  requireRole: vi.fn(),
   adminCreateUser: vi.fn(),
   adminUpdateUserById: vi.fn(),
   // Queue of arrays returned by successive `db.select(...).from(...).where(...).limit?(...)` calls.
@@ -18,9 +18,8 @@ vi.mock('next/navigation', () => ({
     throw new Error(`REDIRECT:${path}`);
   },
 }));
-vi.mock('@/lib/auth/require-admin', () => ({
-  requireAdmin: mocks.requireAdmin,
-  isAdmin: () => false,
+vi.mock('@/lib/auth/require-role', () => ({
+  requireRole: mocks.requireRole,
 }));
 vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => ({
@@ -99,7 +98,7 @@ import { archivePerson, createPerson, updatePerson } from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireAdmin.mockResolvedValue({
+  mocks.requireRole.mockResolvedValue({
     id: 'admin-uuid',
     app_metadata: { role: 'admin' },
   });
@@ -115,7 +114,7 @@ beforeEach(() => {
 
 describe('createPerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireAdmin.mockImplementation(async () => {
+    mocks.requireRole.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();
@@ -312,7 +311,7 @@ describe('createPerson', () => {
 
 describe('updatePerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireAdmin.mockImplementation(async () => {
+    mocks.requireRole.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();
@@ -452,7 +451,7 @@ describe('updatePerson', () => {
 
 describe('archivePerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireAdmin.mockImplementation(async () => {
+    mocks.requireRole.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();

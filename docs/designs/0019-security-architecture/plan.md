@@ -40,7 +40,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: RLS-baseline migration — enable RLS + minimum policies for `service_role` / `authenticated` / `anon` on every table | Done | ae3dbe3 |
-| 2: Per-action role audit — sweep every Server Action for the right `requireRole(...)` | Pending | - |
+| 2: Per-action role audit — sweep every Server Action for the right `requireRole(...)` | Done | - |
 | 3: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Pending | - |
 | 4: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 5: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
@@ -69,7 +69,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 17% (1/6 active phases — Phase 4 parked 2026-05-06)
+**Overall Progress:** 33% (2/6 active phases — Phase 4 parked 2026-05-06)
 
 **Phase 4 parked (2026-05-06).** The `'server-only'` import already throws at build time when a Client Component imports a server module — that's the primary defence. The proposed `secrets-boundary.test.ts` (build the app, grep `.next/static/` for known-secret prefixes) is genuine belt-and-suspenders, but slow (full `pnpm build` per test run) and low marginal value vs. the cost of maintaining it. Revisit if a regression slips past `'server-only'` in practice, or before public launch / external audit.
 
@@ -90,10 +90,15 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Vitest integration test (`tests/integration/rls.test.ts`): open a connection as `authenticated` with a forged JWT for user A; query `dealer_contacts` for dealer B; assert 0 rows. Proves the policy *would* enforce. **Done. 4-test suite confirms (1) all 11 tables RLS-enabled, (2) `is_staff_member()` returns false for forged JWT, (3) every RLS table returns 0 rows for forged authenticated user, (4) Drizzle's connection role still has `rolbypassrls=t`. Auto-loads `.env.local` via `process.loadEnvFile()` (Node ≥ 21.7); skipIf-guarded when `DATABASE_URL` is unset.**
 
 #### Phase 2: Per-action role audit
-- [ ] Sweep every export in `src/features/schedule/actions.ts`, `src/features/email/actions.ts`, `src/features/auth/actions.ts` (including 0018 additions).
-- [ ] For each action, decide the right gate: `requireUserId` (any signed-in) vs `requireAdmin` vs `requireRole('admin')` (alias) vs `requireRole('admin' | 'coach')` for actions a coach should be allowed to call (e.g. `updateAvailabilityBlock` on their own block).
-- [ ] Edit each action's first 3 lines accordingly. Document the decision matrix in `docs/wiki/auth.md` (added in Phase 7).
-- [ ] Vitest tests for the new `requireRole(role)` helper (admin → ok; coach → ok for `'coach'`; coach → throws for `'admin'`; signed-in non-roled → throws for any role).
+- [x] Sweep every export in `src/features/schedule/actions.ts`, `src/features/email/actions.ts`, `src/features/auth/actions.ts` (including 0018 additions). **Done. Audit also covered `src/features/people/actions.ts` since the 0018 user-admin work moved there in 0020 (auth/actions.ts retired to login-only).**
+- [x] For each action, decide the right gate: `requireUserId` (any signed-in) vs `requireAdmin` vs `requireRole('admin')` (alias) vs `requireRole('admin' | 'coach')` for actions a coach should be allowed to call (e.g. `updateAvailabilityBlock` on their own block). **Decision matrix:**
+  - **schedule/actions.ts:** `archiveDealer`, `cancelCampaign` → `requireRole('admin')` (destructive); `*CampaignStyle` × 3 + `*SalesLeadSource` × 3 → `requireRole('admin')` (alias swap from `requireAdmin`); `createAvailabilityBlock`, `updateAvailabilityBlock`, `archiveAvailabilityBlock` → `requireRole(['admin','coach'])` per the plan example; `createDealer`, `updateDealer`, `createCampaign`, `updateCampaign` → `requireRole(['admin','staff','coach'])` (mutating; viewer excluded). Initially these four were left at `requireUserId()` on the rationale that the layout gate is sufficient defence-in-depth, but Codex correctly flagged that Server Actions are public-API-shaped — a direct POST bypasses the layout gate. Tightened in-eval; the now-orphan `requireUserId()` private helper deleted.
+  - **email/actions.ts:** all three send actions (`sendClientCampaignConfirmation`, `sendCoachCampaignConfirmation`, `sendCoachShareLinkEmail`) → `requireRole(['admin','staff','coach'])` (excludes `viewer`; sends external email so a real seat-bearing role should be required). Old `requireUserEmail` helper renamed to `requireSenderEmail` and now derives the email from the User the role check returns.
+  - **auth/actions.ts:** `signInWithMagicLink`, `signInWithGoogle`, `signOut` → no gate. These ARE the auth flow.
+  - **people/actions.ts:** `createPerson`, `updatePerson`, `archivePerson`, `adoptOrphanAuthUser` → `requireRole('admin')` (alias swap from `requireAdmin`).
+  - **Page guards:** `(app)/admin/lookups/page.tsx`, `(app)/admin/people/page.tsx` → `requireRole('admin')` (was `requireAdmin`); the now-unused `requireAdmin` async wrapper was deleted from `src/lib/auth/require-admin.ts`. The pure `isAdmin(user)` predicate stays — used by `require-staff-access.ts`, `auth/callback/route.ts`, `(app)/layout.tsx`, and the new `requireRole` itself for the JWT fast path.
+- [x] Edit each action's first 3 lines accordingly. Document the decision matrix in `docs/wiki/auth.md` (added in Phase 7). **Edits applied across `src/features/schedule/actions.ts`, `src/features/email/actions.ts`, `src/features/people/actions.ts`, `src/app/(app)/admin/lookups/page.tsx`, `src/app/(app)/admin/people/page.tsx`. Wiki update parked for Phase 7 per checklist.**
+- [x] Vitest tests for the new `requireRole(role)` helper (admin → ok; coach → ok for `'coach'`; coach → throws for `'admin'`; signed-in non-roled → throws for any role). **Done. `src/lib/auth/require-role.test.ts` covers 8 cases including not-signed-in (`/login`), admin via JWT fast-path (no DB hit), admin in a multi-role list, coach via membership lookup, coach denied for admin-only, no membership row → `/`, role intersection misses → `/`. People actions test mock updated to mock `@/lib/auth/require-role` (the new boundary).**
 
 #### Phase 3: `audit_log` + `recordAudit()`
 - [ ] `src/lib/db/schema/audit-log.ts` — table with `id`, `occurredAt`, `actorUserId`, `actorRole` (denormalised at write time), `action` (enum: `user.role_changed | user.deactivated | coach.archived | dealer.archived | campaign.cancelled`), `targetTable` (text), `targetId` (bigint), `payload` (jsonb).
