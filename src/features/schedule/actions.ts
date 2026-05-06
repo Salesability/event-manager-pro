@@ -107,6 +107,18 @@ export async function createDealer(formData: FormData): Promise<ActionResult> {
         updatedById: userId,
       });
 
+      // 0023 Phase 4: every dealer-side contact gets a `dealer` team-member
+      // role too, so the People-admin filter / People dialog can surface
+      // them and Phase 5's "every contact has a role" invariant holds.
+      // No `onConflictDoNothing` needed — the contact was just inserted, so
+      // a `team_member_roles(contact_id, role)` collision is impossible.
+      await tx.insert(teamMemberRoles).values({
+        contactId: contactRow.id,
+        role: 'dealer',
+        createdById: userId,
+        updatedById: userId,
+      });
+
       await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
       await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
     });
@@ -205,6 +217,32 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
           updatedById: userId,
         });
       }
+
+      // 0023 Phase 4: ensure the contact has an ACTIVE `dealer` team-member
+      // role. For the new-contact branch, this is the first row. For the
+      // existing-link branch, Phase 2's backfill already inserted it for
+      // every existing dealer-side contact — but the upsert defensively
+      // handles two failure modes:
+      //   - a legacy contact that pre-dated Phase 2's backfill (none on
+      //     dev; could exist on prod); insert wins.
+      //   - a contact whose `dealer` row was previously ARCHIVED (e.g.
+      //     `archivePerson` ran on them); the upsert un-archives it,
+      //     because `onConflictDoNothing` would have left them without an
+      //     active dealer role despite being an active dealer-side contact.
+      // The conflict target is the unconditional `(contact_id, role)`
+      // unique index in `src/lib/db/schema/team-member-roles.ts`.
+      await tx
+        .insert(teamMemberRoles)
+        .values({
+          contactId,
+          role: 'dealer',
+          createdById: userId,
+          updatedById: userId,
+        })
+        .onConflictDoUpdate({
+          target: [teamMemberRoles.contactId, teamMemberRoles.role],
+          set: { archivedAt: null, updatedById: userId },
+        });
 
       await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
       await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
