@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist | Done | d2a1344 |
-| 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Pending | - |
+| 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Done | - |
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | cdf554b |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Pending | - |
 | 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Pending | - |
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
 - `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
-**Overall Progress:** 33% (2/6 phases complete — Phase 3 picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
+**Overall Progress:** 50% (3/6 phases complete — Phase 3 was picked up before Phase 2 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -53,11 +53,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Tsc + lint clean; existing people-admin unit tests still pass. **144/144 vitest, tsc clean, lint clean (4 pre-existing warnings).**
 
 #### Phase 2: Backfill — assign `dealer` role to existing roleless contacts with a dealer link
-- [ ] Write `scripts/backfill-dealer-role.ts` (anchored on `scripts/calendar-clamp-smoke.ts`): for every `contacts.id` that has a non-archived `dealer_contacts` row AND zero non-archived `team_member_roles` rows, insert `team_member_roles(role='dealer', specialty=null, createdById=<system actor>, updatedById=<system actor>)`
-- [ ] Idempotent — re-running the script after success is a no-op (uses the existing `team_member_roles_contact_id_role_unique` index)
-- [ ] Dry-run mode that prints the affected `contactId`s + dealer names before any insert; user reviews the list before live run
-- [ ] Report any *other* roleless contacts (no team_member_roles AND no dealer_contacts) as a separate "needs human triage" list — these are the truly orphaned rows that Phase 5 has to reckon with
-- [ ] Run the dry-run, hand the list to the user, then run live
+- [x] Write `scripts/backfill-dealer-role.ts` (anchored on `scripts/adopt-orphan-auth-users.ts` since `calendar-clamp-smoke.ts` was deleted with 0015): for every `contacts.id` that has a non-archived `dealer_contacts` row AND zero non-archived `team_member_roles` rows, insert `team_member_roles(role='dealer')`. **Done.** Single SQL `SELECT ... WHERE NOT EXISTS (...)` query identifies candidates, joining `dealers` for human-readable names. Apply mode runs all inserts in a single `db.transaction` so partial failure rolls back. `createdById/updatedById` left null per the comment in the script (system-driven backfill, no attributable actor; the `actors` mixin is nullable).
+- [x] Idempotent — re-running the script after success is a no-op (uses the existing `team_member_roles_contact_id_role_unique` index). **Verified:** post-apply re-run reports `Backfill candidates: 0`.
+- [x] Dry-run mode that prints the affected `contactId`s + dealer names before any insert; user reviews the list before live run. **Done — dry-run is the default; `--apply` flag triggers the live commit.** Output is `<contactId>  <displayName>  (dealerName1, dealerName2, ...)`.
+- [x] Report any *other* roleless contacts (no team_member_roles AND no dealer_contacts) as a separate "needs human triage" list — these are the truly orphaned rows that Phase 5 has to reckon with. **Done.** Second `SELECT` looks for "no active role AND no active dealer link" contacts. Output: zero truly-orphan contacts on the dev DB — the `is_staff_member()` invariant has nothing to triage in Phase 5.
+- [x] Run the dry-run, hand the list to the user, then run live. **Done.** Dry-run showed 23 candidates (one per dealership staff contact in the seed data) — Veronica Kennedy/Century Honda, Tammy/Century Hyundai Saint John, etc. Applied live; 23 rows inserted. Post-apply DB state: `admin=3, coach=5, dealer=23` non-archived `team_member_roles`. The `0023 Phase 1` regression-guard test (forged `authenticated` JWT for non-staff → 0 rows on every RLS-gated table) still passes — confirms `is_staff_member()` correctly excludes the new dealer-only rows from the staff-app check.
 
 #### Phase 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role
 - [x] Add `dealer` state + checkbox to the Roles fieldset at `src/features/people/people-admin.tsx:433-457` (mirror the Admin/Coach controls verbatim — same markup, same state hook, same `name="roles"` repeated input wiring). **Done. Discovered + fixed a precondition regression in-phase:** the React 19 form-migration commit `4a4afbd refactor(forms)` removed the imperative `fd.append('roles', 'admin'|'coach')` lines from the onSubmit handler when switching to `<form action>` + `useActionState`, but didn't replace them with hidden `<input name="roles">` elements — so PersonForm has been silently submitting `roles=[]` on every save since then. Phase 3 restores the wire format declaratively: hidden `<input type="hidden" name="roles" value="...">` rendered for each ticked role (admin / coach / dealer). Comment in code points back to the regressing commit so future readers know.
