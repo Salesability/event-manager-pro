@@ -46,7 +46,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 6: MFA enablement (Supabase project toggle + UI affordance) | Parked | - |
 | 7: Email-send hardening (fold in parked Codex findings from 0011) | Done | e7c497a |
-| 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Done | - |
+| 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Done | 854dc8a |
 
 ## Code Anchors
 
