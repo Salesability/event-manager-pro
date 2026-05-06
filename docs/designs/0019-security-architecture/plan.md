@@ -42,7 +42,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | 1: RLS-baseline migration — enable RLS + minimum policies for `service_role` / `authenticated` / `anon` on every table | Done | ae3dbe3 |
 | 2: Per-action role audit — sweep every Server Action for the right `requireRole(...)` | Done | 04ad552 |
 | 3: Coach availability ownership check — row-level "their own block" gate on `*AvailabilityBlock` actions | Done | 278c429 |
-| 4: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Done | - |
+| 4: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Done | 7a187cd |
 | 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 6: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
 | 7: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
