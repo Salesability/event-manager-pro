@@ -39,10 +39,10 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: RLS-baseline migration — enable RLS + minimum policies for `service_role` / `authenticated` / `anon` on every table | Pending | - |
+| 1: RLS-baseline migration — enable RLS + minimum policies for `service_role` / `authenticated` / `anon` on every table | Done | - |
 | 2: Per-action role audit — sweep every Server Action for the right `requireRole(...)` | Pending | - |
 | 3: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Pending | - |
-| 4: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Pending | - |
+| 4: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 5: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
 | 6: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
 | 7: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
@@ -69,7 +69,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 0% (0/7 phases complete)
+**Overall Progress:** 17% (1/6 active phases — Phase 4 parked 2026-05-06)
+
+**Phase 4 parked (2026-05-06).** The `'server-only'` import already throws at build time when a Client Component imports a server module — that's the primary defence. The proposed `secrets-boundary.test.ts` (build the app, grep `.next/static/` for known-secret prefixes) is genuine belt-and-suspenders, but slow (full `pnpm build` per test run) and low marginal value vs. the cost of maintaining it. Revisit if a regression slips past `'server-only'` in practice, or before public launch / external audit.
 
 **Note:**
 - **No existing Server Action is rewritten by this plan.** Phase 2's "role audit" identifies *which* `requireUserId()` should become `requireRole('admin')`, but the change is a 3-character edit per call site, not a refactor.
@@ -81,11 +83,11 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: RLS-baseline migration
-- [ ] Verify the role used by `DATABASE_URL`. If `postgres` superuser via pooler, document and proceed; if a custom role, confirm it has `BYPASSRLS`.
-- [ ] `drizzle/0003_enable_rls.sql` — for every table in `src/lib/db/schema/` (including `auth.users` extension tables): `ALTER TABLE … ENABLE ROW LEVEL SECURITY`. Idempotent: `ALTER TABLE` is safe to re-run.
-- [ ] For each table, write minimum policies: `service_role` → ALL ALLOWED (the Drizzle path); `authenticated` → mirrors current Server Action authz (e.g. for `campaigns`, `staff with team_member_roles → SELECT all`); `anon` → mostly `USING (false)` except specific public-share read paths.
-- [ ] Apply the migration to dev DB; smoke that **the staff app behaves identically** (every existing test still passes, every page still renders) — proves Drizzle's bypass is intact.
-- [ ] Vitest integration test (`tests/integration/rls.test.ts`): open a connection as `authenticated` with a forged JWT for user A; query `dealer_contacts` for dealer B; assert 0 rows. Proves the policy *would* enforce.
+- [x] Verify the role used by `DATABASE_URL`. If `postgres` superuser via pooler, document and proceed; if a custom role, confirm it has `BYPASSRLS`. **Drizzle connects as `postgres` via the Supabase pooler in session mode (port 5432). `pg_roles` confirms `rolsuper=f, rolbypassrls=t`. `service_role` is also `BYPASSRLS=t`. Both `authenticated` and `anon` are RLS-bound (no bypass) and have full DML grants on every public table — exactly the pre-condition that makes RLS load-bearing.**
+- [x] `drizzle/0003_enable_rls.sql` — for every table in `src/lib/db/schema/` (including `auth.users` extension tables): `ALTER TABLE … ENABLE ROW LEVEL SECURITY`. Idempotent: `ALTER TABLE` is safe to re-run. **Done. `auth.users` is NOT touched (Supabase-managed, only shadowed in our schema as a FK reference).**
+- [x] For each table, write minimum policies: `service_role` → ALL ALLOWED (the Drizzle path); `authenticated` → mirrors current Server Action authz (e.g. for `campaigns`, `staff with team_member_roles → SELECT all`); `anon` → mostly `USING (false)` except specific public-share read paths. **Done. Two policies per table: `<table>_service_role_all` (FOR ALL, USING true) and `<table>_staff_all` (FOR ALL TO authenticated, USING `public.is_staff_member()`). `anon` falls through to default-deny — `/share/coach/[id]` queries via Drizzle (BYPASSRLS), not via PostgREST anon, so no anon read policies are needed today. Helper function `public.is_staff_member()` is `SECURITY DEFINER, STABLE, search_path=''`, returns true iff the calling user has an unarchived `team_member_roles` row.**
+- [x] Apply the migration to dev DB; smoke that **the staff app behaves identically** (every existing test still passes, every page still renders) — proves Drizzle's bypass is intact. **`pnpm db:migrate` applied 0003 cleanly (DROP POLICY IF EXISTS NOTICEs are expected idempotency noise). All 11 public tables verified `rowsecurity=t`. Drizzle connection still returns `campaigns=43, contacts=30, dealers=26` rows. Full unit suite passes 104/104. Browser smoke deferred to /eval.**
+- [x] Vitest integration test (`tests/integration/rls.test.ts`): open a connection as `authenticated` with a forged JWT for user A; query `dealer_contacts` for dealer B; assert 0 rows. Proves the policy *would* enforce. **Done. 4-test suite confirms (1) all 11 tables RLS-enabled, (2) `is_staff_member()` returns false for forged JWT, (3) every RLS table returns 0 rows for forged authenticated user, (4) Drizzle's connection role still has `rolbypassrls=t`. Auto-loads `.env.local` via `process.loadEnvFile()` (Node ≥ 21.7); skipIf-guarded when `DATABASE_URL` is unset.**
 
 #### Phase 2: Per-action role audit
 - [ ] Sweep every export in `src/features/schedule/actions.ts`, `src/features/email/actions.ts`, `src/features/auth/actions.ts` (including 0018 additions).

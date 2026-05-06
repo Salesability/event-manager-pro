@@ -22,6 +22,13 @@
       "when": 1778328000000,
       "tag": "0002_contact_user_backfill_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778414400000,
+      "tag": "0003_enable_rls",
+      "breakpoints": true
     }
   ]
 }
