@@ -87,7 +87,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 3: Email notification
 - [ ] `src/features/intake/email.ts:notifyIntake` — uses existing Resend wrapper to mail Shannon (To = `INTAKE_NOTIFY_TO` env var).
-- [ ] Honor `EMAIL_FORCE_DEV_REDIRECT` per the existing dev-redirect convention.
+- [ ] Honor the dev-redirect convention in `src/lib/email/send.ts` — non-production envs auto-redirect to `EMAIL_DEV_TO` (no opt-in flag). The previous `EMAIL_FORCE_DEV_REDIRECT` was retired in 0019 Phase 7.
 - [ ] Unit test for the template + the dev-redirect path.
 
 #### Phase 4: Staff triage

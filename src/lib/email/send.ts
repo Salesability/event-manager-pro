@@ -20,16 +20,30 @@ function client(): Resend | { error: string } {
   return cached;
 }
 
-// Real-send is the default. The redirect is opt-in via an explicit boolean,
-// so an EMAIL_DEV_TO that accidentally leaks into a production env config
-// can never silently route customer mail to a dev inbox. The APP_ENV guard
-// is a redundant second check — production deploys should set APP_ENV=production
-// AND should not set EMAIL_FORCE_DEV_REDIRECT=true.
-function shouldRedirect(): boolean {
-  if (process.env.APP_ENV === 'production') return false;
-  return (
-    process.env.EMAIL_FORCE_DEV_REDIRECT === 'true' && !!process.env.EMAIL_DEV_TO
-  );
+// Inverted (Phase 7 of 0019): real-send requires explicit APP_ENV=production.
+// Any other environment redirects to EMAIL_DEV_TO if set, or refuses the send
+// if not — so a misconfigured deploy that forgets APP_ENV can never silently
+// real-send to a customer. The previous design (real-send default with
+// opt-in redirect) had the inverse failure mode: a production deploy that
+// accidentally left EMAIL_FORCE_DEV_REDIRECT=true would silently route
+// customer email to a dev inbox. See plan Decision matrix in
+// `docs/designs/0019-security-architecture/plan.md` Phase 7.
+type RedirectDecision =
+  | { redirect: true; to: string }
+  | { redirect: false; reason: 'production' | 'no-dev-target' };
+
+function decideRedirect(): RedirectDecision {
+  // Normalise APP_ENV so `Production`, ` production`, etc. don't accidentally
+  // fall through as non-production and silently redirect to a dev inbox.
+  const appEnv = process.env.APP_ENV?.trim().toLowerCase();
+  if (appEnv === 'production') {
+    return { redirect: false, reason: 'production' };
+  }
+  const devTo = process.env.EMAIL_DEV_TO?.trim();
+  if (!devTo) {
+    return { redirect: false, reason: 'no-dev-target' };
+  }
+  return { redirect: true, to: devTo };
 }
 
 export async function sendEmail(input: SendInput): Promise<SendResult> {
@@ -39,11 +53,18 @@ export async function sendEmail(input: SendInput): Promise<SendResult> {
   const resend = client();
   if ('error' in resend) return resend;
 
+  const decision = decideRedirect();
+  if (!decision.redirect && decision.reason === 'no-dev-target') {
+    return {
+      error:
+        'Email send refused: APP_ENV is not "production" and EMAIL_DEV_TO is not set. Set EMAIL_DEV_TO to redirect, or APP_ENV=production to real-send.',
+    };
+  }
+
   let { to, subject } = input;
-  if (shouldRedirect()) {
-    const devTo = process.env.EMAIL_DEV_TO!;
+  if (decision.redirect) {
     subject = `[DEV→${to}] ${subject}`;
-    to = devTo;
+    to = decision.to;
   }
 
   const { data, error } = await resend.emails.send({

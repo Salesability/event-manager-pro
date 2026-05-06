@@ -1,6 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { requireRole } from '@/lib/auth/require-role';
 import { sendEmail } from '@/lib/email/send';
 import {
@@ -18,12 +17,23 @@ async function requireSenderEmail(): Promise<string | { error: string }> {
   return user.email;
 }
 
-async function siteUrl(): Promise<string> {
-  const headerList = await headers();
-  const host = headerList.get('host') ?? 'localhost:3000';
-  const proto =
-    headerList.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  return `${proto}://${host}`;
+// Canonical origin for share links emailed to coaches/clients. Reads from
+// `process.env.SITE_URL` (operator-configured per deploy) — never from the
+// request `Host` header, which an attacker controlling the proxy could spoof
+// to plant a phishing URL inside an outbound email. Returns `{ error }` if
+// unconfigured so the caller can surface the misconfig instead of falling
+// back to a header. Closes the parked Codex High from
+// `shipped/0011-email-send/eval-2026-05-01-1609.md` ("Share-link email trusts
+// request Host"). The operator-set env var IS the allowlist.
+function siteUrl(): string | { error: string } {
+  const explicit = process.env.SITE_URL?.trim().replace(/\/$/, '');
+  if (!explicit) {
+    return {
+      error:
+        'SITE_URL is not configured. Set it to the canonical origin for this deploy.',
+    };
+  }
+  return explicit;
 }
 
 function parseId(formData: FormData, key: string): number | null {
@@ -42,6 +52,11 @@ export async function sendClientCampaignConfirmation(formData: FormData): Promis
 
   const campaign = await loadCampaign(id);
   if (!campaign) return { error: 'Campaign not found.' };
+  if (campaign.status !== 'booked') {
+    return {
+      error: `Confirmation can only be sent for booked campaigns (current status: ${campaign.status}).`,
+    };
+  }
 
   const to = campaign.email?.trim();
   if (!to) return { error: 'No client email on file for this campaign.' };
@@ -81,6 +96,11 @@ export async function sendCoachCampaignConfirmation(formData: FormData): Promise
 
   const campaign = await loadCampaign(id);
   if (!campaign) return { error: 'Campaign not found.' };
+  if (campaign.status !== 'booked') {
+    return {
+      error: `Confirmation can only be sent for booked campaigns (current status: ${campaign.status}).`,
+    };
+  }
   if (!campaign.coachId) return { error: 'No coach assigned to this campaign.' };
 
   const coach = await loadCoach(campaign.coachId);
@@ -125,7 +145,9 @@ export async function sendCoachShareLinkEmail(formData: FormData): Promise<Actio
     .filter((c) => c.coachId === id && c.status !== 'cancelled' && c.endDate >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-  const shareUrl = `${await siteUrl()}/share/coach/${coach.id}`;
+  const origin = siteUrl();
+  if (typeof origin !== 'string') return origin;
+  const shareUrl = `${origin}/share/coach/${coach.id}`;
 
   const { subject, text } = coachShareLink({
     coachFirstName: coach.firstName,

@@ -45,7 +45,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | 4: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Done | 7a187cd |
 | 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
 | 6: MFA enablement (Supabase project toggle + UI affordance) | Parked | - |
-| 7: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
+| 7: Email-send hardening (fold in parked Codex findings from 0011) | Done | - |
 | 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
 
 ## Code Anchors
@@ -70,7 +70,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 67% (4/6 active phases — Phases 5 + 6 parked 2026-05-06)
+**Overall Progress:** 83% (5/6 active phases — Phases 5 + 6 parked 2026-05-06)
 
 **Phase 3 added (2026-05-06).** Inserted after Phase 2 to close Codex High #1 from `eval-2026-05-06-0922.md` — the per-action role audit gates `*AvailabilityBlock` to `['admin','coach']` but doesn't enforce per-row ownership, so a coach could mutate any block (statutory holiday, company closure, another coach's time off). Phases 3-7 of the original plan bumped to 4-8.
 
@@ -132,11 +132,11 @@ Closes Codex High #1 from `eval-2026-05-06-0922.md`. The Phase 2 role gate `requ
 - [ ] Smoke (web-test): `goto /account/mfa` (gated); QR + verification field render. **Don't actually enroll** — that mutates real auth state.
 
 #### Phase 7: Email-send hardening
-- [ ] Address parked Codex findings from `shipped/0011-email-send/eval-2026-05-01-1609.md`:
-  - **Host-header allowlist** — `siteUrl()` (`src/features/email/actions.ts:21`) currently builds the URL from request headers; an attacker controlling `Host` can redirect coach links. Replace with `process.env.NEXT_PUBLIC_SITE_URL` allowlisted to known origins.
-  - **Status check before send** — `sendClientCampaignConfirmation` and `sendCoachCampaignConfirmation` don't check `campaign.status` before emailing; rejected/cancelled campaigns can be replayed. Reject anything except `booked`.
-  - **`EMAIL_FORCE_DEV_REDIRECT=true` flag** — invert the dev-redirect logic so production explicitly opts out of redirection rather than implicitly opting in via `APP_ENV`.
-- [ ] Vitest tests for each.
+- [x] Address parked Codex findings from `shipped/0011-email-send/eval-2026-05-01-1609.md`:
+  - **Host-header allowlist** — `siteUrl()` (`src/features/email/actions.ts:21`) currently builds the URL from request headers; an attacker controlling `Host` can redirect coach links. Replace with `process.env.NEXT_PUBLIC_SITE_URL` allowlisted to known origins. **Done.** Replaced with `process.env.SITE_URL` (already wired for OAuth callbacks); removed the `headers()` import. The operator-set env var IS the allowlist — no header fallback, no implicit allowlist in code. `siteUrl()` returns `{ error }` if unset so the caller surfaces the misconfig instead of silently falling back. (Used `SITE_URL` rather than `NEXT_PUBLIC_SITE_URL` because the call site is server-only; no client-bundle exposure needed.)
+  - **Status check before send** — `sendClientCampaignConfirmation` and `sendCoachCampaignConfirmation` don't check `campaign.status` before emailing; rejected/cancelled campaigns can be replayed. Reject anything except `booked`. **Done.** Both actions now reject with `Confirmation can only be sent for booked campaigns (current status: ${status}).` for any non-booked campaign.
+  - **`EMAIL_FORCE_DEV_REDIRECT=true` flag** — invert the dev-redirect logic so production explicitly opts out of redirection rather than implicitly opting in via `APP_ENV`. **Done.** `lib/email/send.ts` now defaults to redirect-or-refuse for any non-production env: `APP_ENV=production` → real-send (no redirect possible); non-production with `EMAIL_DEV_TO` set → redirect; non-production without `EMAIL_DEV_TO` → refuse the send (rather than risk silently real-sending from a misconfigured env). The `EMAIL_FORCE_DEV_REDIRECT` flag is no longer consulted; `.env.example` and `.env.local` updated. **APP_ENV normalised to `.trim().toLowerCase()` (in-eval after Codex Medium) so case/whitespace variants like `Production` or ` production ` don't fall through to non-prod.** The 0016-book-your-event-intake plan still referenced the retired flag — fixed in-eval.
+- [x] Vitest tests for each. **Done.** `src/lib/email/send.test.ts` covers 9 cases for the inverted redirect matrix (production real-send, production-ignores-DEV_TO, non-prod-with-DEV_TO redirects, APP_ENV-unset behaves as non-prod, non-prod-without-DEV_TO refuses, no APP_ENV/no DEV_TO refuses, Resend error verbatim, missing FROM_EMAIL refused, **+ APP_ENV case/whitespace normalisation in-eval**). `src/features/email/actions.test.ts` covers 9 cases: status gate (cancelled/draft/completed reject + booked passes for both client + coach confirmations) and SITE_URL allowlist (refuse when unset; verbatim when set; trailing-slash strip — both **now assert the literal `shareUrl` arg passed to the template, in-eval after Codex Low**, instead of relying on visual review).
 
 #### Phase 8: Wiki updates + verification
 - [ ] Rewrite `docs/wiki/auth.md` — RBAC section reflects `requireRole(role)`; add a "Defence in Depth" section describing the RLS layer and the `audit_log`.
