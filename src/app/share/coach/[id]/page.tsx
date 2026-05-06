@@ -41,7 +41,7 @@ export default async function CoachSharePage({ params }: Props) {
       <header className="bg-navy px-8 py-4">
         <div className="mx-auto flex max-w-[1440px] items-center gap-3 text-white">
           <Image
-            src="/saleday-logo.jpg"
+            src="/saledayevents-logo.jpg"
             alt="SaleDay Events — Automotive Marketing"
             width={246}
             height={155}

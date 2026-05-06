@@ -22,7 +22,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-stone-200 bg-white p-8 shadow-[0_8px_32px_rgba(15,30,60,0.18)]">
         <div className="flex flex-col items-center gap-3 text-center">
           <Image
-            src="/saleday-logo.jpg"
+            src="/saledayevents-logo.jpg"
             alt="SaleDay Events — Automotive Marketing"
             width={246}
             height={155}
