@@ -6,7 +6,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist | Pending | - |
+| 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist | Done | - |
 | 2: Backfill — assign `dealer` to existing roleless contacts with a dealer link | Pending | - |
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Pending | - |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Pending | - |
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
 - `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 17% (1/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -44,12 +44,13 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Schema — add `dealer` to `team_member_role` enum + parser whitelist
-- [ ] Add `'dealer'` to the `teamMemberRole` pgEnum literal at `src/lib/db/schema/team-member-roles.ts:5-10`
-- [ ] Generate (or hand-write, matching `0003_enable_rls.sql` style) `drizzle/0004_team_member_role_add_dealer.sql` containing `ALTER TYPE team_member_role ADD VALUE IF NOT EXISTS 'dealer';`
-- [ ] Extend `V1_TEAM_ROLES` in `src/features/people/actions.ts:27` to `['admin', 'coach', 'dealer']`
-- [ ] Update `parseRolesField` error copy (line 93) to reflect the new whitelist
-- [ ] Update `syncTeamMemberRoles` (line ~203) and the desired-roles diffing logic so a `dealer` row participates in the upsert/archive cycle alongside `admin`/`coach`
-- [ ] Tsc + lint clean; existing people-admin unit tests still pass
+- [x] Add `'dealer'` to the `teamMemberRole` pgEnum literal at `src/lib/db/schema/team-member-roles.ts:5-10`. **Done.**
+- [x] Generate (or hand-write, matching `0003_enable_rls.sql` style) `drizzle/0004_team_member_role_add_dealer.sql` containing `ALTER TYPE team_member_role ADD VALUE IF NOT EXISTS 'dealer';`. **Done — actual filename `drizzle/0005_team_member_role_add_dealer.sql`.** The plan's assumed `0004_*` was already taken by 0019 Phase 4 (`0004_worthless_titanium_man.sql`); bumped to 0005. `IF NOT EXISTS` clause hand-added to the drizzle-kit-generated `ALTER TYPE` for idempotency. Journal entry's `tag` updated from the auto-generated `0005_woozy_kabuki` and `when` bumped past 0004's so the migrate runner picks it up. Applied cleanly to dev DB; `select enumlabel from pg_enum where enumtypid='public.team_member_role'::regtype` returns 5 values including `dealer`.
+- [x] Extend `V1_TEAM_ROLES` in `src/features/people/actions.ts:27` to `['admin', 'coach', 'dealer']`. **Done.**
+- [x] Update `parseRolesField` error copy (line 93) to reflect the new whitelist. **Done — "admin, coach, dealer only".** The matching unit test in `src/features/people/actions.test.ts:167` updated in the same pass.
+- [x] Update `syncTeamMemberRoles` (line ~203) and the desired-roles diffing logic so a `dealer` row participates in the upsert/archive cycle alongside `admin`/`coach`. **Done implicitly** — the `(V1_TEAM_ROLES as readonly string[]).includes(r.role)` filter at the archive step now treats `dealer` as a v1 role, so dealer rows participate in the diff. `staff` and `viewer` rows still skip archiving as before. **Note for Phase 2 sequencing:** until Phase 3's UI checkbox lands, `parseRolesField` returns at most `['admin', 'coach']` from the form; if Phase 2 backfills dealer rows BEFORE Phase 3 ships the checkbox, an admin saving a dealer-side person would archive the freshly-backfilled dealer row. Mitigation: ship Phase 3 (UI) before Phase 2 (backfill), or ship the trio (1+2+3) in close succession. **Also surfaced:** `src/lib/auth/load-team-membership.ts:8` had a hand-written `TeamMemberRole = 'admin' | 'staff' | 'coach' | 'viewer'` union that didn't include `dealer`; widened in the same pass.
+- [x] **Codex High fixed in-eval — `dealer` aliased to staff in `is_staff_member()` and `requireStaffAccess()`.** Adding `dealer` to the enum without filtering it out of the staff-app role set meant a dealer-only `team_member_roles` row would have passed `requireStaffAccess()` (route gate), the auth callback's role check (so they'd land on `/calendar`), AND `is_staff_member()` in the SQL helper — meaning RLS's `<table>_staff_all` policy would return all rows to a dealer-side user. Closed by: (1) new exported `STAFF_APP_ROLES = ['admin','staff','coach','viewer']` constant + `isStaffAppRole()` helper in `src/lib/auth/load-team-membership.ts`; (2) `requireStaffAccess()` now checks `membership.roles.some(isStaffAppRole)` instead of `roles.length > 0`; (3) `src/app/auth/callback/route.ts` mirrors the same filter; (4) new `drizzle/0006_is_staff_member_excludes_dealer.sql` rewrites the SQL helper with a `tmr.role IN ('admin','staff','coach','viewer')` whitelist. Applied to dev DB; verified `is_staff_member()` returns false for a forged user with no rows. **New regression guard test** in `src/app/auth/callback/route.test.ts` asserts a `roles=['dealer']` user lands on `/auth/auth-error?reason=Portal+not+yet+available`, not the staff app. Now 145/145 vitest.
+- [x] Tsc + lint clean; existing people-admin unit tests still pass. **144/144 vitest, tsc clean, lint clean (4 pre-existing warnings).**
 
 #### Phase 2: Backfill — assign `dealer` role to existing roleless contacts with a dealer link
 - [ ] Write `scripts/backfill-dealer-role.ts` (anchored on `scripts/calendar-clamp-smoke.ts`): for every `contacts.id` that has a non-archived `dealer_contacts` row AND zero non-archived `team_member_roles` rows, insert `team_member_roles(role='dealer', specialty=null, createdById=<system actor>, updatedById=<system actor>)`

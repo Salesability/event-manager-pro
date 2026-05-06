@@ -19,6 +19,8 @@ vi.mock('@/lib/supabase/session', () => ({ getUser: mocks.getUser }));
 
 vi.mock('@/lib/auth/load-team-membership', () => ({
   loadCurrentMembership: mocks.loadCurrentMembership,
+  isStaffAppRole: (role: string) =>
+    ['admin', 'staff', 'coach', 'viewer'].includes(role),
 }));
 
 import { GET } from './route';
@@ -85,6 +87,22 @@ describe('/auth/callback role-aware routing', () => {
     mocks.loadCurrentMembership.mockResolvedValue({
       contactId: 9,
       roles: [],
+      coachContactId: null,
+      hasDealerContact: true,
+    });
+    const res = await GET(makeRequest({ code: 'abc' }));
+    expect(res.headers.get('location')).toContain(
+      '/auth/auth-error?reason=Portal+not+yet+available',
+    );
+  });
+
+  it('only `dealer` role → does NOT land on the staff app (0023 regression guard)', async () => {
+    // Closes the Codex High from 0023 Phase 1: a contact whose only
+    // team_member_roles row is `dealer` is them-side, must not pass the
+    // staff-app gate.
+    mocks.loadCurrentMembership.mockResolvedValue({
+      contactId: 12,
+      roles: ['dealer'],
       coachContactId: null,
       hasDealerContact: true,
     });

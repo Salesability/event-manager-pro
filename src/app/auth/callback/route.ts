@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
+import {
+  isStaffAppRole,
+  loadCurrentMembership,
+} from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/supabase/session';
@@ -42,7 +45,10 @@ export async function GET(request: NextRequest) {
   }
 
   const membership = await loadCurrentMembership();
-  if (membership && membership.roles.length > 0) {
+  // `dealer` rows are excluded so a dealer-only person doesn't accidentally
+  // land on the staff app — see require-staff-access.ts for the matching
+  // filter, drizzle/0006_*.sql for the matching SQL `is_staff_member()`.
+  if (membership && membership.roles.some(isStaffAppRole)) {
     return NextResponse.redirect(new URL(next, url));
   }
 

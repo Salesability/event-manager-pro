@@ -5,7 +5,24 @@ import { db } from '@/lib/db';
 import { contacts, dealerContacts, teamMemberRoles } from '@/lib/db/schema';
 import { getUser } from '@/lib/supabase/session';
 
-export type TeamMemberRole = 'admin' | 'staff' | 'coach' | 'viewer';
+export type TeamMemberRole = 'admin' | 'staff' | 'coach' | 'viewer' | 'dealer';
+
+// Roles that grant staff-app access. `dealer` is deliberately excluded — a
+// person with the `dealer` role is them-side (a contact at a dealership), not
+// us-side, and must not pass `requireStaffAccess()` or land on the staff app
+// from the auth callback. Mirrored in the SQL `is_staff_member()` helper
+// (drizzle/0006_is_staff_member_excludes_dealer.sql) so RLS policies and the
+// app-layer gate agree on what "staff" means.
+export const STAFF_APP_ROLES: readonly TeamMemberRole[] = [
+  'admin',
+  'staff',
+  'coach',
+  'viewer',
+];
+
+export function isStaffAppRole(role: TeamMemberRole): boolean {
+  return (STAFF_APP_ROLES as readonly string[]).includes(role);
+}
 
 export type CurrentMembership = {
   contactId: number;

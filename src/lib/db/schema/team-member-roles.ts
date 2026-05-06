@@ -7,6 +7,7 @@ export const teamMemberRole = pgEnum('team_member_role', [
   'staff',
   'coach',
   'viewer',
+  'dealer',
 ]);
 
 export const teamMemberRoles = pgTable(

@@ -164,7 +164,7 @@ describe('createPerson', () => {
     fd.set('email', 'tilley@example.test');
     fd.append('roles', 'staff');
     expect(await createPerson(fd)).toEqual({
-      error: "Role 'staff' is not selectable in v1 (admin and coach only).",
+      error: "Role 'staff' is not selectable in v1 (admin, coach, dealer only).",
     });
   });
 

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."team_member_role" ADD VALUE 'dealer';

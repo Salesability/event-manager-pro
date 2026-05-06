@@ -24,8 +24,11 @@ type ActionResult =
   | { error: string };
 
 // V1 us-side roles surfaced in the UI. `staff` and `viewer` stay reserved per
-// the 0018 plan decision (auth.md "v1 wired roles").
-const V1_TEAM_ROLES = ['admin', 'coach'] as const;
+// the 0018 plan decision (auth.md "v1 wired roles"). `dealer` was added by
+// 0023 Phase 1 to gate the Dealers section in the Person edit dialog and to
+// keep the "every contact has a role" invariant truthful for dealer-side
+// staff (who previously had no team_member_roles row at all).
+const V1_TEAM_ROLES = ['admin', 'coach', 'dealer'] as const;
 type V1TeamRole = (typeof V1_TEAM_ROLES)[number];
 
 const DEALER_CONTACT_ROLES = ['customer', 'staff', 'prospect'] as const;
@@ -91,7 +94,9 @@ function parseRolesField(formData: FormData): V1TeamRole[] | { error: string } {
   const raw = formData.getAll('roles').map((v) => String(v));
   for (const r of raw) {
     if (!V1_TEAM_ROLES.includes(r as V1TeamRole)) {
-      return { error: `Role '${r}' is not selectable in v1 (admin and coach only).` };
+      return {
+        error: `Role '${r}' is not selectable in v1 (admin, coach, dealer only).`,
+      };
     }
   }
   return Array.from(new Set(raw)) as V1TeamRole[];

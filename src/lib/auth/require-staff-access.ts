@@ -1,6 +1,9 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
-import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
+import {
+  isStaffAppRole,
+  loadCurrentMembership,
+} from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { getUser } from '@/lib/supabase/session';
 
@@ -19,8 +22,13 @@ export async function requireStaffAccess() {
   // before any `team_member_roles` row exists (bootstrap path).
   if (isAdmin(user)) return user;
 
+  // Filter out `dealer` rows: a dealer-only person is them-side and must NOT
+  // land on the staff app. Closes the 0023 Phase 1 Codex High where adding
+  // `dealer` to the enum would have aliased dealer rows as staff via the
+  // earlier `roles.length > 0` check.
   const membership = await loadCurrentMembership();
-  if (!membership || membership.roles.length === 0) {
+  const hasStaffRole = membership?.roles.some(isStaffAppRole) ?? false;
+  if (!hasStaffRole) {
     const reason = membership?.hasDealerContact
       ? 'Portal not yet available'
       : 'Account not provisioned';

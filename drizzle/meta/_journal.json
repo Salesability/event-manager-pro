@@ -36,6 +36,20 @@
       "when": 1778500800000,
       "tag": "0004_worthless_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778587200000,
+      "tag": "0005_team_member_role_add_dealer",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778590800000,
+      "tag": "0006_is_staff_member_excludes_dealer",
+      "breakpoints": true
     }
   ]
 }
