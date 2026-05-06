@@ -15,7 +15,10 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
+import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
+import { isAdmin } from '@/lib/auth/require-admin';
 import { requireRole } from '@/lib/auth/require-role';
+import { ensureAvailabilityOwnership } from './availability-authz';
 import {
   field,
   parseCampaignInput,
@@ -529,12 +532,16 @@ async function validateAvailabilityCoach(input: AvailabilityInput): Promise<Acti
 }
 
 export async function createAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'coach'])).id;
+  const user = await requireRole(['admin', 'coach']);
+  const userId = user.id;
 
   const input = parseAvailabilityInput(formData);
   if ('error' in input) return input;
   const coachError = await validateAvailabilityCoach(input);
   if (coachError) return coachError;
+
+  const ownsErr = await ensureAvailabilityOwnership(user, input);
+  if (ownsErr) return ownsErr;
 
   await db.insert(availabilityBlocks).values({
     ...input,
@@ -548,7 +555,9 @@ export async function createAvailabilityBlock(formData: FormData): Promise<Actio
 }
 
 export async function updateAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'coach'])).id;
+  const user = await requireRole(['admin', 'coach']);
+  const userId = user.id;
+  const userIsAdmin = isAdmin(user);
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid availability block id.' };
@@ -557,10 +566,37 @@ export async function updateAvailabilityBlock(formData: FormData): Promise<Actio
   const coachError = await validateAvailabilityCoach(input);
   if (coachError) return coachError;
 
+  let myCoachId: number | null = null;
+  if (!userIsAdmin) {
+    myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
+    const [existing] = await db
+      .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
+      .from(availabilityBlocks)
+      .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+      .limit(1);
+    if (!existing) return { error: 'Availability block not found.' };
+    const ownsErr = await ensureAvailabilityOwnership(user, existing, input);
+    if (ownsErr) return ownsErr;
+  }
+
+  // Non-admins also constrain the UPDATE's WHERE on kind + coach_id, so a
+  // concurrent admin transfer of the block between the ownership check and
+  // the write doesn't get clobbered. `myCoachId` is non-null on the non-admin
+  // branch — `ensureAvailabilityOwnership` would have returned an error first.
+  const where =
+    userIsAdmin
+      ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
+      : and(
+          eq(availabilityBlocks.id, id),
+          isNull(availabilityBlocks.archivedAt),
+          eq(availabilityBlocks.kind, 'coach_unavailable'),
+          eq(availabilityBlocks.coachId, myCoachId!),
+        );
+
   const result = await db
     .update(availabilityBlocks)
     .set({ ...input, updatedById: userId })
-    .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+    .where(where)
     .returning({ id: availabilityBlocks.id });
   if (!result.length) return { error: 'Availability block not found.' };
 
@@ -569,15 +605,42 @@ export async function updateAvailabilityBlock(formData: FormData): Promise<Actio
 }
 
 export async function archiveAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'coach'])).id;
+  const user = await requireRole(['admin', 'coach']);
+  const userId = user.id;
+  const userIsAdmin = isAdmin(user);
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid availability block id.' };
 
+  let myCoachId: number | null = null;
+  if (!userIsAdmin) {
+    myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
+    const [existing] = await db
+      .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
+      .from(availabilityBlocks)
+      .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+      .limit(1);
+    if (!existing) return { error: 'Availability block not found.' };
+    const ownsErr = await ensureAvailabilityOwnership(user, existing);
+    if (ownsErr) return ownsErr;
+  }
+
+  // See updateAvailabilityBlock: non-admin archive WHERE pins kind + coach_id
+  // to close the TOCTOU window between the ownership check and the write.
+  const where =
+    userIsAdmin
+      ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
+      : and(
+          eq(availabilityBlocks.id, id),
+          isNull(availabilityBlocks.archivedAt),
+          eq(availabilityBlocks.kind, 'coach_unavailable'),
+          eq(availabilityBlocks.coachId, myCoachId!),
+        );
+
   await db
     .update(availabilityBlocks)
     .set({ archivedAt: new Date(), updatedById: userId })
-    .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)));
+    .where(where);
 
   revalidateAvailabilityViews();
   return { ok: true };

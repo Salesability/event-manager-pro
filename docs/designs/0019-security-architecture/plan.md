@@ -41,11 +41,12 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 |-------|--------|--------|
 | 1: RLS-baseline migration — enable RLS + minimum policies for `service_role` / `authenticated` / `anon` on every table | Done | ae3dbe3 |
 | 2: Per-action role audit — sweep every Server Action for the right `requireRole(...)` | Done | 04ad552 |
-| 3: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Pending | - |
-| 4: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
-| 5: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
-| 6: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
-| 7: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
+| 3: Coach availability ownership check — row-level "their own block" gate on `*AvailabilityBlock` actions | Done | - |
+| 4: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Pending | - |
+| 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
+| 6: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
+| 7: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
+| 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
 
 ## Code Anchors
 
@@ -69,9 +70,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 33% (2/6 active phases — Phase 4 parked 2026-05-06)
+**Overall Progress:** 43% (3/7 active phases — Phase 5 parked 2026-05-06)
 
-**Phase 4 parked (2026-05-06).** The `'server-only'` import already throws at build time when a Client Component imports a server module — that's the primary defence. The proposed `secrets-boundary.test.ts` (build the app, grep `.next/static/` for known-secret prefixes) is genuine belt-and-suspenders, but slow (full `pnpm build` per test run) and low marginal value vs. the cost of maintaining it. Revisit if a regression slips past `'server-only'` in practice, or before public launch / external audit.
+**Phase 3 added (2026-05-06).** Inserted after Phase 2 to close Codex High #1 from `eval-2026-05-06-0922.md` — the per-action role audit gates `*AvailabilityBlock` to `['admin','coach']` but doesn't enforce per-row ownership, so a coach could mutate any block (statutory holiday, company closure, another coach's time off). Phases 3-7 of the original plan bumped to 4-8.
+
+**Phase 5 parked (2026-05-06).** The `'server-only'` import already throws at build time when a Client Component imports a server module — that's the primary defence. The proposed `secrets-boundary.test.ts` (build the app, grep `.next/static/` for known-secret prefixes) is genuine belt-and-suspenders, but slow (full `pnpm build` per test run) and low marginal value vs. the cost of maintaining it. Revisit if a regression slips past `'server-only'` in practice, or before public launch / external audit.
 
 **Note:**
 - **No existing Server Action is rewritten by this plan.** Phase 2's "role audit" identifies *which* `requireUserId()` should become `requireRole('admin')`, but the change is a 3-character edit per call site, not a refactor.
@@ -100,32 +103,40 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Edit each action's first 3 lines accordingly. Document the decision matrix in `docs/wiki/auth.md` (added in Phase 7). **Edits applied across `src/features/schedule/actions.ts`, `src/features/email/actions.ts`, `src/features/people/actions.ts`, `src/app/(app)/admin/lookups/page.tsx`, `src/app/(app)/admin/people/page.tsx`. Wiki update parked for Phase 7 per checklist.**
 - [x] Vitest tests for the new `requireRole(role)` helper (admin → ok; coach → ok for `'coach'`; coach → throws for `'admin'`; signed-in non-roled → throws for any role). **Done. `src/lib/auth/require-role.test.ts` covers 8 cases including not-signed-in (`/login`), admin via JWT fast-path (no DB hit), admin in a multi-role list, coach via membership lookup, coach denied for admin-only, no membership row → `/`, role intersection misses → `/`. People actions test mock updated to mock `@/lib/auth/require-role` (the new boundary).**
 
-#### Phase 3: `audit_log` + `recordAudit()`
+#### Phase 3: Coach availability ownership check
+Closes Codex High #1 from `eval-2026-05-06-0922.md`. The Phase 2 role gate `requireRole(['admin','coach'])` on `*AvailabilityBlock` lets a non-admin coach mutate any block (statutory holiday, company closure, another coach's `coach_unavailable`). The plan example envisioned "coach on their own block"; that ownership invariant is missing. Today's production user set is admin-only so the practical risk is zero, but the gap would manifest the day a non-admin coach is provisioned. Folding it into 0019 since it's a single-feature follow-on to Phase 2.
+- [x] Helper `ensureAvailabilityOwnership(user, ...facets)` in `src/features/schedule/availability-authz.ts` (extracted to its own module so the helper is testable without `'use server'` constraints). Admin → returns null (no DB hit). Non-admin → loads `loadCurrentMembership()` (already request-cached); requires `coachContactId != null`; every facet must have `kind === 'coach_unavailable'` AND `coachId === coachContactId`. Returns `{ error: 'You can only modify your own availability.' }` on any miss.
+- [x] `createAvailabilityBlock`: now grabs `user` from `requireRole`; calls `ensureAvailabilityOwnership(user, input)` after the existing `validateAvailabilityCoach` check, before insert.
+- [x] `updateAvailabilityBlock`: when `!isAdmin(user)`, loads `existing` (`kind, coachId`) by id and calls `ensureAvailabilityOwnership(user, existing, input)`. Both facets must pass — prevents both "modify someone else's block" and "transfer ownership of own block by changing input.coachId." Admin path skips the extra read. **The non-admin UPDATE's WHERE also pins `kind = 'coach_unavailable'` AND `coach_id = myCoachId` (added in-eval after Codex Medium TOCTOU finding) so a concurrent admin transfer between the ownership check and the write doesn't get clobbered.**
+- [x] `archiveAvailabilityBlock`: when `!isAdmin(user)`, loads `existing` and calls `ensureAvailabilityOwnership(user, existing)`. Admin path skips the extra read. **Same TOCTOU-hardened WHERE clause for the non-admin path (in-eval fix).**
+- [x] Vitest tests in `src/features/schedule/availability-authz.test.ts` (9 cases): admin always allowed (no membership lookup); admin allowed across mixed facets; coach own → pass; coach other-coach input → denied; coach holiday/closure → denied; update path with existing-OK + input-transfers-ownership → denied; update path with existing-foreign + input-mine → denied; user with `coachContactId === null` → denied; null membership → denied.
+
+#### Phase 4: `audit_log` + `recordAudit()`
 - [ ] `src/lib/db/schema/audit-log.ts` — table with `id`, `occurredAt`, `actorUserId`, `actorRole` (denormalised at write time), `action` (enum: `user.role_changed | user.deactivated | coach.archived | dealer.archived | campaign.cancelled`), `targetTable` (text), `targetId` (bigint), `payload` (jsonb).
 - [ ] `pnpm db:generate` → review → commit `drizzle/0004_audit_log.sql`.
 - [ ] `src/features/audit/actions.ts:recordAudit({ action, targetTable, targetId, payload })` — `'server-only'` import; reads current user via existing helpers; writes a row.
 - [ ] Wire `recordAudit()` into: `setUserRoles`, `deactivateUser` (0018 P1); `archiveCoach`, `archiveDealer`, `cancelCampaign` (existing).
 - [ ] Vitest test for `recordAudit()` happy path + the 5 wired actions emit rows of the right shape.
 
-#### Phase 4: Boundary-discipline checks
+#### Phase 5: Boundary-discipline checks
 - [ ] Verify `'server-only'` import is present in: `src/lib/supabase/admin.ts` (0018 P1), `src/lib/db/index.ts`, `src/features/audit/actions.ts`, `src/lib/email/send.ts`. Add where missing.
 - [ ] `tests/integration/secrets-boundary.test.ts` — build the app (`pnpm build`), then grep `.next/static/` for known-secret strings (`SUPABASE_SERVICE_ROLE_KEY`'s first 12 chars, `RESEND_API_KEY`'s prefix, `DATABASE_URL` host). Fails if any are found.
 - [ ] Document the test in `docs/wiki/conventions.md`.
 
-#### Phase 5: MFA enablement
+#### Phase 6: MFA enablement
 - [ ] Supabase project: enable TOTP factor at the Auth Settings level.
 - [ ] `src/app/(app)/account/mfa/page.tsx` — Server Component, "Set up MFA" affordance. Calls `supabase.auth.mfa.enroll({ factorType: 'totp' })`, displays QR + secret, accepts the verification code.
 - [ ] Anchor: `src/app/login/page.tsx:1` (sibling auth-flow page).
 - [ ] Smoke (web-test): `goto /account/mfa` (gated); QR + verification field render. **Don't actually enroll** — that mutates real auth state.
 
-#### Phase 6: Email-send hardening
+#### Phase 7: Email-send hardening
 - [ ] Address parked Codex findings from `shipped/0011-email-send/eval-2026-05-01-1609.md`:
   - **Host-header allowlist** — `siteUrl()` (`src/features/email/actions.ts:21`) currently builds the URL from request headers; an attacker controlling `Host` can redirect coach links. Replace with `process.env.NEXT_PUBLIC_SITE_URL` allowlisted to known origins.
   - **Status check before send** — `sendClientCampaignConfirmation` and `sendCoachCampaignConfirmation` don't check `campaign.status` before emailing; rejected/cancelled campaigns can be replayed. Reject anything except `booked`.
   - **`EMAIL_FORCE_DEV_REDIRECT=true` flag** — invert the dev-redirect logic so production explicitly opts out of redirection rather than implicitly opting in via `APP_ENV`.
 - [ ] Vitest tests for each.
 
-#### Phase 7: Wiki updates + verification
+#### Phase 8: Wiki updates + verification
 - [ ] Rewrite `docs/wiki/auth.md` — RBAC section reflects `requireRole(role)`; add a "Defence in Depth" section describing the RLS layer and the `audit_log`.
 - [ ] Update `docs/wiki/conventions.md:17-18` to describe the *current* state accurately (Drizzle bypasses RLS via service-role; supabase-js path is reserved for the portal) and reference this plan as where the alignment was restored.
 - [ ] Add `docs/wiki/security.md` (new) — single page describing: the five layers, the threat model the staff app assumes, the threat model the portal will assume, where each control lives in the codebase, what to grep when investigating an incident.
@@ -142,5 +153,5 @@ For each new file or method below, the builder reads the anchor first and matche
 - **DB encryption at rest beyond Supabase defaults.** Supabase Postgres is encrypted at rest by the provider; we don't add column-level encryption.
 - **Pen-testing or external audit.** Worth doing before public launch; not in scope here.
 - **Rate limiting.** The `/book-your-event` public form (parked at `0016-book-your-event-intake`) needs it; covered there.
-- **Audit-log UI.** Phase 3 writes rows; reading them via an admin UI is a follow-up.
+- **Audit-log UI.** Phase 4 writes rows; reading them via an admin UI is a follow-up.
 - **Per-row encryption for invoices/payments** (line 95 of port-migration: Quote → Contract → Invoice → Payment). When payment data lands, that gets its own threat model.
