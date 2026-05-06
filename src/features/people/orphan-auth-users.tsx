@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
@@ -67,6 +67,11 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
   );
 }
 
+type AdoptState =
+  | { ok: true; contactId?: number; warning?: string }
+  | { error: string }
+  | null;
+
 function AdoptForm({
   orphan,
   onSuccess,
@@ -75,42 +80,32 @@ function AdoptForm({
   onSuccess: () => void;
 }) {
   const router = useRouter();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [pending, startTransition] = useTransition();
+  const [state, formAction, pending] = useActionState<AdoptState, FormData>(
+    async (_prev, fd) => adoptOrphanAuthUser(fd),
+    null,
+  );
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error('First and last name are both required.');
-      return;
+  useEffect(() => {
+    if (!state) return;
+    if ('ok' in state) {
+      toast.success('Adopted');
+      router.refresh();
+      onSuccess();
+    } else {
+      toast.error(state.error);
     }
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('userId', orphan.userId);
-      fd.set('firstName', firstName.trim());
-      fd.set('lastName', lastName.trim());
-      if (orphan.email) fd.set('email', orphan.email);
-      const result = await adoptOrphanAuthUser(fd);
-      if ('ok' in result) {
-        toast.success('Adopted');
-        router.refresh();
-        onSuccess();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
+  }, [state, router, onSuccess]);
 
   return (
-    <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
+    <form action={formAction} className="mt-4 flex flex-col gap-3">
+      <input type="hidden" name="userId" value={orphan.userId} />
+      {orphan.email && <input type="hidden" name="email" value={orphan.email} />}
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
           First name
           <input
             type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
+            name="firstName"
             className={inputClass}
             autoFocus
             required
@@ -118,13 +113,7 @@ function AdoptForm({
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
           Last name
-          <input
-            type="text"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className={inputClass}
-            required
-          />
+          <input type="text" name="lastName" className={inputClass} required />
         </label>
       </div>
       {orphan.email && (

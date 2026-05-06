@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/toaster';
 import {
@@ -65,8 +65,7 @@ export function LookupAdmin({
   const router = useRouter();
   const [renamed, setRenamed] = useState<Record<number, string>>({});
   const [archivedIds, setArchivedIds] = useState<Set<number>>(() => new Set());
-  const [label, setLabel] = useState('');
-  const [pending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const rows = useMemo(
     () =>
@@ -80,29 +79,32 @@ export function LookupAdmin({
     router.refresh();
   }
 
-  function onAdd(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextLabel = label.trim();
-    if (!nextLabel) {
-      toast.error('Label is required.');
-      return;
-    }
-
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('label', nextLabel);
+  type AddState = { ok: true } | { error: string } | null;
+  const [addState, addAction, pending] = useActionState<AddState, FormData>(
+    async (_prev, fd) => {
       const result = await config.createAction(fd);
       if ('ok' in result) {
-        toast.success(`${config.title.slice(0, -1)} added`);
-        setLabel('');
+        // Drop any optimistic mutations that the upcoming router.refresh()
+        // would superscede — server is now the source of truth again.
         setArchivedIds(new Set());
         setRenamed({});
-        refresh();
-      } else {
-        toast.error(result.error);
       }
-    });
-  }
+      return result;
+    },
+    null,
+  );
+
+  useEffect(() => {
+    if (!addState) return;
+    if ('ok' in addState) {
+      toast.success(`${config.title.slice(0, -1)} added`);
+      formRef.current?.reset();
+      refresh();
+    } else {
+      toast.error(addState.error);
+    }
+    // refresh + config are stable for the lifetime of this component instance.
+  }, [addState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section
@@ -119,11 +121,9 @@ export function LookupAdmin({
         </span>
       </div>
 
-      <form onSubmit={onAdd} className="mt-3 flex gap-2">
+      <form ref={formRef} action={addAction} className="mt-3 flex gap-2">
         <input
           name="label"
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
           className={`${inputClass} flex-1`}
           placeholder={config.addLabel}
           maxLength={120}

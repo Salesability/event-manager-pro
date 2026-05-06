@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/toaster';
 import {
@@ -9,6 +9,8 @@ import {
   updateAvailabilityBlock,
 } from '@/features/schedule/actions';
 import type { AvailabilityBlock, Coach } from '@/features/schedule/queries';
+
+type CreateState = { ok: true } | { error: string } | null;
 
 type AvailabilityKind = AvailabilityBlock['kind'];
 
@@ -53,7 +55,6 @@ export function AvailabilityAdmin({
   const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft, startDate: defaultStartDate }));
   const [archivedIds, setArchivedIds] = useState<Set<number>>(() => new Set());
   const [overrides, setOverrides] = useState<Record<number, AvailabilityBlock>>({});
-  const [pending, startTransition] = useTransition();
 
   const rows = useMemo(
     () =>
@@ -70,28 +71,39 @@ export function AvailabilityAdmin({
     router.refresh();
   }
 
-  function onCreate(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    startTransition(async () => {
-      const fd = draftToFormData(draft);
+  // The form's own FormData carries every field via `name=` props. Disabled
+  // `<select>` elements (CoachSelect when kind ≠ coach_unavailable) are not
+  // submitted, which is exactly what `parseAvailabilityInput` expects.
+  const [createState, createAction, pending] = useActionState<CreateState, FormData>(
+    async (_prev, fd) => {
       const result = await createAvailabilityBlock(fd);
       if ('ok' in result) {
-        toast.success('Date block added');
         setDraft({ ...emptyDraft, startDate: defaultStartDate });
-        refresh();
-      } else {
-        toast.error(result.error);
       }
-    });
-  }
+      return result;
+    },
+    null,
+  );
+
+  useEffect(() => {
+    if (!createState) return;
+    if ('ok' in createState) {
+      toast.success('Date block added');
+      refresh();
+    } else {
+      toast.error(createState.error);
+    }
+    // refresh is stable (router.refresh wrapper).
+  }, [createState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="mt-4 flex flex-col gap-5">
-      <form onSubmit={onCreate} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
+      <form action={createAction} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Start Date" htmlFor="block-start" required>
             <input
               id="block-start"
+              name="startDate"
               type="date"
               value={draft.startDate}
               onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
@@ -102,6 +114,7 @@ export function AvailabilityAdmin({
           <Field label="End Date" htmlFor="block-end">
             <input
               id="block-end"
+              name="endDate"
               type="date"
               value={draft.endDate}
               onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))}
@@ -111,6 +124,7 @@ export function AvailabilityAdmin({
           <Field label="Type" htmlFor="block-kind">
             <KindSelect
               id="block-kind"
+              name="kind"
               value={draft.kind}
               onChange={(kind) =>
                 setDraft((d) => ({
@@ -124,6 +138,7 @@ export function AvailabilityAdmin({
           <Field label="Coach" htmlFor="block-coach">
             <CoachSelect
               id="block-coach"
+              name="coachId"
               coaches={coaches}
               value={draft.coachId}
               disabled={draft.kind !== 'coach_unavailable'}
@@ -135,6 +150,7 @@ export function AvailabilityAdmin({
           <Field label="Reason" htmlFor="block-reason">
             <input
               id="block-reason"
+              name="reason"
               type="text"
               value={draft.reason}
               onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
@@ -367,16 +383,19 @@ function Field({
 
 function KindSelect({
   id,
+  name,
   value,
   onChange,
 }: {
   id?: string;
+  name?: string;
   value: AvailabilityKind;
   onChange: (value: AvailabilityKind) => void;
 }) {
   return (
     <select
       id={id}
+      name={name}
       value={value}
       onChange={(e) => onChange(e.target.value as AvailabilityKind)}
       className={inputClass}
@@ -392,12 +411,14 @@ function KindSelect({
 
 function CoachSelect({
   id,
+  name,
   coaches,
   value,
   disabled,
   onChange,
 }: {
   id?: string;
+  name?: string;
   coaches: Coach[];
   value: string;
   disabled: boolean;
@@ -406,6 +427,7 @@ function CoachSelect({
   return (
     <select
       id={id}
+      name={name}
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}

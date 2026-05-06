@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Dialog } from '@/components/ui/dialog';
@@ -286,6 +286,11 @@ function dealerLinksFromPerson(person?: AdminPersonRow): DealerLinkDraft[] {
   }));
 }
 
+type PersonFormState =
+  | { ok: true; contactId?: number; warning?: string }
+  | { error: string }
+  | null;
+
 function PersonForm({
   mode,
   person,
@@ -298,22 +303,58 @@ function PersonForm({
   onSuccess: () => void;
 }) {
   const router = useRouter();
-  const [firstName, setFirstName] = useState(person?.firstName ?? '');
-  const [lastName, setLastName] = useState(person?.lastName ?? '');
-  const [email, setEmail] = useState(person?.email ?? '');
-  const [phone, setPhone] = useState(person?.phone ?? '');
   const [admin, setAdmin] = useState(person?.roles.includes('admin') ?? false);
   const [coach, setCoach] = useState(person?.roles.includes('coach') ?? false);
   const [dealerLinks, setDealerLinks] = useState<DealerLinkDraft[]>(
     dealerLinksFromPerson(person),
   );
-  const [pending, startTransition] = useTransition();
 
   // App access is derived, not toggled. The convention going forward is
   // "everyone who needs a sign-in has one by default" — picking Admin or
   // Coach implies App access, leaving both unchecked (e.g. a dealer-side
   // contact) leaves the contact sign-in-less.
   const wantsAppAccess = admin || coach;
+
+  const action = mode === 'create' ? createPerson : updatePerson;
+  const [state, formAction, pending] = useActionState<PersonFormState, FormData>(
+    async (_prev, fd) => {
+      // Destructive-edit guard: saving with no roles bans the existing auth
+      // user. Confirm before letting the action run. Returning null leaves
+      // state unchanged so no toast fires.
+      if (mode === 'edit' && person?.hasAppAccess && !wantsAppAccess) {
+        const firstName = String(fd.get('firstName') ?? '').trim();
+        const lastName = String(fd.get('lastName') ?? '').trim();
+        const ok = window.confirm(
+          `Saving with no roles will end app access for ${firstName} ${lastName} and ban their sign-in account. The contact record stays. Continue?`,
+        );
+        if (!ok) return null;
+      }
+      return action(fd);
+    },
+    null,
+  );
+
+  useEffect(() => {
+    if (!state) return;
+    if ('ok' in state) {
+      if (state.warning) {
+        // Partial success — DB committed, auth-side step had a problem.
+        // Still close + refresh; surface the warning so the admin knows
+        // what to retry.
+        toast.error(state.warning);
+      } else {
+        toast.success(mode === 'create' ? 'Person added' : 'Person updated');
+      }
+      router.refresh();
+      onSuccess();
+    } else {
+      // Hard failure — keep the dialog open. Refresh anyway because some
+      // error paths revalidate (e.g. race-loss bans the just-created auth
+      // user); the table should reflect that.
+      toast.error(state.error);
+      router.refresh();
+    }
+  }, [state, mode, router, onSuccess]);
 
   function setDealerLink(i: number, patch: Partial<DealerLinkDraft>) {
     setDealerLinks((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -327,78 +368,30 @@ function PersonForm({
     setDealerLinks((prev) => prev.filter((_, idx) => idx !== i));
   }
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) {
-      toast.error('First and last name are required.');
-      return;
-    }
-    if (wantsAppAccess && !email.trim()) {
-      toast.error('Email is required for Admin or Coach roles.');
-      return;
-    }
-    // Guard the destructive transition: a coach/admin (or even role-less
-    // legacy sign-in) being saved with both checkboxes unticked will ban
-    // their auth user via `updatePerson`. Cheap UX confirm prevents the
-    // silent footgun.
-    if (mode === 'edit' && person?.hasAppAccess && !wantsAppAccess) {
-      const ok = window.confirm(
-        `Saving with no roles will end app access for ${firstName.trim()} ${lastName.trim()} and ban their sign-in account. The contact record stays. Continue?`,
-      );
-      if (!ok) return;
-    }
-    const filledLinks = dealerLinks.filter((l) => l.dealerId);
-    if (filledLinks.some((l) => !l.dealerId || !l.role)) {
-      toast.error('Each dealer link needs both a dealer and a role.');
-      return;
-    }
-
-    startTransition(async () => {
-      const fd = new FormData();
-      if (mode === 'edit' && person) fd.set('contactId', String(person.contactId));
-      fd.set('firstName', firstName.trim());
-      fd.set('lastName', lastName.trim());
-      if (email.trim()) fd.set('email', email.trim().toLowerCase());
-      if (phone.trim()) fd.set('phone', phone.trim());
-      if (wantsAppAccess) fd.set('appAccess', '1');
-      if (admin) fd.append('roles', 'admin');
-      if (coach) fd.append('roles', 'coach');
-      for (const link of filledLinks) {
-        fd.append('dealerLinks', `${link.dealerId}:${link.role}`);
-      }
-
-      const action = mode === 'create' ? createPerson : updatePerson;
-      const result = await action(fd);
-      if ('ok' in result) {
-        if (result.warning) {
-          // Partial success — DB committed, auth-side step had a problem.
-          // Still close + refresh so the new/updated row is visible; surface
-          // the warning so the admin knows what to retry.
-          toast.error(result.warning);
-        } else {
-          toast.success(mode === 'create' ? 'Person added' : 'Person updated');
-        }
-        router.refresh();
-        onSuccess();
-      } else {
-        // Hard failure — keep the dialog open so the admin can fix and retry.
-        // Refresh anyway because some error paths revalidate (e.g. race-loss
-        // bans the just-created auth user); the table should reflect that.
-        toast.error(result.error);
-        router.refresh();
-      }
-    });
-  }
-
   return (
-    <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
+    <form action={formAction} className="mt-4 flex flex-col gap-3">
+      {mode === 'edit' && person && (
+        <input type="hidden" name="contactId" value={person.contactId} />
+      )}
+      {wantsAppAccess && <input type="hidden" name="appAccess" value="1" />}
+      {dealerLinks
+        .filter((l) => l.dealerId)
+        .map((l, i) => (
+          <input
+            key={`dl-${i}`}
+            type="hidden"
+            name="dealerLinks"
+            value={`${l.dealerId}:${l.role}`}
+          />
+        ))}
+
       <div className="grid grid-cols-2 gap-2">
         <label className="flex flex-col gap-1 text-xs font-medium text-stone-600">
           First name
           <input
             type="text"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
+            name="firstName"
+            defaultValue={person?.firstName ?? ''}
             className={inputClass}
             autoFocus
             required
@@ -408,8 +401,8 @@ function PersonForm({
           Last name
           <input
             type="text"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
+            name="lastName"
+            defaultValue={person?.lastName ?? ''}
             className={inputClass}
             required
           />
@@ -421,8 +414,8 @@ function PersonForm({
           Email
           <input
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            name="email"
+            defaultValue={person?.email ?? ''}
             className={inputClass}
           />
         </label>
@@ -430,8 +423,8 @@ function PersonForm({
           Phone
           <input
             type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            name="phone"
+            defaultValue={person?.phone ?? ''}
             className={inputClass}
           />
         </label>
@@ -439,8 +432,7 @@ function PersonForm({
 
       <div className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
         <p className="text-[11px] text-stone-500">
-          Picking a role grants a sign-in at the email above. Leave both unchecked
-          for dealer-side contacts.
+          Roles
         </p>
         <label className="flex items-center gap-2 text-sm text-stone-700">
           <input
@@ -449,7 +441,7 @@ function PersonForm({
             onChange={(e) => setAdmin(e.target.checked)}
           />
           <span>
-            <strong>Admin</strong> — gates <code className="text-xs">/admin/*</code>
+            <strong>Admin</strong>
           </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-stone-700">
@@ -459,8 +451,7 @@ function PersonForm({
             onChange={(e) => setCoach(e.target.checked)}
           />
           <span>
-            <strong>Coach</strong> — assignable on the calendar; auto-filters their{' '}
-            <code className="text-xs">/calendar</code>
+            <strong>Coach</strong>
           </span>
         </label>
       </div>
