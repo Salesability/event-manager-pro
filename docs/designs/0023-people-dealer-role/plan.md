@@ -11,7 +11,7 @@
 | 3: PersonForm UI — Dealer checkbox + gate Dealers section + require ≥1 role | Done | cdf554b |
 | 4: Auto-assign — `createDealer` / `updateDealer` insert `team_member_roles(dealer)` | Done | ea3f522 |
 | 5: Invariant — DB trigger or app-level guard for "every contact has a role" | Done | 3056603 |
-| 6: Tests + smoke verification | Done | - |
+| 6: Tests + smoke verification | Done | 3bfc37a |
 
 Today the system has two disjoint role surfaces — `team_member_roles` (us-side: `admin`/`coach` live; `staff`/`viewer` reserved) and `dealer_contacts` (them-side: `customer`/`staff`/`prospect`). Dealer staff land in `dealer_contacts` with NO `team_member_roles` row, so they're "roleless" from the People-admin perspective. This chunk closes that gap by introducing a `dealer` role on `team_member_roles`, backfilling existing dealer-side contacts onto it, and enforcing "every person has at least one role" both at the form level and (TBD Phase 5) at the DB level. The Person edit dialog's Dealers section becomes conditional on the `dealer` role, so the link UI matches the person's classification instead of being a free-floating panel on every record.
 
