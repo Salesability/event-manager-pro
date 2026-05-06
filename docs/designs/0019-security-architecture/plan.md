@@ -44,7 +44,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 | 3: Coach availability ownership check — row-level "their own block" gate on `*AvailabilityBlock` actions | Done | 278c429 |
 | 4: `audit_log` table + `recordAudit()` helper + wire into sensitive actions | Done | 7a187cd |
 | 5: Boundary-discipline checks — `'server-only'` lint + secrets-in-bundle smoke test | Parked | - |
-| 6: MFA enablement (Supabase project toggle + UI affordance) | Pending | - |
+| 6: MFA enablement (Supabase project toggle + UI affordance) | Parked | - |
 | 7: Email-send hardening (fold in parked Codex findings from 0011) | Pending | - |
 | 8: Wiki updates + verification (tsc + tests + /eval + smoke + manual security walk-through) | Pending | - |
 
@@ -70,11 +70,13 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md:389` — explicit note that `auth.uid()` is NULL over Drizzle's direct connection. Phase 1 doesn't change that — it just makes RLS *enabled* (so policies *would* enforce) while the Drizzle path remains a `BYPASSRLS` role.
 - `db-conventions` skill — RLS policy patterns; `service_role` bypass behaviour; how to write idempotent migration scripts.
 
-**Overall Progress:** 57% (4/7 active phases — Phase 5 parked 2026-05-06)
+**Overall Progress:** 67% (4/6 active phases — Phases 5 + 6 parked 2026-05-06)
 
 **Phase 3 added (2026-05-06).** Inserted after Phase 2 to close Codex High #1 from `eval-2026-05-06-0922.md` — the per-action role audit gates `*AvailabilityBlock` to `['admin','coach']` but doesn't enforce per-row ownership, so a coach could mutate any block (statutory holiday, company closure, another coach's time off). Phases 3-7 of the original plan bumped to 4-8.
 
 **Phase 5 parked (2026-05-06).** The `'server-only'` import already throws at build time when a Client Component imports a server module — that's the primary defence. The proposed `secrets-boundary.test.ts` (build the app, grep `.next/static/` for known-secret prefixes) is genuine belt-and-suspenders, but slow (full `pnpm build` per test run) and low marginal value vs. the cost of maintaining it. Revisit if a regression slips past `'server-only'` in practice, or before public launch / external audit.
+
+**Phase 6 parked (2026-05-06).** MFA is operator-grade hardening; deferring until the staff team is bigger than David alone. Today's threat model (single admin, ~10 internal employees on a closed signup) doesn't earn the foot-gun risk of a Supabase TOTP rollout without a tested account-recovery path. Mandatory-MFA-for-admins was already deferred to v2 in Decision #4; opt-in v1 didn't earn its keep either. Revisit before public launch or when a non-admin staff member is provisioned.
 
 **Note:**
 - **No existing Server Action is rewritten by this plan.** Phase 2's "role audit" identifies *which* `requireUserId()` should become `requireRole('admin')`, but the change is a 3-character edit per call site, not a refactor.
