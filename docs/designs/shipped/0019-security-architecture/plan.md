@@ -8,7 +8,7 @@ This plan reverses that drift **defensively**: enable RLS on every table, but co
 
 **Done =** every domain table has RLS enabled with policies that *would* enforce per-tenant / per-role visibility if a JWT-bearing connection ever reached them; Drizzle continues to operate unchanged via a service-role connection; `audit_log` rows are written for `setUserRoles`, `deactivateUser`, `archiveCoach`, `archiveDealer`, `cancelCampaign`; every Server Action carries the right `requireRole(...)` check; admin accounts can opt into Supabase MFA; the boundary-discipline lint catches a regression where a Client Component reaches for the service-role client.
 
-**Depends on `0018-user-system`** — the role taxonomy (admin / coach / etc.), the `requireAdmin()` helper, `loadCurrentMembership()`, the `requireStaffAccess()` gate, and the `app_metadata.role` claim are all foundations this plan reads. **0018 shipped 2026-05-05** ([`shipped/0018-user-system/plan.md`](../shipped/0018-user-system/plan.md)) — 0019 is unblocked.
+**Depends on `0018-user-system`** — the role taxonomy (admin / coach / etc.), the `requireAdmin()` helper, `loadCurrentMembership()`, the `requireStaffAccess()` gate, and the `app_metadata.role` claim are all foundations this plan reads. **0018 shipped 2026-05-05** ([`0018-user-system/plan.md`](../0018-user-system/plan.md)) — 0019 is unblocked.
 
 ## Decisions
 

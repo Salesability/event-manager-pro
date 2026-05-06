@@ -9,8 +9,8 @@
 > **Source.** Imported verbatim from `SaleDay_Events_Production_Software_Plan.docx.md` on 2026-05-05. Markdown export artifacts (`\|`, `\+`, etc.) preserved as-is.
 >
 > **Relationship to current chunks:**
-> - `docs/designs/0018-user-system/` (RBAC, contact-user linkage) — foundational for any role-aware module here (admin/coach/BDC/dealer per "Authentication" row in the stack table).
-> - `docs/designs/0019-security-architecture/` (RLS defence-in-depth, audit log) — direct precondition for the multi-tenancy + PIPEDA-compliant data-isolation requirements called out in "Key Considerations."
+> - `docs/designs/shipped/0018-user-system/` (RBAC, contact-user linkage) — foundational for any role-aware module here (admin/coach/BDC/dealer per "Authentication" row in the stack table).
+> - `docs/designs/shipped/0019-security-architecture/` (RLS defence-in-depth, audit log) — direct precondition for the multi-tenancy + PIPEDA-compliant data-isolation requirements called out in "Key Considerations."
 > - `docs/designs/0016-book-your-event-intake/` — early surface area for the "Event Created" workflow step described in Module 2's Campaign Workflow.
 > - `docs/designs/0014-summary-reports/` — foreshadows the Module 3 "Post-Event Report" feature.
 
