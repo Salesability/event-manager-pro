@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Done | 891d569 |
-| 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | - |
+| 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | 529be61 |
 | 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Pending | - |
 | 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
