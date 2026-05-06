@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Done | 891d569 |
-| 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Pending | - |
+| 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | - |
 | 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Pending | - |
 | 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -30,7 +30,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/architecture.md` — UI primitive convention (re-exported wrappers in `src/components/ui/` rather than direct primitive imports in feature code). Keep the convention; both Headless UI and Radix sit behind the same wrapper layer.
 - `docs/wiki/auth.md` — relevant only insofar as PersonForm's `useActionState` pipeline calls Server Actions; the migration must not regress the action invocation contract.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and verification (visual + a11y parity check)
@@ -50,13 +50,13 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] **In-eval Codex High fix: focus restore on close.** Without `Dialog.Trigger` (consumers use controlled `open` props with the opener button outside `Dialog.Root`), Radix's default trigger-focus restore had no target — Esc / outside-click / Close would have landed focus on `<body>`, losing keyboard users' place. Fixed by adding a `FocusContext` (React.MutableRefObject) that `Root` populates from `document.activeElement` on open; `Panel` reads it in `onCloseAutoFocus`, calls `e.preventDefault()`, and `.focus()`s the saved element. Restores the previous-focused-button-after-close UX that HUI provided by default.
 
 #### Phase 2: PersonForm Roles fieldset → Radix Checkbox
-- [ ] Decide: Checkbox-with-multi-select OR RadioGroup-with-mutual-exclusion. Tied to 0023's "mutual exclusion of dealer with admin/coach" open question — defer until 0023 lands or pull that decision forward into this chunk
-- [ ] If Checkbox: `pnpm add @radix-ui/react-checkbox`; rewrite the Admin/Coach checkboxes (and post-0023 Dealer checkbox) to use it
-- [ ] If RadioGroup: `pnpm add @radix-ui/react-radio-group`; restructure the fieldset — single radio group with three options
-- [ ] Either way: preserve `name="roles"` form-data wiring (Radix Checkbox renders a hidden `<input>`; RadioGroup renders one)
-- [ ] Keep Tailwind classes consistent with the rest of the form
-- [ ] Verify keyboard nav (Tab to fieldset, Space to toggle, arrow keys for RadioGroup)
-- [ ] Test: ticking/unticking each role still serializes correctly into FormData
+- [x] Decide: Checkbox-with-multi-select OR RadioGroup-with-mutual-exclusion. **Decision: Checkbox.** 0023 shipped with "allow combinations" of admin/coach/dealer (the plan's open question on mutual exclusion was deferred to v2, and Codex agreed it's acceptable for v1). Multi-select Checkbox is the matching primitive.
+- [x] If Checkbox: `pnpm add @radix-ui/react-checkbox`; rewrite the Admin/Coach checkboxes (and post-0023 Dealer checkbox) to use it. **Done — installed `^1.3.3`.** Three native `<input type="checkbox">` elements at `people-admin.tsx:437-490` swapped to `<Checkbox.Root name="roles" value="admin|coach|dealer">` with a tick-rendering `<Checkbox.Indicator><CheckIcon /></Checkbox.Indicator>` inside.
+- [x] ~~If RadioGroup: `pnpm add @radix-ui/react-radio-group`; restructure the fieldset~~ **Skipped — chose Checkbox.**
+- [x] Either way: preserve `name="roles"` form-data wiring (Radix Checkbox renders a hidden `<input>`; RadioGroup renders one). **Done — Radix Checkbox emits its own hidden `<input type="checkbox" name="roles" value="…">` next to the visible button when `name`+`value` are passed. The explicit `<input type="hidden" name="roles">` rows that 0023 Phase 3 added are now redundant — dropped them. Wire format flows from the same control that renders the UI; the 0020-vintage onSubmit-handler regression is fully closed.**
+- [x] Keep Tailwind classes consistent with the rest of the form. **Done.** New `roleCheckboxClass` constant: `inline-flex h-4 w-4 shrink-0 ... data-[state=checked]:border-navy data-[state=checked]:bg-navy data-[state=checked]:text-white focus-visible:ring-2 focus-visible:ring-navy/30`. Inline `<CheckIcon>` SVG (matches the X-icon idiom in the Dialog wrapper).
+- [x] Verify keyboard nav (Tab to fieldset, Space to toggle, arrow keys for RadioGroup). **Verified by code inspection** — Radix Checkbox renders a button element with native checkbox a11y semantics; Tab targets it, Space toggles. (RadioGroup not used.)
+- [x] Test: ticking/unticking each role still serializes correctly into FormData. **Smoke green:** opened Add Person → ticked Dealer → Dealers section appeared + "Pick at least one role" inline error disappeared. Wire format flows through Radix's hidden input; the existing vitest suite (149/149 still passes) covers the action-side `formData.getAll('roles')` path which Phase 1 of 0023 already exercises.
 
 #### Phase 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role
 - [ ] `pnpm add cmdk @radix-ui/react-select @radix-ui/react-popover`

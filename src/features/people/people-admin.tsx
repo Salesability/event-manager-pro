@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import * as Checkbox from '@radix-ui/react-checkbox';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
@@ -66,6 +67,33 @@ const rowDeleteClass =
 
 const submitClass =
   'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
+
+// Radix Checkbox doesn't render a tick visual itself — it ships an unstyled
+// button + Indicator slot. These classes turn the button into a checkbox-
+// shaped target and flip the navy-on-white look when `data-state="checked"`.
+// `roleCheckboxClass` is shared across the three role checkboxes so the
+// fieldset stays visually uniform. `CheckIcon` is the indicator SVG (matches
+// the inline-SVG idiom used by the Dialog wrapper).
+const roleCheckboxClass =
+  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-stone-300 bg-white transition data-[state=checked]:border-navy data-[state=checked]:bg-navy data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30';
+
+function CheckIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-3 w-3"
+      aria-hidden="true"
+    >
+      <path
+        fillRule="evenodd"
+        d="M16.704 5.29a1 1 0 0 1 .005 1.414l-7.5 7.55a1 1 0 0 1-1.42.004l-3.5-3.5a1 1 0 1 1 1.414-1.415l2.79 2.79 6.79-6.84a1 1 0 0 1 1.42-.004Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
 
 function pillClass(active: boolean): string {
   return active
@@ -388,15 +416,14 @@ function PersonForm({
         <input type="hidden" name="contactId" value={person.contactId} />
       )}
       {wantsAppAccess && <input type="hidden" name="appAccess" value="1" />}
-      {/* Hidden role inputs — restore the wire format `parseRolesField` reads
-          in `src/features/people/actions.ts`. The 0020 Phase 3 form built
-          these via `FormData.append` inside an onSubmit handler; the React 19
-          migration (4a4afbd) switched to `<form action>` and dropped the
-          imperative build without adding hidden inputs, silently submitting
-          `roles=[]`. 0023 Phase 3 restores the contract declaratively. */}
-      {admin && <input type="hidden" name="roles" value="admin" />}
-      {coach && <input type="hidden" name="roles" value="coach" />}
-      {dealer && <input type="hidden" name="roles" value="dealer" />}
+      {/* Roles wire-format: each Radix Checkbox below renders its own hidden
+          `<input type="checkbox" name="roles" value="…">` next to the visible
+          button when `name`+`value` are passed (see `<Checkbox.Root>` calls in
+          the Roles fieldset). Phase 2 of 0024 dropped the explicit hidden
+          `<input>` rows that 0023 Phase 3 added — Radix Checkbox handles the
+          serialization itself. The 0020-vintage onSubmit-handler regression
+          that 0023 documented is fully closed: the wire format now flows from
+          the same control that renders the UI, with no hand-maintained mirror. */}
       {dealerLinks
         .filter((l) => l.dealerId)
         .map((l, i) => (
@@ -458,31 +485,49 @@ function PersonForm({
           Roles
         </p>
         <label className="flex items-center gap-2 text-sm text-stone-700">
-          <input
-            type="checkbox"
+          <Checkbox.Root
+            name="roles"
+            value="admin"
             checked={admin}
-            onChange={(e) => setAdmin(e.target.checked)}
-          />
+            onCheckedChange={(c) => setAdmin(c === true)}
+            className={roleCheckboxClass}
+          >
+            <Checkbox.Indicator>
+              <CheckIcon />
+            </Checkbox.Indicator>
+          </Checkbox.Root>
           <span>
             <strong>Admin</strong>
           </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-stone-700">
-          <input
-            type="checkbox"
+          <Checkbox.Root
+            name="roles"
+            value="coach"
             checked={coach}
-            onChange={(e) => setCoach(e.target.checked)}
-          />
+            onCheckedChange={(c) => setCoach(c === true)}
+            className={roleCheckboxClass}
+          >
+            <Checkbox.Indicator>
+              <CheckIcon />
+            </Checkbox.Indicator>
+          </Checkbox.Root>
           <span>
             <strong>Coach</strong>
           </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-stone-700">
-          <input
-            type="checkbox"
+          <Checkbox.Root
+            name="roles"
+            value="dealer"
             checked={dealer}
-            onChange={(e) => setDealerChecked(e.target.checked)}
-          />
+            onCheckedChange={(c) => setDealerChecked(c === true)}
+            className={roleCheckboxClass}
+          >
+            <Checkbox.Indicator>
+              <CheckIcon />
+            </Checkbox.Indicator>
+          </Checkbox.Root>
           <span>
             <strong>Dealer</strong>{' '}
             <span className="text-xs text-stone-500">
