@@ -6,7 +6,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Pending | - |
+| 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Done | - |
 | 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Pending | - |
 | 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Pending | - |
 | 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Pending | - |
@@ -30,7 +30,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/architecture.md` — UI primitive convention (re-exported wrappers in `src/components/ui/` rather than direct primitive imports in feature code). Keep the convention; both Headless UI and Radix sit behind the same wrapper layer.
 - `docs/wiki/auth.md` — relevant only insofar as PersonForm's `useActionState` pipeline calls Server Actions; the migration must not regress the action invocation contract.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and verification (visual + a11y parity check)
@@ -40,13 +40,14 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog)
-- [ ] `pnpm add @radix-ui/react-dialog`
-- [ ] Decide: keep `@headlessui/react` for the duration of the migration (incremental swap) OR rip it out at the end of this chunk (single-lib commitment). Working assumption: rip it out in Phase 5; it's only used by `dialog.tsx`
-- [ ] Rewrite `src/components/ui/dialog.tsx` against Radix primitives — preserve the exported API surface (`Dialog.Root`, `Dialog.Backdrop`, `Dialog.Panel`, `Dialog.Title`, `Dialog.Description`, `Dialog.Close`)
-- [ ] Map Radix's `Overlay`/`Content` to Headless UI's `Backdrop`/`Panel` shape; preserve the existing `data-closed` transition Tailwind classes (Radix uses `data-state="open|closed"` — class names need updating)
-- [ ] Verify the existing transition (fade + scale) still plays — Radix uses `data-state` attributes rather than `data-closed`; rewrite the Tailwind selectors accordingly
-- [ ] Visual parity check on `/admin/people` Add/Edit dialogs and any other dialog call site (Block Date dialog at `/calendar`, etc.)
-- [ ] Tsc + lint clean
+- [x] `pnpm add @radix-ui/react-dialog` — installed `^1.1.15`.
+- [x] Decide: keep `@headlessui/react` for the duration of the migration (incremental swap) OR rip it out at the end of this chunk (single-lib commitment). **Decision: rip it out in Phase 5.** Confirmed by `grep -r '@headlessui' src/` post-swap — `dialog.tsx` was the only consumer; nothing else imports it. Phase 5 will run `pnpm remove @headlessui/react` once smoke is clean across all dialog call sites.
+- [x] Rewrite `src/components/ui/dialog.tsx` against Radix primitives — preserve the exported API surface (`Dialog.Root`, `Dialog.Backdrop`, `Dialog.Panel`, `Dialog.Title`, `Dialog.Description`, `Dialog.Close`). **Done.** Single `Dialog.Portal` wrapper inside `Root` so consumers can keep rendering `Backdrop` + `Panel` as siblings; `Backdrop` becomes Radix's `Overlay`, `Panel` becomes `Content`. `onClose(false)` callback bridged to Radix's `onOpenChange` semantics.
+- [x] Map Radix's `Overlay`/`Content` to Headless UI's `Backdrop`/`Panel` shape; preserve the existing `data-closed` transition Tailwind classes (Radix uses `data-state="open|closed"` — class names need updating). **Done.** Tailwind selectors changed from `data-closed:opacity-0` / `data-closed:scale-95` to `data-[state=closed]:opacity-0` / `data-[state=closed]:scale-95`. Comment in the wrapper notes that Radix's default unmount-on-close may cut close-side transitions; v1 accepts this (richer `forceMount` + tailwindcss-animate is tunable later).
+- [x] Verify the existing transition (fade + scale) still plays — Radix uses `data-state` attributes rather than `data-closed`; rewrite the Tailwind selectors accordingly. **Done.** Open transition fades + scales in correctly; close transition plays briefly before unmount.
+- [x] Visual parity check on `/admin/people` Add/Edit dialogs and any other dialog call site (Block Date dialog at `/calendar`, etc.). **Smoke green:** `+ Add Person` dialog renders with title, description, all form fields including the 0023 Dealer checkbox + helper text; Cancel button closes correctly. `/calendar`'s `Block Date` dialog opens with all fields (Block Out Dates title, Reason field, Add Block button) — confirms the wrapper change didn't regress non-PersonForm consumers.
+- [x] Tsc + lint clean. **Verified — 4 pre-existing lint warnings, no new issues.**
+- [x] **In-eval Codex High fix: focus restore on close.** Without `Dialog.Trigger` (consumers use controlled `open` props with the opener button outside `Dialog.Root`), Radix's default trigger-focus restore had no target — Esc / outside-click / Close would have landed focus on `<body>`, losing keyboard users' place. Fixed by adding a `FocusContext` (React.MutableRefObject) that `Root` populates from `document.activeElement` on open; `Panel` reads it in `onCloseAutoFocus`, calls `e.preventDefault()`, and `.focus()`s the saved element. Restores the previous-focused-button-after-close UX that HUI provided by default.
 
 #### Phase 2: PersonForm Roles fieldset → Radix Checkbox
 - [ ] Decide: Checkbox-with-multi-select OR RadioGroup-with-mutual-exclusion. Tied to 0023's "mutual exclusion of dealer with admin/coach" open question — defer until 0023 lands or pull that decision forward into this chunk
