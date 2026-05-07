@@ -15,7 +15,7 @@ Tabs (legacy semantics):
 | 1: Aggregation queries (4 reports) | Done | 3f052aa |
 | 2: Reports UI page (tabs + tables) | Done | ebfa63f |
 | 3: Per-report Print + CSV export | Done | 3f4643f |
-| 4: Verification (tsc + vitest + dev smoke) | Done | - |
+| 4: Verification (tsc + vitest + dev smoke) | Done | 155df20 |
 
 ## Code Anchors
 
