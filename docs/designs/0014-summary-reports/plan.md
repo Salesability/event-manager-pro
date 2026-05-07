@@ -14,8 +14,8 @@ Tabs (legacy semantics):
 |-------|--------|--------|
 | 1: Aggregation queries (4 reports) | Done | 3f052aa |
 | 2: Reports UI page (tabs + tables) | Done | ebfa63f |
-| 3: Per-report Print + CSV export | In Progress | - |
-| 4: Verification (tsc + vitest + dev smoke) | Pending | - |
+| 3: Per-report Print + CSV export | Done | 3f4643f |
+| 4: Verification (tsc + vitest + dev smoke) | Done | - |
 
 ## Code Anchors
 
@@ -35,7 +35,7 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - `docs/wiki/architecture.md` — A standalone route (`/reports`) is appropriate; this surface is large enough to deserve its own page rather than a modal in the new app. UI primitives stay re-exported from `src/components/ui/`.
 - `docs/wiki/auth.md` — `/reports` is staff-only; gate via `requireRole(['admin', 'coach'])` at the page level + the durable `requireStaffAccess()` already wired into `(app)/layout.tsx` from 0018.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Anchor on **`/admin/people`** — TanStack Table + `DataTable` wrapper + the column-builder factory + filter-state idiom are all established there. Reports is the second admin-table surface; the third (Production polish, Lookups polish) follows the same pattern.
@@ -64,7 +64,7 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - [x] Per-tab Print button triggers the print stylesheet; ensure the active tab's table is what prints (not all four). Print button calls `window.print()`; Radix Tabs unmounts inactive panels by default so only the active table is in the DOM at print time.
 
 #### Phase 4: Verification
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm test` clean (aggregation-query tests + columns-builder snapshots if useful).
-- [ ] `pnpm dev` smoke: each tab renders correct totals against the imported corpus; CSVs match on-screen rows; print preview is clean.
-- [ ] web-test smoke: navigate to `/reports`, switch tabs, verify the table mounts and at least one row renders per tab.
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm test` clean (aggregation-query tests + columns-builder snapshots if useful). 171/171 across the chunk's three new test files (5 + 8 + 8 = 21 chunk-specific cases).
+- [x] `pnpm dev` smoke: each tab renders correct totals against the imported corpus; CSVs match on-screen rows; print preview is clean. Verified live; print-mode wired via `beforeprint`/`afterprint` flips DataTable to `getFilteredRowModel().rows` so the full filtered set prints (not just the current page).
+- [x] web-test smoke: navigate to `/reports`, switch tabs, verify the table mounts and at least one row renders per tab. Per-tab screenshots saved at `/tmp/web-test-reports-{dealer,coach,month,full}.png`. Added route-handler tests (`src/app/(app)/reports/export/route.test.ts`, 8 cases) covering the `requireRole(['admin','coach'])` gate-ordering invariant + rejection path + per-tab CSV shape + injection-mitigation pass-through.
