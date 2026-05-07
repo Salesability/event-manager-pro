@@ -9,7 +9,7 @@
 | 1: Rename + chrome simplify | Done | 539746f |
 | 2: TanStack DataTable foundation on Dealers + route move to `/dealerships` | Done | 62de77d |
 | 3: Radix Dialog + form swap (DealerForm) | Done | eadff5f |
-| 4: Optional Radix Form adoption (decision tree) | Done | - |
+| 4: Optional Radix Form adoption (decision tree) | Done | 0564cb2 |
 | 5: Tests + smoke verification | Pending | - |
 
 After 0020 retired Sales Coaches, `/lists` collapsed to a one-section "Manage Lists" page that just shows dealerships — but kept all the multi-section chrome (umbrella h1, explanatory subtitle linking to `/admin/people`, redundant `🏢 Dealerships 26` ListCard header). The screenshot the user shared makes the redundancy obvious: title, subtitle, and section header all say the same thing. This chunk renames the page to "Dealers" (since dealers/companies *are* the page now) and migrates it onto the same toolbar + TanStack DataTable + Radix Dialog pattern that 0021 + 0024 established on `/admin/people`. End state: visiting `/dealerships` (route moved from `/lists` in Phase 2) shows a single h1 "Dealers", a toolbar with `N dealers` count + search box + `+ Add Dealer`, a sortable/searchable table of dealerships, and an Edit/Add dialog that uses the same Radix Dialog wrapper as PersonForm. Out of scope: dealer schema changes; marketing-site rename. Phase 1 shipped at the original `/lists` route (commit `539746f`); Phase 2 moves the folder to `/dealerships` while rewriting the page.
