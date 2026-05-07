@@ -16,7 +16,7 @@ describe('isAdminPath', () => {
     expect(isAdminPath('/')).toBe(false);
     expect(isAdminPath('/calendar')).toBe(false);
     expect(isAdminPath('/production')).toBe(false);
-    expect(isAdminPath('/lists')).toBe(false);
+    expect(isAdminPath('/dealerships')).toBe(false);
     expect(isAdminPath('/share/coach/1')).toBe(false);
   });
 

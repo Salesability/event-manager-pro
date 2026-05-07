@@ -94,7 +94,7 @@ function revalidatePeopleViews() {
   revalidatePath('/admin/users');
   // Coach views read from team_member_roles too.
   revalidatePath('/calendar');
-  revalidatePath('/lists');
+  revalidatePath('/dealerships');
   revalidatePath('/production');
 }
 

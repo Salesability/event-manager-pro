@@ -126,7 +126,7 @@ export async function createDealer(formData: FormData): Promise<ActionResult> {
     return toActionResult(err);
   }
 
-  revalidatePath('/lists');
+  revalidatePath('/dealerships');
   revalidatePath('/production');
   return { ok: true };
 }
@@ -251,7 +251,7 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
     return toActionResult(err);
   }
 
-  revalidatePath('/lists');
+  revalidatePath('/dealerships');
   revalidatePath('/production');
   return { ok: true };
 }
@@ -283,7 +283,7 @@ export async function archiveDealer(formData: FormData): Promise<ActionResult> {
     });
   }
 
-  revalidatePath('/lists');
+  revalidatePath('/dealerships');
   revalidatePath('/production');
   return { ok: true };
 }
