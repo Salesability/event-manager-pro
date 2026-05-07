@@ -8,7 +8,7 @@ type Tab = { href: string; label: string; admin?: true };
 const TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List' },
-  { href: '/lists', label: 'Manage Lists' },
+  { href: '/lists', label: 'Dealers' },
   { href: '/admin/lookups', label: 'Lookups', admin: true },
   { href: '/admin/people', label: 'People', admin: true },
 ];
