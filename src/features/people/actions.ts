@@ -660,18 +660,25 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
   } else if (appAccess && current.userId != null) {
     // Already linked. Lift any active ban first (idempotent on already-active
     // users) — this is the restore path when an earlier accidental ban is
-    // reversed by re-ticking a role on Edit. Then keep app_metadata.role in
-    // sync with the role set.
-    const { error: unbanErr } = await admin.auth.admin.updateUserById(
+    // reversed by re-ticking a role on Edit. Sync the email here too: prior
+    // to 2026-05-07 the contact_identifiers email updated correctly but
+    // `auth.users.email` stayed at the original provisioning value, so the
+    // person could only sign in with the old email. `email_confirm: true`
+    // skips Supabase's user-confirmation flow — admin override semantics.
+    // Then keep app_metadata.role in sync with the role set.
+    const { error: updateErr } = await admin.auth.admin.updateUserById(
       current.userId,
-      { ban_duration: 'none' },
+      {
+        ban_duration: 'none',
+        ...(email ? { email, email_confirm: true } : {}),
+      },
     );
-    if (unbanErr) {
+    if (updateErr) {
       revalidatePeopleViews();
       return {
         ok: true,
         contactId,
-        warning: `Person updated, but lifting the auth-user ban failed: ${unbanErr.message}.`,
+        warning: `Person updated, but auth-side update failed: ${updateErr.message}.`,
       };
     }
     const result = await syncAuthMetadata(current.userId, roles);

@@ -508,6 +508,36 @@ describe('updatePerson', () => {
     });
   });
 
+  it('syncs auth.users.email when an already-linked admin updates the email field (2026-05-07 fix)', async () => {
+    // Pre-2026-05-07 bug: `swapPrimaryIdentifier` updated `contact_identifiers`
+    // but no auth.admin.updateUserById call existed for the email — the
+    // person could only sign in with the original provisioning email. Now
+    // the already-linked branch passes `email` to `updateUserById` alongside
+    // the unban so the sign-in handle stays in sync.
+    const fd = new FormData();
+    fd.set('contactId', '1');
+    fd.set('firstName', 'Existing');
+    fd.set('lastName', 'Admin');
+    fd.set('email', 'new-address@example.test');
+    fd.set('appAccess', '1');
+    fd.append('roles', 'admin');
+    mocks.selectResults = [
+      [{ id: 1, userId: 'existing-auth', archivedAt: null }],
+      [{ role: 'admin' }], // existingRoles snapshot
+      [], [], [], [], [], // tx writes
+    ];
+    const result = await updatePerson(fd);
+    expect(result).toEqual({ ok: true, contactId: 1 });
+    expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
+      ban_duration: 'none',
+      email: 'new-address@example.test',
+      email_confirm: true,
+    });
+    expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
+      app_metadata: { role: 'admin' },
+    });
+  });
+
   it('on→off app access bans the auth user when role transitions admin → dealer', async () => {
     // Post-Phase-5: the on→off auth-ban path is reached when the admin
     // demotes a person to dealer-only (a role that doesn't grant app access).
