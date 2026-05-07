@@ -10,7 +10,7 @@
 | 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | 529be61 |
 | 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Done | 3f07ddc |
 | 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Deferred | - |
-| 5: Tests + smoke verification | Done | - |
+| 5: Tests + smoke verification | Done | cb5da66 |
 
 The codebase is already on a headless component lib — `@headlessui/react` (Tailwind Labs' Headless UI), wired through `src/components/ui/dialog.tsx`. This chunk swaps that dependency for Radix Primitives and uses the swap as a pilot for richer form widgets (Combobox via `cmdk`, Radix Select, Radix Checkbox/RadioGroup, optional Radix Form). Pilot surface is the PersonForm dialog at `src/features/people/people-admin.tsx:294-523`. The win: a typeable/filterable dealer picker (Combobox) and consistent keyboard/a11y semantics across compound widgets, with a Radix-everywhere story for future forms (Production, Lookups, Booking intake) to follow. The cost: bundle shift from one headless lib to another (~similar size), one round of API change inside the existing `Dialog` wrapper, and a decision about whether the React 19 `useActionState` server-action pattern stays or yields to a form-state library.
 
