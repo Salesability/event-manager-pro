@@ -10,7 +10,7 @@
 | 2: User menu (avatar dropdown) | Done | ca8ba48 |
 | 3: Admin tab grouping | Done | edff423 |
 | 4: Responsive collapse | Skipped — no overflow at 1280px post-Phases 2+3 | - |
-| 5: Smoke verification | Done | - |
+| 5: Smoke verification | Done | 6589356 |
 
 The staff-app top nav currently sits at six flat tabs plus a static avatar pill, the user's full email, and a standalone `Sign out` button — three problems compounding. (1) Inactive tab text (`text-white/60` on navy) sits at the WCAG AA boundary; (2) operational tabs (Calendar/Production/Reports/Dealers) and admin tabs (Lookups/People) are visually identical for admins, and the matrix only grows as 0028 + 0029 land more admin surface; (3) the email + standalone sign-out button consume ~30% of the bar width for an action used once a session, with no responsive plan as more tabs arrive. "Done" = inactive tabs hit AA contrast, the admin section is visually distinct from the operational section, the avatar pill is the single entry point for account actions (email shown inside, sign-out moved inside), and the bar has a defined behavior under narrow widths.
 
