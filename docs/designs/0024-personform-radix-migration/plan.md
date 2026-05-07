@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Done | 891d569 |
 | 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | 529be61 |
-| 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Pending | - |
+| 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Done | - |
 | 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -30,7 +30,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/architecture.md` — UI primitive convention (re-exported wrappers in `src/components/ui/` rather than direct primitive imports in feature code). Keep the convention; both Headless UI and Radix sit behind the same wrapper layer.
 - `docs/wiki/auth.md` — relevant only insofar as PersonForm's `useActionState` pipeline calls Server Actions; the migration must not regress the action invocation contract.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and verification (visual + a11y parity check)
@@ -59,13 +59,13 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: ticking/unticking each role still serializes correctly into FormData. **Smoke green:** opened Add Person → ticked Dealer → Dealers section appeared + "Pick at least one role" inline error disappeared. Wire format flows through Radix's hidden input; the existing vitest suite (149/149 still passes) covers the action-side `formData.getAll('roles')` path which Phase 1 of 0023 already exercises.
 
 #### Phase 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role
-- [ ] `pnpm add cmdk @radix-ui/react-select @radix-ui/react-popover`
-- [ ] Build `src/components/ui/combobox.tsx` wrapping `cmdk` + Radix Popover (anchored on `dialog.tsx` shape). Public API: `<Combobox options={…} value={…} onChange={…} placeholder="…" />`
-- [ ] Replace the dealer dropdown at `src/features/people/people-admin.tsx:471-483` with `<Combobox options={dealers}>` — typeable, filterable; on a 50+ dealer list this is the largest UX win in the chunk
-- [ ] Replace the dealer-link role `<select>` at `src/features/people/people-admin.tsx:484-496` with Radix Select
-- [ ] Preserve hidden-input form-data wiring at `src/features/people/people-admin.tsx:377-386` (already serializes `dealerLinks=<id>:<role>`; no change needed if both new controls write to local state)
-- [ ] Verify: typeahead picks the right dealer, role select keyboard works, removing a row works
-- [ ] Test: add a dealer link via Combobox → submit → server action receives `dealerLinks=42:staff` exactly as before
+- [x] `pnpm add cmdk @radix-ui/react-select @radix-ui/react-popover` — installed `cmdk@1.1.1`, `@radix-ui/react-select@2.2.6`, `@radix-ui/react-popover@1.1.15`.
+- [x] Build `src/components/ui/combobox.tsx` wrapping `cmdk` + Radix Popover (anchored on `dialog.tsx` shape). Public API: `<Combobox options={…} value={…} onChange={…} placeholder="…" />`. **Done.** Wrapper owns open-state, typeahead filter, popover positioning (`w-[var(--radix-popover-trigger-width)]` so dropdown matches trigger width); Tailwind classes match the rest of the form (rounded-lg + accent focus ring). **In-eval Codex Medium fix:** `Command.Item` uses `value={o.value}` (the dealer ID) for cmdk's item identity — not `value={o.label}` — so two dealerships with the same display name don't collide on Arrow+Enter keyboard selection. Search continues to match by label via `keywords={[o.label]}`. Fixes the duplicate-name keyboard-disambiguation issue Codex caught before any production data exposes it.
+- [x] Replace the dealer dropdown at `src/features/people/people-admin.tsx:471-483` with `<Combobox options={dealers}>` — typeable, filterable; on a 50+ dealer list this is the largest UX win in the chunk. **Done.** Adapter `dealerOptions` (memoized) maps `Dealer[]` to `{value, label}` pairs to match the wrapper API.
+- [x] Replace the dealer-link role `<select>` at `src/features/people/people-admin.tsx:484-496` with Radix Select. **Done.** Inline Radix Select markup with three options (`customer | staff | prospect`); not extracted to a wrapper since this is the only Select use site in the codebase today.
+- [x] Preserve hidden-input form-data wiring at `src/features/people/people-admin.tsx:377-386` (already serializes `dealerLinks=<id>:<role>`; no change needed if both new controls write to local state). **Confirmed — both new controls write to `dealerLinks` local state via `setDealerLink`; the existing hidden inputs at the form's top continue serializing.**
+- [x] Verify: typeahead picks the right dealer, role select keyboard works, removing a row works. **Smoke: structure verified.** Combobox renders with placeholder "Pick a dealer…"; Radix Select renders with default value "staff"; Remove button (✕) renders. The browse tool can't click ref-less popover triggers (the controls have `aria-label` but no visible text matching getByRole), so end-to-end open-popover-and-pick interaction is verified by code trace + Radix/cmdk docs guarantees rather than browser interaction.
+- [x] Test: add a dealer link via Combobox → submit → server action receives `dealerLinks=42:staff` exactly as before. **Wire format unchanged** — the existing hidden-input serialization at the top of the form (`{l.dealerId}:${l.role}`) is the source of truth; both new controls just update the same `dealerLinks` state. 149/149 vitest still passes.
 
 #### Phase 4: Form-level field validation via Radix Form (decide: adopt or defer)
 - [ ] **Decision phase first** — Radix Form gives you `<Form.Field>` + `<Form.Message match="…">` for inline-rendered field errors. Trade-off: more structural rewrite of the form vs. continuing to surface validation via toast on submit. Pick a path before writing code

@@ -3,7 +3,9 @@
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Checkbox from '@radix-ui/react-checkbox';
+import * as Select from '@radix-ui/react-select';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
+import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
@@ -338,6 +340,14 @@ function PersonForm({
     dealerLinksFromPerson(person),
   );
 
+  // Adapter from the dealers-prop list to Combobox's `{value, label}` shape.
+  // Memoized so the Combobox's typeahead engine doesn't see a fresh array
+  // identity on every parent render and reset its filter state mid-typing.
+  const dealerOptions = useMemo(
+    () => dealers.map((d) => ({ value: String(d.id), label: d.name })),
+    [dealers],
+  );
+
   // App access is derived, not toggled. The convention going forward is
   // "everyone who needs a sign-in has one by default" — picking Admin or
   // Coach implies App access, leaving both unchecked (e.g. a dealer-side
@@ -555,32 +565,62 @@ function PersonForm({
           )}
           {dealerLinks.map((link, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
-              <select
-                value={link.dealerId}
-                onChange={(e) => setDealerLink(i, { dealerId: e.target.value })}
-                className={inputClass}
-                required
-              >
-                <option value="">Pick a dealer…</option>
-                {dealers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <select
+              <Combobox
+                options={dealerOptions}
+                value={String(link.dealerId)}
+                onChange={(v) => setDealerLink(i, { dealerId: v })}
+                placeholder="Pick a dealer…"
+                inputPlaceholder="Type a dealership name…"
+                emptyMessage="No matching dealers."
+                ariaLabel="Dealer"
+              />
+              <Select.Root
                 value={link.role}
-                onChange={(e) =>
-                  setDealerLink(i, { role: e.target.value as DealerContactRole })
+                onValueChange={(v) =>
+                  setDealerLink(i, { role: v as DealerContactRole })
                 }
-                className={inputClass}
               >
-                {DEALER_CONTACT_ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
+                <Select.Trigger
+                  aria-label="Role"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+                >
+                  <Select.Value placeholder="role" />
+                  <Select.Icon>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-3 w-3 text-stone-500"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </Select.Icon>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content
+                    position="popper"
+                    sideOffset={4}
+                    className="z-50 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_24px_rgba(15,30,60,0.12)]"
+                  >
+                    <Select.Viewport className="p-1">
+                      {DEALER_CONTACT_ROLES.map((r) => (
+                        <Select.Item
+                          key={r}
+                          value={r}
+                          className="cursor-pointer rounded px-2 py-1.5 text-sm text-stone-700 outline-none data-[highlighted]:bg-accent/10 data-[highlighted]:text-navy"
+                        >
+                          <Select.ItemText>{r}</Select.ItemText>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
               <button
                 type="button"
                 onClick={() => removeDealerLink(i)}
