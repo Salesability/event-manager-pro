@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-07 — auth.md: capture role-purpose distinction (admin = ops, coach = field, dealer = customer-side)
+
+- New `## What each role is for` section in [auth.md](auth.md), placed before `## Route gating (RBAC)` so the reader gets the *purpose* of each role before the *enforcement* layers. Captures: admin owns every staff page; coach's staff-app surface is **Calendar only** (the where-am-I-booked tool — coaches go to the dealership on the sales day); dealer is customer-side with no staff-app access today.
+- Flagged the gap between intent and current state: `requireStaffAccess` admits any staff role to `(app)/*` and the nav only marks `admin: true` on Lookups + People. Production List + Dealers are visible to coaches today; tightening to admin-only is queued in `docs/designs/CURRENT.md` Parked (the role-scoping plan that surfaced after `/lists` → `/dealerships` rename).
+- Sourced from a user clarification (2026-05-07): "production is an admin concern, the coach goes to the store on the sales day."
+
 ## 2026-05-07 — 0024 personform-radix-migration: Headless UI → Radix Primitives (Dialog, Checkbox, Combobox, Select)
 
 - Five-phase chunk landed at `docs/designs/closed/0024-personform-radix-migration/`. Pilot surface was `src/features/people/people-admin.tsx`'s PersonForm dialog; the wrapper layer (`src/components/ui/`) absorbs both Headless UI (now removed) and Radix Primitives behind the same `Dialog.{Root, Backdrop, Panel, Title, Description, Close}` API so the six dialog consumers (`people-admin`, `orphan-auth-users`, `calendar-view`, `booking-form`, `lists/list-actions`, `production/row-actions`) didn't change.

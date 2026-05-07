@@ -59,6 +59,16 @@ The `next` param is passed through `safeNextPath()` (in `src/lib/auth/`) to prev
 - `signOut()` Server Action (`src/features/auth/actions.ts`) → `supabase.auth.signOut()` → redirect to `/login`.
 - `<SessionBanner />` (`src/components/auth/session-banner.tsx`) is a server component rendering the logged-in email and a logout form button. Wired into `src/app/layout.tsx` so it appears on every gated page.
 
+## What each role is for
+
+The role labels (`admin` / `coach` / `dealer`) carry purpose, not just permissions — they map to *who does what in the business*, and the surface gates should follow that map:
+
+- **Admin** — back-office / ops. Plans events, manages dealers, provisions coaches, runs the production schedule. Surfaces: every staff page (Calendar, Production List, Dealers, Lookups, People).
+- **Coach** — field / event-day. Goes to the dealership on the sales day to run the booth. Their staff-app surface is **Calendar only** — the where-am-I-booked tool. Production List is back-office "what's coming up" (campaign-level), not field-facing, so it stays admin.
+- **Dealer** — customer-side. No staff-app access today; the dealer portal isn't built yet. A `dealer`-only contact is them-side, not us-side, and `STAFF_APP_ROLES` excludes `dealer` from the staff gate (see Route gating below).
+
+**Today the role taxonomy is enforced; the per-route surface scoping isn't fully.** `requireStaffAccess` admits any staff role to the `(app)/*` shell, and the nav (`src/components/app/app-nav.tsx`) only marks `admin: true` on Lookups + People — Production List and Dealers are visible to coaches in the current build. Tightening Production + Dealers to admin-only at both the nav and the page-level (`requireRole('admin')`) is queued separately; see `docs/designs/CURRENT.md` Parked.
+
 ## Route gating (RBAC)
 
 Three layers of gating, defence-in-depth (top to bottom: cheapest, most-likely-to-be-bypassed-first):
