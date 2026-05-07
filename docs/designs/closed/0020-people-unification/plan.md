@@ -119,7 +119,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Appended to `docs/wiki/log.md`: dated entry "0020 people-unification: one People page replaces Users + Sales Coaches" — summarises the five-phase ship + the two-Codex-Mediums-fixed-each-phase pattern + the new code surface + the retired Server Actions.
 - [x] `pnpm tsc --noEmit` clean.
 - [x] `pnpm test` clean (100/100).
-- [x] Cross-link audit: 1 forward-looking reference in `log.md` to `shipped/0020-people-unification/plan.md` — resolves when the chunk is closed (next step).
+- [x] Cross-link audit: 1 forward-looking reference in `log.md` to `closed/0020-people-unification/plan.md` — resolves when the chunk is closed (next step).
 - [ ] /eval against `0020-people-unification/plan.md`.
 - [ ] Smoke (web-test) end-to-end (covered by /eval).
 

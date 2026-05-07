@@ -16,15 +16,15 @@ Replaces a single-file legacy app (`deprecated/index.html`, ~2,300 lines) that u
 |---|---|---|
 | Framework | **Next.js 16** (App Router, TypeScript strict) | Largest hireable talent pool, cleanest growth path for the new surface area. Server Actions remove the need for most route handlers. |
 | Styling | **Tailwind CSS** | Standard. |
-| UI primitives | **Sonner** (toasts) + **Headless UI** (Dialog, Listbox/Combobox) | Sonner for the simple `toast.success(…)` API; Headless UI for accessible Tailwind-native dialog/listbox primitives. Tooltip is deferred — when needed, add Floating UI or Radix Tooltip à la carte. We tried Base UI (`@base-ui/react`) first and backed out: see [docs/designs/shipped/0007-lists-crud/plan.md](../designs/shipped/0007-lists-crud/plan.md) Decisions for the swap rationale (mui/base-ui#4234). |
+| UI primitives | **Sonner** (toasts) + **Headless UI** (Dialog, Listbox/Combobox) | Sonner for the simple `toast.success(…)` API; Headless UI for accessible Tailwind-native dialog/listbox primitives. Tooltip is deferred — when needed, add Floating UI or Radix Tooltip à la carte. We tried Base UI (`@base-ui/react`) first and backed out: see [docs/designs/closed/0007-lists-crud/plan.md](../designs/closed/0007-lists-crud/plan.md) Decisions for the swap rationale (mui/base-ui#4234). |
 | Package manager | **pnpm** | Strict by default, smaller `node_modules`. |
 | Persistence | **Supabase Postgres 17.6** | Real DB with money-grade integrity (transactions, FKs) — required for quote/invoice/contract immutability. Also rolls in Auth + Storage. |
 | ORM | **Drizzle** | Closer to SQL than Prisma; pairs well with Supabase migrations; lighter footprint. |
 | Auth | **Supabase Auth** (Google OAuth + magic link) | See [auth.md](auth.md). |
-| Future integrations | Stripe (invoicing/payments), Dropbox Sign (e-sign), Resend + React Email (outbound mail), `@react-pdf/renderer` (server-rendered PDFs) | Each lands in its own chunk per the migration order in `docs/designs/shipped/0001-port-stack-analysis/notes.md`. |
+| Future integrations | Stripe (invoicing/payments), Dropbox Sign (e-sign), Resend + React Email (outbound mail), `@react-pdf/renderer` (server-rendered PDFs) | Each lands in its own chunk per the migration order in `docs/designs/closed/0001-port-stack-analysis/notes.md`. |
 | Deploy | **Cloud Run** with "allow unauthenticated invocations" | Container is publicly reachable; access control is app-side via the auth middleware. Per-coach public share links (legacy `?coach=<id>`) stay un-gated. No Google LB / IAP — keeps things portable. |
 
-Decision rationale lives in `docs/designs/shipped/0001-port-stack-analysis/notes.md` (the alternatives considered: SvelteKit + Supabase, Astro + islands, Rails/Django) and `docs/designs/shipped/0002-nextjs-scaffold/decision.md` (ORM + cloud-vs-local picks).
+Decision rationale lives in `docs/designs/closed/0001-port-stack-analysis/notes.md` (the alternatives considered: SvelteKit + Supabase, Astro + islands, Rails/Django) and `docs/designs/closed/0002-nextjs-scaffold/decision.md` (ORM + cloud-vs-local picks).
 
 ## Folder layout
 
@@ -83,9 +83,9 @@ See [conventions.md](conventions.md) for the full rule set.
 
 ## Migration roadmap
 
-Per `docs/designs/shipped/0001-port-stack-analysis/notes.md`, work is sequenced as:
+Per `docs/designs/closed/0001-port-stack-analysis/notes.md`, work is sequenced as:
 
-1. ✅ **App shell + auth + Postgres tables** — scaffold (`docs/designs/shipped/0002-nextjs-scaffold/`), auth (`docs/designs/shipped/0003-supabase-auth/`), schema (in flight, see [data-model.md](data-model.md)).
+1. ✅ **App shell + auth + Postgres tables** — scaffold (`docs/designs/closed/0002-nextjs-scaffold/`), auth (`docs/designs/closed/0003-supabase-auth/`), schema (in flight, see [data-model.md](data-model.md)).
 2. **One-time Sheets → Postgres import** — TS script reading legacy ranges via existing API key, fanning out into `clients` + `contacts` etc.
 3. **Port the three views** — lists, production, calendar (calendar last; reuse the legacy ribbon-packing algorithm).
 4. **Cutover** — point `events.salesability.ca` at the new deploy; Sheets becomes read-only archive.

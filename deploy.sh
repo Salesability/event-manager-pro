@@ -22,12 +22,13 @@ PROJECT_ID="${GCP_PROJECT_ID:-nnwweb}"
 SERVICE_NAME="${GCP_SERVICE_NAME:-event-manager-pro}"
 REGION="${GCP_REGION:-northamerica-northeast1}"
 DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-database-url}"
+SERVICE_ROLE_SECRET_NAME="${GCP_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
 
 # Public origin used by server actions to build OAuth/magic-link redirect URLs.
 # Override via PROD_SITE_URL if the service hostname changes.
-PROD_SITE_URL="${PROD_SITE_URL:-https://${SERVICE_NAME}-248904507231.${REGION}.run.app}"
+PROD_SITE_URL="${PROD_SITE_URL:-https://event-manager-pro-7435lagfjq-nn.a.run.app}"
 
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
@@ -36,6 +37,7 @@ REQUIRED_VARS=(
     "NEXT_PUBLIC_SUPABASE_URL"
     "NEXT_PUBLIC_SUPABASE_ANON_KEY"
     "DATABASE_URL"
+    "SUPABASE_SERVICE_ROLE_KEY"
 )
 MISSING_VARS=()
 for var in "${REQUIRED_VARS[@]}"; do
@@ -50,29 +52,42 @@ if [ ${#MISSING_VARS[@]} -ne 0 ]; then
 fi
 echo "✅ Required environment variables present."
 
-echo "🔐 Ensuring Secret Manager secret '${DB_SECRET_NAME}' exists..."
-if ! gcloud secrets describe "${DB_SECRET_NAME}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
-    echo "   Secret not found — creating from local DATABASE_URL."
-    printf '%s' "${DATABASE_URL}" | gcloud secrets create "${DB_SECRET_NAME}" \
-        --project="${PROJECT_ID}" \
-        --replication-policy=automatic \
-        --data-file=-
-else
-    echo "   Secret exists — leaving stored value untouched."
-    echo "   To push a new version from local .env.local, run:"
-    echo "     printf '%s' \"\$DATABASE_URL\" | gcloud secrets versions add ${DB_SECRET_NAME} --project=${PROJECT_ID} --data-file=-"
-fi
+ensure_secret() {
+    local secret_name="$1"
+    local local_var="$2"
+    echo "🔐 Ensuring Secret Manager secret '${secret_name}' exists..."
+    if ! gcloud secrets describe "${secret_name}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+        echo "   Secret not found — creating from local ${local_var}."
+        printf '%s' "${!local_var}" | gcloud secrets create "${secret_name}" \
+            --project="${PROJECT_ID}" \
+            --replication-policy=automatic \
+            --data-file=-
+    else
+        echo "   Secret exists — leaving stored value untouched."
+        echo "   To push a new version from local .env.local, run:"
+        echo "     printf '%s' \"\$${local_var}\" | gcloud secrets versions add ${secret_name} --project=${PROJECT_ID} --data-file=-"
+    fi
+}
+
+ensure_secret "${DB_SECRET_NAME}" "DATABASE_URL"
+ensure_secret "${SERVICE_ROLE_SECRET_NAME}" "SUPABASE_SERVICE_ROLE_KEY"
 
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 RUNTIME_SA="${GCP_RUNTIME_SA:-${PROJECT_NUMBER}-compute@developer.gserviceaccount.com}"
 
-echo "🔑 Granting ${RUNTIME_SA} access to secret '${DB_SECRET_NAME}' (idempotent)..."
-gcloud secrets add-iam-policy-binding "${DB_SECRET_NAME}" \
-    --project="${PROJECT_ID}" \
-    --member="serviceAccount:${RUNTIME_SA}" \
-    --role="roles/secretmanager.secretAccessor" \
-    --condition=None \
-    --quiet >/dev/null
+grant_secret_access() {
+    local secret_name="$1"
+    echo "🔑 Granting ${RUNTIME_SA} access to secret '${secret_name}' (idempotent)..."
+    gcloud secrets add-iam-policy-binding "${secret_name}" \
+        --project="${PROJECT_ID}" \
+        --member="serviceAccount:${RUNTIME_SA}" \
+        --role="roles/secretmanager.secretAccessor" \
+        --condition=None \
+        --quiet >/dev/null
+}
+
+grant_secret_access "${DB_SECRET_NAME}"
+grant_secret_access "${SERVICE_ROLE_SECRET_NAME}"
 
 echo "🏗️  Building image ${IMAGE} via Cloud Build..."
 gcloud builds submit \
@@ -99,7 +114,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --allow-unauthenticated \
     --port=3000 \
     --set-env-vars="${ENV_VARS}" \
-    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest"
+    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest"
 
 echo "✅ Deployment complete."
 echo "🌐 Service URL:"

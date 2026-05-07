@@ -78,7 +78,7 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 
 **v1 wired roles:** `admin`, `coach`, and `dealer` are selectable in the UI (the Person dialog's Roles fieldset). `staff` and `viewer` are reserved enum values for future use. Staff-app access requires *either* `app_metadata.role === 'admin'` (bootstrap path) *or* at least one active `team_member_roles` row whose role is in `STAFF_APP_ROLES = {admin, staff, coach, viewer}` — `dealer` is deliberately excluded from the staff-app gate (a dealer-only contact is them-side, not us-side; landing them on `/calendar` would be a privilege escalation). The matching SQL `is_staff_member()` helper applies the same whitelist so RLS policies and the app-layer gate agree on what "staff" means. The older "signed-in non-admin = staff by default" was retracted as a Codex Critical (post-callback URL bypass) on 2026-05-05.
 
-**Per-action gate matrix** (set by 0019 Phase 2's audit; see `shipped/0019-security-architecture/plan.md`):
+**Per-action gate matrix** (set by 0019 Phase 2's audit; see `closed/0019-security-architecture/plan.md`):
 
 | Action surface | Gate |
 |---|---|

@@ -4,7 +4,7 @@
 
 The repo already has the *data model* for a real user system — `contacts.user_id` (nullable UNIQUE FK to `auth.users`), `team_member_roles` (admin / staff / coach / viewer), `dealer_contacts` (customer-side relationships), all wired in `docs/wiki/data-model.md:9-29`. What's missing is the *application wiring*: `src/proxy.ts` gates only "logged in vs not", there is no `requireAdmin()`, no `/admin/users` UI, no contact↔user linkage on signup, no role-aware routing after callback, and no coach auto-filter on `/calendar` (which legacy `deprecated/index.html` did at line 702-710 of `doLogin()`). This plan closes that gap end-to-end. **Done =** an admin can provision a user *and* link them to a `contacts` row + `team_member_roles` row in a single flow; non-admins can't reach `/admin/*`; a signed-in coach lands on `/calendar` already filtered to their own bookings; an unrecognised auth.users post-callback gets a clean error rather than a half-rendered staff app; the `auth.md` wiki "RBAC" open item is resolved.
 
-This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../0017-user-admin/plan.md). 0017 covered provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It was parked and unstarted, so its content folded into Phase 1 below; 0017 moved to `shipped/` on 2026-05-05 with a supersession note.
+This plan **subsumed** [`docs/designs/closed/0017-user-admin/plan.md`](../0017-user-admin/plan.md). 0017 covered provisioning + `app_metadata.role` + `requireAdmin()` — the foundation here. It was parked and unstarted, so its content folded into Phase 1 below; 0017 moved to `closed/` on 2026-05-05 with a supersession note.
 
 ## Decisions
 
@@ -15,7 +15,7 @@ This plan **subsumed** [`docs/designs/shipped/0017-user-admin/plan.md`](../0017-
 
 2. **No new `profiles` table.** The data-model wiki already names `team_member_roles` as the staff-side role table (and `contacts` as the master person record). `auth.md:74` mentions a `profiles` table — that's wiki drift; resolve it in Phase 6 by removing the `profiles` mention rather than building one.
 
-3. **Subsume 0017, don't run alongside.** 0017 is unstarted. Its scope (provisioning UI, `app_metadata.role`, `requireAdmin()`, bootstrap script) is Phase 1 of this plan verbatim. After 0018 is active in `CURRENT.md`, the 0017 folder ships to `shipped/` with a one-line plan-body addendum noting supersession. No content duplication.
+3. **Subsume 0017, don't run alongside.** 0017 is unstarted. Its scope (provisioning UI, `app_metadata.role`, `requireAdmin()`, bootstrap script) is Phase 1 of this plan verbatim. After 0018 is active in `CURRENT.md`, the 0017 folder ships to `closed/` with a one-line plan-body addendum noting supersession. No content duplication.
 
 4. **Portal routing is *decided* but not *built* here.** The post-callback router (Phase 5) implements the full decision tree (staff role → `/`; contact-only → portal; neither → `/auth/auth-error`). The contact-only branch redirects to `/auth/auth-error?reason=Portal+not+yet+available` until the portal route exists. This costs ~5 lines and makes the day-portal-ships change a one-line route swap rather than a routing rewrite.
 
@@ -155,7 +155,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Removed the `profiles` mention from `auth.md`. None present in `data-model.md`.
 - [x] Updated `docs/wiki/data-model.md` Q #15 (the actual `team_member_roles ↔ user_id` coupling question — Q #16 is the schema-rename pass) — resolved app-enforced, with rationale (cross-table predicates would need a trigger; we want flexibility to seed staff records ahead of provisioning; deactivation flow archives roles without orphaning the link). Q #4 (signup trigger) also resolved as shipped. Inline reference at line 29 fixed to point at Q #15.
 - [x] Appended to `docs/wiki/log.md`: dated entry "0018 user-system: full RBAC + role-aware login + auto-link trigger".
-- [x] Moved `docs/designs/0017-user-admin/` to `docs/designs/shipped/0017-user-admin/` with a top-of-body supersession blockquote on 2026-05-05.
+- [x] Moved `docs/designs/0017-user-admin/` to `docs/designs/closed/0017-user-admin/` with a top-of-body supersession blockquote on 2026-05-05.
 - [x] `pnpm tsc --noEmit` clean.
 - [x] `pnpm test` clean (78/78).
 - [ ] /eval against `0018-user-system/plan.md`.

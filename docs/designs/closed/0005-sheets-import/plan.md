@@ -15,7 +15,7 @@ For each new file or method below, the builder reads the anchor first and matche
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — table shapes for `dealers`, `contacts`, `dealer_contacts`, `team_member_roles`, `campaigns`; reservation of `sales_leads` as a future per-record table.
 - `db-conventions` skill — TS-script backfill pattern (`scripts/import-from-sheets.ts`, idempotent, restartable); `INSERT … ON CONFLICT DO NOTHING` for lookup seeds; direct port-5432 `DATABASE_URL` for `db:migrate`.
-- `docs/designs/shipped/0005-sheets-import/notes.md` §Resolved — auth path, dedup keys, FK resolution strategy, channel-column boolean cast, schema-era handling for variable Events row widths.
+- `docs/designs/closed/0005-sheets-import/notes.md` §Resolved — auth path, dedup keys, FK resolution strategy, channel-column boolean cast, schema-era handling for variable Events row widths.
 
 ## Progress Tracker
 

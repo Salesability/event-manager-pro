@@ -32,7 +32,7 @@ For each new file or method below, the builder reads the anchor first and matche
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — role taxonomy and the "team_member_roles vs dealer_contacts.role" distinction. Update this page in the same chunk that adds `dealer` so the wiki stays current.
 - `docs/wiki/auth.md` — hybrid role storage (auth.users.app_metadata + team_member_roles). The `dealer` role does NOT need to land in `app_metadata.role` (that field gates admin only); confirm and document in the wiki.
-- `docs/designs/shipped/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
+- `docs/designs/closed/0018-user-system/plan.md` — locks the role-taxonomy decisions this plan extends; read before touching `parseRolesField` or auth-metadata sync.
 
 **Overall Progress:** 100% (6/6 phases complete — actual order: 1 → 3 → 2 → 4 → 5 → 6 to avoid the backfill-then-stale-UI race noted in Phase 1's eval)
 
