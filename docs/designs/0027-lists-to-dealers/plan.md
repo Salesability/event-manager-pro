@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Rename + chrome simplify | Done | 539746f |
-| 2: TanStack DataTable foundation on Dealers + route move to `/dealerships` | Done | - |
+| 2: TanStack DataTable foundation on Dealers + route move to `/dealerships` | Done | 62de77d |
 | 3: Radix Dialog + form swap (DealerForm) | Pending | - |
 | 4: Optional Radix Form adoption (decision tree) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
