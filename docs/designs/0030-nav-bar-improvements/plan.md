@@ -7,8 +7,8 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Tab contrast bump | Done | 9718a4d |
-| 2: User menu (avatar dropdown) | In Progress | - |
-| 3: Admin tab grouping | Pending | - |
+| 2: User menu (avatar dropdown) | Done | ca8ba48 |
+| 3: Admin tab grouping | In Progress | - |
 | 4: Responsive collapse | Pending | - |
 | 5: Smoke verification | Pending | - |
 
@@ -27,7 +27,7 @@ The staff-app top nav currently sits at six flat tabs plus a static avatar pill,
 - `docs/wiki/conventions.md` — Server Actions for mutations (sign-out is already a Server Action via `@/features/auth/actions:signOut` — keep that wiring inside the menu). No route handler.
 - Existing `src/components/ui/dialog.tsx` + `src/components/ui/combobox.tsx` set the precedent: Radix primitive → thin headless wrapper → feature consumer. The user menu follows that pattern.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Phase 1 is a one-line cosmetic fix shipped on its own so the contrast win lands without waiting on the dropdown.
@@ -59,12 +59,12 @@ The staff-app top nav currently sits at six flat tabs plus a static avatar pill,
 - [x] ~~Smoke (web-test): close menu via Escape; menu disappears; focus restored to trigger~~ — Same MCP-tooling limitation; Radix's default `onCloseAutoFocus` returns focus to the trigger, verified via code-trace.
 
 #### Phase 3: Admin tab grouping
-- [ ] Resolve Open Question 2 (separator vs. submenu) — default to separator
-- [ ] Add a `<span aria-hidden className="mx-2 h-5 w-px bg-white/20" />` (or equivalent) between the last operational tab and the first admin tab in `src/components/app/app-nav.tsx`
-- [ ] Drive the separator off the `admin: true` flag transition rather than hard-coded index, so 0028/0029 additions don't break it
-- [ ] Confirm separator is hidden when the user is non-admin (no admin tabs rendered → no boundary)
-- [ ] Test: render `<AppNav isAdmin={true} />` shows separator before Lookups; `<AppNav isAdmin={false} />` shows no separator
-- [ ] Smoke (web-test): `goto /calendar`; visual separator present between "Dealers" and "Lookups"
+- [x] Resolve Open Question 2 (separator vs. submenu) — default to separator. Shipped separator (lower-risk, one-click-deep, easy to reverse if 0028/0029 push admin count past ~3).
+- [x] Add a `<span aria-hidden className="mx-2 h-5 w-px bg-white/20" />` (or equivalent) between the last operational tab and the first admin tab in `src/components/app/app-nav.tsx`
+- [x] Drive the separator off the `admin: true` flag transition rather than hard-coded index, so 0028/0029 additions don't break it. Uses `tabs.findIndex((t) => t.admin)` — adding/removing admin tabs auto-shifts the boundary.
+- [x] Confirm separator is hidden when the user is non-admin (no admin tabs rendered → no boundary). The `findIndex` returns `-1` when no admin tabs are present (filter strips them); `i === -1` never matches a positive `i`, so the conditional render fires only when an admin tab actually exists.
+- [x] ~~Test: render `<AppNav isAdmin={true} />` shows separator before Lookups; `<AppNav isAdmin={false} />` shows no separator~~ — repo doesn't have React Testing Library wired (no component-render tests in the existing suite); verification via web-test smoke instead.
+- [x] Smoke (web-test): `goto /calendar`; visual separator present between "Dealers" and "Lookups". Screenshot at `/tmp/web-test-nav-separator.png` confirms the divider sits exactly between the two groups; a11y tree (`aria-hidden`) shows no extraneous element so screen readers still hear the six-tab list as an unbroken sequence.
 
 #### Phase 4: Responsive collapse
 - [ ] Spike: capture screenshots at 1024px, 1280px, 1440px to confirm whether overflow is real today (post-Phases 2 + 3) or only theoretical
