@@ -6,8 +6,8 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Tab contrast bump | Done | - |
-| 2: User menu (avatar dropdown) | Pending | - |
+| 1: Tab contrast bump | Done | 9718a4d |
+| 2: User menu (avatar dropdown) | In Progress | - |
 | 3: Admin tab grouping | Pending | - |
 | 4: Responsive collapse | Pending | - |
 | 5: Smoke verification | Pending | - |
@@ -50,13 +50,13 @@ The staff-app top nav currently sits at six flat tabs plus a static avatar pill,
 - [x] Smoke (web-test): `goto /calendar`; nav bar visible; inactive tabs (Production List, Reports, Dealers, Lookups, People) all show readable label text. Screenshot at `/tmp/web-test-nav-contrast.png`.
 
 #### Phase 2: User menu (avatar dropdown)
-- [ ] Decide the dropdown primitive (resolve Open Question 1) — install `@radix-ui/react-dropdown-menu` if going that way
-- [ ] Create `src/components/app/user-menu.tsx` — avatar pill is the trigger; menu content shows email (top) + `Sign out` (bottom) with the `signOut` Server Action wired inside the menu item
-- [ ] Update `src/components/app/app-header.tsx:27-43` to render `<UserMenu email={email} />` in place of the inline pill + sign-out form
-- [ ] Confirm `Escape`, click-outside, and arrow-key navigation behave per Radix defaults
-- [ ] Test: snapshot of `app-header.tsx` rendering with the new menu (no DOM driver — just confirm the trigger is present and email is not on the bar)
-- [ ] Smoke (web-test): `goto /calendar`; click avatar trigger (label "Account menu" or initials); menu opens with email "<user>" + button "Sign out"
-- [ ] Smoke (web-test): close menu via Escape; menu disappears; focus restored to trigger
+- [x] Decide the dropdown primitive (resolve Open Question 1) — install `@radix-ui/react-dropdown-menu` if going that way. Picked DropdownMenu over Popover; `@radix-ui/react-dropdown-menu ^2.1.16` added.
+- [x] Create `src/components/app/user-menu.tsx` — avatar pill is the trigger; menu content shows email (top) + `Sign out` (bottom) with the `signOut` Server Action wired inside the menu item. Form-in-menu-item submit hardened via `onSelect` → `requestSubmit()` (Codex Phase 2 Medium — fixes the unmount-vs-submit race).
+- [x] Update `src/components/app/app-header.tsx:27-43` to render `<UserMenu email={email} />` in place of the inline pill + sign-out form.
+- [x] Confirm `Escape`, click-outside, and arrow-key navigation behave per Radix defaults. (Verified by code-trace; runtime open cycle blocked by browse-tool MCP a11y limitation — see eval Coverage Caveats.)
+- [x] Test: snapshot of `app-header.tsx` rendering with the new menu (no DOM driver — just confirm the trigger is present and email is not on the bar). Confirmed via `web-test` snapshot — bar shows `button "Account menu": DA`; no email or standalone "Sign out" on the bar.
+- [x] ~~Smoke (web-test): `goto /calendar`; click avatar trigger (label "Account menu" or initials); menu opens with email "<user>" + button "Sign out"~~ — Browse-tool MCP a11y tree doesn't assign `@e<n>` ref to the Radix DropdownMenu.Trigger button (likely an `aria-haspopup="menu"` quirk), so the click can't be driven via the existing tooling. Closed-state visible verification done via screenshot at `/tmp/web-test-user-menu-closed.png`. Phase 5 will revisit if a workaround surfaces.
+- [x] ~~Smoke (web-test): close menu via Escape; menu disappears; focus restored to trigger~~ — Same MCP-tooling limitation; Radix's default `onCloseAutoFocus` returns focus to the trigger, verified via code-trace.
 
 #### Phase 3: Admin tab grouping
 - [ ] Resolve Open Question 2 (separator vs. submenu) — default to separator
