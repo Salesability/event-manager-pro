@@ -12,7 +12,7 @@ Tabs (legacy semantics):
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Aggregation queries (4 reports) | Pending | - |
+| 1: Aggregation queries (4 reports) | Done | - |
 | 2: Reports UI page (tabs + tables) | Pending | - |
 | 3: Per-report Print + CSV export | Pending | - |
 | 4: Verification (tsc + vitest + dev smoke) | Pending | - |
@@ -35,7 +35,7 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - `docs/wiki/architecture.md` — A standalone route (`/reports`) is appropriate; this surface is large enough to deserve its own page rather than a modal in the new app. UI primitives stay re-exported from `src/components/ui/`.
 - `docs/wiki/auth.md` — `/reports` is staff-only; gate via `requireRole(['admin', 'coach'])` at the page level + the durable `requireStaffAccess()` already wired into `(app)/layout.tsx` from 0018.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
 - Anchor on **`/admin/people`** — TanStack Table + `DataTable` wrapper + the column-builder factory + filter-state idiom are all established there. Reports is the second admin-table surface; the third (Production polish, Lookups polish) follows the same pattern.
@@ -46,10 +46,10 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 ### Phase Checklist
 
 #### Phase 1: Aggregation queries
-- [ ] Add `loadCampaignsByDealer`, `loadCampaignsByCoach`, `loadCampaignsByMonth` to `src/features/schedule/queries.ts`.
-- [ ] Each returns `{ groupKey, groupLabel, count, totalQty, totalSms, totalLetters }` with `COALESCE(SUM(...), 0)` so nullable integer columns don't bubble nulls into totals.
-- [ ] `loadFullProductionReport` reuses the existing campaigns query shape (already loaded by `/production`); decide whether to call it here or compose the existing loader.
-- [ ] Vitest coverage for the three aggregations against a fixture corpus (idempotent, clean teardown).
+- [x] Add `loadCampaignsByDealer`, `loadCampaignsByCoach`, `loadCampaignsByMonth` to `src/features/schedule/queries.ts`.
+- [x] Each returns `{ groupKey, groupLabel, count, totalQty, totalSms, totalLetters }` with `COALESCE(SUM(...), 0)` so nullable integer columns don't bubble nulls into totals.
+- [x] `loadFullProductionReport` reuses the existing campaigns query shape (already loaded by `/production`); decide whether to call it here or compose the existing loader. Composed via re-export of `loadCampaigns()` to avoid drift.
+- [x] Vitest coverage for the three aggregations against a fixture corpus (idempotent, clean teardown). 5 new tests in `src/features/schedule/queries.test.ts`.
 
 #### Phase 2: Reports UI — anchored on `/admin/people`
 - [ ] New route `src/app/(app)/reports/page.tsx` — server component, `requireRole(['admin', 'coach'])`, `await Promise.all([...four queries])`, hand to client `<ReportsTabs>`. Mirror `src/app/(app)/admin/people/page.tsx`.

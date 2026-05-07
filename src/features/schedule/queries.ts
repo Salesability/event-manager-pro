@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   availabilityBlocks,
@@ -467,6 +467,119 @@ export async function loadSalesLeadSources(): Promise<LookupOption[]> {
     .from(salesLeadSources)
     .where(isNull(salesLeadSources.archivedAt))
     .orderBy(salesLeadSources.sortOrder, salesLeadSources.label);
+}
+
+// Shared shape for the three group-by aggregations on the /reports surface.
+// `groupKey` is the GROUP BY column value (dealerId, coachId, or 'YYYY-MM');
+// `groupLabel` is what the table renders. `count` and the three totals are
+// cast to int in SQL — Postgres returns bigint for `count()` / `sum()`, which
+// drizzle hands back as a string by default.
+export type CampaignAggregateRow<K = number | null | string> = {
+  groupKey: K;
+  groupLabel: string;
+  count: number;
+  totalQty: number;
+  totalSms: number;
+  totalLetters: number;
+};
+
+export async function loadCampaignsByDealer(): Promise<CampaignAggregateRow<number>[]> {
+  const rows = await db
+    .select({
+      dealerId: campaigns.dealerId,
+      dealerName: dealers.name,
+      count: sql<number>`count(${campaigns.id})::int`,
+      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+    })
+    .from(campaigns)
+    .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .groupBy(campaigns.dealerId, dealers.name)
+    .orderBy(dealers.name);
+
+  return rows.map((r) => ({
+    groupKey: r.dealerId,
+    groupLabel: r.dealerName,
+    count: Number(r.count),
+    totalQty: Number(r.totalQty),
+    totalSms: Number(r.totalSms),
+    totalLetters: Number(r.totalLetters),
+  }));
+}
+
+export async function loadCampaignsByCoach(): Promise<CampaignAggregateRow<number | null>[]> {
+  const rows = await db
+    .select({
+      coachId: campaigns.coachId,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      count: sql<number>`count(${campaigns.id})::int`,
+      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+    })
+    .from(campaigns)
+    .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
+    .groupBy(campaigns.coachId, contacts.firstName, contacts.lastName)
+    .orderBy(contacts.firstName, contacts.lastName);
+
+  return rows.map((r) => ({
+    groupKey: r.coachId,
+    groupLabel:
+      r.firstName || r.lastName
+        ? `${r.firstName ?? ''} ${r.lastName ?? ''}`.trim()
+        : 'Unassigned',
+    count: Number(r.count),
+    totalQty: Number(r.totalQty),
+    totalSms: Number(r.totalSms),
+    totalLetters: Number(r.totalLetters),
+  }));
+}
+
+export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<string>[]> {
+  // Group key is `YYYY-MM` derived from start_date — matches the legacy
+  // summary's "by month" tab, which bucketed events by their start month.
+  // A campaign that crosses a month boundary shows up under its start month
+  // only; that's the legacy semantics and the simplest mental model.
+  const monthKey = sql<string>`to_char(${campaigns.startDate}, 'YYYY-MM')`;
+  const rows = await db
+    .select({
+      monthKey,
+      count: sql<number>`count(${campaigns.id})::int`,
+      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+    })
+    .from(campaigns)
+    .groupBy(monthKey)
+    .orderBy(monthKey);
+
+  return rows.map((r) => ({
+    groupKey: r.monthKey,
+    groupLabel: formatMonthLabel(r.monthKey),
+    count: Number(r.count),
+    totalQty: Number(r.totalQty),
+    totalSms: Number(r.totalSms),
+    totalLetters: Number(r.totalLetters),
+  }));
+}
+
+// Full Production Report tab is the same flat list `/production` already
+// renders — re-export the existing loader so the four-tab page can fetch
+// all four datasets via a single `Promise.all`.
+export async function loadFullProductionReport(): Promise<Campaign[]> {
+  return loadCampaigns();
+}
+
+function formatMonthLabel(yyyymm: string): string {
+  // `yyyymm` is `YYYY-MM` from `to_char` — pick noon UTC so a downstream
+  // toLocaleDateString call doesn't shift the month due to timezone.
+  const [year, month] = yyyymm.split('-');
+  if (!year || !month) return yyyymm;
+  const d = new Date(`${year}-${month}-01T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return yyyymm;
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 export async function loadAvailabilityBlocks(
