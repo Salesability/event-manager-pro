@@ -76,7 +76,7 @@ Status/Commit per chunk live in the top-level Progress Tracker; this table is th
 | 5.4 | Availability admin: Block-out dates UI (`availability_blocks` CRUD) | lines 279, 579–599 | [`0009-availability-admin/plan.md`](../closed/0009-availability-admin/plan.md) |
 | 5.5 | Email send: Resend confirmation to client/coach + email coach share link | lines 424–425, 431–444, 1720 | [`0011-email-send/plan.md`](../closed/0011-email-send/plan.md) |
 | 5.6 | Production: Export CSV + Print | lines 307–308 | [`0013-production-export/plan.md`](../closed/0013-production-export/plan.md) |
-| 5.7 | Booking Summary modal: By Client / By Coach / By Month / Full Production Report + Print + Export CSV | lines 278, 552–574 | [`0014-summary-reports/plan.md`](../0014-summary-reports/plan.md) |
+| 5.7 | Booking Summary modal: By Client / By Coach / By Month / Full Production Report + Print + Export CSV | lines 278, 552–574 | [`0014-summary-reports/plan.md`](../closed/0014-summary-reports/plan.md) — Done 2026-05-07 |
 | 5.8 | Calendar share: full-calendar share link variant of `shareModal` (per-coach already shipped in 4) | lines 489–516 | [`0010-calendar-share-full/plan.md`](../0010-calendar-share-full/plan.md) (small; could fold into 5.5) |
 
 Sequencing:
