@@ -9,6 +9,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type PaginationState,
   type SortingState,
   type Table as TanstackTable,
   type Updater,
@@ -45,8 +46,15 @@ type DataTableProps<TData, TValue> = {
   // per-column fuzzy match — pass one for queries that span multiple fields
   // (e.g. name + email + dealer name in a single textbox).
   globalFilterFn?: FilterFn<TData>;
-  // Default page size. Caller can drive a different value via the page-size
-  // dropdown after mount.
+  // Hoisted sort state. When provided, the table becomes "controlled" for
+  // sorting — useful when sort needs to survive parent remounts (e.g. tabs
+  // that unmount their content panel on switch). Pass both or neither.
+  sorting?: SortingState;
+  onSortingChange?: (updater: Updater<SortingState>) => void;
+  // Hoisted pagination state. Same controlled/uncontrolled rule as `sorting`.
+  pagination?: PaginationState;
+  onPaginationChange?: (updater: Updater<PaginationState>) => void;
+  // Default page size. Used only when `pagination` is uncontrolled.
   initialPageSize?: number;
   emptyState?: React.ReactNode;
 };
@@ -61,10 +69,23 @@ export function DataTable<TData, TValue>({
   columnFilters,
   onColumnFiltersChange,
   globalFilterFn,
+  sorting: sortingProp,
+  onSortingChange: onSortingChangeProp,
+  pagination: paginationProp,
+  onPaginationChange: onPaginationChangeProp,
   initialPageSize = 25,
   emptyState,
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>(initialSorting);
+  const [internalSorting, setInternalSorting] = useState<SortingState>(initialSorting);
+  const sorting = sortingProp ?? internalSorting;
+  const onSortingChange = onSortingChangeProp ?? setInternalSorting;
+
+  const [internalPagination, setInternalPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: initialPageSize,
+  });
+  const pagination = paginationProp ?? internalPagination;
+  const onPaginationChange = onPaginationChangeProp ?? setInternalPagination;
 
   // The `react-hooks/incompatible-library` rule fires here because TanStack
   // Table's hook returns functions that the lint rule's heuristic flags as
@@ -76,11 +97,13 @@ export function DataTable<TData, TValue>({
     columns,
     state: {
       sorting,
+      pagination,
       ...(columnVisibility != null && { columnVisibility }),
       ...(globalFilter != null && { globalFilter }),
       ...(columnFilters != null && { columnFilters }),
     },
-    onSortingChange: setSorting,
+    onSortingChange,
+    onPaginationChange,
     onGlobalFilterChange: onGlobalFilterChange
       ? (updater) => {
           const next =
@@ -95,7 +118,6 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: initialPageSize, pageIndex: 0 } },
     ...(globalFilterFn != null && { globalFilterFn }),
   });
 

@@ -12,8 +12,8 @@ Tabs (legacy semantics):
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Aggregation queries (4 reports) | Done | - |
-| 2: Reports UI page (tabs + tables) | Pending | - |
+| 1: Aggregation queries (4 reports) | Done | 3f052aa |
+| 2: Reports UI page (tabs + tables) | In Progress | - |
 | 3: Per-report Print + CSV export | Pending | - |
 | 4: Verification (tsc + vitest + dev smoke) | Pending | - |
 
@@ -52,11 +52,11 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - [x] Vitest coverage for the three aggregations against a fixture corpus (idempotent, clean teardown). 5 new tests in `src/features/schedule/queries.test.ts`.
 
 #### Phase 2: Reports UI — anchored on `/admin/people`
-- [ ] New route `src/app/(app)/reports/page.tsx` — server component, `requireRole(['admin', 'coach'])`, `await Promise.all([...four queries])`, hand to client `<ReportsTabs>`. Mirror `src/app/(app)/admin/people/page.tsx`.
-- [ ] New `src/components/ui/tabs.tsx` — Radix Tabs wrapper following the `dialog.tsx` shape (`Tabs.Root`, `Tabs.List`, `Tabs.Trigger`, `Tabs.Content` re-exports + project Tailwind classes).
-- [ ] New `src/features/reports/reports-tabs.tsx` — client component with the four-tab switcher; each tab renders a `<DataTable>` (the `@/components/ui/data-table` wrapper from 0021).
-- [ ] New `src/features/reports/reports-columns.tsx` — four `buildXColumns(...)` factories, mirroring `people-columns.tsx`. Sortable headers, cell formatters consistent with people-admin, faceted filters where they make sense (e.g. month picker on the Month tab).
-- [ ] Filter-pill state: lift the `ColumnFiltersState` + `useState` idiom from `people-admin.tsx:1-200`. Search input + facet pills on the Full Production Report tab match Production view's existing search/filter UX.
+- [x] New route `src/app/(app)/reports/page.tsx` — server component, `requireRole(['admin', 'coach'])`, `await Promise.all([...four queries])`, hand to client `<ReportsTabs>`. Mirror `src/app/(app)/admin/people/page.tsx`.
+- [x] New `src/components/ui/tabs.tsx` — Radix Tabs wrapper following the `dialog.tsx` shape (`Tabs.Root`, `Tabs.List`, `Tabs.Trigger`, `Tabs.Content` re-exports + project Tailwind classes). Added `@radix-ui/react-tabs ^1.1.13` to `package.json`.
+- [x] New `src/features/reports/reports-tabs.tsx` — client component with the four-tab switcher; each tab renders a `<DataTable>` (the `@/components/ui/data-table` wrapper from 0021).
+- [x] New `src/features/reports/reports-columns.tsx` — four `buildXColumns(...)` factories, mirroring `people-columns.tsx`. Sortable headers, cell formatters consistent with people-admin. Month-picker faceted filter wired on the Full tab (the "Month" aggregate tab is itself the breakdown — extra filter would be redundant). Also exports `coachRowKey()` for stable keys when `groupKey` is null (Codex Phase 1 Low carry-forward).
+- [x] Filter-pill state: lift the `ColumnFiltersState` + `useState` idiom from `people-admin.tsx:1-200`. Search input + facet pills on the Full Production Report tab match Production view's existing search/filter UX. Added Reports nav link to `app-nav.tsx`.
 
 #### Phase 3: Print + CSV export
 - [ ] Reuse the print stylesheet from 5.6 (`src/app/production/print.css` or equivalent — confirm during implementation).

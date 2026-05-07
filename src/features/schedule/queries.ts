@@ -1,6 +1,7 @@
 import 'server-only';
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { formatYearMonth } from '@/lib/dates';
 import {
   availabilityBlocks,
   campaigns,
@@ -557,7 +558,7 @@ export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<strin
 
   return rows.map((r) => ({
     groupKey: r.monthKey,
-    groupLabel: formatMonthLabel(r.monthKey),
+    groupLabel: formatYearMonth(r.monthKey),
     count: Number(r.count),
     totalQty: Number(r.totalQty),
     totalSms: Number(r.totalSms),
@@ -570,16 +571,6 @@ export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<strin
 // all four datasets via a single `Promise.all`.
 export async function loadFullProductionReport(): Promise<Campaign[]> {
   return loadCampaigns();
-}
-
-function formatMonthLabel(yyyymm: string): string {
-  // `yyyymm` is `YYYY-MM` from `to_char` — pick noon UTC so a downstream
-  // toLocaleDateString call doesn't shift the month due to timezone.
-  const [year, month] = yyyymm.split('-');
-  if (!year || !month) return yyyymm;
-  const d = new Date(`${year}-${month}-01T12:00:00Z`);
-  if (Number.isNaN(d.getTime())) return yyyymm;
-  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 export async function loadAvailabilityBlocks(
