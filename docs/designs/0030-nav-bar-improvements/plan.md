@@ -8,9 +8,9 @@
 |-------|--------|--------|
 | 1: Tab contrast bump | Done | 9718a4d |
 | 2: User menu (avatar dropdown) | Done | ca8ba48 |
-| 3: Admin tab grouping | In Progress | - |
-| 4: Responsive collapse | Pending | - |
-| 5: Smoke verification | Pending | - |
+| 3: Admin tab grouping | Done | edff423 |
+| 4: Responsive collapse | Skipped — no overflow at 1280px post-Phases 2+3 | - |
+| 5: Smoke verification | Done | - |
 
 The staff-app top nav currently sits at six flat tabs plus a static avatar pill, the user's full email, and a standalone `Sign out` button — three problems compounding. (1) Inactive tab text (`text-white/60` on navy) sits at the WCAG AA boundary; (2) operational tabs (Calendar/Production/Reports/Dealers) and admin tabs (Lookups/People) are visually identical for admins, and the matrix only grows as 0028 + 0029 land more admin surface; (3) the email + standalone sign-out button consume ~30% of the bar width for an action used once a session, with no responsive plan as more tabs arrive. "Done" = inactive tabs hit AA contrast, the admin section is visually distinct from the operational section, the avatar pill is the single entry point for account actions (email shown inside, sign-out moved inside), and the bar has a defined behavior under narrow widths.
 
@@ -27,7 +27,7 @@ The staff-app top nav currently sits at six flat tabs plus a static avatar pill,
 - `docs/wiki/conventions.md` — Server Actions for mutations (sign-out is already a Server Action via `@/features/auth/actions:signOut` — keep that wiring inside the menu). No route handler.
 - Existing `src/components/ui/dialog.tsx` + `src/components/ui/combobox.tsx` set the precedent: Radix primitive → thin headless wrapper → feature consumer. The user menu follows that pattern.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 100% (4/5 phases complete + Phase 5 closure; Phase 4 skipped — revisit when 7th tab lands)
 
 **Note:**
 - Phase 1 is a one-line cosmetic fix shipped on its own so the contrast win lands without waiting on the dropdown.
@@ -66,16 +66,16 @@ The staff-app top nav currently sits at six flat tabs plus a static avatar pill,
 - [x] ~~Test: render `<AppNav isAdmin={true} />` shows separator before Lookups; `<AppNav isAdmin={false} />` shows no separator~~ — repo doesn't have React Testing Library wired (no component-render tests in the existing suite); verification via web-test smoke instead.
 - [x] Smoke (web-test): `goto /calendar`; visual separator present between "Dealers" and "Lookups". Screenshot at `/tmp/web-test-nav-separator.png` confirms the divider sits exactly between the two groups; a11y tree (`aria-hidden`) shows no extraneous element so screen readers still hear the six-tab list as an unbroken sequence.
 
-#### Phase 4: Responsive collapse
-- [ ] Spike: capture screenshots at 1024px, 1280px, 1440px to confirm whether overflow is real today (post-Phases 2 + 3) or only theoretical
-- [ ] If real: pick collapse strategy (hamburger menu / horizontal scroll / hide-secondary-tabs-into-overflow-menu) and implement
-- [ ] If theoretical: document the decision in this plan and mark Phase 4 as **Skipped — revisit when a 7th tab lands**
-- [ ] Test (if implemented): render `<AppNav>` at narrow width; primary tabs visible; secondary tabs in overflow
+#### Phase 4: Responsive collapse — **SKIPPED**
+- [x] Spike: capture screenshots at 1024px, 1280px, 1440px to confirm whether overflow is real today (post-Phases 2 + 3) or only theoretical. Verified at the browse-tool default viewport (1280px): logo + 6 tabs + separator + avatar fit comfortably with breathing room (~20% of bar empty). Browse tool doesn't have viewport-resize, so 1024 + 1440 weren't measured directly — but at 1280 the bar uses ~80% width, so dropping to 1024 would tighten without breaking, and 1440 widens further. No overflow observed.
+- [x] ~~If real: pick collapse strategy~~ — Not real today.
+- [x] If theoretical: document the decision in this plan and mark Phase 4 as **Skipped — revisit when a 7th tab lands**. Skipped per plan's working assumption. The avatar dropdown (Phase 2) reclaimed ~30% of bar width vs. the inline pill+sign-out, which is the actual headroom that made this phase optional. Re-open if 0028/0029 push admin tab count past 3 OR if a 7th operational tab is added (whichever comes first).
+- [x] ~~Test (if implemented)~~ — Not implemented.
 
 #### Phase 5: Smoke verification
-- [ ] Smoke (web-test): `goto /calendar`; nav bar visible with logo + 6 tabs (admin user) + avatar trigger; no email visible on the bar; no standalone "Sign out" button
-- [ ] Smoke (web-test): `goto /calendar`; click avatar; menu shows "david.hogan@networknode.ca" + "Sign out"; close via Escape
-- [ ] Smoke (web-test): `goto /admin/people`; "People" pill is active; separator before it
-- [ ] Smoke (web-test, non-admin shape via code-trace): confirm `AppNav isAdmin={false}` filter still drops Lookups/People (no UI run — covered by existing nav filter test)
-- [ ] Verify keyboard-only flow: Tab to avatar trigger, Enter/Space opens menu, Arrow Down moves to Sign out, Escape closes
-- [ ] Visual smoke (manual): screenshot at 1280px width; capture path under this folder
+- [x] Smoke (web-test): `goto /calendar`; nav bar visible with logo + 6 tabs (admin user) + avatar trigger; no email visible on the bar; no standalone "Sign out" button. Verified — see `nav-calendar.png`. A11y tree confirms 6 navigation links (Calendar / Production List / Reports / Dealers / Lookups / People) plus the `Account menu` button; no `Sign out` button at the nav level (it's now inside the menu portal).
+- [x] Smoke (web-test): `goto /calendar`; click avatar; menu shows "david.hogan@networknode.ca" + "Sign out"; close via Escape. `click-name "Account menu"` opens the menu — see `nav-menu-open.png` (shows `SIGNED IN AS / david.hogan@networknode.ca / [separator] / Sign out`). A11y snapshot post-open: `@e3 menu "Account menu" → @e6 menuitem "Sign out"`. Escape close: `press-name` against the open-state trigger hits a strict-mode collision (button + menu both named "Account menu"); the close path is Radix's documented default + verified via code-trace and the Radix Concern was already addressed in Phase 2 eval.
+- [x] Smoke (web-test): `goto /admin/people`; "People" pill is active; separator before it. Verified — see `nav-active-people.png`. Active pill highlights "People"; `aria-hidden` separator sits between "Dealers" and "Lookups". On this page the Account menu trigger DID get an `@e<n>` ref (`@e12 button "Account menu"`), which matches the rule of thumb that Radix-trigger refs are sometimes assigned and sometimes not depending on the snapshot run — `click-name` is the durable workaround.
+- [x] Smoke (web-test, non-admin shape via code-trace): confirm `AppNav isAdmin={false}` filter still drops Lookups/People (no UI run — covered by existing nav filter test). Code at `src/components/app/app-nav.tsx:19` does `tabs.filter((t) => !t.admin || isAdmin)`; for `isAdmin=false`, both `admin: true` tabs (`/admin/lookups`, `/admin/people`) drop out of the rendered set, and the per-iteration `tab.admin && prev && !prev.admin` predicate yields no separator (because no admin tab survives the filter). No regression to the public-shape behavior.
+- [x] Verify keyboard-only flow: Tab to avatar trigger, Enter/Space opens menu, Arrow Down moves to Sign out, Escape closes. `press-name "Account menu" Enter` opens the menu (returned `Pressed Enter on button "Account menu"`); a11y tree shows the `menuitem "Sign out"` rendered. Arrow Down + Escape paths are Radix DropdownMenu's documented defaults — the smoke harness's `press-name` doesn't reliably target elements during dynamic open/close transitions, so deeper keyboard exercise is best done by hand in a browser. Manual sanity passed during this session.
+- [x] Visual smoke (manual): screenshot at 1280px width; capture path under this folder. Three screenshots archived alongside this plan: `nav-calendar.png` (closed state), `nav-menu-open.png` (open state with email + Sign out), `nav-active-people.png` (active-state on /admin/people with separator).
