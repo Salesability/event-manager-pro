@@ -30,7 +30,7 @@ export function AppNav({ isAdmin }: { isAdmin: boolean }) {
               'rounded-md px-4 py-2 text-sm font-medium transition ' +
               (active
                 ? 'bg-stone-400/40 text-white'
-                : 'text-white/60 hover:bg-white/10 hover:text-white')
+                : 'text-white/75 hover:bg-white/10 hover:text-white')
             }
           >
             {tab.label}
