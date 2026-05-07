@@ -16,7 +16,7 @@ import {
   type VisibilityState,
   useReactTable,
 } from '@tanstack/react-table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Headless data-table wrapper. Owns sort + pagination + filter state and
 // renders the table chrome in this app's Tailwind vocabulary so consumers
@@ -121,7 +121,28 @@ export function DataTable<TData, TValue>({
     ...(globalFilterFn != null && { globalFilterFn }),
   });
 
-  const rows = table.getRowModel().rows;
+  // Print path: bypass pagination so all filtered rows make it onto the
+  // page rather than just the current 25-row slice the user happens to be
+  // viewing. The flag flips via the browser's `beforeprint` event (synchronous,
+  // fires before the print preview captures the DOM) and clears on
+  // `afterprint`. The Tailwind `print:hidden` on the pagination footer keeps
+  // the chrome out of the printed view.
+  const [isPrinting, setIsPrinting] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onBefore = () => setIsPrinting(true);
+    const onAfter = () => setIsPrinting(false);
+    window.addEventListener('beforeprint', onBefore);
+    window.addEventListener('afterprint', onAfter);
+    return () => {
+      window.removeEventListener('beforeprint', onBefore);
+      window.removeEventListener('afterprint', onAfter);
+    };
+  }, []);
+
+  const rows = isPrinting
+    ? table.getFilteredRowModel().rows
+    : table.getRowModel().rows;
 
   return (
     <div className="flex flex-col gap-3">
@@ -204,7 +225,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
   const end = Math.min(totalRows, (pageIndex + 1) * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 print:hidden">
       <div>
         {totalRows === 0 ? '0 rows' : `${start}–${end} of ${totalRows}`}
       </div>

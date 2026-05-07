@@ -13,8 +13,8 @@ Tabs (legacy semantics):
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Aggregation queries (4 reports) | Done | 3f052aa |
-| 2: Reports UI page (tabs + tables) | In Progress | - |
-| 3: Per-report Print + CSV export | Pending | - |
+| 2: Reports UI page (tabs + tables) | Done | ebfa63f |
+| 3: Per-report Print + CSV export | In Progress | - |
 | 4: Verification (tsc + vitest + dev smoke) | Pending | - |
 
 ## Code Anchors
@@ -35,7 +35,7 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - `docs/wiki/architecture.md` — A standalone route (`/reports`) is appropriate; this surface is large enough to deserve its own page rather than a modal in the new app. UI primitives stay re-exported from `src/components/ui/`.
 - `docs/wiki/auth.md` — `/reports` is staff-only; gate via `requireRole(['admin', 'coach'])` at the page level + the durable `requireStaffAccess()` already wired into `(app)/layout.tsx` from 0018.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Anchor on **`/admin/people`** — TanStack Table + `DataTable` wrapper + the column-builder factory + filter-state idiom are all established there. Reports is the second admin-table surface; the third (Production polish, Lookups polish) follows the same pattern.
@@ -59,9 +59,9 @@ The single largest anchor for this chunk is **`/admin/people`** — the 0021-peo
 - [x] Filter-pill state: lift the `ColumnFiltersState` + `useState` idiom from `people-admin.tsx:1-200`. Search input + facet pills on the Full Production Report tab match Production view's existing search/filter UX. Added Reports nav link to `app-nav.tsx`.
 
 #### Phase 3: Print + CSV export
-- [ ] Reuse the print stylesheet from 5.6 (`src/app/production/print.css` or equivalent — confirm during implementation).
-- [ ] CSV export route at `src/app/reports/export/route.ts` accepting `?tab=client|coach|month|full`. Mirror the 5.6 export route handler shape (content-type, disposition, encoding posture). The CSV-injection mitigation parked from 5.6 needs to apply here too.
-- [ ] Per-tab Print button triggers the print stylesheet; ensure the active tab's table is what prints (not all four).
+- [x] Reuse the print stylesheet from 5.6 (`src/app/production/print.css` or equivalent — confirm during implementation). Stylesheet lives in `src/app/globals.css` (`@media print {…}` block) — global, no separate file. Added `print:hidden` to `Tabs.List`, the action-button row (Export + Print), the Full-tab search/month picker, and the DataTable pagination footer so only the active table prints.
+- [x] CSV export route at `src/app/reports/export/route.ts` accepting `?tab=client|coach|month|full`. Mirror the 5.6 export route handler shape (content-type, disposition, encoding posture). The CSV-injection mitigation parked from 5.6 needs to apply here too. Implemented at `src/app/(app)/reports/export/route.ts` (route group matches the page); `?tab=dealer|coach|month|full` (renamed `client` → `dealer` to match the UI tab key). Extracted `csvCell` / `buildCsv` / `csvResponse` to `src/lib/csv.ts` with formula-prefix mitigation; retrofitted `production/export/route.ts` to use the same helper, closing the parked Codex Medium from 5.6 in the same pass. 7 new vitest cases in `src/lib/csv.test.ts`.
+- [x] Per-tab Print button triggers the print stylesheet; ensure the active tab's table is what prints (not all four). Print button calls `window.print()`; Radix Tabs unmounts inactive panels by default so only the active table is in the DOM at print time.
 
 #### Phase 4: Verification
 - [ ] `pnpm tsc --noEmit` clean.

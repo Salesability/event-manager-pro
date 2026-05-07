@@ -124,13 +124,30 @@ export function ReportsTabs({
 
   return (
     <Tabs.Root value={tab} onValueChange={(v) => setTab(v as ReportTabKey)}>
-      <Tabs.List aria-label="Report views">
-        {(Object.keys(TAB_LABELS) as ReportTabKey[]).map((key) => (
-          <Tabs.Trigger key={key} value={key}>
-            {TAB_LABELS[key]}
-          </Tabs.Trigger>
-        ))}
-      </Tabs.List>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Tabs.List aria-label="Report views" className="print:hidden">
+          {(Object.keys(TAB_LABELS) as ReportTabKey[]).map((key) => (
+            <Tabs.Trigger key={key} value={key}>
+              {TAB_LABELS[key]}
+            </Tabs.Trigger>
+          ))}
+        </Tabs.List>
+        <div className="flex items-center gap-2 print:hidden">
+          <a
+            href={`/reports/export?tab=${tab}`}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-navy hover:text-navy"
+          >
+            ⬇ Export CSV
+          </a>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:border-navy hover:text-navy"
+          >
+            🖨 Print
+          </button>
+        </div>
+      </div>
 
       <Tabs.Content value="dealer">
         <DataTable
@@ -169,7 +186,7 @@ export function ReportsTabs({
       </Tabs.Content>
 
       <Tabs.Content value="full">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
           <input
             type="search"
             value={fullGlobalFilter}

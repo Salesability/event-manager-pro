@@ -2,6 +2,7 @@ import 'server-only';
 import { type NextRequest } from 'next/server';
 import { requireStaffAccess } from '@/lib/auth/require-staff-access';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
+import { buildCsv, csvResponse } from '@/lib/csv';
 import { filterCampaigns, todayIso } from '../filter';
 
 const HEADERS = [
@@ -34,44 +35,25 @@ export async function GET(request: NextRequest) {
   const today = todayIso();
   const rows = filterCampaigns(await loadCampaigns(), { q, status, showCancelled });
 
-  const lines = [
-    HEADERS.map(csvCell).join(','),
-    ...rows.map((c) =>
-      [
-        `${c.startDate} → ${c.endDate}`,
-        c.dealerName,
-        formatContact(c),
-        c.styleLabel ?? '',
-        c.salesLeadSourceLabel ?? '',
-        c.qtyRecords ?? '',
-        c.smsEmail ?? '',
-        c.letters ?? '',
-        c.bdc ?? '',
-        c.coachName ?? '',
-        c.notes ?? '',
-        statusLabel(c, today),
-      ]
-        .map((v) => csvCell(String(v)))
-        .join(','),
-    ),
-  ];
+  const csv = buildCsv(
+    HEADERS,
+    rows.map((c) => [
+      `${c.startDate} → ${c.endDate}`,
+      c.dealerName,
+      formatContact(c),
+      c.styleLabel ?? '',
+      c.salesLeadSourceLabel ?? '',
+      c.qtyRecords != null ? String(c.qtyRecords) : '',
+      c.smsEmail != null ? String(c.smsEmail) : '',
+      c.letters != null ? String(c.letters) : '',
+      c.bdc != null ? String(c.bdc) : '',
+      c.coachName ?? '',
+      c.notes ?? '',
+      statusLabel(c, today),
+    ]),
+  );
 
-  // Prepend a UTF-8 BOM so Excel auto-detects the encoding when the file
-  // is opened directly (without it, accented characters render as mojibake).
-  const csv = '\uFEFF' + lines.join('\r\n');
-
-  return new Response(csv, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="production-${today}.csv"`,
-      'Cache-Control': 'no-store',
-    },
-  });
-}
-
-function csvCell(v: string) {
-  return `"${v.replace(/"/g, '""')}"`;
+  return csvResponse(`production-${today}.csv`, csv);
 }
 
 function formatContact(c: Campaign) {
