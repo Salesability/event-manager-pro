@@ -9,7 +9,7 @@
 | 1: Rename + chrome simplify | Done | 539746f |
 | 2: TanStack DataTable foundation on Dealers + route move to `/dealerships` | Done | 62de77d |
 | 3: Radix Dialog + form swap (DealerForm) | Done | eadff5f |
-| 4: Optional Radix Form adoption (decision tree) | Pending | - |
+| 4: Optional Radix Form adoption (decision tree) | Done | - |
 | 5: Tests + smoke verification | Pending | - |
 
 After 0020 retired Sales Coaches, `/lists` collapsed to a one-section "Manage Lists" page that just shows dealerships — but kept all the multi-section chrome (umbrella h1, explanatory subtitle linking to `/admin/people`, redundant `🏢 Dealerships 26` ListCard header). The screenshot the user shared makes the redundancy obvious: title, subtitle, and section header all say the same thing. This chunk renames the page to "Dealers" (since dealers/companies *are* the page now) and migrates it onto the same toolbar + TanStack DataTable + Radix Dialog pattern that 0021 + 0024 established on `/admin/people`. End state: visiting `/dealerships` (route moved from `/lists` in Phase 2) shows a single h1 "Dealers", a toolbar with `N dealers` count + search box + `+ Add Dealer`, a sortable/searchable table of dealerships, and an Edit/Add dialog that uses the same Radix Dialog wrapper as PersonForm. Out of scope: dealer schema changes; marketing-site rename. Phase 1 shipped at the original `/lists` route (commit `539746f`); Phase 2 moves the folder to `/dealerships` while rewriting the page.
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → "Mutations go through Server Actions" — `archiveDealer`/`createDealer`/`updateDealer` already in `src/features/schedule/actions.ts`; keep them there for this chunk (the actions don't move with the UI).
 - `docs/wiki/auth.md` (RBAC) — page-level gate: `/lists` is staff-only today, no role tightening needed (admins/coaches both manage dealers). Keep the existing gate from `(app)/layout.tsx`.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and a fast smoke check (typecheck + lint).
@@ -111,11 +111,11 @@ Goal: replace the current `app/(app)/dealerships/dealer-form.tsx` (custom `Field
 
 **Decision gate before starting:** Re-read Open Question 3. If Phases 1–3 shipped clean and there's no concurrent work on PersonForm/booking intake, proceed. Otherwise mark this phase **Skipped** and file a carry-forward to migrate PersonForm + DealerForm + BookingForm together.
 
-- [ ] If skipping: edit this plan to flip Phase 4 to Skipped, capture the carry-forward in `CURRENT.md`'s Parked list, jump to Phase 5.
-- [ ] If proceeding: install `@radix-ui/react-form` (already a transitive of `@radix-ui/react-*`? verify with `pnpm why`). Wrap DealerForm fields in `<Form.Field>` with `<Form.Label>` + `<Form.Control asChild>` + `<Form.Message match="valueMissing">…</Form.Message>`.
-- [ ] Verify the form still posts to `createDealer` / `updateDealer` Server Actions — Radix Form uses native form submission unless `onSubmit` is intercepted.
-- [ ] In the same pass, retrofit `PersonForm` to use Radix Form so the two forms share the validation idiom (don't migrate one without the other — that was the rationale in 0024's Parked note).
-- [ ] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
+- [x] ~~If skipping~~ — Phase 4 ran (user said "do it" 2026-05-07).
+- [x] Installed `@radix-ui/react-form@0.1.8`. Wrapped DealerForm fields in `<Form.Field>` with `<Form.Label>` + `<Form.Control asChild>` + `<Form.Message match="valueMissing">` on `name`. Added `<Form.Message match="typeMismatch">` on email.
+- [x] Form still posts to `createDealer` / `updateDealer` Server Actions — `<Form.Root action={formAction}>` passes through to native form submission. Wire-format unchanged (`name`, `contactFirst`, `contactLast`, `contactEmail`, `contactPhone`, `address`, `id`).
+- [x] In the same pass, retrofited `PersonForm`'s standard text fields (firstName, lastName, email, phone) to use `<Form.Field>` + `<Form.Message>`. Custom controls (Radix Checkbox roles fieldset, Combobox + Select dealer picker) stay outside Radix Form — they don't have `valueMissing` semantics that Radix Form's match clauses operate on. Native + Radix Form coexist inside the same `<Form.Root>`.
+- [x] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
 
 ### Phase 5: Tests + smoke verification
 
