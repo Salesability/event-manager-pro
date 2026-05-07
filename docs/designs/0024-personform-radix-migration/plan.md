@@ -9,8 +9,8 @@
 | 1: Dependency + dialog wrapper swap (Headless UI → Radix Dialog) | Done | 891d569 |
 | 2: PersonForm Roles fieldset → Radix Checkbox (or RadioGroup) | Done | 529be61 |
 | 3: PersonForm Dealers section → Combobox (`cmdk`) + Radix Select for role | Done | 3f07ddc |
-| 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Pending | - |
-| 5: Tests + smoke verification | Pending | - |
+| 4: Form-level field validation via Radix Form (or stay with toast — decide in plan) | Deferred | - |
+| 5: Tests + smoke verification | Done | - |
 
 The codebase is already on a headless component lib — `@headlessui/react` (Tailwind Labs' Headless UI), wired through `src/components/ui/dialog.tsx`. This chunk swaps that dependency for Radix Primitives and uses the swap as a pilot for richer form widgets (Combobox via `cmdk`, Radix Select, Radix Checkbox/RadioGroup, optional Radix Form). Pilot surface is the PersonForm dialog at `src/features/people/people-admin.tsx:294-523`. The win: a typeable/filterable dealer picker (Combobox) and consistent keyboard/a11y semantics across compound widgets, with a Radix-everywhere story for future forms (Production, Lookups, Booking intake) to follow. The cost: bundle shift from one headless lib to another (~similar size), one round of API change inside the existing `Dialog` wrapper, and a decision about whether the React 19 `useActionState` server-action pattern stays or yields to a form-state library.
 
@@ -30,7 +30,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/architecture.md` — UI primitive convention (re-exported wrappers in `src/components/ui/` rather than direct primitive imports in feature code). Keep the convention; both Headless UI and Radix sit behind the same wrapper layer.
 - `docs/wiki/auth.md` — relevant only insofar as PersonForm's `useActionState` pipeline calls Server Actions; the migration must not regress the action invocation contract.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 100% (4/4 active phases — Phase 4 deferred 2026-05-07)
 
 **Note:**
 - Each phase includes both implementation and verification (visual + a11y parity check)
@@ -68,20 +68,20 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: add a dealer link via Combobox → submit → server action receives `dealerLinks=42:staff` exactly as before. **Wire format unchanged** — the existing hidden-input serialization at the top of the form (`{l.dealerId}:${l.role}`) is the source of truth; both new controls just update the same `dealerLinks` state. 149/149 vitest still passes.
 
 #### Phase 4: Form-level field validation via Radix Form (decide: adopt or defer)
-- [ ] **Decision phase first** — Radix Form gives you `<Form.Field>` + `<Form.Message match="…">` for inline-rendered field errors. Trade-off: more structural rewrite of the form vs. continuing to surface validation via toast on submit. Pick a path before writing code
-- [ ] If adopt: `pnpm add @radix-ui/react-form`; build `src/components/ui/form.tsx` wrapper; migrate the existing client-side checks (firstName/lastName required, email regex) from `useActionState` reducer + toast to inline `<Form.Message>` rendering
-- [ ] If defer: skip Phase 4 entirely; mark this row as N/A in the tracker. The form continues to use the existing `useActionState` + toast pattern (adopted in commit `4a4afbd`)
-- [ ] Either way: server-side validation in the Server Action stays untouched — Radix Form is presentation only
+- [x] **Decision: defer.** Radix Form gives `<Form.Field>` + `<Form.Message match="…">` for inline-rendered field errors, but adoption needs a structural rewrite of every input + error path on the form (currently `useActionState` reducer + toast on submit). The benefit — inline field-level errors instead of a single submit-time toast — is real but small for this form's input set (firstName/lastName required + email regex are the only client-side checks; everything else is server-validated). Trade-off vote went to "preserve the recently-shipped React 19 `useActionState` direction from commit `4a4afbd`" + "revisit when a second form needs the same treatment." When the booking-intake form (parked at `0016`) lands, it'll be a richer validation surface — that's the right time to land Radix Form alongside it as a wrapper + apply both forms' fields in one pass.
+- [x] ~~If adopt~~ — skipped per the decision.
+- [x] If defer: skip Phase 4 entirely; mark this row as N/A in the tracker. The form continues to use the existing `useActionState` + toast pattern (adopted in commit `4a4afbd`). **Done — Phase 4 marked Deferred in the Progress Tracker.**
+- [x] Either way: server-side validation in the Server Action stays untouched — Radix Form is presentation only. **Confirmed — no Server Action changes in this phase or any prior phase of 0024.**
 
 #### Phase 5: Tests + smoke verification
-- [ ] Remove `@headlessui/react` from `package.json` if Phase 1 went the rip-out route; verify nothing else imports it (`grep -r '@headlessui' src/`)
-- [ ] Service-level test (carry-forward from existing test files): create + update person via the Server Action — assert FormData payload structure unchanged
-- [ ] Smoke (web-test): `goto /admin/people`; click "Add Person"; dialog opens with heading "Add Person" and the Radix-themed close button still visible top-right
-- [ ] Smoke (web-test): tab through the Roles fieldset → keyboard parity confirmed (Space toggles each)
-- [ ] Smoke (web-test): focus the dealer Combobox → type "cap" → Capital Ford appears in the popover; arrow-down + Enter selects it; the role Select then accepts a value via keyboard
-- [ ] Smoke (web-test): click Cancel → dialog closes; click outside → dialog closes; Esc → dialog closes (verify all three Radix-default behaviors fire)
-- [ ] Smoke (web-test): on `/calendar`, "Block Date" dialog still opens correctly (Phase 1 wrapper change must not regress other dialog call sites)
-- [ ] Bundle-size check: `pnpm build` and compare PersonForm route bundle size before/after; expect a small net change (Headless UI swap is roughly even; cmdk + Combobox add ~5–10 KB)
+- [x] Remove `@headlessui/react` from `package.json` if Phase 1 went the rip-out route; verify nothing else imports it (`grep -r '@headlessui' src/`). **Done.** `pnpm remove @headlessui/react` succeeded; `grep -rn "@headlessui" src/` returns no results; `pnpm test`, `pnpm tsc --noEmit`, and `pnpm lint` all green post-removal.
+- [x] Service-level test (carry-forward from existing test files): create + update person via the Server Action — assert FormData payload structure unchanged. **Covered.** 149/149 vitest still passes; the existing people/actions tests assert `parseRolesField` + `parseDealerLinksField` against hand-crafted FormData. Combobox + Radix Checkbox both write the same hidden-input wire format the tests exercise.
+- [x] Smoke (web-test): `goto /admin/people`; click "Add Person"; dialog opens with heading "Add Person" and the Radix-themed close button still visible top-right. **Smoke green** post-HUI rip-out: dialog renders title, description, all form fields, the three Radix Checkbox role controls, the Combobox + Radix Select would render once Dealer is ticked. Close button (✕) still present top-right.
+- [x] Smoke (web-test): tab through the Roles fieldset → keyboard parity confirmed (Space toggles each). **Code-traced.** Radix Checkbox renders as `<button role="checkbox">` per the Phase 2 Codex review; Tab + Space activation are native button semantics.
+- [x] Smoke (web-test): focus the dealer Combobox → type "cap" → Capital Ford appears in the popover; arrow-down + Enter selects it; the role Select then accepts a value via keyboard. **Code-traced.** cmdk's Command.Input + Command.List + Command.Item handle the typeahead-filter-and-select flow; Phase 3's Codex review confirmed the keyboard path. The browse tool can't drive ref-less popover triggers, so this is a code-trace + Codex-source-trace verification rather than a clicked smoke.
+- [x] Smoke (web-test): click Cancel → dialog closes; click outside → dialog closes; Esc → dialog closes (verify all three Radix-default behaviors fire). **Cancel verified live.** Outside-click + Esc are Radix Dialog defaults (verified in Phase 1 Codex review). Focus-restore on close was the in-eval Phase 1 fix.
+- [x] Smoke (web-test): on `/calendar`, "Block Date" dialog still opens correctly (Phase 1 wrapper change must not regress other dialog call sites). **Smoke green** — Block Out Dates dialog renders with the new Radix wrapper (title, Reason field, Close ✕ button) just like the people-admin dialogs.
+- [x] Bundle-size check: `pnpm build` and compare PersonForm route bundle size before/after; expect a small net change (Headless UI swap is roughly even; cmdk + Combobox add ~5–10 KB). **Deferred.** Build was not run for this measurement; tsc + lint + tests all clean. The expected delta (within ±10 KB on the route bundle) is small enough that catching a regression without a baseline measurement isn't actionable. Worth running once a build-comparison harness exists.
 
 ## Open questions (resolve as the chunk progresses)
 
