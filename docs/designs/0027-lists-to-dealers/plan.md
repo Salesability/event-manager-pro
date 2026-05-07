@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Rename + chrome simplify | Done | 539746f |
 | 2: TanStack DataTable foundation on Dealers + route move to `/dealerships` | Done | 62de77d |
-| 3: Radix Dialog + form swap (DealerForm) | Pending | - |
+| 3: Radix Dialog + form swap (DealerForm) | Done | - |
 | 4: Optional Radix Form adoption (decision tree) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → "Mutations go through Server Actions" — `archiveDealer`/`createDealer`/`updateDealer` already in `src/features/schedule/actions.ts`; keep them there for this chunk (the actions don't move with the UI).
 - `docs/wiki/auth.md` (RBAC) — page-level gate: `/lists` is staff-only today, no role tightening needed (admins/coaches both manage dealers). Keep the existing gate from `(app)/layout.tsx`.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and a fast smoke check (typecheck + lint).
@@ -99,13 +99,13 @@ Goal: replace the bare `<ul>`-of-`<li>` with the same DataTable that `/admin/peo
 
 Goal: replace the current `app/(app)/dealerships/dealer-form.tsx` (custom `Field` helper + bare buttons; moved here in Phase 2) with a PersonForm-shaped form that uses the shared `Dialog` wrapper, the shared input class, and the shared toast wiring.
 
-- [ ] Create `src/features/dealers/dealer-form.tsx` — anchor on `PersonForm` at `src/features/people/people-admin.tsx:324`. Same `useActionState<State, FormData>` shape, same `useEffect` toast/router-refresh wiring, same `Cancel` + submit footer. Replaces the existing `src/app/(app)/dealerships/dealer-form.tsx` (moved in Phase 2).
-- [ ] Use the same `inputClass` constant pattern from `people-admin.tsx:58` (or factor into a `src/components/ui/form-classes.ts` if it starts to repeat — defer that decision until Phase 4).
-- [ ] Drop the bespoke `Field({label, htmlFor, required})` helper in favor of the People-style inline `<label className="flex flex-col gap-1 text-xs font-medium text-stone-600">…</label>` shape (matches `people-admin.tsx:449`).
-- [ ] Wire Add/Edit dialog from `dealers-admin.tsx` — `Dialog.Root` + `Dialog.Backdrop` + `Dialog.Panel` (anchor: `people-admin.tsx:254`).
-- [ ] Delete `src/app/(app)/dealerships/list-actions.tsx` (its `AddDealerButton` + `DealerRowActions` move into `dealers-admin.tsx` as inline behavior, just like `/admin/people`).
-- [ ] Update `archiveDealer`'s confirm message via the `buildArchiveConfirmMessage`-style facet composer (anchor: `people-admin.tsx:287`). For dealers the facets are simpler ("Archive X? N campaigns will keep their reference, M contacts will lose this dealership link.") — load the counts from the dealer row if cheap, otherwise keep the current one-liner with a TODO.
-- [ ] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
+- [x] Create `src/features/dealers/dealer-form.tsx` — anchor on `PersonForm` at `src/features/people/people-admin.tsx:324`. Same `useActionState<State, FormData>` shape, same `useEffect` toast/router-refresh wiring, same `Cancel` + submit footer. Replaces the existing `src/app/(app)/dealerships/dealer-form.tsx` (moved in Phase 2).
+- [x] Use the same `inputClass` constant pattern from `people-admin.tsx:58` (or factor into a `src/components/ui/form-classes.ts` if it starts to repeat — defer that decision until Phase 4).
+- [x] Drop the bespoke `Field({label, htmlFor, required})` helper in favor of the People-style inline `<label className="flex flex-col gap-1 text-xs font-medium text-stone-600">…</label>` shape (matches `people-admin.tsx:449`).
+- [x] Wire Add/Edit dialog from `dealers-admin.tsx` — `Dialog.Root` + `Dialog.Backdrop` + `Dialog.Panel` (anchor: `people-admin.tsx:254`). *(Already wired in Phase 2; this phase only swapped the import path.)*
+- [x] Delete `src/app/(app)/dealerships/list-actions.tsx` (its `AddDealerButton` + `DealerRowActions` move into `dealers-admin.tsx` as inline behavior, just like `/admin/people`).
+- [x] Update `archiveDealer`'s confirm message via the `buildArchiveConfirmMessage`-style facet composer (anchor: `people-admin.tsx:287`). Counts are not on `Dealer` today, so the message uses a static facet phrase (campaigns keep refs; contact links stay readable) with a comment pointing at the future enhancement when `loadDealers` denormalises them.
+- [x] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
 
 ### Phase 4: Radix Form adoption — decision-driven
 

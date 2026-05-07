@@ -4,7 +4,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 // Public surface preserved from the previous Headless UI wrapper so call
-// sites in `people-admin.tsx`, `calendar-view.tsx`, `lists/list-actions.tsx`,
+// sites in `people-admin.tsx`, `calendar-view.tsx`, `dealers-admin.tsx`,
 // `production/row-actions.tsx`, etc. don't change:
 //   <Dialog.Root open onClose={setOpen}>
 //     <Dialog.Backdrop />

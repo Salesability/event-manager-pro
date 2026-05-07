@@ -9,7 +9,7 @@ import { toast } from '@/components/ui/toaster';
 import { archiveDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import { buildDealersColumns } from '@/features/dealers/dealers-columns';
-import { DealerForm } from '@/app/(app)/dealerships/dealer-form';
+import { DealerForm } from '@/features/dealers/dealer-form';
 
 const dealersGlobalFilterFn: FilterFn<Dealer> = (row, _columnId, filterValue) => {
   const q = String(filterValue ?? '').toLowerCase().trim();
@@ -30,6 +30,18 @@ const dealersGlobalFilterFn: FilterFn<Dealer> = (row, _columnId, filterValue) =>
 const headerAddClass =
   'rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10';
 
+// Compose the archive confirm message from the row's facets, mirroring the
+// people-admin pattern. Counts (linked contacts, referenced campaigns) aren't
+// surfaced on the Dealer row today — once `loadDealers` denormalises them,
+// the message can list specifics. Until then it states the soft-delete
+// guarantee in plain language: archive sets `dealers.archivedAt` (no cascade,
+// no hard-delete), existing campaign references survive in the database, and
+// the dealer disappears from active staff surfaces (the People page filters
+// archived dealers via `isNull(dealers.archivedAt)`).
+function buildArchiveConfirmMessage(dealer: Dealer): string {
+  return `Archive ${dealer.name}? Existing campaigns keep their reference. Contact-link rows are preserved in history but the dealer disappears from the People page and Dealer pickers. Continue?`;
+}
+
 export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const router = useRouter();
   const [addOpen, setAddOpen] = useState(false);
@@ -41,9 +53,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const clearFilters = () => setGlobalFilter('');
 
   function archive(dealer: Dealer) {
-    if (
-      !confirm(`Archive ${dealer.name}? Existing campaigns will keep their reference.`)
-    ) {
+    if (!confirm(buildArchiveConfirmMessage(dealer))) {
       return;
     }
     startTransition(async () => {
