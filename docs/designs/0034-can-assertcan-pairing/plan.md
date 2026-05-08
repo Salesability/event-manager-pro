@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Capability extraction script (Can/useCan vs assertCan/can) | Done | - |
-| 2: Set diff → CI fail on asymmetric gates | Done | - |
-| 3: Wire + document the convention + close | Done | - |
+| 1: Capability extraction script (Can/useCan vs assertCan/can) | Done | 47df3f6 |
+| 2: Set diff → CI fail on asymmetric gates | Done | 47df3f6 |
+| 3: Wire + document the convention + close | Done | 47df3f6 |
 
 The capability layer (0029) gives every gated affordance a name. The convention is: every `<Can capability="X">` in the UI must pair with `assertCan('X')` (or surviving `requireRole`) in the action it triggers. Today this is a code-review responsibility. This chunk makes it a tooling check: a small script greps the codebase for capability strings on both sides, builds two sets, and fails CI if either side has a capability the other doesn't. Catches **(a)** "added a Cancel button without an action gate" — high-impact security leak — and **(b)** "added a server gate but UI still shows the button" — UX leak. **Done = the script runs in CI; passes against the current surface; deliberate breakage of either side fails the check; documented as part of the capability convention.**
 
