@@ -13,6 +13,7 @@ import * as Checkbox from '@radix-ui/react-checkbox';
 import * as Form from '@radix-ui/react-form';
 import * as Select from '@radix-ui/react-select';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
+import { Can } from '@/components/auth/can';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
@@ -216,9 +217,11 @@ export function PeopleAdmin({
         <div>
           <p className="text-xs text-stone-500">{people.length} people</p>
         </div>
-        <button onClick={() => setAddOpen(true)} className={headerAddClass}>
-          + Add Person
-        </button>
+        <Can capability="person:create">
+          <button onClick={() => setAddOpen(true)} className={headerAddClass}>
+            + Add Person
+          </button>
+        </Can>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Can } from '@/components/auth/can';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
 import { adoptOrphanAuthUser } from '@/features/people/actions';
@@ -50,9 +51,11 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
           {orphan.lastSignInAt && ` · last sign-in ${new Date(orphan.lastSignInAt).toLocaleDateString()}`}
         </div>
       </div>
-      <button onClick={() => setOpen(true)} className={rowEditClass}>
-        Adopt
-      </button>
+      <Can capability="person:adopt-orphan">
+        <button onClick={() => setOpen(true)} className={rowEditClass}>
+          Adopt
+        </button>
+      </Can>
       <Dialog.Root open={open} onClose={setOpen}>
         <Dialog.Backdrop />
         <Dialog.Panel>

@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md: capability pairing CI check (0034 shipped — UI/server asymmetry now CI-enforced)
+
+- New script `scripts/check-capability-pairing.mjs` (Node ESM, no extra deps) and `pnpm check:capability-pairing`. Extracts capabilities from UI (`<Can capability="X">` + `useCan('X')`) and server (`assertCan('X')` + `can(profile, 'X')`) sides; diffs; exits non-zero on either side missing the other. Closes the third class of authz mistake: 0031 catches "no gate," 0032 catches "wrong admit set," 0034 catches "gate on one side but not the other."
+- Three UI affordances had been shipping with admin-only server gates but no `<Can>` wrapper (the page-level `requireRole('admin')` was carrying the load): `+ Add Person` (`/admin/people`), `+ Add Dealer` (`/dealerships`), `Adopt` (orphan-auth panel). All three wrapped in the matching `<Can capability=...>`. Two legitimately-server-only capabilities documented via the per-line `// expected: server-only` opt-out: `production:export` (Route Handler, CSV download with no UI button) and `coach-availability:edit-own` (row-relative server check; UI gates Block Date at role level, not capability level — coaches can press the button; the server enforces row ownership).
+- Sabotage smokes: temporarily bogus-renamed `<Can capability="person:create">` to `person:bogus` → script reported both directions of asymmetry (UI-only `person:bogus` and server-only `person:create`). Restored.
+- Updated [auth.md](auth.md) § "Structural enforcement of the matrix" — third sublayer (gate symmetry) now points at the script + the opt-out convention.
+- 14/14 capabilities paired or opted out. 441/441 vitest still green (no behavior change for current admin role; the new `<Can>` wrappers are no-ops for the page's actual users). `pnpm tsc --noEmit && pnpm lint && pnpm check:capability-pairing && pnpm test --run` all clean.
+
 ## 2026-05-08 — auth.md: action-matrix executable test (0032 shipped — admit-set drift now CI-enforced)
 
 - New test surface `src/features/__tests__/action-gate-matrix.ts` (24 rows — every gated Server Action + 2 protected Route Handlers) and `action-gate-matrix.test.ts` (24 × 7 = 168 outcome assertions + 1 drift-detection test = 169 tests). Drives each gated entry with mocked `getUser` + `loadCurrentMembership` + `redirect` + a Proxy-backed no-op `db` stub; asserts each of seven roles (unauth / admin / staff / coach / viewer / dealer / orphan) gets the documented outcome.

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   // role-keyed (0029 Phase 2) so the matrix lives in capabilities.ts; same
   // admit set as `requireRole('admin')` was — admin is the only role with
   // `production:export`.
-  await assertCan('production:export');
+  await assertCan('production:export'); // expected: server-only
 
   const sp = request.nextUrl.searchParams;
   const q = sp.get('q') ?? '';

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FilterFn } from '@tanstack/react-table';
+import { Can } from '@/components/auth/can';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
@@ -81,9 +82,11 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
     <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between">
         <p className="text-xs text-stone-500">{dealers.length} dealers</p>
-        <button onClick={() => setAddOpen(true)} className={headerAddClass}>
-          + Add Dealer
-        </button>
+        <Can capability="dealer:create">
+          <button onClick={() => setAddOpen(true)} className={headerAddClass}>
+            + Add Dealer
+          </button>
+        </Can>
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

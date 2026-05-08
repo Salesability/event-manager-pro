@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Capability extraction script (Can/useCan vs assertCan/can) | Pending | - |
-| 2: Set diff → CI fail on asymmetric gates | Pending | - |
-| 3: Wire + document the convention + close | Pending | - |
+| 1: Capability extraction script (Can/useCan vs assertCan/can) | Done | - |
+| 2: Set diff → CI fail on asymmetric gates | Done | - |
+| 3: Wire + document the convention + close | Done | - |
 
 The capability layer (0029) gives every gated affordance a name. The convention is: every `<Can capability="X">` in the UI must pair with `assertCan('X')` (or surviving `requireRole`) in the action it triggers. Today this is a code-review responsibility. This chunk makes it a tooling check: a small script greps the codebase for capability strings on both sides, builds two sets, and fails CI if either side has a capability the other doesn't. Catches **(a)** "added a Cancel button without an action gate" — high-impact security leak — and **(b)** "added a server gate but UI still shows the button" — UX leak. **Done = the script runs in CI; passes against the current surface; deliberate breakage of either side fails the check; documented as part of the capability convention.**
 
@@ -23,7 +23,7 @@ The capability layer (0029) gives every gated affordance a name. The convention 
 - `docs/wiki/auth.md` § "Capability gating" — the rule that `<Can>` and `assertCan` use the same capability string. This chunk enforces that rule mechanically.
 - `docs/wiki/auth.md` § "Capability matrix" — the canonical capability list. The diff check uses this as the "expected" set: any capability that appears in code but not in the matrix file is a third class of mistake (typo or undocumented capability) — the script can flag this too.
 
-**Overall Progress:** 0% (0/3 phases complete)
+**Overall Progress:** 100% (3/3 phases complete)
 
 **Note:**
 - Forward-compatible with 0033 (next-safe-action). When `assertCan` migrates to middleware, the script's regex for the server side updates from `assertCan\('(...)'`)\` to also match `metadata\(\{capability: '(...)'`)\` or whatever shape the middleware adopts. The capability *strings* don't change.
@@ -47,25 +47,25 @@ The capability layer (0029) gives every gated affordance a name. The convention 
 
 ### Phase 1: Capability extraction
 
-- [ ] Create `scripts/check-capability-pairing.ts`. Two extraction passes:
-  - **UI side**: glob `src/**/*.{ts,tsx}` excluding `*.test.*`; regex for `<Can\s+capability="([^"]+)"` and `useCan\(\s*['"]([^'"]+)['"]`.
-  - **Server side**: same glob; regex for `assertCan\(\s*['"]([^'"]+)['"]` and `can\([^,]+,\s*['"]([^'"]+)['"]`.
-- [ ] Build two `Set<string>`. Compute symmetric diff.
-- [ ] Apply opt-out parsing: any line ending in `// expected: server-only` (or similar marker) drops the capability from the *required-on-UI-side* set. Same for `// expected: ui-only` if such cases ever exist.
-- [ ] Print a clean report on diff: list each capability that's only-on-one-side with file:line, plus the opt-out path.
+- [x] Created `scripts/check-capability-pairing.mjs` (Node ESM, no deps — runs via `node scripts/...`). Two extraction passes over `src/**/*.{ts,tsx,jsx,mjs,cjs,js}` (skipping `*.test.*` + `capabilities.ts` source-of-truth + `node_modules`/`.next`/etc):
+  - **UI side**: `<Can\s+capability="([^"]+)"` + `\buseCan\(\s*["']([^"']+)["']`.
+  - **Server side**: `\bassertCan\(\s*["']([^"']+)["']` + `\bcan\([^,)]+,\s*["']([^"']+)["']`.
+- [x] Two `Set<string>`-equivalent maps; per-capability classification with the opt-out states folded in.
+- [x] Per-line opt-out: `// expected: server-only`, `// expected: ui-only`, or `// expected: both` recognised via tail-of-line regex.
+- [x] Report shape: `Capability pairing scan: X/Y capabilities paired or opted out.` then `OK` or per-failure `'cap' (kind — present on the wrong side) at <file:line> ... <hint>`.
 
 ### Phase 2: Diff → CI fail
 
-- [ ] Add `pnpm check:capability-pairing` to package.json scripts (invokes the tsx script).
-- [ ] Run against current codebase. Expected outcome: zero diff (every capability appears on both sides today, modulo `production:export` which is server-only and would need the opt-out).
-- [ ] Add `production:export` opt-out comment in `production/export/route.ts`. Re-run — expect green.
-- [ ] Sabotage: temporarily wrap a button in `<Can capability="dealer:bogus">`; run check; verify it reports the asymmetry; remove.
-- [ ] Sabotage: temporarily delete the `<Can>` from one of the dealer row buttons; run check; verify; restore.
+- [x] Added `check:capability-pairing` to package.json (`node scripts/check-capability-pairing.mjs`).
+- [x] First run against current codebase reported FIVE asymmetries: `production:export` + `coach-availability:edit-own` (legitimately server-only) AND `person:create` + `person:adopt-orphan` + `dealer:create` (real UI-affordance gaps where the page-level `requireRole('admin')` was carrying the load instead of `<Can>`). Wrapped the three real-gap buttons with `<Can capability=...>` in `people-admin.tsx`, `dealers-admin.tsx`, `orphan-auth-users.tsx`.
+- [x] Added `// expected: server-only` opt-out in `production/export/route.ts` (Route Handler, no UI button) + reworked the `availability-authz.ts` doc-comment so the regex stops matching its prose mention of `assertCan('coach-availability:edit-own')`.
+- [x] Re-ran — green: `Capability pairing scan: 14/14 capabilities paired or opted out.`
+- [x] Sabotage: renamed a `<Can capability="person:create">` to `person:bogus` — script flagged both `person:bogus (ui-only)` AND `person:create (server-only)`. Restored.
 
 ### Phase 3: Wire + document + close
 
-- [ ] Add `pnpm check:capability-pairing` to the existing CI step (after `pnpm lint`, before `pnpm test`). If no CI is wired today, ensure it's at least documented as a pre-commit step (matches the project's current `pnpm tsc && pnpm lint && pnpm test` ritual).
-- [ ] Update `docs/wiki/auth.md` § "Capability gating: actions + UI affordances" to reference the pairing check + the opt-out convention.
-- [ ] Append `wiki/log.md` entry.
-- [ ] Smoke: `pnpm check:capability-pairing` → green.
-- [ ] Smoke: `pnpm lint && pnpm test --run` → green; the new check doesn't disrupt existing passes.
+- [x] No GH Actions workflow exists today; `pnpm check:capability-pairing` is the developer-terminal gate. Documented in the wiki ritual; future CI workflow should add it next to `pnpm lint` + `pnpm test`.
+- [x] Updated `docs/wiki/auth.md` § "Structural enforcement of the matrix" with the third sublayer (gate symmetry) — references the script + opt-out convention.
+- [x] Appended `wiki/log.md` entry.
+- [x] Smoke: `pnpm check:capability-pairing` → 14/14 paired or opted out.
+- [x] Smoke: `pnpm tsc --noEmit && pnpm lint && pnpm test --run` → tsc clean, lint clean (4 pre-existing warnings), 441/441 vitest.
