@@ -39,6 +39,10 @@ const ADMIN_ONLY_CAPS: Capability[] = [
   'person:archive',
   'person:adopt-orphan',
   'lookup:edit',
+  'campaign:create',
+  'campaign:edit',
+  'campaign:cancel',
+  'email:send',
   'coach-availability:edit-any',
 ];
 

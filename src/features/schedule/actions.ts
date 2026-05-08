@@ -55,7 +55,7 @@ function toActionResult(err: unknown): ActionResult {
 }
 
 export async function createDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
+  const userId = (await assertCan('dealer:create')).id;
 
   const name = field(formData, 'name');
   const address = field(formData, 'address');
@@ -133,7 +133,7 @@ export async function createDealer(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
+  const userId = (await assertCan('dealer:edit')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid dealer id.' };
@@ -309,7 +309,7 @@ function revalidateLookupViews() {
 }
 
 export async function createCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
+  const userId = (await assertCan('campaign:create')).id;
 
   const input = parseCampaignInput(formData);
   if ('error' in input) return input;
@@ -334,7 +334,7 @@ export async function createCampaign(formData: FormData): Promise<ActionResult> 
 }
 
 export async function updateCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole(['admin', 'staff', 'coach'])).id;
+  const userId = (await assertCan('campaign:edit')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid campaign id.' };
@@ -361,7 +361,7 @@ export async function updateCampaign(formData: FormData): Promise<ActionResult> 
 }
 
 export async function cancelCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole('admin')).id;
+  const userId = (await assertCan('campaign:cancel')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid campaign id.' };

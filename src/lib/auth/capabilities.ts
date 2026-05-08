@@ -27,6 +27,10 @@ export type Capability =
   | 'person:archive'
   | 'person:adopt-orphan'
   | 'lookup:edit'
+  | 'campaign:create'
+  | 'campaign:edit'
+  | 'campaign:cancel'
+  | 'email:send'
   | 'coach-availability:edit-own'
   | 'coach-availability:edit-any';
 
@@ -68,6 +72,10 @@ export function can(
     case 'person:archive':
     case 'person:adopt-orphan':
     case 'lookup:edit':
+    case 'campaign:create':
+    case 'campaign:edit':
+    case 'campaign:cancel':
+    case 'email:send':
     case 'coach-availability:edit-any':
       // Pure-admin caps. Already handled by the shortcut above; reaching
       // here means the profile is not admin → deny.

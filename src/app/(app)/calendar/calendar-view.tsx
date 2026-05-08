@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Can } from '@/components/auth/can';
 import { Dialog } from '@/components/ui/dialog';
 import type {
   AvailabilityBlock,
@@ -453,13 +454,15 @@ export function CalendarView({
               >
                 Block Date
               </button>
-              <button
-                type="button"
-                onClick={() => setDialog({ kind: 'create' })}
-                className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                + Book Event
-              </button>
+              <Can capability="campaign:create">
+                <button
+                  type="button"
+                  onClick={() => setDialog({ kind: 'create' })}
+                  className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+                >
+                  + Book Event
+                </button>
+              </Can>
             </>
           )}
           <button

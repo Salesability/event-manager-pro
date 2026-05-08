@@ -1,6 +1,6 @@
 'use server';
 
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import { sendEmail } from '@/lib/email/send';
 import {
   clientConfirmation,
@@ -12,7 +12,7 @@ import { loadCampaign, loadCampaigns, loadCoach } from '@/features/schedule/quer
 type ActionResult = { ok: true } | { error: string };
 
 async function requireSenderEmail(): Promise<string | { error: string }> {
-  const user = await requireRole(['admin', 'staff', 'coach']);
+  const user = await assertCan('email:send');
   if (!user.email) return { error: 'No email on file for the signed-in account.' };
   return user.email;
 }

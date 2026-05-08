@@ -64,7 +64,7 @@ The `next` param is passed through `safeNextPath()` (in `src/lib/auth/`) to prev
 The role labels (`admin` / `coach` / `dealer`) carry purpose, not just permissions — they map to *who does what in the business*, and the surface gates should follow that map:
 
 - **Admin** — back-office / ops. Plans events, manages dealers, provisions coaches, runs the production schedule. Surfaces: every staff page (Calendar, Production List, Reports, Dealers, plus the Admin dropdown's People and Lookups).
-- **Coach** — field / event-day. Goes to the dealership on the sales day to run the booth. Staff-app surface is **Calendar + Reports** — Calendar is the where-am-I-booked tool; Reports lets a coach see their own summary view (`['admin', 'coach']` gate, the only non-admin staff page after 0028). Production List is back-office "what's coming up" (campaign-level), not field-facing, so it's admin-only. Dealers (the customer-company list) is admin-only too.
+- **Coach** — field / event-day. Goes to the dealership on the sales day to run the booth. Staff-app surface is **Calendar + Reports** — Calendar is the where-am-I-booked tool (plus the only mutation a coach can perform: their own `coach_unavailable` blocks via Block Date); Reports lets a coach see their own summary view (`['admin', 'coach']` gate). Booking events, dealer CRUD, sending client/coach emails, cancelling campaigns — all back-office work, all admin-only. The role purpose is "show up, run the booth"; everything that schedules or shapes the booth lives with admin.
 - **Dealer** — customer-side. No staff-app access today; the dealer portal isn't built yet. A `dealer`-only contact is them-side, not us-side, and `STAFF_APP_ROLES` excludes `dealer` from the staff gate (see Route gating below).
 
 The per-route surface matrix is enforced at three layers (see [Route gating](#route-gating-rbac) below): edge `ADMIN_PATHS` (`/admin`, `/production`, `/dealerships`), page-level `requireRole('admin')` on the same routes, and nav scoping (`requiresAdmin` flag on top-tab entries; `Admin` dropdown rendered only for admins). 0028 closed the previous gap where Production + Dealers were coach-visible in the nav and the layout-only `requireStaffAccess` gate.
@@ -94,13 +94,12 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 | Action surface | Gate |
 |---|---|
 | Person CRUD (create / update / archive / adopt-orphan) | `assertCan('person:create' \| 'person:edit' \| 'person:archive' \| 'person:adopt-orphan')` |
-| Dealer archive | `assertCan('dealer:archive')` |
+| Dealer CRUD (create / update / archive) | `assertCan('dealer:create' \| 'dealer:edit' \| 'dealer:archive')` — admin-only since 2026-05-08 (`/dealerships` page itself was admin-gated by 0028; the actions caught up post-0029) |
+| Campaign CRUD (create / update / cancel) | `assertCan('campaign:create' \| 'campaign:edit' \| 'campaign:cancel')` — admin-only since 2026-05-08 (booking is back-office work; coach is field-only) |
+| Outbound email (client / coach confirmations, share-link) | `assertCan('email:send')` — admin-only since 2026-05-08 (admin → external comms, sent after admin books) |
 | Lookup admin (campaign styles, sales lead sources × create/update/archive) | `assertCan('lookup:edit')` |
 | Production CSV export Route Handler | `assertCan('production:export')` |
 | Availability blocks (create / update / archive) | `requireRole(['admin','coach'])` plus row-level `ensureAvailabilityOwnership` (which delegates the predicate to `can('coach-availability:edit-own', facet)` post-0029) |
-| Mutating dealer / campaign CRUD | `requireRole(['admin','staff','coach'])` (multi-role; capability layer added no semantic gain) |
-| Outbound email (client / coach confirmations, share-link) | `requireRole(['admin','staff','coach'])` |
-| Cancel campaign | `requireRole('admin')` (kept on requireRole pending a `campaign:cancel` capability) |
 | Auth flow (`signIn*`, `signOut`) | none — these IS the auth flow |
 
 ## Capability matrix
@@ -113,6 +112,8 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 | `dealer:view`, `dealer:edit`, `dealer:create`, `dealer:archive` | ✅ | ❌ | ❌ | Same |
 | `person:view`, `person:create`, `person:edit`, `person:archive`, `person:adopt-orphan` | ✅ | ❌ | ❌ | `/admin/people` admin-only |
 | `lookup:edit` | ✅ | ❌ | ❌ | `/admin/lookups` admin-only |
+| `campaign:create`, `campaign:edit`, `campaign:cancel` | ✅ | ❌ | ❌ | Booking is back-office; coach is field-only |
+| `email:send` | ✅ | ❌ | ❌ | Admin → external comms (client + coach confirmations + share link) |
 | `coach-availability:edit-any` | ✅ | ❌ | ❌ | Holiday + company-closure rows |
 | `coach-availability:edit-own` | ✅ | ✅ on own row | ❌ | Coach passes only on `kind='coach_unavailable'` AND `coachId === profile.coachContactId` |
 

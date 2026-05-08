@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md: tightened coach surface (back-office actions all admin-only)
+
+- After 0029 shipped the user noticed five Server Actions still admitted coach via `requireRole(['admin','staff','coach'])` — `createDealer`, `updateDealer`, `createCampaign`, `updateCampaign`, the email-send helper. Per the role purpose ("coach is field-only, admin runs the back office"), tightened all five to admin-only. `cancelCampaign` was already admin via `requireRole('admin')`; migrated it to `assertCan('campaign:cancel')` for matrix consistency.
+- Added 4 capabilities to [capabilities.ts](../../src/lib/auth/capabilities.ts): `campaign:create`, `campaign:edit`, `campaign:cancel`, `email:send`. Reused the existing `dealer:create` / `dealer:edit` (defined in 0029 Phase 1, unused until now). 17 capabilities in v1.
+- UI affordances tightened: `+ Book Event` on calendar wrapped in `<Can capability="campaign:create">`; event-detail's Email Client / Email Coach (single shared `<Can capability="email:send">`), Cancel Campaign (`<Can capability="campaign:cancel">`), Edit (`<Can capability="campaign:edit">`) all gated. Result for a coach loading the calendar: only Block Date is visible in the toolbar; clicking a campaign ribbon shows the read-only event detail with no action buttons.
+- Updated [auth.md](auth.md) per-action gate matrix to reflect the migrations + the role-purpose paragraph for "coach" to make the surface explicit (Calendar + Reports + own availability blocks; nothing that schedules or shapes the booth).
+- 239/239 vitest (was 227); test mocks updated for `email/actions.test.ts` (`requireRole` → `assertCan`).
+
 ## 2026-05-08 — auth.md + security.md: capability layer as the fourth gate (0029 shipped)
 
 - Updated [auth.md](auth.md) `## Route gating (RBAC)`:

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  requireRole: vi.fn(),
+  assertCan: vi.fn(),
   sendEmail: vi.fn(),
   loadCampaign: vi.fn(),
   loadCampaigns: vi.fn(),
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   coachShareLink: vi.fn(),
 }));
 
-vi.mock('@/lib/auth/require-role', () => ({ requireRole: mocks.requireRole }));
+vi.mock('@/lib/auth/assert-can', () => ({ assertCan: mocks.assertCan }));
 vi.mock('@/lib/email/send', () => ({ sendEmail: mocks.sendEmail }));
 vi.mock('@/lib/email/templates', () => ({
   clientConfirmation: () => ({ subject: 'Client', text: 'Body' }),
@@ -33,7 +33,7 @@ const ORIGINAL_ENV = { ...process.env };
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.SITE_URL;
-  mocks.requireRole.mockResolvedValue({
+  mocks.assertCan.mockResolvedValue({
     id: 'admin-uuid',
     email: 'sender@example.test',
     app_metadata: { role: 'admin' },

@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
 import { cancelCampaign } from '@/features/schedule/actions';
 import {
@@ -113,42 +114,48 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
       </dl>
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-4">
-        <button
-          type="button"
-          onClick={onEmailClient}
-          disabled={pending || !campaign.email}
-          title={campaign.email ? 'Send the dealer contact a booking confirmation' : 'No client email on file'}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Email Client
-        </button>
-        <button
-          type="button"
-          onClick={onEmailCoach}
-          disabled={pending || !campaign.coachId}
-          title={campaign.coachId ? 'Send the assigned coach a booking confirmation' : 'No coach assigned'}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Email Coach
-        </button>
-        <span className="flex-1" />
-        {campaign.status !== 'cancelled' && (
+        <Can capability="email:send">
           <button
             type="button"
-            onClick={onCancel}
-            disabled={pending}
-            className="rounded-lg border border-status-red/40 bg-white px-3 py-1.5 text-xs font-semibold text-status-red transition hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onEmailClient}
+            disabled={pending || !campaign.email}
+            title={campaign.email ? 'Send the dealer contact a booking confirmation' : 'No client email on file'}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Cancel Campaign
+            Email Client
           </button>
+          <button
+            type="button"
+            onClick={onEmailCoach}
+            disabled={pending || !campaign.coachId}
+            title={campaign.coachId ? 'Send the assigned coach a booking confirmation' : 'No coach assigned'}
+            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Email Coach
+          </button>
+        </Can>
+        <span className="flex-1" />
+        {campaign.status !== 'cancelled' && (
+          <Can capability="campaign:cancel">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={pending}
+              className="rounded-lg border border-status-red/40 bg-white px-3 py-1.5 text-xs font-semibold text-status-red transition hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancel Campaign
+            </button>
+          </Can>
         )}
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light"
-        >
-          Edit
-        </button>
+        <Can capability="campaign:edit">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light"
+          >
+            Edit
+          </button>
+        </Can>
       </div>
     </div>
   );
