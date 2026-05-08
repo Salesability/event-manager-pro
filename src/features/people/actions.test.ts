@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  requireRole: vi.fn(),
+  assertCan: vi.fn(),
   recordAudit: vi.fn(),
   adminCreateUser: vi.fn(),
   adminUpdateUserById: vi.fn(),
@@ -19,8 +19,8 @@ vi.mock('next/navigation', () => ({
     throw new Error(`REDIRECT:${path}`);
   },
 }));
-vi.mock('@/lib/auth/require-role', () => ({
-  requireRole: mocks.requireRole,
+vi.mock('@/lib/auth/assert-can', () => ({
+  assertCan: mocks.assertCan,
 }));
 vi.mock('@/features/audit/actions', () => ({
   recordAudit: mocks.recordAudit,
@@ -102,7 +102,7 @@ import { archivePerson, createPerson, updatePerson } from './actions';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireRole.mockResolvedValue({
+  mocks.assertCan.mockResolvedValue({
     id: 'admin-uuid',
     app_metadata: { role: 'admin' },
   });
@@ -118,7 +118,7 @@ beforeEach(() => {
 
 describe('createPerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireRole.mockImplementation(async () => {
+    mocks.assertCan.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();
@@ -348,7 +348,7 @@ describe('createPerson', () => {
 
 describe('updatePerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireRole.mockImplementation(async () => {
+    mocks.assertCan.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();
@@ -584,7 +584,7 @@ describe('updatePerson', () => {
 
 describe('archivePerson', () => {
   it('rejects without admin', async () => {
-    mocks.requireRole.mockImplementation(async () => {
+    mocks.assertCan.mockImplementation(async () => {
       throw new Error('REDIRECT:/');
     });
     const fd = new FormData();

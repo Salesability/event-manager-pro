@@ -1,0 +1,90 @@
+import type { User } from '@supabase/supabase-js';
+import type { TeamMemberRole } from '@/lib/auth/load-team-membership';
+
+// Pure capability PDP. Decides whether a profile holds a capability against
+// an optional resource. No DB calls, no auth lookups — caller loads the
+// profile (typically via loadCurrentMembership) and passes it in.
+//
+// Capability format: `subject:verb`. Matches OpenFGA / Cedar convention and
+// keeps grep grouped by surface area at the top of output. Admin is a meta:
+// an admin profile passes every capability — admins skip resource-relative
+// branches like coach-availability:edit-own's row-ownership check.
+//
+// No `'server-only'` directive: this module is the shared decision layer.
+// The server PEP (`assert-can.ts`) and the client PEP (`<Can>` / `useCan`)
+// both import from here so the matrix lives in exactly one place.
+
+export type Capability =
+  | 'production:view'
+  | 'production:export'
+  | 'dealer:view'
+  | 'dealer:edit'
+  | 'dealer:create'
+  | 'dealer:archive'
+  | 'person:view'
+  | 'person:create'
+  | 'person:edit'
+  | 'person:archive'
+  | 'person:adopt-orphan'
+  | 'lookup:edit'
+  | 'coach-availability:edit-own'
+  | 'coach-availability:edit-any';
+
+export type CapabilityProfile = {
+  user: User | null;
+  roles: TeamMemberRole[];
+  coachContactId: number | null;
+};
+
+export type CoachAvailabilityResource = {
+  kind: 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
+  coachId: number | null;
+};
+
+export function can(
+  profile: CapabilityProfile | null,
+  capability: Capability,
+  resource?: unknown,
+): boolean {
+  if (!profile?.user) return false;
+
+  // Admin shortcut. Mirrors requireRole's JWT fast-path (`app_metadata.role`)
+  // plus the explicit role-list check; either path is admit-everything.
+  const isAdmin =
+    profile.user.app_metadata?.role === 'admin' ||
+    profile.roles.includes('admin');
+  if (isAdmin) return true;
+
+  switch (capability) {
+    case 'production:view':
+    case 'production:export':
+    case 'dealer:view':
+    case 'dealer:edit':
+    case 'dealer:create':
+    case 'dealer:archive':
+    case 'person:view':
+    case 'person:create':
+    case 'person:edit':
+    case 'person:archive':
+    case 'person:adopt-orphan':
+    case 'lookup:edit':
+    case 'coach-availability:edit-any':
+      // Pure-admin caps. Already handled by the shortcut above; reaching
+      // here means the profile is not admin → deny.
+      return false;
+    case 'coach-availability:edit-own': {
+      // A coach can edit only their own coach_unavailable rows. Holiday and
+      // company-closure rows are admin-only (would be `:edit-any`); a coach
+      // touching another coach's row is denied even if the resource kind
+      // matches.
+      const isCoach = profile.roles.includes('coach');
+      if (!isCoach || profile.coachContactId == null) return false;
+      const facet = resource as CoachAvailabilityResource | undefined;
+      if (!facet) return false;
+      return (
+        facet.kind === 'coach_unavailable' &&
+        facet.coachId === profile.coachContactId
+      );
+    }
+  }
+}

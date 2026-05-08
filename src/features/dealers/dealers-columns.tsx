@@ -1,6 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import { Can } from '@/components/auth/can';
 import type { Dealer } from '@/features/schedule/queries';
 
 function composedContact(d: Dealer): string {
@@ -82,19 +83,23 @@ export function buildDealersColumns(
         const d = row.original;
         return (
           <div className="flex shrink-0 items-center justify-end gap-1">
-            <button
-              onClick={() => actions.onEdit(d)}
-              className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-            >
-              Edit
-            </button>
-            <button
-              onClick={() => actions.onArchive(d)}
-              aria-label={`Remove ${d.name}`}
-              className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              ✕
-            </button>
+            <Can capability="dealer:edit">
+              <button
+                onClick={() => actions.onEdit(d)}
+                className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+              >
+                Edit
+              </button>
+            </Can>
+            <Can capability="dealer:archive">
+              <button
+                onClick={() => actions.onArchive(d)}
+                aria-label={`Remove ${d.name}`}
+                className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </Can>
           </div>
         );
       },

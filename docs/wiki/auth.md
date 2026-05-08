@@ -71,13 +71,14 @@ The per-route surface matrix is enforced at three layers (see [Route gating](#ro
 
 ## Route gating (RBAC)
 
-Three layers of gating, defence-in-depth (top to bottom: cheapest, most-likely-to-be-bypassed-first):
+Four layers of gating, defence-in-depth (top to bottom: cheapest, most-likely-to-be-bypassed-first):
 
 1. **`src/proxy.ts` + `src/lib/supabase/middleware.ts`** — single edge gate.
    - Sends unauthenticated requests to `/login?next=<original-path>` (whitelist: `/login`, `/auth/callback`, `/auth/auth-error`, plus public `/share/coach/[id]` per-coach share links).
    - Sends signed-in non-admins hitting `/admin/*` (matched against the `ADMIN_PATHS` constant) back to `/` — gate is `user.app_metadata?.role === 'admin'`.
 2. **Page-level `requireStaffAccess()`** (`src/lib/auth/require-staff-access.ts`) — runs in `(app)/layout.tsx` and from any `(app)/*` Route Handler that doesn't route through the layout (e.g. `/production/export`). Single staff-access decision: admin-via-JWT-fast-path or any active `team_member_roles` row. Anyone else lands on `/auth/auth-error?reason=...`.
-3. **Per-page / per-Server-Action `requireRole(role | role[])`** (`src/lib/auth/require-role.ts`) — the deepest layer. Every admin page calls `requireRole('admin')` at the top; every Server Action calls one of the role-list variants (`requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])`) before its first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout gate, so action-level gating is load-bearing, not just defence-in-depth. Pure `isAdmin(user)` predicate (same module that `requireRole` reads) is exposed for ad-hoc decisions like "admin skips the row-ownership check."
+3. **Per-page / per-Server-Action `requireRole(role | role[])`** (`src/lib/auth/require-role.ts`) — the deepest enforcement layer. Every admin page calls `requireRole('admin')` at the top; every Server Action calls one of the role-list variants (`requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])`) before its first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout gate, so action-level gating is load-bearing, not just defence-in-depth. Pure `isAdmin(user)` predicate (same module that `requireRole` reads) is exposed for ad-hoc decisions like "admin skips the row-ownership check."
+4. **Capability gating: actions + UI affordances** (0029, 2026-05-08). Selected `requireRole` call sites — those whose capability semantics tighten intent — migrated to `assertCan(capability, resource?)` from `src/lib/auth/assert-can.ts`. The decision lives in `src/lib/auth/capabilities.ts` as a pure `can(profile, capability, resource?) → boolean`; the same module powers the client-side `<Can>` / `useCan()` PEP for affordance hiding (mounted via `CapabilityProvider` in `(app)/layout.tsx`). **Capabilities are an *intent* layer, not a *security* layer** — `assertCan` redirects on deny exactly like `requireRole` did, and that server-side gate is what prevents privilege escalation. The `<Can>` wrapper is bypassable (a determined client can always hand-craft the FormData submit), so every `<Can>` must pair with the corresponding server-side gate. See § "Capability matrix" below for the role↔capability table.
 
 **Two surfaces, kept consistent at write time:**
 
@@ -88,15 +89,34 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 
 **v1 wired roles:** `admin`, `coach`, and `dealer` are selectable in the UI (the Person dialog's Roles fieldset). `staff` and `viewer` are reserved enum values for future use. Staff-app access requires *either* `app_metadata.role === 'admin'` (bootstrap path) *or* at least one active `team_member_roles` row whose role is in `STAFF_APP_ROLES = {admin, staff, coach, viewer}` — `dealer` is deliberately excluded from the staff-app gate (a dealer-only contact is them-side, not us-side; landing them on `/calendar` would be a privilege escalation). The matching SQL `is_staff_member()` helper applies the same whitelist so RLS policies and the app-layer gate agree on what "staff" means. The older "signed-in non-admin = staff by default" was retracted as a Codex Critical (post-callback URL bypass) on 2026-05-05.
 
-**Per-action gate matrix** (set by 0019 Phase 2's audit; see `closed/0019-security-architecture/plan.md`):
+**Per-action gate matrix** (set by 0019 Phase 2's audit; capability migration in 0029 Phase 2):
 
 | Action surface | Gate |
 |---|---|
-| Admin-only mutations (lookups, archive, lifecycle transitions) | `requireRole('admin')` |
-| Mutating dealer / campaign CRUD | `requireRole(['admin','staff','coach'])` |
-| Availability blocks (create / update / archive) | `requireRole(['admin','coach'])` plus a row-level "is this your own block?" check via `ensureAvailabilityOwnership` |
+| Person CRUD (create / update / archive / adopt-orphan) | `assertCan('person:create' \| 'person:edit' \| 'person:archive' \| 'person:adopt-orphan')` |
+| Dealer archive | `assertCan('dealer:archive')` |
+| Lookup admin (campaign styles, sales lead sources × create/update/archive) | `assertCan('lookup:edit')` |
+| Production CSV export Route Handler | `assertCan('production:export')` |
+| Availability blocks (create / update / archive) | `requireRole(['admin','coach'])` plus row-level `ensureAvailabilityOwnership` (which delegates the predicate to `can('coach-availability:edit-own', facet)` post-0029) |
+| Mutating dealer / campaign CRUD | `requireRole(['admin','staff','coach'])` (multi-role; capability layer added no semantic gain) |
 | Outbound email (client / coach confirmations, share-link) | `requireRole(['admin','staff','coach'])` |
+| Cancel campaign | `requireRole('admin')` (kept on requireRole pending a `campaign:cancel` capability) |
 | Auth flow (`signIn*`, `signOut`) | none — these IS the auth flow |
+
+## Capability matrix
+
+`src/lib/auth/capabilities.ts` is the canonical role↔capability table. v1 capabilities and their role admit set:
+
+| Capability | admin | coach | dealer | Notes |
+|---|---|---|---|---|
+| `production:view`, `production:export` | ✅ | ❌ | ❌ | 0028 page-gate already excludes coach |
+| `dealer:view`, `dealer:edit`, `dealer:create`, `dealer:archive` | ✅ | ❌ | ❌ | Same |
+| `person:view`, `person:create`, `person:edit`, `person:archive`, `person:adopt-orphan` | ✅ | ❌ | ❌ | `/admin/people` admin-only |
+| `lookup:edit` | ✅ | ❌ | ❌ | `/admin/lookups` admin-only |
+| `coach-availability:edit-any` | ✅ | ❌ | ❌ | Holiday + company-closure rows |
+| `coach-availability:edit-own` | ✅ | ✅ on own row | ❌ | Coach passes only on `kind='coach_unavailable'` AND `coachId === profile.coachContactId` |
+
+**`<Can>` adoption** (Phase 4): row-actions on `/admin/people` (Edit + Archive), `/dealerships` (Edit + ✕), and `/admin/lookups` (Add form + Rename + ✕). Today these affordances are also gated by the page-level `requireRole('admin')` — `<Can>` becomes redundant for the *current* role matrix but locks the affordance to capability-keyed intent for future expansions (e.g. when a `person:archive-own` capability lets coaches archive themselves). The top-bar `app-nav.tsx` stays on `isAdmin` boolean rather than `<Can capability="…:view">` — the nav decision is computed server-side in the layout and rendering it client-side via `useCan()` would mean a hydration round-trip for an essentially-static surface.
 
 ## Defence in depth (RLS + audit log)
 

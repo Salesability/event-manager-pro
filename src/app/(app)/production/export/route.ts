@@ -1,6 +1,6 @@
 import 'server-only';
 import { type NextRequest } from 'next/server';
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
 import { filterCampaigns, todayIso } from '../filter';
@@ -22,10 +22,11 @@ const HEADERS = [
 
 export async function GET(request: NextRequest) {
   // Route Handlers don't run through `(app)/layout.tsx`, so the page-level
-  // gate has to be re-asserted explicitly here. The page itself is admin-only
-  // (0028 Phase 1) — a coach who can't see Production has no business
-  // exporting it, so the gate matches.
-  await requireRole('admin');
+  // gate has to be re-asserted explicitly here. Capability-keyed instead of
+  // role-keyed (0029 Phase 2) so the matrix lives in capabilities.ts; same
+  // admit set as `requireRole('admin')` was — admin is the only role with
+  // `production:export`.
+  await assertCan('production:export');
 
   const sp = request.nextUrl.searchParams;
   const q = sp.get('q') ?? '';

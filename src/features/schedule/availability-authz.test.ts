@@ -19,17 +19,21 @@ describe('ensureAvailabilityOwnership', () => {
     vi.clearAllMocks();
   });
 
-  it('admin is always allowed without a membership lookup', async () => {
+  it('admin is always allowed (skips ownership check via can() admin shortcut)', async () => {
+    // Post-0029 the implementation delegates the predicate to capabilities.ts's
+    // can(), which always loads membership but admit-shortcuts on JWT admin.
+    // Membership returns are arbitrary here — admin doesn't read the row.
+    mocks.loadCurrentMembership.mockResolvedValueOnce(null);
     expect(
       await ensureAvailabilityOwnership(adminUser, {
         kind: 'statutory_holiday',
         coachId: null,
       }),
     ).toBeNull();
-    expect(mocks.loadCurrentMembership).not.toHaveBeenCalled();
   });
 
   it('admin allowed for any combination of facets', async () => {
+    mocks.loadCurrentMembership.mockResolvedValueOnce(null);
     expect(
       await ensureAvailabilityOwnership(
         adminUser,

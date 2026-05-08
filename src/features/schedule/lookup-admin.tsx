@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
 import {
   archiveCampaignStyle,
@@ -121,21 +122,23 @@ export function LookupAdmin({
         </span>
       </div>
 
-      <form ref={formRef} action={addAction} className="mt-3 flex gap-2">
-        <input
-          name="label"
-          className={`${inputClass} flex-1`}
-          placeholder={config.addLabel}
-          maxLength={120}
-        />
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          Add
-        </button>
-      </form>
+      <Can capability="lookup:edit">
+        <form ref={formRef} action={addAction} className="mt-3 flex gap-2">
+          <input
+            name="label"
+            className={`${inputClass} flex-1`}
+            placeholder={config.addLabel}
+            maxLength={120}
+          />
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Add
+          </button>
+        </form>
+      </Can>
 
       <div className="mt-4 flex flex-col divide-y divide-stone-100">
         {rows.length === 0 ? (
@@ -260,18 +263,20 @@ function LookupRow({
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800">
             {item.label}
           </span>
-          <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
-            Rename
-          </button>
-          <button
-            type="button"
-            onClick={archive}
-            disabled={pending}
-            aria-label={`Archive ${item.label}`}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            x
-          </button>
+          <Can capability="lookup:edit">
+            <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+              Rename
+            </button>
+            <button
+              type="button"
+              onClick={archive}
+              disabled={pending}
+              aria-label={`Archive ${item.label}`}
+              className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              x
+            </button>
+          </Can>
         </>
       )}
     </div>

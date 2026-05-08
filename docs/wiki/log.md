@@ -13,6 +13,18 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md + security.md: capability layer as the fourth gate (0029 shipped)
+
+- Updated [auth.md](auth.md) `## Route gating (RBAC)`:
+  - Bumped intro from "Three layers" to "Four layers"; added layer 4 capability gating with the **intent layer, not security layer** caveat.
+  - Rewrote the per-action gate matrix to reflect 0029 Phase 2's migrations: 4 person CRUD actions → `assertCan('person:*')`, `archiveDealer` → `assertCan('dealer:archive')`, 6 lookup admin actions → `assertCan('lookup:edit')`, `production/export` Route Handler → `assertCan('production:export')`. Multi-role staff sends + cancelCampaign + auth flow stay on `requireRole`.
+  - Added new `## Capability matrix` subsection — canonical role↔capability table (12 caps in v1: production / dealer / person / lookup × view/edit/create/archive/etc., plus `coach-availability:edit-own` and `:edit-any`).
+- Updated [security.md](security.md) layer 3:
+  - Renamed from "Action — require-role.ts" to "Action — require-role.ts + assert-can.ts" to reflect the capability PEP.
+  - Inlined the **intent vs enforcement** distinction so a future reader doesn't mistake `<Can>` for a security boundary.
+  - Updated the availability special-case to mention the `can()` delegation post-0029.
+- Sourced from `closed/0029-capability-layer/` shipping 2026-05-08. Component test file was deferred — vitest is configured `environment: 'node'` and no `@testing-library/react` is installed; predicate test coverage lives in `src/lib/auth/capabilities.test.ts` (43 cases, table-driven) and `src/lib/auth/assert-can.test.ts` (7 cases, mock-driven).
+
 ## 2026-05-08 — auth.md: close the role-route-scoping gap paragraph (0028 shipped)
 
 - Updated [auth.md](auth.md) `## What each role is for`:

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
+import { Can } from '@/components/auth/can';
 import type {
   AdminPersonRow,
   DealerLink,
@@ -186,20 +187,24 @@ export function buildPeopleColumns(
         const isActive = status === 'active';
         return (
           <div className="flex shrink-0 items-center justify-end gap-1">
-            <button
-              onClick={() => actions.onEdit(p)}
-              className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-            >
-              Edit
-            </button>
-            {isActive && (
+            <Can capability="person:edit">
               <button
-                onClick={() => actions.onArchive(p)}
-                aria-label={`Archive ${p.displayName}`}
-                className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => actions.onEdit(p)}
+                className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
               >
-                ✕
+                Edit
               </button>
+            </Can>
+            {isActive && (
+              <Can capability="person:archive">
+                <button
+                  onClick={() => actions.onArchive(p)}
+                  aria-label={`Archive ${p.displayName}`}
+                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ✕
+                </button>
+              </Can>
             )}
           </div>
         );

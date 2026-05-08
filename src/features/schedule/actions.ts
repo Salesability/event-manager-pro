@@ -15,6 +15,7 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
+import { assertCan } from '@/lib/auth/assert-can';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { requireRole } from '@/lib/auth/require-role';
@@ -263,7 +264,7 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
 // `/production`, `/share/coach/[id]`, and the booking-form coach picker.
 
 export async function archiveDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await requireRole('admin')).id;
+  const userId = (await assertCan('dealer:archive')).id;
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid dealer id.' };
@@ -403,7 +404,7 @@ function lookupActionResult(err: unknown): ActionResult {
 }
 
 export async function createCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -426,7 +427,7 @@ export async function createCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function updateCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -449,7 +450,7 @@ export async function updateCampaignStyle(formData: FormData): Promise<ActionRes
 }
 
 export async function archiveCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid style id.' };
@@ -464,7 +465,7 @@ export async function archiveCampaignStyle(formData: FormData): Promise<ActionRe
 }
 
 export async function createSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const label = parseLookupLabel(formData);
   if (typeof label !== 'string') return label;
@@ -487,7 +488,7 @@ export async function createSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function updateSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };
@@ -510,7 +511,7 @@ export async function updateSalesLeadSource(formData: FormData): Promise<ActionR
 }
 
 export async function archiveSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await requireRole('admin');
+  await assertCan('lookup:edit');
 
   const id = parseId(formData);
   if (id == null) return { error: 'Invalid data source id.' };

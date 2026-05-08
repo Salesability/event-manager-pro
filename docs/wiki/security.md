@@ -28,13 +28,19 @@ Runs in `(app)/layout.tsx` (covers all gated pages) and from any non-page Route 
 
 What this catches: a signed-in customer-only auth user typing `/calendar` directly (no team-member row → portal-or-error). What it misses: Server Actions invoked via direct POST without rendering a layout.
 
-### 3. Action — `src/lib/auth/require-role.ts`
+### 3. Action — `src/lib/auth/require-role.ts` + `src/lib/auth/assert-can.ts`
 
-The deepest layer. Every Server Action calls `requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])` / `requireRole(['admin','staff','coach','viewer'])` before its first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout — so this layer is load-bearing, not just defence-in-depth. Per-action gate matrix is in [auth.md → Per-action gate matrix](auth.md#per-action-gate-matrix).
+The deepest enforcement layer. Every Server Action calls one of:
+- `requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])` / `requireRole(['admin','staff','coach','viewer'])` for role-list shapes; or
+- `assertCan(capability, resource?)` for capability-keyed shapes (0029, 2026-05-08).
 
-The `requireRole` helper combines a JWT-fast-path for admins (no DB hit) with `loadCurrentMembership()` (request-cached) for non-admin role checks. Returns the `User` so callers can use `user.id` for audit columns and `user.email` for outbound mail `replyTo`.
+Both helpers run before the action's first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout — so this layer is load-bearing, not just defence-in-depth. Per-action gate matrix in [auth.md → Per-action gate matrix](auth.md#per-action-gate-matrix); capability ↔ role matrix in [auth.md → Capability matrix](auth.md#capability-matrix).
 
-Special case: **`*AvailabilityBlock` actions also call `ensureAvailabilityOwnership(user, ...facets)`** to enforce row-level "is this your own block?" — admin bypasses; non-admin coach can only mutate `kind='coach_unavailable'` rows where `coach_id` matches their own contact. The non-admin UPDATE/archive `WHERE` also pins `kind` + `coach_id` for TOCTOU safety. See `src/features/schedule/availability-authz.ts`.
+The `requireRole` helper combines a JWT-fast-path for admins (no DB hit) with `loadCurrentMembership()` (request-cached) for non-admin role checks. Returns the `User` so callers can use `user.id` for audit columns and `user.email` for outbound mail `replyTo`. `assertCan` follows the same redirect-on-fail control flow but routes the predicate through `src/lib/auth/capabilities.ts`'s pure `can(profile, capability, resource?) → boolean`.
+
+**Capabilities are an intent layer, not a security layer.** The companion `<Can>` / `useCan()` client PEP (`src/components/auth/`) hides UI affordances based on the same predicate, but a determined client can always hand-craft a FormData submit — the load-bearing gate is the server-side `assertCan` (or surviving `requireRole`) at the action's first line. Every `<Can>` must pair with the corresponding server-side gate.
+
+Special case: **`*AvailabilityBlock` actions also call `ensureAvailabilityOwnership(user, ...facets)`** to enforce row-level "is this your own block?" — admin bypasses; non-admin coach can only mutate `kind='coach_unavailable'` rows where `coach_id` matches their own contact. Post-0029 the predicate delegates to `can(profile, 'coach-availability:edit-own', facet)` so the rule lives in capabilities.ts; the soft-error `{ error }` return contract is preserved because "you tried to edit another coach's row" is a validation error, not an auth error. The non-admin UPDATE/archive `WHERE` also pins `kind` + `coach_id` for TOCTOU safety. See `src/features/schedule/availability-authz.ts`.
 
 ### 4. RLS — `drizzle/0003_enable_rls.sql`
 
