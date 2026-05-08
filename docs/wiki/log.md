@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md: close the role-route-scoping gap paragraph (0028 shipped)
+
+- Updated [auth.md](auth.md) `## What each role is for`:
+  - Admin surface line now lists Calendar + Production List + Reports + Dealers + Admin-dropdown items (matches 0028-05-08-AM nav reshape).
+  - Coach surface line corrected: was "**Calendar only**" (echoing the 0028 plan body's intent), now "**Calendar + Reports**" — Reports is gated `['admin', 'coach']` and remains the only non-admin staff page after 0028. Plan body's "Calendar only" claim was stronger than its scope; Reports left intentionally out of scope.
+  - Replaced the stale gap paragraph (claimed Production + Dealers leak to coaches; queued tightening in `CURRENT.md` Parked) with a forward-looking matrix-enforcement paragraph naming the three layers + 0028 closure.
+- Sourced from `closed/0028-role-route-scoping/` shipping 2026-05-08.
+
 ## 2026-05-07 — auth.md: capture role-purpose distinction (admin = ops, coach = field, dealer = customer-side)
 
 - New `## What each role is for` section in [auth.md](auth.md), placed before `## Route gating (RBAC)` so the reader gets the *purpose* of each role before the *enforcement* layers. Captures: admin owns every staff page; coach's staff-app surface is **Calendar only** (the where-am-I-booked tool — coaches go to the dealership on the sales day); dealer is customer-side with no staff-app access today.

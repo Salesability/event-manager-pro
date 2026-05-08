@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Tighten `/production` to admin (edge + page gate) | Pending | - |
-| 2: Tighten `/dealerships` to admin (edge + page gate) | Pending | - |
-| 3: Nav scoping + tests + smoke verification | Pending | - |
+| 1: Tighten `/production` to admin (edge + page gate) | Done | _bundled_ |
+| 2: Tighten `/dealerships` to admin (edge + page gate) | Done | _bundled_ |
+| 3: Nav scoping + tests + smoke verification | Done | _bundled_ |
 
 The role taxonomy is settled (admin / coach / dealer per `docs/wiki/auth.md` § "What each role is for"), but the per-route surface scoping today is looser than the intended matrix: `requireStaffAccess` admits any staff role to the `(app)/*` shell, and the nav only marks `admin: true` on Lookups + People — Production List and Dealers are visible to coaches in the current build. This chunk tightens three layers (edge middleware `ADMIN_PATHS`, page-level `requireRole('admin')`, and nav `admin: true` flag) so coach's staff-app surface is **Calendar only** and admin owns everything else. Dealer never gets here at all (`STAFF_APP_ROLES` already excludes them at the staff gate). Out of scope: defining new roles, RLS policy changes, the dealer portal, role-promotion UX changes.
 
@@ -30,7 +30,7 @@ For each new code below, the builder reads the anchor first and matches its shap
 - `docs/wiki/auth.md` — § "Per-action gate matrix" stays as-is; this chunk is *page-level*, not Server-Action-level. Action gates were already tightened in 0019 Phase 2.
 - `CLAUDE.md` — "Mutations go through Server Actions, not route handlers" — `/production/export` is a legitimate Route Handler exception (CSV download, not a mutation), but it still needs the role gate per the 0018 Critical fix.
 
-**Overall Progress:** 0% (0/3 phases complete)
+**Overall Progress:** 100% (3/3 phases complete — bundled into a single commit on 2026-05-08)
 
 **Note:**
 - All three phases are tiny edits — this is a wiring chunk, not a feature.

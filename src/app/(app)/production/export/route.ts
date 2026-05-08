@@ -1,6 +1,6 @@
 import 'server-only';
 import { type NextRequest } from 'next/server';
-import { requireStaffAccess } from '@/lib/auth/require-staff-access';
+import { requireRole } from '@/lib/auth/require-role';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
 import { filterCampaigns, todayIso } from '../filter';
@@ -21,11 +21,11 @@ const HEADERS = [
 ];
 
 export async function GET(request: NextRequest) {
-  // Route Handlers don't run through `(app)/layout.tsx`, so the staff-app
-  // gate has to be re-asserted explicitly here. Without this, a contact-only
-  // auth user blocked from `/production` could still GET `/production/export`
-  // and exfil the campaign CSV.
-  await requireStaffAccess();
+  // Route Handlers don't run through `(app)/layout.tsx`, so the page-level
+  // gate has to be re-asserted explicitly here. The page itself is admin-only
+  // (0028 Phase 1) — a coach who can't see Production has no business
+  // exporting it, so the gate matches.
+  await requireRole('admin');
 
   const sp = request.nextUrl.searchParams;
   const q = sp.get('q') ?? '';

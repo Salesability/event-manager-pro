@@ -12,11 +12,17 @@ describe('isAdminPath', () => {
     expect(isAdminPath('/admin/anything/nested')).toBe(true);
   });
 
+  it('matches /production and /dealerships and their subpaths (admin-only after 0028)', () => {
+    expect(isAdminPath('/production')).toBe(true);
+    expect(isAdminPath('/production/export')).toBe(true);
+    expect(isAdminPath('/dealerships')).toBe(true);
+    expect(isAdminPath('/dealerships/anything')).toBe(true);
+  });
+
   it('does not match non-admin paths', () => {
     expect(isAdminPath('/')).toBe(false);
     expect(isAdminPath('/calendar')).toBe(false);
-    expect(isAdminPath('/production')).toBe(false);
-    expect(isAdminPath('/dealerships')).toBe(false);
+    expect(isAdminPath('/reports')).toBe(false);
     expect(isAdminPath('/share/coach/1')).toBe(false);
   });
 

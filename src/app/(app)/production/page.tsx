@@ -1,3 +1,4 @@
+import { requireRole } from '@/lib/auth/require-role';
 import {
   loadCampaignStyles,
   loadCampaigns,
@@ -18,6 +19,7 @@ type Props = {
 };
 
 export default async function ProductionPage({ searchParams }: Props) {
+  await requireRole('admin');
   const { q, status, cancelled } = await searchParams;
   const showCancelled = cancelled === '1';
 

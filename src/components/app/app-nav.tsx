@@ -4,13 +4,19 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-type Tab = { href: string; label: string };
+type Tab = { href: string; label: string; requiresAdmin?: true };
 
+// `requiresAdmin` hides the tab from coaches in the bar. Production + Dealers
+// are operationally-shaped (daily back-office views) but admin-audience —
+// they stay top-level (not in the Admin dropdown, which is settings-shaped)
+// so admins can reach them without a menu click. Coaches don't see them at
+// all. Route-level enforcement is in `src/lib/supabase/middleware.ts`
+// (`ADMIN_PATHS`) + `requireRole('admin')` on each page (0028 Phases 1+2).
 const OPERATIONAL_TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
-  { href: '/production', label: 'Production List' },
+  { href: '/production', label: 'Production List', requiresAdmin: true },
   { href: '/reports', label: 'Reports' },
-  { href: '/dealerships', label: 'Dealers' },
+  { href: '/dealerships', label: 'Dealers', requiresAdmin: true },
 ];
 
 // Admin lives behind a single labeled dropdown rather than as flat top-level
@@ -30,11 +36,12 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
+  const operationalTabs = OPERATIONAL_TABS.filter((t) => !t.requiresAdmin || isAdmin);
   const adminActive = ADMIN_TABS.some((t) => isActive(pathname, t.href));
 
   return (
     <nav className="flex items-center gap-1">
-      {OPERATIONAL_TABS.map((tab) => {
+      {operationalTabs.map((tab) => {
         const active = isActive(pathname, tab.href);
         return (
           <Link

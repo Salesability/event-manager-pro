@@ -1,8 +1,10 @@
+import { requireRole } from '@/lib/auth/require-role';
 import { loadDealers } from '@/features/schedule/queries';
 import { DealersAdmin } from '@/features/dealers/dealers-admin';
 
 // Dealers admin. People (incl. coaches) live on /admin/people.
 export default async function DealershipsPage() {
+  await requireRole('admin');
   const dealers = await loadDealers();
 
   return (

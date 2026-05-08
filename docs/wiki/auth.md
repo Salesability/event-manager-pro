@@ -63,11 +63,11 @@ The `next` param is passed through `safeNextPath()` (in `src/lib/auth/`) to prev
 
 The role labels (`admin` / `coach` / `dealer`) carry purpose, not just permissions — they map to *who does what in the business*, and the surface gates should follow that map:
 
-- **Admin** — back-office / ops. Plans events, manages dealers, provisions coaches, runs the production schedule. Surfaces: every staff page (Calendar, Production List, Dealers, Lookups, People).
-- **Coach** — field / event-day. Goes to the dealership on the sales day to run the booth. Their staff-app surface is **Calendar only** — the where-am-I-booked tool. Production List is back-office "what's coming up" (campaign-level), not field-facing, so it stays admin.
+- **Admin** — back-office / ops. Plans events, manages dealers, provisions coaches, runs the production schedule. Surfaces: every staff page (Calendar, Production List, Reports, Dealers, plus the Admin dropdown's People and Lookups).
+- **Coach** — field / event-day. Goes to the dealership on the sales day to run the booth. Staff-app surface is **Calendar + Reports** — Calendar is the where-am-I-booked tool; Reports lets a coach see their own summary view (`['admin', 'coach']` gate, the only non-admin staff page after 0028). Production List is back-office "what's coming up" (campaign-level), not field-facing, so it's admin-only. Dealers (the customer-company list) is admin-only too.
 - **Dealer** — customer-side. No staff-app access today; the dealer portal isn't built yet. A `dealer`-only contact is them-side, not us-side, and `STAFF_APP_ROLES` excludes `dealer` from the staff gate (see Route gating below).
 
-**Today the role taxonomy is enforced; the per-route surface scoping isn't fully.** `requireStaffAccess` admits any staff role to the `(app)/*` shell, and the nav (`src/components/app/app-nav.tsx`) only marks `admin: true` on Lookups + People — Production List and Dealers are visible to coaches in the current build. Tightening Production + Dealers to admin-only at both the nav and the page-level (`requireRole('admin')`) is queued separately; see `docs/designs/CURRENT.md` Parked.
+The per-route surface matrix is enforced at three layers (see [Route gating](#route-gating-rbac) below): edge `ADMIN_PATHS` (`/admin`, `/production`, `/dealerships`), page-level `requireRole('admin')` on the same routes, and nav scoping (`requiresAdmin` flag on top-tab entries; `Admin` dropdown rendered only for admins). 0028 closed the previous gap where Production + Dealers were coach-visible in the nav and the layout-only `requireStaffAccess` gate.
 
 ## Route gating (RBAC)
 
