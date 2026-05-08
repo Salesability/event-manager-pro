@@ -13,6 +13,16 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — architecture.md: PDF library + blob storage decisions (0026-quote-pdf Phase 1)
+
+- New rows in the [architecture.md](architecture.md) stack table: **PDF generation = `pdf-lib`** (replaces `@react-pdf/renderer` from the original "Future integrations" placeholder) and **Blob storage = Google Cloud Storage** (picked over Supabase Storage). Both decisions land Phase 1 of [0026-quote-pdf](../designs/0026-quote-pdf/plan.md) and propagate forward to 7.2 (Contract MSA send + signed-PDF storage) and 7.3 (Invoice PDF).
+- **PDF strategy: code-built layout, not template-fill.** Mid-Phase-1 the working assumption was that designers would upload a branded PDF template to GCS and `pdf-lib` would fill AcroForm fields / coordinate-overlay the data; user reversed it 2026-05-08 — code is now the source of truth for the document look (logo, fonts, margins, T&C wording). GCS holds rendered output only at `quotes/{id}/{rev}.pdf`. Layout iteration is dev-side via `src/lib/pdf/render-*.ts` modules. Pinning policy: a sent quote's PDF stays as-rendered; renderer-code changes do not retroactively alter previously-sent documents.
+- New adapters: `src/lib/storage/gcs.ts` (`putObject` / `getObject` / `signedUrl`, env-pull-on-call mirroring `src/lib/email/send.ts` shape) and `src/lib/pdf/render-quote.ts` (single-page Quote with `public/saledayevents-logo.jpg` embedded top-right, header, Client + Event blocks, line-items table, totals, T&C + Invoicing & Payment language).
+- New deps: `pdf-lib@1.17.1`, `@google-cloud/storage@7.19.0`, `server-only@0.0.1`. The `server-only` add is so the existing `import 'server-only'` guard in adapters continues to work in vitest mocks (vitest mocks the import; outside Next's bundler the package throws on evaluation, which is the intended behavior — adapters never import in client bundles).
+- New env vars in `.env.example`: `GCS_PROJECT_ID`, `GCS_BUCKET`, `GCS_CREDENTIALS_JSON` (optional inline JSON; fall through to Application Default Credentials / workload identity in Cloud Run).
+- 453/453 vitest (was 450; +3 render-quote tests covering PDF magic header + single US-Letter page round-trip + zero-line-item resilience). Opt-in visual smoke at `WRITE_SMOKE_PDF=1 pnpm vitest run src/lib/pdf` writes `/tmp/quote-smoke.pdf` for layout eyeball.
+- Carry-forward into Phase 3: real-bucket `putObject`/`getObject` smoke once creds wired + multi-page handling if line-item count grows past one page + signature/dealer-detail block polish.
+
 ## 2026-05-08 — auth.md: next-safe-action middleware client (0033 shipped — auth-required is now the default)
 
 - New `src/lib/actions/action-client.ts` exports four tiers: `baseClient` (no auth — auth-flow opt-out), `authedClient` (signed-in required), `capabilityClient(cap)` (auth + `assertCan(cap)`), `roleListClient(roles)` (auth + `requireRole(roles)` for the multi-role admit-set legacy carve-outs). All four built on `next-safe-action@8` + `zod@4`; navigation errors propagate via `isNavigationError`. Result shape now `{data?, serverError?, validationErrors?}` — the temporary `toLegacyResult` adapter at `src/lib/actions/legacy-result.ts` maps it back to `{ok|error}` so existing form callers don't need a flag-day rewrite.
