@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Custom ESLint rule + AST traversal | Done | - |
-| 2: Wire into eslint config + opt-out comment convention + CI verification | Done | - |
-| 3: Sweep existing actions + close | Done | - |
+| 1: Custom ESLint rule + AST traversal | Done | ce40ece |
+| 2: Wire into eslint config + opt-out comment convention + CI verification | Done | ce40ece |
+| 3: Sweep existing actions + close | Done | ce40ece |
 
 This chunk closes the highest-impact authz failure mode: a new Server Action ships with no gate. The mistake costs nothing today (caught only by careful review) and the blast radius is full privilege escalation. The fix is small: a custom ESLint rule that walks every exported `async function` in any file with `'use server'` (top-level directive or inline) and asserts the body contains a call to a known allow-listed gate (`assertCan`, `requireRole`, `requireStaffAccess`, plus `next-safe-action`'s middleware shape once 0033 lands). Files can opt out per-function with an explicit `// authz: public` comment that the rule reads — but the *default* must be reject. **Done = the rule fires red on every gate-missing action in CI; the existing surface passes; an `// authz: public` opt-out exists for the legitimate exceptions (auth flow itself).**
 
