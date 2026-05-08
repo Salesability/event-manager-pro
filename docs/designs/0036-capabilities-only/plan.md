@@ -10,7 +10,7 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: New capabilities (matrix rows + tests) | Done | - |
+| 1: New capabilities (matrix rows + tests) | Done | `5575c62` |
 | 2: Migrate page + layout gates | Pending | - |
 | 3: Migrate availability actions + delete `roleListClient` | Pending | - |
 | 4: Docs + smoke verification | Pending | - |
