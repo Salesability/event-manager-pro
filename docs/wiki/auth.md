@@ -108,6 +108,10 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 
 | Capability | admin | coach | dealer | Notes |
 |---|---|---|---|---|
+| `app:access` | ✅ | ✅ | ❌ | 0036 (matrix preview). Mirrors `STAFF_APP_ROLES = {admin, staff, coach, viewer}`; `dealer` excluded. Replaces `requireStaffAccess()` in `(app)/layout.tsx` in Phase 2. |
+| `admin:access` | ✅ | ❌ | ❌ | 0036 (matrix preview). Replaces `requireRole('admin')` on `/admin/lookups`, `/admin/people`, `/production`, `/dealerships` in Phase 2. |
+| `reports:view` | ✅ | ✅ | ❌ | 0036 (matrix preview). Replaces `requireRole(['admin','coach'])` on `/reports` + `/reports/export` in Phase 2. |
+| `availability:edit` | ✅ | ✅ | ❌ | 0036 (matrix preview). Replaces `roleListClient(['admin','coach'])` on the 3 availability-block Server Actions in Phase 3. Row-level ownership still enforced via `availability-authz.ts` (delegates to `coach-availability:edit-own`). |
 | `production:view`, `production:export` | ✅ | ❌ | ❌ | 0028 page-gate already excludes coach |
 | `dealer:view`, `dealer:edit`, `dealer:create`, `dealer:archive` | ✅ | ❌ | ❌ | Same |
 | `person:view`, `person:create`, `person:edit`, `person:archive`, `person:adopt-orphan` | ✅ | ❌ | ❌ | `/admin/people` admin-only |

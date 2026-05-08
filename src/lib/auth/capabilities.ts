@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js';
-import type { TeamMemberRole } from '@/lib/auth/load-team-membership';
+import { isStaffAppRole, type TeamMemberRole } from '@/lib/auth/team-roles';
 
 // Pure capability PDP. Decides whether a profile holds a capability against
 // an optional resource. No DB calls, no auth lookups — caller loads the
@@ -15,6 +15,10 @@ import type { TeamMemberRole } from '@/lib/auth/load-team-membership';
 // both import from here so the matrix lives in exactly one place.
 
 export type Capability =
+  | 'app:access'
+  | 'admin:access'
+  | 'reports:view'
+  | 'availability:edit'
   | 'production:view'
   | 'production:export'
   | 'dealer:view'
@@ -60,6 +64,21 @@ export function can(
   if (isAdmin) return true;
 
   switch (capability) {
+    case 'app:access': {
+      // Staff-app shell access. Delegates to `isStaffAppRole` (the same
+      // predicate `requireStaffAccess()` and the auth-callback router use)
+      // so swapping `requireStaffAccess()` for `assertCan('app:access')`
+      // preserves admit-set semantics by construction. `dealer` is them-side
+      // and excluded by `STAFF_APP_ROLES`.
+      return profile.roles.some(isStaffAppRole);
+    }
+    case 'reports:view':
+    case 'availability:edit': {
+      // Admin || coach. Admin already passed via the shortcut above; check
+      // the membership roles for coach.
+      return profile.roles.includes('coach');
+    }
+    case 'admin:access':
     case 'production:view':
     case 'production:export':
     case 'dealer:view':
