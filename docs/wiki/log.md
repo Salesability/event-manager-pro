@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md: action-gate ESLint rule (0031 shipped — gate-presence is now structurally enforced)
+
+- New custom rule `action-gate/no-ungated-action` in `eslint-plugins/action-gate.mjs`. Rejects any exported `async` function in a `'use server'` file (or a `route.ts` Route Handler) that doesn't reach an allow-listed gate (`assertCan` / `requireRole` / `requireStaffAccess`) — directly or through a same-file wrapper helper that itself calls one. Per-function opt-out via `// authz: public` line comment.
+- Wired in `eslint.config.mjs` against two file globs: `src/features/**/actions.ts` and `src/app/**/route.ts` (the latter with `routeHandler: true` to skip the `'use server'` directive precondition). Allow-list is forward-compatible with 0033 — the next-safe-action middleware shape will plug in via `gateNames` option.
+- Four legitimate ungated exceptions opted out: `signInWithMagicLink`, `signInWithGoogle`, `signOut` (login flow itself) and the `/auth/callback` GET handler (OAuth code-for-session exchange runs before any session exists). All other Server Actions in `src/features/{people,schedule,email}/actions.ts` and the two protected Route Handlers (`/production/export`, `/reports/export`) pass cleanly — the 22 gated exports each reach an allow-listed gate.
+- Updated [auth.md](auth.md) § Capability matrix with the new "Structural enforcement of the matrix" subsection: lint catches gate-missing (0031), test catches wrong-admit-set (0032), CI catches Can/assertCan-asymmetric (0034).
+- 16/16 rule tests + full vitest suite green; `pnpm lint` clean (only the 4 pre-existing warnings).
+
 ## 2026-05-08 — auth.md: tightened coach surface (back-office actions all admin-only)
 
 - After 0029 shipped the user noticed five Server Actions still admitted coach via `requireRole(['admin','staff','coach'])` — `createDealer`, `updateDealer`, `createCampaign`, `updateCampaign`, the email-send helper. Per the role purpose ("coach is field-only, admin runs the back office"), tightened all five to admin-only. `cancelCampaign` was already admin via `requireRole('admin')`; migrated it to `assertCan('campaign:cancel')` for matrix consistency.

@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getUser } from '@/lib/supabase/session';
 import { safeNextPath } from '@/lib/url';
 
+// authz: public — OAuth-code exchange runs before any session exists.
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get('code');

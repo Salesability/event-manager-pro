@@ -21,6 +21,7 @@ async function siteUrl() {
   return `${proto}://${host}`;
 }
 
+// authz: public
 export async function signInWithMagicLink(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim();
   const next = safeNextPath(formData.get('next'));
@@ -50,6 +51,7 @@ export async function signInWithMagicLink(formData: FormData) {
   redirect(`/login?sent=${encodeURIComponent(email)}`);
 }
 
+// authz: public
 export async function signInWithGoogle(formData: FormData) {
   const next = safeNextPath(formData.get('next'));
 
@@ -71,6 +73,7 @@ export async function signInWithGoogle(formData: FormData) {
   redirect(data.url);
 }
 
+// authz: public
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
