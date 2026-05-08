@@ -10,7 +10,7 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: PDF library + GCS storage foundation (decisions + adapters) | Done | (pending) |
+| 1: PDF library + GCS storage foundation (decisions + adapters) | Done | `3c4b5b9` |
 | 2: Quote data model + Server Actions | Pending | - |
 | 3: Quote PDF rendering (real data, real layout, persist to GCS) | Pending | - |
 | 4: Quote email send + public accept/decline flow | Pending | - |
