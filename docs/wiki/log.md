@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-08 — auth.md: action-matrix executable test (0032 shipped — admit-set drift now CI-enforced)
+
+- New test surface `src/features/__tests__/action-gate-matrix.ts` (24 rows — every gated Server Action + 2 protected Route Handlers) and `action-gate-matrix.test.ts` (24 × 7 = 168 outcome assertions + 1 drift-detection test = 169 tests). Drives each gated entry with mocked `getUser` + `loadCurrentMembership` + `redirect` + a Proxy-backed no-op `db` stub; asserts each of seven roles (unauth / admin / staff / coach / viewer / dealer / orphan) gets the documented outcome.
+- Roles `staff`, `viewer`, `dealer` were added in-eval after Codex caught the partial-admit-set blind spot — a gate switched to `requireRole(['admin','staff'])` would silently pass a 4-role matrix. Sabotage smoke confirms: flipping `cancelCampaign` to `['admin','staff']` makes `staff → redirect:/` fail as expected.
+- Drift detection: the suite re-walks `src/features/**/actions.ts` (top-level `'use server'`, with comment-tolerant directive detection) + any `*/actions/**/*.ts` shape + `src/app/**/route.ts`. Regex hits five export shapes (async function, const-async, default-async-function, default-async-arrow). Filters `// authz: public` opt-outs. New gated action without a matrix row → CI fails. Pairs with 0031: 0031 catches "no gate," 0032 catches "wrong admit set."
+- Updated [auth.md](auth.md) § "Structural enforcement of the matrix" — three sublayers (presence / admit-set / symmetry) make the layering explicit; 0034 still pending for symmetry.
+- 441/441 vitest (was 272 pre-0032; +169 new). `pnpm tsc --noEmit && pnpm lint` clean (only the 4 pre-existing warnings).
+
 ## 2026-05-08 — auth.md: action-gate ESLint rule (0031 shipped — gate-presence is now structurally enforced)
 
 - New custom rule `action-gate/no-ungated-action` in `eslint-plugins/action-gate.mjs`. Rejects any exported `async` function in a `'use server'` file (or a `route.ts` Route Handler) that doesn't reach an allow-listed gate (`assertCan` / `requireRole` / `requireStaffAccess`) — directly or through a same-file wrapper helper that itself calls one. Per-function opt-out via `// authz: public` line comment.

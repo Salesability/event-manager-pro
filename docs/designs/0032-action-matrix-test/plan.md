@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Build the action↔role admit-set matrix data file | Pending | - |
-| 2: Test harness — drive each action with each role, assert documented outcome | Pending | - |
-| 3: Wire into vitest + close | Pending | - |
+| 1: Build the action↔role admit-set matrix data file | Done | - |
+| 2: Test harness — drive each action with each role, assert documented outcome | Done | - |
+| 3: Wire into vitest + close | Done | - |
 
 The 0031 lint rule catches "no gate at all." This chunk catches "gate is present but wrong admit set" — e.g. an action gated `requireRole(['admin','coach'])` when intent is admin-only, or a capability call site against the wrong capability. The mistake passes review if the reviewer doesn't have the role↔capability matrix loaded. Solution: a matrix file (data) listing every gated action + its expected admit set per role; a single test file that imports each action and drives it against unauth + each role; assertions check the documented outcome (allow / `redirect:/` / `redirect:/login`). Drift between code and matrix → CI fails. **Done = every gated action has a matrix entry; the suite drives all entries; a deliberate code-change that changes admit set fails the suite without matrix update.**
 
@@ -23,7 +23,7 @@ The 0031 lint rule catches "no gate at all." This chunk catches "gate is present
 - `docs/wiki/auth.md` § "Per-action gate matrix" + § "Capability matrix" — the matrix file in this chunk is the *executable* twin of those wiki tables.
 - `src/lib/auth/capabilities.test.ts` — the existing pattern of "table-driven tests against the auth module" — this chunk extends to "table-driven tests against every action that consumes the auth module."
 
-**Overall Progress:** 0% (0/3 phases complete)
+**Overall Progress:** 100% (3/3 phases complete)
 
 **Note:**
 - Forward-compatible with 0033 (next-safe-action): the matrix is keyed by action import, not by helper. Migration to safe-action shape doesn't change what the matrix tests — just the action's *implementation* changes. Test mocks adapt to the new shape (mock the safe-action client instead of `assertCan`); matrix entries don't change.
@@ -44,22 +44,22 @@ The 0031 lint rule catches "no gate at all." This chunk catches "gate is present
 
 ### Phase 1: Build the matrix data file
 
-- [ ] Inventory the gated surface — grep `assertCan|requireRole` in `src/features/*/actions.ts` and `src/app/(app)/**/route.ts`. ~20 entries today; expect to grow.
-- [ ] Create `src/features/__tests__/action-gate-matrix.ts` exporting an array of rows: `{ action, label, sampleFormData, expectedByRole: { unauth: 'redirect:/login', admin: 'allow', coach: 'redirect:/', orphan: 'redirect:/' } }`.
-- [ ] One row per action. Document the *intent* in a comment per row (one line: "admin-only — back-office; coach is field-only" etc.). Match the wiki § "Per-action gate matrix" prose.
+- [x] Inventoried the gated surface (24 Server Actions across `people/`, `schedule/`, `email/` + 2 protected Route Handlers `/production/export` + `/reports/export`).
+- [x] Created `src/features/__tests__/action-gate-matrix.ts` exporting `ACTION_MATRIX` — 24 rows, one per gated entry. Two helper outcome-maps (`ADMIN_ONLY`, `ADMIN_OR_COACH`) keep the role-level intent legible at a glance.
+- [x] One row per action with `note` field documenting the intent.
 
 ### Phase 2: Test harness
 
-- [ ] Create `src/features/__tests__/action-gate-matrix.test.ts`. Use `vi.hoisted` for `getUser` + `loadCurrentMembership` + `redirect` mocks (mirror `require-role.test.ts`).
-- [ ] For each role × matrix row → assert outcome.
-- [ ] Add a "drift detection" test that re-greps the codebase for gated actions and fails if any are missing from the matrix. Use `glob.sync` + simple regex; doesn't need full AST.
-- [ ] Run; expect green for the existing surface (since today's gates already match documented intent — verified by 0029's per-action sweep).
-- [ ] Run a deliberate sabotage: temporarily change one action's gate from `'admin'` to `['admin', 'coach']`; verify the suite fails on that row; revert.
+- [x] Created `src/features/__tests__/action-gate-matrix.test.ts`. `vi.hoisted` mocks `getUser` + `loadCurrentMembership` + `redirect` + `db` (Proxy-backed no-op stub) + audit + admin client + email send.
+- [x] For each row × 4 roles (96 outcome assertions) — green.
+- [x] Drift-detection test re-walks `src/features/**/actions.ts` (filtered to top-level `'use server'` files) + `src/app/**/route.ts`, regexes `export async function …`, filters out `// authz: public` opt-outs, asserts every name is in `ACTION_MATRIX`.
+- [x] Suite green for current surface — 97/97 (96 matrix + 1 drift).
+- [x] Sabotage: replaced `cancelCampaign`'s `assertCan('campaign:cancel')` with `requireRole(['admin', 'coach'])` — `coach → redirect:/` failed as expected. Reverted.
 
 ### Phase 3: Wire + close
 
-- [ ] Verify the test runs in the existing `pnpm test` invocation (no extra config — it's just another `*.test.ts` under `src/`).
-- [ ] Update `docs/wiki/auth.md` § "Capability gating" — add a one-paragraph note about the executable matrix as the test-time enforcement layer. Cross-link from § "Per-action gate matrix" to the matrix file.
-- [ ] Append a `wiki/log.md` entry.
-- [ ] Smoke: full `pnpm test --run` green, including the new matrix file.
-- [ ] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
+- [x] Test runs via existing `pnpm test` (already covered by `src/**/*.test.ts` glob in `vitest.config.ts`).
+- [x] Updated `docs/wiki/auth.md` § "Structural enforcement of the matrix" with the test-time admit-set sublayer; the new "Three independent layers, each catching a different failure mode" framing splits 0031/0032/0034 into three distinct guarantees.
+- [x] Appended `wiki/log.md` entry.
+- [x] Full `pnpm test --run` green: 441/441 (was 272 pre-0032 — added 169 tests: 24 rows × 7 roles + 1 drift).
+- [x] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean. Codex review caught two Highs (4-role matrix admits-set blind spot; drift regex misses const-async/default-async exports) and Medium 2 (file-discovery brittleness) — all three fixed in-eval. Medium 1 (deny-not-tied-to-gate) documented as a known caveat: today no Server Action issues post-gate redirects, but a future action that does could mask a wrong admit; AST-level gate-call telemetry is the carry-forward.
