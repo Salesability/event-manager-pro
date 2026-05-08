@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { adoptOrphanAuthUser } from '@/features/people/actions';
 import type { OrphanAuthUser } from '@/features/people/queries';
 
@@ -84,7 +85,10 @@ function AdoptForm({
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState<AdoptState, FormData>(
-    async (_prev, fd) => adoptOrphanAuthUser(fd),
+    async (_prev, fd) =>
+      toLegacyResult<{ ok: true; contactId?: number; warning?: string }>(
+        await adoptOrphanAuthUser(fd),
+      ),
     null,
   );
 

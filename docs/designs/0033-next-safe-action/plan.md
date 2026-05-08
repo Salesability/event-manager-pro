@@ -6,11 +6,11 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Install + bootstrap `action-client.ts` (base + auth + admin tier middlewares) | Pending | - |
-| 2: Pilot migration — dealer CRUD (`createDealer`, `updateDealer`, `archiveDealer`) + form caller + tests | Pending | - |
-| 3: Bulk migration — people / lookup / campaign / email (~17 remaining actions) | Pending | - |
-| 4: Retire hand-rolled validators (`parseId`, `field`, `parseLookupLabel`, …) — Zod schemas everywhere | Pending | - |
-| 5: Wiki update + smoke + close | Pending | - |
+| 1: Install + bootstrap `action-client.ts` (base + auth + admin tier middlewares) | Done | - |
+| 2: Pilot migration — dealer CRUD (`createDealer`, `updateDealer`, `archiveDealer`) + form caller + tests | Done | - |
+| 3: Bulk migration — people / lookup / campaign / email (~17 remaining actions) | Done | - |
+| 4: Retire hand-rolled validators (`parseId`, `field`, `parseLookupLabel`, …) — Zod schemas everywhere | Deferred (carry-forward) | - |
+| 5: Wiki update + smoke + close | Done | - |
 
 This chunk migrates every gated Server Action in the staff app from the hand-rolled `await assertCan(...)` shape to a `next-safe-action` middleware-chained client. The motivation isn't *"the current pattern is wrong"* — `assertCan` works correctly and is greppable. The motivation is **error-class reduction**: middleware composition makes the auth-required path the *default*, so writing an unauthed action requires explicit opt-out (the inverse of today's "remember to add the gate"). It also pulls input-validation into the same chain via Standard Schema (Zod), retiring the hand-rolled `field()` / `parseId()` / `parseLookupLabel()` helpers and giving every action a uniform `{data, validationErrors, serverError}` result shape that pairs natively with React 19's `useActionState`. Capability layer (0029) is **forward-compatible** — `capabilities.ts` is the PDP and stays untouched; `assertCan` becomes a `.use()` middleware so existing capability strings survive verbatim. Soft-trigger was meant to be `0016-book-your-event-intake` (untrusted public input wanting Zod), but the user is committing to this chunk independently as a risk-reduction investment ahead of that work — so when 0016 lands, it inherits the convention rather than seeding it.
 
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/security.md` § "Defence in depth" layer 3 — the **intent vs enforcement** distinction holds; middleware doesn't change which side of the line `<Can>` sits on.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers" — Route Handlers (`production/export/route.ts`) get their own variant of the safe-action shape (no FormData parsing, but auth + capability middleware still applies).
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 80% (4/5 phases shipped; Phase 4 deferred as carry-forward)
 
 **Note:**
 - This is a **wiring + retrofit chunk**, not a feature. No new user-visible behavior; the gain is **error-class reduction** (missing-gate, drifted-gate, asymmetric-Can/assertCan all become harder to ship).
@@ -114,13 +114,17 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Per-action sanity: after each migrated action, run *its* existing test suite (don't wait for the full run at end). Revert any action whose tests fail and isolate the diff.
 - [ ] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
 
-### Phase 4: Retire hand-rolled validators
+### Phase 4: Retire hand-rolled validators (DEFERRED — carry-forward)
 
-- [ ] `grep -rn "parseId\|parseOptionalId\|parseDate\|parseLookupLabel\|field" src/features/ src/app/` — every call site should now read from `parsedInput`. Confirm zero remaining consumers.
-- [ ] Delete `src/features/schedule/validators.ts` (or downsize to just the parts other code paths still use — e.g. `EMAIL_RE` if it's referenced outside Server Actions).
-- [ ] Delete the now-obsolete `validateContactInputs` / `parseCampaignInput` helpers if they're fully absorbed into Zod schemas.
-- [ ] If Phase 2 introduced `toLegacyResult` adapter and every consumer is now on the new shape, delete the adapter.
-- [ ] `pnpm tsc --noEmit && pnpm lint && pnpm test --run` clean.
+Phase 4 was scoped as "replace `field()` / `parseId()` / `parseLookupLabel()` / `validateContactInputs()` / `parseCampaignInput()` with Zod schemas everywhere; delete `validators.ts`." That requires writing 12+ field-level Zod schemas that match the existing semantics (required-field rules, length caps, email regex, ID coercion, multi-role parsing, dealer-link JSON parsing) and rewriting every action body to read `parsedInput.field` instead of calling the parser. Substantial work; not required for the safety-net win Phase 1–3 already delivered.
+
+**Carry-forward**: revisit when `0016-book-your-event-intake` lands (public-facing form, untrusted input, natural fit for Zod schemas). Until then, actions use the `formDataSchema` passthrough — the safe-action client validates "is FormData" via `z.instanceof(FormData)`, the action body keeps the existing `field()` / `parseId()` calls. The legacy-result adapter (`toLegacyResult`) stays in place for the same reason.
+
+Items left for the deferred follow-up (cite this carry-forward when you scope it):
+- [ ] Write per-action Zod schemas (dealer create/update, person create/update, campaign create/update, lookup label, availability block).
+- [ ] Replace `parseDealerInput` / `parseCampaignInput` / `parseAvailabilityInput` with the matching schema's `parsedInput`.
+- [ ] Delete `src/features/schedule/validators.ts` once no Server Action imports it.
+- [ ] If every form consumer migrates to read `serverError` / `validationErrors` directly, delete `src/lib/actions/legacy-result.ts`.
 
 ### Phase 5: Wiki update + smoke + close
 

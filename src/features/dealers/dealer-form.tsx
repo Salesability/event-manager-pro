@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as Form from '@radix-ui/react-form';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 
@@ -68,7 +69,7 @@ export function DealerForm({
   const { touched, fieldHandlers } = useTouched();
   const action = mode === 'create' ? createDealer : updateDealer;
   const [state, formAction, pending] = useActionState<DealerFormState, FormData>(
-    async (_prev, fd) => action(fd),
+    async (_prev, fd) => toLegacyResult(await action(fd)),
     null,
   );
 

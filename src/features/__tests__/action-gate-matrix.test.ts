@@ -19,11 +19,18 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Next.js redirect throws `Error` with `digest: 'NEXT_REDIRECT;...'`. Both the
+// imperative `assertCan`/`requireRole` callers AND the safe-action middleware
+// (via `isNavigationError`) recognise this digest and let it propagate. The
+// mock matches that shape so post-0033 actions wrapped in `capabilityClient`
+// surface the redirect as a thrown error rather than a `{serverError}` body.
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   loadCurrentMembership: vi.fn(),
   redirect: vi.fn((p: string) => {
-    throw new Error(`redirect:${p}`);
+    const err = new Error(`NEXT_REDIRECT;replace;${p};307;`);
+    (err as Error & { digest: string }).digest = `NEXT_REDIRECT;replace;${p};307;`;
+    throw err;
   }),
 }));
 
@@ -191,13 +198,14 @@ function classify(
   outcome: Awaited<ReturnType<typeof captureOutcome>>,
 ): Outcome | 'allow-with-error' {
   if (outcome.kind === 'resolve') return 'allow';
-  // The redirect mock throws `Error('redirect:/path')`. Anything else is
-  // post-gate and counts as "allow" for the matrix's purposes — the gate
-  // let the action proceed, where it then failed on validation, missing
-  // FormData fields, or the no-op DB stub.
-  if (outcome.message.startsWith('redirect:')) {
-    return outcome.message as Outcome;
-  }
+  // The redirect mock throws an Error whose `digest` starts with
+  // `NEXT_REDIRECT;<kind>;<path>;...`. Decode the path so the assertion
+  // can compare against `redirect:/login` / `redirect:/`. Anything else is
+  // post-gate and counts as "allow" — the gate let the action proceed,
+  // where it then failed on validation, missing FormData fields, or the
+  // no-op DB stub.
+  const m = outcome.message.match(/^NEXT_REDIRECT;[^;]+;([^;]+);/);
+  if (m) return `redirect:${m[1]}` as Outcome;
   return 'allow-with-error';
 }
 
@@ -205,7 +213,9 @@ describe('action gate matrix — every gated action × role × outcome', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.redirect.mockImplementation((p: string) => {
-      throw new Error(`redirect:${p}`);
+      const err = new Error(`NEXT_REDIRECT;replace;${p};307;`);
+      (err as Error & { digest: string }).digest = `NEXT_REDIRECT;replace;${p};307;`;
+      throw err;
     });
   });
 

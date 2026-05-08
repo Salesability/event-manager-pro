@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveAvailabilityBlock,
   createAvailabilityBlock,
@@ -76,7 +77,7 @@ export function AvailabilityAdmin({
   // submitted, which is exactly what `parseAvailabilityInput` expects.
   const [createState, createAction, pending] = useActionState<CreateState, FormData>(
     async (_prev, fd) => {
-      const result = await createAvailabilityBlock(fd);
+      const result = toLegacyResult(await createAvailabilityBlock(fd));
       if ('ok' in result) {
         setDraft({ ...emptyDraft, startDate: defaultStartDate });
       }
@@ -232,7 +233,7 @@ function AvailabilityRow({
     startTransition(async () => {
       const fd = draftToFormData(draft);
       fd.set('id', String(block.id));
-      const result = await updateAvailabilityBlock(fd);
+      const result = toLegacyResult(await updateAvailabilityBlock(fd));
       if ('ok' in result) {
         toast.success('Date block saved');
         const next = formDraftToBlock(block.id, draft);
@@ -251,7 +252,7 @@ function AvailabilityRow({
     startTransition(async () => {
       const fd = new FormData();
       fd.set('id', String(block.id));
-      const result = await archiveAvailabilityBlock(fd);
+      const result = toLegacyResult(await archiveAvailabilityBlock(fd));
       if ('ok' in result) {
         toast.success('Date block removed');
         onLocalArchive();

@@ -15,10 +15,13 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
-import { assertCan } from '@/lib/auth/assert-can';
+import {
+  capabilityClient,
+  formDataSchema,
+  roleListClient,
+} from '@/lib/actions/action-client';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
-import { requireRole } from '@/lib/auth/require-role';
 import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import {
@@ -54,112 +57,114 @@ function toActionResult(err: unknown): ActionResult {
   throw err;
 }
 
-export async function createDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('dealer:create')).id;
+export const createDealer = capabilityClient('dealer:create')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
 
-  const name = field(formData, 'name');
-  const address = field(formData, 'address');
-  const contactFirst = field(formData, 'contactFirst');
-  const contactLast = field(formData, 'contactLast');
-  const contactEmail = field(formData, 'contactEmail').toLowerCase();
-  const contactPhone = field(formData, 'contactPhone');
+    const name = field(formData, 'name');
+    const address = field(formData, 'address');
+    const contactFirst = field(formData, 'contactFirst');
+    const contactLast = field(formData, 'contactLast');
+    const contactEmail = field(formData, 'contactEmail').toLowerCase();
+    const contactPhone = field(formData, 'contactPhone');
 
-  if (!name) return { error: 'Dealership name is required.' };
-  const contactErr = validateContactInputs({
-    contactFirst,
-    contactLast,
-    contactEmail,
-    contactPhone,
-  });
-  if (contactErr) return { error: contactErr };
-
-  try {
-    await db.transaction(async (tx) => {
-      const [dealerRow] = await tx
-        .insert(dealers)
-        .values({
-          publicId: generatePublicId(),
-          name,
-          address: address || null,
-          createdById: userId,
-          updatedById: userId,
-        })
-        .returning({ id: dealers.id });
-
-      const hasContact = contactFirst || contactLast;
-      if (!hasContact) return;
-
-      const [contactRow] = await tx
-        .insert(contacts)
-        .values({
-          firstName: contactFirst,
-          lastName: contactLast,
-          createdById: userId,
-          updatedById: userId,
-        })
-        .returning({ id: contacts.id });
-
-      await tx.insert(dealerContacts).values({
-        dealerId: dealerRow.id,
-        contactId: contactRow.id,
-        role: 'staff',
-        source: 'admin',
-        createdById: userId,
-        updatedById: userId,
-      });
-
-      // 0023 Phase 4: every dealer-side contact gets a `dealer` team-member
-      // role too, so the People-admin filter / People dialog can surface
-      // them and Phase 5's "every contact has a role" invariant holds.
-      // No `onConflictDoNothing` needed — the contact was just inserted, so
-      // a `team_member_roles(contact_id, role)` collision is impossible.
-      await tx.insert(teamMemberRoles).values({
-        contactId: contactRow.id,
-        role: 'dealer',
-        createdById: userId,
-        updatedById: userId,
-      });
-
-      await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
-      await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
+    if (!name) return { error: 'Dealership name is required.' };
+    const contactErr = validateContactInputs({
+      contactFirst,
+      contactLast,
+      contactEmail,
+      contactPhone,
     });
-  } catch (err) {
-    return toActionResult(err);
-  }
+    if (contactErr) return { error: contactErr };
 
-  revalidatePath('/dealerships');
-  revalidatePath('/production');
-  return { ok: true };
-}
+    try {
+      await db.transaction(async (tx) => {
+        const [dealerRow] = await tx
+          .insert(dealers)
+          .values({
+            publicId: generatePublicId(),
+            name,
+            address: address || null,
+            createdById: userId,
+            updatedById: userId,
+          })
+          .returning({ id: dealers.id });
 
-export async function updateDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('dealer:edit')).id;
+        const hasContact = contactFirst || contactLast;
+        if (!hasContact) return;
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid dealer id.' };
+        const [contactRow] = await tx
+          .insert(contacts)
+          .values({
+            firstName: contactFirst,
+            lastName: contactLast,
+            createdById: userId,
+            updatedById: userId,
+          })
+          .returning({ id: contacts.id });
 
-  const name = field(formData, 'name');
-  const address = field(formData, 'address');
-  const contactFirst = field(formData, 'contactFirst');
-  const contactLast = field(formData, 'contactLast');
-  const contactEmail = field(formData, 'contactEmail').toLowerCase();
-  const contactPhone = field(formData, 'contactPhone');
+        await tx.insert(dealerContacts).values({
+          dealerId: dealerRow.id,
+          contactId: contactRow.id,
+          role: 'staff',
+          source: 'admin',
+          createdById: userId,
+          updatedById: userId,
+        });
 
-  if (!name) return { error: 'Dealership name is required.' };
-  const contactErr = validateContactInputs({
-    contactFirst,
-    contactLast,
-    contactEmail,
-    contactPhone,
+        // 0023 Phase 4: every dealer-side contact gets a `dealer` team-member
+        // role too, so the People-admin filter / People dialog can surface
+        // them and Phase 5's "every contact has a role" invariant holds.
+        await tx.insert(teamMemberRoles).values({
+          contactId: contactRow.id,
+          role: 'dealer',
+          createdById: userId,
+          updatedById: userId,
+        });
+
+        await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
+        await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
+      });
+    } catch (err) {
+      return toActionResult(err);
+    }
+
+    revalidatePath('/dealerships');
+    revalidatePath('/production');
+    return { ok: true };
   });
-  if (contactErr) return { error: contactErr };
 
-  const dealerExists = await db
-    .select({ id: dealers.id })
-    .from(dealers)
-    .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
-    .limit(1);
-  if (!dealerExists.length) return { error: 'Dealer not found.' };
+export const updateDealer = capabilityClient('dealer:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid dealer id.' };
+
+    const name = field(formData, 'name');
+    const address = field(formData, 'address');
+    const contactFirst = field(formData, 'contactFirst');
+    const contactLast = field(formData, 'contactLast');
+    const contactEmail = field(formData, 'contactEmail').toLowerCase();
+    const contactPhone = field(formData, 'contactPhone');
+
+    if (!name) return { error: 'Dealership name is required.' };
+    const contactErr = validateContactInputs({
+      contactFirst,
+      contactLast,
+      contactEmail,
+      contactPhone,
+    });
+    if (contactErr) return { error: contactErr };
+
+    const dealerExists = await db
+      .select({ id: dealers.id })
+      .from(dealers)
+      .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+      .limit(1);
+    if (!dealerExists.length) return { error: 'Dealer not found.' };
 
   try {
     await db.transaction(async (tx) => {
@@ -245,17 +250,17 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
           set: { archivedAt: null, updatedById: userId },
         });
 
-      await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
-      await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
-    });
-  } catch (err) {
-    return toActionResult(err);
-  }
+        await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
+        await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
+      });
+    } catch (err) {
+      return toActionResult(err);
+    }
 
-  revalidatePath('/dealerships');
-  revalidatePath('/production');
-  return { ok: true };
-}
+    revalidatePath('/dealerships');
+    revalidatePath('/production');
+    return { ok: true };
+  });
 
 // `createCoach` / `updateCoach` / `archiveCoach` retired in 0020 Phase 4 —
 // the People page (`/admin/people`) handles all three via `createPerson` /
@@ -263,31 +268,33 @@ export async function updateDealer(formData: FormData): Promise<ActionResult> {
 // read path (`loadCoaches` in `queries.ts`) stays — it's used by `/calendar`,
 // `/production`, `/share/coach/[id]`, and the booking-form coach picker.
 
-export async function archiveDealer(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('dealer:archive')).id;
+export const archiveDealer = capabilityClient('dealer:archive')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid dealer id.' };
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid dealer id.' };
 
-  const result = await db
-    .update(dealers)
-    .set({ archivedAt: new Date(), updatedById: userId })
-    .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
-    .returning({ id: dealers.id });
+    const result = await db
+      .update(dealers)
+      .set({ archivedAt: new Date(), updatedById: userId })
+      .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+      .returning({ id: dealers.id });
 
-  if (result.length) {
-    await recordAudit({
-      action: 'dealer.archived',
-      targetTable: 'dealers',
-      targetId: id,
-      payload: null,
-    });
-  }
+    if (result.length) {
+      await recordAudit({
+        action: 'dealer.archived',
+        targetTable: 'dealers',
+        targetId: id,
+        payload: null,
+      });
+    }
 
-  revalidatePath('/dealerships');
-  revalidatePath('/production');
-  return { ok: true };
-}
+    revalidatePath('/dealerships');
+    revalidatePath('/production');
+    return { ok: true };
+  });
 
 // ---------- Campaigns (5.2) ----------
 
@@ -308,84 +315,90 @@ function revalidateLookupViews() {
   revalidateCampaignViews();
 }
 
-export async function createCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('campaign:create')).id;
+export const createCampaign = capabilityClient('campaign:create')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
 
-  const input = parseCampaignInput(formData);
-  if ('error' in input) return input;
+    const input = parseCampaignInput(formData);
+    if ('error' in input) return input;
 
-  const dealerExists = await db
-    .select({ id: dealers.id })
-    .from(dealers)
-    .where(and(eq(dealers.id, input.dealerId), isNull(dealers.archivedAt)))
-    .limit(1);
-  if (!dealerExists.length) return { error: 'Dealer not found.' };
+    const dealerExists = await db
+      .select({ id: dealers.id })
+      .from(dealers)
+      .where(and(eq(dealers.id, input.dealerId), isNull(dealers.archivedAt)))
+      .limit(1);
+    if (!dealerExists.length) return { error: 'Dealer not found.' };
 
-  await db.insert(campaigns).values({
-    publicId: generatePublicId(),
-    status: 'booked',
-    createdById: userId,
-    updatedById: userId,
-    ...input,
+    await db.insert(campaigns).values({
+      publicId: generatePublicId(),
+      status: 'booked',
+      createdById: userId,
+      updatedById: userId,
+      ...input,
+    });
+
+    revalidateCampaignViews();
+    return { ok: true };
   });
 
-  revalidateCampaignViews();
-  return { ok: true };
-}
+export const updateCampaign = capabilityClient('campaign:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
 
-export async function updateCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('campaign:edit')).id;
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid campaign id.' };
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid campaign id.' };
+    const input = parseCampaignInput(formData);
+    if ('error' in input) return input;
 
-  const input = parseCampaignInput(formData);
-  if ('error' in input) return input;
+    const dealerExists = await db
+      .select({ id: dealers.id })
+      .from(dealers)
+      .where(and(eq(dealers.id, input.dealerId), isNull(dealers.archivedAt)))
+      .limit(1);
+    if (!dealerExists.length) return { error: 'Dealer not found.' };
 
-  const dealerExists = await db
-    .select({ id: dealers.id })
-    .from(dealers)
-    .where(and(eq(dealers.id, input.dealerId), isNull(dealers.archivedAt)))
-    .limit(1);
-  if (!dealerExists.length) return { error: 'Dealer not found.' };
+    const result = await db
+      .update(campaigns)
+      .set({ ...input, updatedById: userId })
+      .where(eq(campaigns.id, id))
+      .returning({ id: campaigns.id });
+    if (!result.length) return { error: 'Campaign not found.' };
 
-  const result = await db
-    .update(campaigns)
-    .set({ ...input, updatedById: userId })
-    .where(eq(campaigns.id, id))
-    .returning({ id: campaigns.id });
-  if (!result.length) return { error: 'Campaign not found.' };
-
-  revalidateCampaignViews();
-  return { ok: true };
-}
-
-export async function cancelCampaign(formData: FormData): Promise<ActionResult> {
-  const userId = (await assertCan('campaign:cancel')).id;
-
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid campaign id.' };
-
-  const result = await db
-    .update(campaigns)
-    .set({ status: 'cancelled', updatedById: userId })
-    .where(and(eq(campaigns.id, id), inArray(campaigns.status, ['draft', 'booked'])))
-    .returning({ id: campaigns.id });
-  if (!result.length) {
-    // Either the row doesn't exist, or it's already cancelled / completed.
-    return { error: 'Campaign cannot be cancelled in its current state.' };
-  }
-
-  await recordAudit({
-    action: 'campaign.cancelled',
-    targetTable: 'campaigns',
-    targetId: id,
-    payload: null,
+    revalidateCampaignViews();
+    return { ok: true };
   });
 
-  revalidateCampaignViews();
-  return { ok: true };
-}
+export const cancelCampaign = capabilityClient('campaign:cancel')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid campaign id.' };
+
+    const result = await db
+      .update(campaigns)
+      .set({ status: 'cancelled', updatedById: userId })
+      .where(and(eq(campaigns.id, id), inArray(campaigns.status, ['draft', 'booked'])))
+      .returning({ id: campaigns.id });
+    if (!result.length) {
+      // Either the row doesn't exist, or it's already cancelled / completed.
+      return { error: 'Campaign cannot be cancelled in its current state.' };
+    }
+
+    await recordAudit({
+      action: 'campaign.cancelled',
+      targetTable: 'campaigns',
+      targetId: id,
+      payload: null,
+    });
+
+    revalidateCampaignViews();
+    return { ok: true };
+  });
 
 // ---------- Lookups (5.3) ----------
 
@@ -403,127 +416,127 @@ function lookupActionResult(err: unknown): ActionResult {
   throw err;
 }
 
-export async function createCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
+export const createCampaignStyle = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const label = parseLookupLabel(formData);
+    if (typeof label !== 'string') return label;
 
-  const label = parseLookupLabel(formData);
-  if (typeof label !== 'string') return label;
-
-  try {
-    const restored = await db
-      .update(campaignStyles)
-      .set({ archivedAt: null })
-      .where(and(eq(campaignStyles.label, label), isNotNull(campaignStyles.archivedAt)))
-      .returning({ id: campaignStyles.id });
-    if (!restored.length) {
-      await db.insert(campaignStyles).values({ label });
+    try {
+      const restored = await db
+        .update(campaignStyles)
+        .set({ archivedAt: null })
+        .where(and(eq(campaignStyles.label, label), isNotNull(campaignStyles.archivedAt)))
+        .returning({ id: campaignStyles.id });
+      if (!restored.length) {
+        await db.insert(campaignStyles).values({ label });
+      }
+    } catch (err) {
+      return lookupActionResult(err);
     }
-  } catch (err) {
-    return lookupActionResult(err);
-  }
 
-  revalidateLookupViews();
-  return { ok: true };
-}
+    revalidateLookupViews();
+    return { ok: true };
+  });
 
-export async function updateCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
+export const updateCampaignStyle = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid style id.' };
+    const label = parseLookupLabel(formData);
+    if (typeof label !== 'string') return label;
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid style id.' };
-  const label = parseLookupLabel(formData);
-  if (typeof label !== 'string') return label;
-
-  try {
-    const result = await db
-      .update(campaignStyles)
-      .set({ label })
-      .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)))
-      .returning({ id: campaignStyles.id });
-    if (!result.length) return { error: 'Style not found.' };
-  } catch (err) {
-    return lookupActionResult(err);
-  }
-
-  revalidateLookupViews();
-  return { ok: true };
-}
-
-export async function archiveCampaignStyle(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
-
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid style id.' };
-
-  await db
-    .update(campaignStyles)
-    .set({ archivedAt: new Date() })
-    .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)));
-
-  revalidateLookupViews();
-  return { ok: true };
-}
-
-export async function createSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
-
-  const label = parseLookupLabel(formData);
-  if (typeof label !== 'string') return label;
-
-  try {
-    const restored = await db
-      .update(salesLeadSources)
-      .set({ archivedAt: null })
-      .where(and(eq(salesLeadSources.label, label), isNotNull(salesLeadSources.archivedAt)))
-      .returning({ id: salesLeadSources.id });
-    if (!restored.length) {
-      await db.insert(salesLeadSources).values({ label });
+    try {
+      const result = await db
+        .update(campaignStyles)
+        .set({ label })
+        .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)))
+        .returning({ id: campaignStyles.id });
+      if (!result.length) return { error: 'Style not found.' };
+    } catch (err) {
+      return lookupActionResult(err);
     }
-  } catch (err) {
-    return lookupActionResult(err);
-  }
 
-  revalidateLookupViews();
-  return { ok: true };
-}
+    revalidateLookupViews();
+    return { ok: true };
+  });
 
-export async function updateSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
+export const archiveCampaignStyle = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid style id.' };
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid data source id.' };
-  const label = parseLookupLabel(formData);
-  if (typeof label !== 'string') return label;
+    await db
+      .update(campaignStyles)
+      .set({ archivedAt: new Date() })
+      .where(and(eq(campaignStyles.id, id), isNull(campaignStyles.archivedAt)));
 
-  try {
-    const result = await db
+    revalidateLookupViews();
+    return { ok: true };
+  });
+
+export const createSalesLeadSource = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const label = parseLookupLabel(formData);
+    if (typeof label !== 'string') return label;
+
+    try {
+      const restored = await db
+        .update(salesLeadSources)
+        .set({ archivedAt: null })
+        .where(and(eq(salesLeadSources.label, label), isNotNull(salesLeadSources.archivedAt)))
+        .returning({ id: salesLeadSources.id });
+      if (!restored.length) {
+        await db.insert(salesLeadSources).values({ label });
+      }
+    } catch (err) {
+      return lookupActionResult(err);
+    }
+
+    revalidateLookupViews();
+    return { ok: true };
+  });
+
+export const updateSalesLeadSource = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid data source id.' };
+    const label = parseLookupLabel(formData);
+    if (typeof label !== 'string') return label;
+
+    try {
+      const result = await db
+        .update(salesLeadSources)
+        .set({ label })
+        .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)))
+        .returning({ id: salesLeadSources.id });
+      if (!result.length) return { error: 'Data source not found.' };
+    } catch (err) {
+      return lookupActionResult(err);
+    }
+
+    revalidateLookupViews();
+    return { ok: true };
+  });
+
+export const archiveSalesLeadSource = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid data source id.' };
+
+    await db
       .update(salesLeadSources)
-      .set({ label })
-      .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)))
-      .returning({ id: salesLeadSources.id });
-    if (!result.length) return { error: 'Data source not found.' };
-  } catch (err) {
-    return lookupActionResult(err);
-  }
+      .set({ archivedAt: new Date() })
+      .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)));
 
-  revalidateLookupViews();
-  return { ok: true };
-}
-
-export async function archiveSalesLeadSource(formData: FormData): Promise<ActionResult> {
-  await assertCan('lookup:edit');
-
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid data source id.' };
-
-  await db
-    .update(salesLeadSources)
-    .set({ archivedAt: new Date() })
-    .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)));
-
-  revalidateLookupViews();
-  return { ok: true };
-}
+    revalidateLookupViews();
+    return { ok: true };
+  });
 
 // ---------- Availability blocks (5.4) ----------
 
@@ -588,120 +601,126 @@ async function validateAvailabilityCoach(input: AvailabilityInput): Promise<Acti
   return coach ? null : { error: 'Coach not found.' };
 }
 
-export async function createAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const user = await requireRole(['admin', 'coach']);
-  const userId = user.id;
+export const createAvailabilityBlock = roleListClient(['admin', 'coach'])
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const user = ctx.user;
+    const userId = user.id;
 
-  const input = parseAvailabilityInput(formData);
-  if ('error' in input) return input;
-  const coachError = await validateAvailabilityCoach(input);
-  if (coachError) return coachError;
+    const input = parseAvailabilityInput(formData);
+    if ('error' in input) return input;
+    const coachError = await validateAvailabilityCoach(input);
+    if (coachError) return coachError;
 
-  const ownsErr = await ensureAvailabilityOwnership(user, input);
-  if (ownsErr) return ownsErr;
+    const ownsErr = await ensureAvailabilityOwnership(user, input);
+    if (ownsErr) return ownsErr;
 
-  await db.insert(availabilityBlocks).values({
-    ...input,
-    source: 'admin',
-    createdById: userId,
-    updatedById: userId,
+    await db.insert(availabilityBlocks).values({
+      ...input,
+      source: 'admin',
+      createdById: userId,
+      updatedById: userId,
+    });
+
+    revalidateAvailabilityViews();
+    return { ok: true };
   });
 
-  revalidateAvailabilityViews();
-  return { ok: true };
-}
+export const updateAvailabilityBlock = roleListClient(['admin', 'coach'])
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const user = ctx.user;
+    const userId = user.id;
+    const userIsAdmin = isAdmin(user);
 
-export async function updateAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const user = await requireRole(['admin', 'coach']);
-  const userId = user.id;
-  const userIsAdmin = isAdmin(user);
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid availability block id.' };
+    const input = parseAvailabilityInput(formData);
+    if ('error' in input) return input;
+    const coachError = await validateAvailabilityCoach(input);
+    if (coachError) return coachError;
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid availability block id.' };
-  const input = parseAvailabilityInput(formData);
-  if ('error' in input) return input;
-  const coachError = await validateAvailabilityCoach(input);
-  if (coachError) return coachError;
+    let myCoachId: number | null = null;
+    if (!userIsAdmin) {
+      myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
+      const [existing] = await db
+        .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
+        .from(availabilityBlocks)
+        .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+        .limit(1);
+      if (!existing) return { error: 'Availability block not found.' };
+      const ownsErr = await ensureAvailabilityOwnership(user, existing, input);
+      if (ownsErr) return ownsErr;
+    }
 
-  let myCoachId: number | null = null;
-  if (!userIsAdmin) {
-    myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
-    const [existing] = await db
-      .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
-      .from(availabilityBlocks)
-      .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
-      .limit(1);
-    if (!existing) return { error: 'Availability block not found.' };
-    const ownsErr = await ensureAvailabilityOwnership(user, existing, input);
-    if (ownsErr) return ownsErr;
-  }
+    // Non-admins also constrain the UPDATE's WHERE on kind + coach_id, so a
+    // concurrent admin transfer of the block between the ownership check and
+    // the write doesn't get clobbered. `myCoachId` is non-null on the non-admin
+    // branch — `ensureAvailabilityOwnership` would have returned an error first.
+    const where =
+      userIsAdmin
+        ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
+        : and(
+            eq(availabilityBlocks.id, id),
+            isNull(availabilityBlocks.archivedAt),
+            eq(availabilityBlocks.kind, 'coach_unavailable'),
+            eq(availabilityBlocks.coachId, myCoachId!),
+          );
 
-  // Non-admins also constrain the UPDATE's WHERE on kind + coach_id, so a
-  // concurrent admin transfer of the block between the ownership check and
-  // the write doesn't get clobbered. `myCoachId` is non-null on the non-admin
-  // branch — `ensureAvailabilityOwnership` would have returned an error first.
-  const where =
-    userIsAdmin
-      ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
-      : and(
-          eq(availabilityBlocks.id, id),
-          isNull(availabilityBlocks.archivedAt),
-          eq(availabilityBlocks.kind, 'coach_unavailable'),
-          eq(availabilityBlocks.coachId, myCoachId!),
-        );
+    const result = await db
+      .update(availabilityBlocks)
+      .set({ ...input, updatedById: userId })
+      .where(where)
+      .returning({ id: availabilityBlocks.id });
+    if (!result.length) return { error: 'Availability block not found.' };
 
-  const result = await db
-    .update(availabilityBlocks)
-    .set({ ...input, updatedById: userId })
-    .where(where)
-    .returning({ id: availabilityBlocks.id });
-  if (!result.length) return { error: 'Availability block not found.' };
+    revalidateAvailabilityViews();
+    return { ok: true };
+  });
 
-  revalidateAvailabilityViews();
-  return { ok: true };
-}
+export const archiveAvailabilityBlock = roleListClient(['admin', 'coach'])
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const user = ctx.user;
+    const userId = user.id;
+    const userIsAdmin = isAdmin(user);
 
-export async function archiveAvailabilityBlock(formData: FormData): Promise<ActionResult> {
-  const user = await requireRole(['admin', 'coach']);
-  const userId = user.id;
-  const userIsAdmin = isAdmin(user);
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid availability block id.' };
 
-  const id = parseId(formData);
-  if (id == null) return { error: 'Invalid availability block id.' };
+    let myCoachId: number | null = null;
+    if (!userIsAdmin) {
+      myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
+      const [existing] = await db
+        .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
+        .from(availabilityBlocks)
+        .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
+        .limit(1);
+      if (!existing) return { error: 'Availability block not found.' };
+      const ownsErr = await ensureAvailabilityOwnership(user, existing);
+      if (ownsErr) return ownsErr;
+    }
 
-  let myCoachId: number | null = null;
-  if (!userIsAdmin) {
-    myCoachId = (await loadCurrentMembership())?.coachContactId ?? null;
-    const [existing] = await db
-      .select({ kind: availabilityBlocks.kind, coachId: availabilityBlocks.coachId })
-      .from(availabilityBlocks)
-      .where(and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt)))
-      .limit(1);
-    if (!existing) return { error: 'Availability block not found.' };
-    const ownsErr = await ensureAvailabilityOwnership(user, existing);
-    if (ownsErr) return ownsErr;
-  }
+    // See updateAvailabilityBlock: non-admin archive WHERE pins kind + coach_id
+    // to close the TOCTOU window between the ownership check and the write.
+    const where =
+      userIsAdmin
+        ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
+        : and(
+            eq(availabilityBlocks.id, id),
+            isNull(availabilityBlocks.archivedAt),
+            eq(availabilityBlocks.kind, 'coach_unavailable'),
+            eq(availabilityBlocks.coachId, myCoachId!),
+          );
 
-  // See updateAvailabilityBlock: non-admin archive WHERE pins kind + coach_id
-  // to close the TOCTOU window between the ownership check and the write.
-  const where =
-    userIsAdmin
-      ? and(eq(availabilityBlocks.id, id), isNull(availabilityBlocks.archivedAt))
-      : and(
-          eq(availabilityBlocks.id, id),
-          isNull(availabilityBlocks.archivedAt),
-          eq(availabilityBlocks.kind, 'coach_unavailable'),
-          eq(availabilityBlocks.coachId, myCoachId!),
-        );
+    await db
+      .update(availabilityBlocks)
+      .set({ archivedAt: new Date(), updatedById: userId })
+      .where(where);
 
-  await db
-    .update(availabilityBlocks)
-    .set({ archivedAt: new Date(), updatedById: userId })
-    .where(where);
-
-  revalidateAvailabilityViews();
-  return { ok: true };
-}
+    revalidateAvailabilityViews();
+    return { ok: true };
+  });
 
 async function swapPrimaryIdentifier(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],

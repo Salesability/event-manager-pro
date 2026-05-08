@@ -18,6 +18,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archivePerson, createPerson, updatePerson } from '@/features/people/actions';
 import type {
   AdminPersonRow,
@@ -189,7 +190,9 @@ export function PeopleAdmin({
     startTransition(async () => {
       const fd = new FormData();
       fd.set('contactId', String(person.contactId));
-      const result = await archivePerson(fd);
+      const result = toLegacyResult<{ ok: true; contactId?: number; warning?: string }>(
+        await archivePerson(fd),
+      );
       if ('ok' in result) {
         if (result.warning) toast.error(result.warning);
         else toast.success('Person archived');
@@ -426,7 +429,9 @@ function PersonForm({
         );
         if (!ok) return null;
       }
-      return action(fd);
+      return toLegacyResult<{ ok: true; contactId?: number; warning?: string }>(
+        await action(fd),
+      );
     },
     null,
   );

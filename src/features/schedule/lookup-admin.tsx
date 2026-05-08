@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition } f
 import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveCampaignStyle,
   archiveSalesLeadSource,
@@ -14,8 +15,10 @@ import {
 } from '@/features/schedule/actions';
 import type { LookupOption } from '@/features/schedule/queries';
 
-type ActionResult = { ok: true } | { error: string };
-type LookupAction = (formData: FormData) => Promise<ActionResult>;
+// All six lookup actions share the safe-action shape post-0033 (returns
+// `Promise<SafeActionResult<...>>`). Caller-side compat to the legacy
+// `{ok|error}` is via `toLegacyResult`.
+type LookupAction = typeof createCampaignStyle;
 type LookupKind = 'styles' | 'sources';
 
 const configs: Record<
@@ -83,7 +86,7 @@ export function LookupAdmin({
   type AddState = { ok: true } | { error: string } | null;
   const [addState, addAction, pending] = useActionState<AddState, FormData>(
     async (_prev, fd) => {
-      const result = await config.createAction(fd);
+      const result = toLegacyResult(await config.createAction(fd));
       if ('ok' in result) {
         // Drop any optimistic mutations that the upcoming router.refresh()
         // would superscede — server is now the source of truth again.
@@ -197,7 +200,7 @@ function LookupRow({
       const fd = new FormData();
       fd.set('id', String(item.id));
       fd.set('label', nextLabel);
-      const result = await updateAction(fd);
+      const result = toLegacyResult(await updateAction(fd));
       if ('ok' in result) {
         toast.success('Lookup renamed');
         onLocalRename(nextLabel);
@@ -215,7 +218,7 @@ function LookupRow({
     startTransition(async () => {
       const fd = new FormData();
       fd.set('id', String(item.id));
-      const result = await archiveAction(fd);
+      const result = toLegacyResult(await archiveAction(fd));
       if ('ok' in result) {
         toast.success('Lookup archived');
         onLocalArchive();

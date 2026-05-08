@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   assertCan: vi.fn(),
+  getUser: vi.fn(),
+  loadCurrentMembership: vi.fn(),
   recordAudit: vi.fn(),
   adminCreateUser: vi.fn(),
   adminUpdateUserById: vi.fn(),
@@ -13,15 +15,31 @@ const mocks = vi.hoisted(() => ({
   updates: [] as Array<{ table: string; patch: unknown }>,
 }));
 
+vi.mock('server-only', () => ({}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('next/navigation', () => ({
   redirect: (path: string) => {
-    throw new Error(`REDIRECT:${path}`);
+    const err = new Error(`NEXT_REDIRECT;replace;${path};307;`);
+    (err as Error & { digest: string }).digest = `NEXT_REDIRECT;replace;${path};307;`;
+    throw err;
   },
 }));
 vi.mock('@/lib/auth/assert-can', () => ({
   assertCan: mocks.assertCan,
 }));
+// 0033: middleware-based auth tier hits these helpers. The legacy
+// `assertCan` mock above also still fires (for any direct-call sites that
+// might survive the migration).
+vi.mock('@/lib/supabase/session', () => ({ getUser: mocks.getUser }));
+vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
+  const real = await importOriginal<
+    typeof import('@/lib/auth/load-team-membership')
+  >();
+  return {
+    ...real,
+    loadCurrentMembership: mocks.loadCurrentMembership,
+  };
+});
 vi.mock('@/features/audit/actions', () => ({
   recordAudit: mocks.recordAudit,
 }));
@@ -100,12 +118,44 @@ vi.mock('@/lib/db', () => {
 
 import { archivePerson, createPerson, updatePerson } from './actions';
 
+// 0033: actions return the safe-action wrapper shape `{data?, serverError?,
+// validationErrors?}`. Test assertions still want the legacy
+// `{ok|error|warning|contactId}` shape — unwrap on the way out so the
+// existing 70+ assertions don't all need rewriting. Throws on serverError /
+// validationErrors so unexpected denials surface loudly rather than as a
+// "didn't equal" mismatch.
+async function call<T>(
+  p: Promise<{ data?: T; serverError?: string; validationErrors?: unknown } | undefined | null>,
+): Promise<T> {
+  const r = await p;
+  if (!r) throw new Error('action returned null/undefined');
+  if (r.serverError) throw new Error(`unexpected serverError: ${r.serverError}`);
+  if (r.validationErrors) {
+    throw new Error(`unexpected validationErrors: ${JSON.stringify(r.validationErrors)}`);
+  }
+  if (r.data === undefined) {
+    throw new Error('action returned undefined data');
+  }
+  return r.data;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // 0033 — middleware tier reads getUser; admin-shortcut bypasses
+  // loadCurrentMembership when `app_metadata.role === 'admin'`. The legacy
+  // `assertCan` mock is also wired so any surviving direct-calls keep
+  // working. mockResolvedValue (not Once) — getUser may be re-read by
+  // both the middleware and downstream code in the same request.
   mocks.assertCan.mockResolvedValue({
     id: 'admin-uuid',
     app_metadata: { role: 'admin' },
   });
+  mocks.getUser.mockResolvedValue({
+    id: 'admin-uuid',
+    email: 'admin@test.local',
+    app_metadata: { role: 'admin' },
+  });
+  mocks.loadCurrentMembership.mockResolvedValue(null);
   mocks.adminCreateUser.mockResolvedValue({
     data: { user: { id: 'new-auth-uuid' } },
     error: null,
@@ -118,13 +168,19 @@ beforeEach(() => {
 
 describe('createPerson', () => {
   it('rejects without admin', async () => {
+    // After 0033, the middleware catches and re-throws Next-shaped redirects;
+    // a plain `Error('REDIRECT:/')` would be caught by `handleServerError`
+    // and surfaced as `{serverError}`. Match the digest so `isNavigationError`
+    // recognises it.
     mocks.assertCan.mockImplementation(async () => {
-      throw new Error('REDIRECT:/');
+      const err = new Error('NEXT_REDIRECT;replace;/;307;');
+      (err as Error & { digest: string }).digest = 'NEXT_REDIRECT;replace;/;307;';
+      throw err;
     });
     const fd = new FormData();
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
-    await expect(createPerson(fd)).rejects.toThrow('REDIRECT:/');
+    await expect(createPerson(fd)).rejects.toThrow('NEXT_REDIRECT;replace;/;');
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
     expect(mocks.inserts.length).toBe(0);
   });
@@ -133,7 +189,7 @@ describe('createPerson', () => {
     const fd = new FormData();
     fd.set('firstName', '');
     fd.set('lastName', '');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: 'First and last name are both required.',
     });
   });
@@ -143,7 +199,7 @@ describe('createPerson', () => {
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.set('email', 'not-an-email');
-    expect(await createPerson(fd)).toEqual({ error: 'Email looks invalid.' });
+    expect(await call(createPerson(fd))).toEqual({ error: 'Email looks invalid.' });
   });
 
   it('rejects admin/coach roles without app access', async () => {
@@ -151,7 +207,7 @@ describe('createPerson', () => {
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.append('roles', 'coach');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: 'App access is required to assign Admin or Coach roles.',
     });
   });
@@ -163,7 +219,7 @@ describe('createPerson', () => {
     fd.append('roles', 'dealer');
     // Drizzle mocks: insert contact + syncTeamMemberRoles existing-empty.
     mocks.selectResults = [[]];
-    expect(await createPerson(fd)).toEqual({ ok: true, contactId: 999 });
+    expect(await call(createPerson(fd))).toEqual({ ok: true, contactId: 999 });
     // No auth user provisioned (dealer doesn't imply app access).
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
   });
@@ -175,7 +231,7 @@ describe('createPerson', () => {
     fd.set('appAccess', '1');
     fd.set('email', 'tilley@example.test');
     fd.append('roles', 'staff');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: "Role 'staff' is not selectable in v1 (admin, coach, dealer only).",
     });
   });
@@ -185,7 +241,7 @@ describe('createPerson', () => {
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.set('appAccess', '1');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: 'Email is required when granting app access.',
     });
   });
@@ -194,7 +250,7 @@ describe('createPerson', () => {
     const fd = new FormData();
     fd.set('firstName', 'Roleless');
     fd.set('lastName', 'Contact');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: 'At least one role is required.',
     });
     expect(mocks.inserts).toHaveLength(0);
@@ -206,7 +262,7 @@ describe('createPerson', () => {
     fd.set('lastName', 'Shaye');
     fd.append('roles', 'dealer');
     fd.append('dealerLinks', 'not-a-link');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: "Invalid dealer link: 'not-a-link'.",
     });
   });
@@ -217,7 +273,7 @@ describe('createPerson', () => {
     fd.set('lastName', 'Shaye');
     fd.append('roles', 'dealer');
     fd.append('dealerLinks', '100:bogus');
-    expect(await createPerson(fd)).toEqual({
+    expect(await call(createPerson(fd))).toEqual({
       error: "Invalid dealer-contact role: 'bogus'.",
     });
   });
@@ -232,7 +288,7 @@ describe('createPerson', () => {
       [], // syncTeamMemberRoles: existing
       [], // syncDealerLinks: existing
     ];
-    const result = await createPerson(fd);
+    const result = await call(createPerson(fd));
     expect(result).toEqual({ ok: true, contactId: 999 });
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
     expect(mocks.inserts.some((i) => i.values && (i.values as { firstName?: string }).firstName === 'New')).toBe(true);
@@ -253,7 +309,7 @@ describe('createPerson', () => {
     // 4) Conditional UPDATE … RETURNING after auth.admin.createUser → won the link
     mocks.selectResults = [[], [], [], [{ id: 999 }]];
 
-    const result = await createPerson(fd);
+    const result = await call(createPerson(fd));
     expect(result).toEqual({ ok: true, contactId: 999 });
     expect(mocks.adminCreateUser).toHaveBeenCalledWith({
       email: 'brand@example.test',
@@ -285,7 +341,7 @@ describe('createPerson', () => {
       [{ userId: 'someone-else' }], // linkedNow check → different user_id
     ];
 
-    const result = await createPerson(fd);
+    const result = await call(createPerson(fd));
     expect(result).toEqual({
       error:
         'Auth user provisioning raced with another writer; the new auth user has been disabled. Refresh and check the People page.',
@@ -312,7 +368,7 @@ describe('createPerson', () => {
       [{ userId: 'new-auth-uuid' }], // linkedNow → same auth user (trigger won)
     ];
 
-    const result = await createPerson(fd);
+    const result = await call(createPerson(fd));
     expect(result).toEqual({ ok: true, contactId: 999 });
     // No compensating ban.
     expect(mocks.adminUpdateUserById).not.toHaveBeenCalledWith(
@@ -336,7 +392,7 @@ describe('createPerson', () => {
 
     // Partial success: contact was committed, auth-side failed. The UI must
     // refresh and close (the row exists), with a warning toast.
-    const result = await createPerson(fd);
+    const result = await call(createPerson(fd));
     expect(result).toEqual({
       ok: true,
       contactId: 999,
@@ -348,14 +404,20 @@ describe('createPerson', () => {
 
 describe('updatePerson', () => {
   it('rejects without admin', async () => {
+    // After 0033, the middleware catches and re-throws Next-shaped redirects;
+    // a plain `Error('REDIRECT:/')` would be caught by `handleServerError`
+    // and surfaced as `{serverError}`. Match the digest so `isNavigationError`
+    // recognises it.
     mocks.assertCan.mockImplementation(async () => {
-      throw new Error('REDIRECT:/');
+      const err = new Error('NEXT_REDIRECT;replace;/;307;');
+      (err as Error & { digest: string }).digest = 'NEXT_REDIRECT;replace;/;307;';
+      throw err;
     });
     const fd = new FormData();
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
-    await expect(updatePerson(fd)).rejects.toThrow('REDIRECT:/');
+    await expect(updatePerson(fd)).rejects.toThrow('NEXT_REDIRECT;replace;/;');
   });
 
   it('rejects without any role (0023 Phase 5 invariant)', async () => {
@@ -363,7 +425,7 @@ describe('updatePerson', () => {
     fd.set('contactId', '1');
     fd.set('firstName', 'X');
     fd.set('lastName', 'Y');
-    expect(await updatePerson(fd)).toEqual({
+    expect(await call(updatePerson(fd))).toEqual({
       error: 'At least one role is required.',
     });
   });
@@ -375,7 +437,7 @@ describe('updatePerson', () => {
     fd.set('lastName', 'Y');
     fd.append('roles', 'dealer');
     mocks.selectResults = [[]]; // current-state lookup returns no row
-    expect(await updatePerson(fd)).toEqual({ error: 'Person not found.' });
+    expect(await call(updatePerson(fd))).toEqual({ error: 'Person not found.' });
   });
 
   it('rejects when contact is archived', async () => {
@@ -387,7 +449,7 @@ describe('updatePerson', () => {
     mocks.selectResults = [
       [{ id: 1, userId: null, archivedAt: '2026-01-01T00:00:00Z' }],
     ];
-    expect(await updatePerson(fd)).toEqual({ error: 'Person not found.' });
+    expect(await call(updatePerson(fd))).toEqual({ error: 'Person not found.' });
   });
 
   it('off→on app access provisions the auth user and links it', async () => {
@@ -418,7 +480,7 @@ describe('updatePerson', () => {
       [],
       [{ id: 1 }],
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({ ok: true, contactId: 1 });
     expect(mocks.adminCreateUser).toHaveBeenCalledOnce();
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('new-auth-uuid', {
@@ -440,7 +502,7 @@ describe('updatePerson', () => {
       [], [], [], [], [], [], // current update + 2 swap email + swap phone + sync roles + sync dealer (6 entries)
       [], // Conditional UPDATE … RETURNING → zero rows (raced)
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({
       error:
         'App access was just provisioned by another admin. Refresh and re-check the row.',
@@ -469,7 +531,7 @@ describe('updatePerson', () => {
     mocks.selectResults = [
       [{ id: 1, userId: 'existing-auth', archivedAt: null }],
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({ error: 'At least one role is required.' });
     expect(mocks.adminUpdateUserById).not.toHaveBeenCalled();
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
@@ -491,7 +553,7 @@ describe('updatePerson', () => {
       [{ role: 'admin' }], // existingRoles snapshot — pre-mutation
       [], [], [], [], [], // identifier swaps + role/dealer sync
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({ ok: true, contactId: 1 });
     // Auth banned because no admin/coach is in the surviving role set.
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
@@ -526,7 +588,7 @@ describe('updatePerson', () => {
       [{ role: 'admin' }], // existingRoles snapshot
       [], [], [], [], [], // tx writes
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({ ok: true, contactId: 1 });
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
       ban_duration: 'none',
@@ -559,7 +621,7 @@ describe('updatePerson', () => {
       [], // syncTeamMemberRoles
       [], // syncDealerLinks
     ];
-    const result = await updatePerson(fd);
+    const result = await call(updatePerson(fd));
     expect(result).toEqual({ ok: true, contactId: 1 });
     expect(mocks.adminUpdateUserById).toHaveBeenCalledWith('existing-auth', {
       ban_duration: '876000h',
@@ -584,12 +646,18 @@ describe('updatePerson', () => {
 
 describe('archivePerson', () => {
   it('rejects without admin', async () => {
+    // After 0033, the middleware catches and re-throws Next-shaped redirects;
+    // a plain `Error('REDIRECT:/')` would be caught by `handleServerError`
+    // and surfaced as `{serverError}`. Match the digest so `isNavigationError`
+    // recognises it.
     mocks.assertCan.mockImplementation(async () => {
-      throw new Error('REDIRECT:/');
+      const err = new Error('NEXT_REDIRECT;replace;/;307;');
+      (err as Error & { digest: string }).digest = 'NEXT_REDIRECT;replace;/;307;';
+      throw err;
     });
     const fd = new FormData();
     fd.set('contactId', '1');
-    await expect(archivePerson(fd)).rejects.toThrow('REDIRECT:/');
+    await expect(archivePerson(fd)).rejects.toThrow('NEXT_REDIRECT;replace;/;');
   });
 
   it('refuses self-archive', async () => {
@@ -598,7 +666,7 @@ describe('archivePerson', () => {
     mocks.selectResults = [
       [{ id: 1, userId: 'admin-uuid', archivedAt: null }],
     ];
-    expect(await archivePerson(fd)).toEqual({
+    expect(await call(archivePerson(fd))).toEqual({
       error: 'You cannot archive your own account.',
     });
   });
@@ -609,7 +677,7 @@ describe('archivePerson', () => {
     mocks.selectResults = [
       [{ id: 1, userId: 'someone-else', archivedAt: null }],
     ];
-    const result = await archivePerson(fd);
+    const result = await call(archivePerson(fd));
     expect(result).toEqual({ ok: true, contactId: 1 });
     // Verify: no UPDATE on contacts table itself.
     const tablesUpdated = mocks.updates.map((u) => u.table);
@@ -636,7 +704,7 @@ describe('archivePerson', () => {
     mocks.selectResults = [
       [{ id: 1, userId: null, archivedAt: null }],
     ];
-    expect(await archivePerson(fd)).toEqual({ ok: true, contactId: 1 });
+    expect(await call(archivePerson(fd))).toEqual({ ok: true, contactId: 1 });
     expect(mocks.adminUpdateUserById).not.toHaveBeenCalled();
   });
 });

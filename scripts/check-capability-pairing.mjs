@@ -31,6 +31,10 @@ const SERVER_PATTERNS = [
   /\bassertCan\(\s*["']([^"']+)["']/g,
   // `can(profile, 'X', resource?)` — pure PDP. Capability is the second arg.
   /\bcan\([^,)]+,\s*["']([^"']+)["']/g,
+  // 0033 next-safe-action middleware client: `capabilityClient('X')` — the
+  // capability is baked into the factory at action-definition time, not
+  // called inline. Treat it as a server gate for pairing purposes.
+  /\bcapabilityClient\(\s*["']([^"']+)["']/g,
 ];
 
 const SKIP_DIRS = new Set([

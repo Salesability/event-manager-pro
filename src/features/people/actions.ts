@@ -9,7 +9,10 @@ import {
   dealerContacts,
   teamMemberRoles,
 } from '@/lib/db/schema';
-import { assertCan } from '@/lib/auth/assert-can';
+import {
+  capabilityClient,
+  formDataSchema,
+} from '@/lib/actions/action-client';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAudit } from '@/features/audit/actions';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
@@ -329,9 +332,9 @@ async function syncAuthMetadata(authUserId: string, roles: V1TeamRole[]) {
 
 // ---------- Server Actions ----------
 
-export async function createPerson(formData: FormData): Promise<ActionResult> {
-  await assertCan('person:create');
-
+export const createPerson = capabilityClient('person:create')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
   const firstName = field(formData, 'firstName');
   const lastName = field(formData, 'lastName');
   const email = field(formData, 'email').toLowerCase();
@@ -477,11 +480,11 @@ export async function createPerson(formData: FormData): Promise<ActionResult> {
 
   revalidatePeopleViews();
   return { ok: true, contactId: newContactId };
-}
+});
 
-export async function updatePerson(formData: FormData): Promise<ActionResult> {
-  await assertCan('person:edit');
-
+export const updatePerson = capabilityClient('person:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
   const contactId = parseOptionalId(formData, 'contactId');
   if (contactId == null) return { error: 'Invalid contact id.' };
 
@@ -699,10 +702,12 @@ export async function updatePerson(formData: FormData): Promise<ActionResult> {
 
   revalidatePeopleViews();
   return { ok: true, contactId };
-}
+});
 
-export async function archivePerson(formData: FormData): Promise<ActionResult> {
-  const adminUser = await assertCan('person:archive');
+export const archivePerson = capabilityClient('person:archive')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+  const adminUser = ctx.user;
 
   const contactId = parseOptionalId(formData, 'contactId');
   if (contactId == null) return { error: 'Invalid contact id.' };
@@ -776,16 +781,16 @@ export async function archivePerson(formData: FormData): Promise<ActionResult> {
 
   revalidatePeopleViews();
   return { ok: true, contactId };
-}
+});
 
 // Adopt an orphan auth user — an `auth.users` row that has no matching
 // `contacts.user_id`. Materializes a contacts row + email identifier, then
 // links via `contacts.user_id`. Exception path for the Tilley-style legacy
 // state and for any future Supabase-dashboard fallback path. The People
 // page surfaces orphans in a small bottom panel; this action takes a row.
-export async function adoptOrphanAuthUser(formData: FormData): Promise<ActionResult> {
-  await assertCan('person:adopt-orphan');
-
+export const adoptOrphanAuthUser = capabilityClient('person:adopt-orphan')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
   const userId = field(formData, 'userId');
   const firstName = field(formData, 'firstName');
   const lastName = field(formData, 'lastName');
@@ -824,4 +829,4 @@ export async function adoptOrphanAuthUser(formData: FormData): Promise<ActionRes
 
   revalidatePeopleViews();
   return { ok: true, contactId: newContactId };
-}
+});

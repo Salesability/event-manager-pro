@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createCampaign, updateCampaign } from '@/features/schedule/actions';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
@@ -53,7 +54,7 @@ export function BookingForm({
 }: BookingFormProps) {
   const action = mode === 'create' ? createCampaign : updateCampaign;
   const [state, formAction, pending] = useActionState<State, FormData>(
-    async (_prev, fd) => action(fd),
+    async (_prev, fd) => toLegacyResult(await action(fd)),
     null,
   );
 

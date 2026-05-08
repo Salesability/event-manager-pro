@@ -7,6 +7,7 @@ import { Can } from '@/components/auth/can';
 import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archiveDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import { buildDealersColumns } from '@/features/dealers/dealers-columns';
@@ -60,7 +61,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set('id', String(dealer.id));
-      const result = await archiveDealer(fd);
+      const result = toLegacyResult(await archiveDealer(fd));
       if ('ok' in result) {
         toast.success('Dealer removed');
         router.refresh();

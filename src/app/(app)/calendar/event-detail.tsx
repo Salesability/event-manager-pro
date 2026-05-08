@@ -3,6 +3,7 @@
 import { useTransition } from 'react';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { cancelCampaign } from '@/features/schedule/actions';
 import {
   sendClientCampaignConfirmation,
@@ -25,7 +26,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set('id', String(campaign.id));
-      const result = await cancelCampaign(fd);
+      const result = toLegacyResult(await cancelCampaign(fd));
       if ('ok' in result) {
         toast.success('Campaign cancelled');
         onClose();
@@ -45,7 +46,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set('campaignId', String(campaign.id));
-      const result = await sendClientCampaignConfirmation(fd);
+      const result = toLegacyResult(await sendClientCampaignConfirmation(fd));
       if ('ok' in result) toast.success('Confirmation sent');
       else toast.error(result.error);
     });
@@ -60,7 +61,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set('campaignId', String(campaign.id));
-      const result = await sendCoachCampaignConfirmation(fd);
+      const result = toLegacyResult(await sendCoachCampaignConfirmation(fd));
       if ('ok' in result) toast.success('Confirmation sent');
       else toast.error(result.error);
     });
