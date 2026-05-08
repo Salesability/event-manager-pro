@@ -6,9 +6,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Build the action↔role admit-set matrix data file | Done | - |
-| 2: Test harness — drive each action with each role, assert documented outcome | Done | - |
-| 3: Wire into vitest + close | Done | - |
+| 1: Build the action↔role admit-set matrix data file | Done | 3648eec |
+| 2: Test harness — drive each action with each role, assert documented outcome | Done | 3648eec |
+| 3: Wire into vitest + close | Done | 3648eec |
 
 The 0031 lint rule catches "no gate at all." This chunk catches "gate is present but wrong admit set" — e.g. an action gated `requireRole(['admin','coach'])` when intent is admin-only, or a capability call site against the wrong capability. The mistake passes review if the reviewer doesn't have the role↔capability matrix loaded. Solution: a matrix file (data) listing every gated action + its expected admit set per role; a single test file that imports each action and drives it against unauth + each role; assertions check the documented outcome (allow / `redirect:/` / `redirect:/login`). Drift between code and matrix → CI fails. **Done = every gated action has a matrix entry; the suite drives all entries; a deliberate code-change that changes admit set fails the suite without matrix update.**
 
