@@ -6,11 +6,11 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Install + bootstrap `action-client.ts` (base + auth + admin tier middlewares) | Done | - |
-| 2: Pilot migration — dealer CRUD (`createDealer`, `updateDealer`, `archiveDealer`) + form caller + tests | Done | - |
-| 3: Bulk migration — people / lookup / campaign / email (~17 remaining actions) | Done | - |
+| 1: Install + bootstrap `action-client.ts` (base + auth + admin tier middlewares) | Done | 0d2fe95 |
+| 2: Pilot migration — dealer CRUD (`createDealer`, `updateDealer`, `archiveDealer`) + form caller + tests | Done | 0d2fe95 |
+| 3: Bulk migration — people / lookup / campaign / email (~17 remaining actions) | Done | 0d2fe95 |
 | 4: Retire hand-rolled validators (`parseId`, `field`, `parseLookupLabel`, …) — Zod schemas everywhere | Deferred (carry-forward) | - |
-| 5: Wiki update + smoke + close | Done | - |
+| 5: Wiki update + smoke + close | Done | 0d2fe95 |
 
 This chunk migrates every gated Server Action in the staff app from the hand-rolled `await assertCan(...)` shape to a `next-safe-action` middleware-chained client. The motivation isn't *"the current pattern is wrong"* — `assertCan` works correctly and is greppable. The motivation is **error-class reduction**: middleware composition makes the auth-required path the *default*, so writing an unauthed action requires explicit opt-out (the inverse of today's "remember to add the gate"). It also pulls input-validation into the same chain via Standard Schema (Zod), retiring the hand-rolled `field()` / `parseId()` / `parseLookupLabel()` helpers and giving every action a uniform `{data, validationErrors, serverError}` result shape that pairs natively with React 19's `useActionState`. Capability layer (0029) is **forward-compatible** — `capabilities.ts` is the PDP and stays untouched; `assertCan` becomes a `.use()` middleware so existing capability strings survive verbatim. Soft-trigger was meant to be `0016-book-your-event-intake` (untrusted public input wanting Zod), but the user is committing to this chunk independently as a risk-reduction investment ahead of that work — so when 0016 lands, it inherits the convention rather than seeding it.
 
