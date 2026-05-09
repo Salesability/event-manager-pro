@@ -223,19 +223,19 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     label: 'createAvailabilityBlock',
     invoke: () => scheduleActions.createAvailabilityBlock(fd()),
     expectedByRole: ADMIN_OR_COACH,
-    note: 'requireRole(["admin","coach"]) + row-level ownership inside',
+    note: 'availability:edit (admin || coach) + row-level ownership inside',
   },
   {
     label: 'updateAvailabilityBlock',
     invoke: () => scheduleActions.updateAvailabilityBlock(fd()),
     expectedByRole: ADMIN_OR_COACH,
-    note: 'requireRole(["admin","coach"]) + row-level ownership inside',
+    note: 'availability:edit (admin || coach) + row-level ownership inside',
   },
   {
     label: 'archiveAvailabilityBlock',
     invoke: () => scheduleActions.archiveAvailabilityBlock(fd()),
     expectedByRole: ADMIN_OR_COACH,
-    note: 'requireRole(["admin","coach"]) + row-level ownership inside',
+    note: 'availability:edit (admin || coach) + row-level ownership inside',
   },
 
   // ---- Route Handlers (2) -----------------------------------------------

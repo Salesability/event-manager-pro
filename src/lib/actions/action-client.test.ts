@@ -28,12 +28,7 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
   };
 });
 
-import {
-  authedClient,
-  baseClient,
-  capabilityClient,
-  roleListClient,
-} from './action-client';
+import { authedClient, baseClient, capabilityClient } from './action-client';
 
 const adminUser = {
   id: 'u-admin',
@@ -111,26 +106,16 @@ describe('action-client tiers', () => {
 
     it('passes when admin via JWT app_metadata', async () => {
       mocks.getUser.mockResolvedValue(adminUser);
-      // capability admin-shortcut bypasses the membership lookup
+      // assertCan loads membership unconditionally; the admin shortcut inside
+      // can() admits via app_metadata.role even when the role list is empty.
       const action = capabilityClient('person:create')
         .schema(z.object({}))
         .action(async ({ ctx }) => ({ ok: true, id: ctx.user.id }));
       const result = await action({});
       expect(result.data).toEqual({ ok: true, id: 'u-admin' });
     });
-  });
 
-  describe('roleListClient', () => {
-    it('admin via JWT passes a multi-role admit set', async () => {
-      mocks.getUser.mockResolvedValue(adminUser);
-      const action = roleListClient(['admin', 'coach'])
-        .schema(z.object({}))
-        .action(async () => ({ ok: true }));
-      const result = await action({});
-      expect(result.data).toEqual({ ok: true });
-    });
-
-    it('coach via team_member_roles passes a multi-role admit set', async () => {
+    it('admits coach for a multi-role capability (availability:edit)', async () => {
       mocks.getUser.mockResolvedValue(coachUser);
       mocks.loadCurrentMembership.mockResolvedValue({
         contactId: 7,
@@ -138,14 +123,14 @@ describe('action-client tiers', () => {
         coachContactId: 7,
         hasDealerContact: false,
       });
-      const action = roleListClient(['admin', 'coach'])
+      const action = capabilityClient('availability:edit')
         .schema(z.object({}))
         .action(async () => ({ ok: true }));
       const result = await action({});
       expect(result.data).toEqual({ ok: true });
     });
 
-    it('coach is denied for a roleList that excludes coach', async () => {
+    it('denies coach for an admin-only capability (admin:access)', async () => {
       mocks.getUser.mockResolvedValue(coachUser);
       mocks.loadCurrentMembership.mockResolvedValue({
         contactId: 7,
@@ -153,7 +138,7 @@ describe('action-client tiers', () => {
         coachContactId: 7,
         hasDealerContact: false,
       });
-      const action = roleListClient(['admin'])
+      const action = capabilityClient('admin:access')
         .schema(z.object({}))
         .action(async () => ({ ok: true }));
       await expect(action({})).rejects.toThrow('NEXT_REDIRECT;replace;/;');

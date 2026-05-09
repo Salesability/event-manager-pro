@@ -447,13 +447,15 @@ export function CalendarView({
         <div className="flex flex-wrap items-center gap-2">
           {mode === 'app' && (
             <>
-              <button
-                type="button"
-                onClick={() => setDialog({ kind: 'availability' })}
-                className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
-              >
-                Block Date
-              </button>
+              <Can capability="availability:edit">
+                <button
+                  type="button"
+                  onClick={() => setDialog({ kind: 'availability' })}
+                  className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
+                >
+                  Block Date
+                </button>
+              </Can>
               <Can capability="campaign:create">
                 <button
                   type="button"

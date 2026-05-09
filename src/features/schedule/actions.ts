@@ -15,11 +15,7 @@ import {
   salesLeadSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
-import {
-  capabilityClient,
-  formDataSchema,
-  roleListClient,
-} from '@/lib/actions/action-client';
+import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
@@ -601,7 +597,7 @@ async function validateAvailabilityCoach(input: AvailabilityInput): Promise<Acti
   return coach ? null : { error: 'Coach not found.' };
 }
 
-export const createAvailabilityBlock = roleListClient(['admin', 'coach'])
+export const createAvailabilityBlock = capabilityClient('availability:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const user = ctx.user;
@@ -626,7 +622,7 @@ export const createAvailabilityBlock = roleListClient(['admin', 'coach'])
     return { ok: true };
   });
 
-export const updateAvailabilityBlock = roleListClient(['admin', 'coach'])
+export const updateAvailabilityBlock = capabilityClient('availability:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const user = ctx.user;
@@ -678,7 +674,7 @@ export const updateAvailabilityBlock = roleListClient(['admin', 'coach'])
     return { ok: true };
   });
 
-export const archiveAvailabilityBlock = roleListClient(['admin', 'coach'])
+export const archiveAvailabilityBlock = capabilityClient('availability:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const user = ctx.user;

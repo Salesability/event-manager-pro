@@ -12,7 +12,7 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 |-------|--------|--------|
 | 1: New capabilities (matrix rows + tests) | Done | `5575c62` |
 | 2: Migrate page + layout gates | Done | `d8794b3` |
-| 3: Migrate availability actions + delete `roleListClient` | Pending | - |
+| 3: Migrate availability actions + delete `roleListClient` | In Progress | - |
 | 4: Docs + smoke verification | Pending | - |
 
 **Overall Progress:** 50% (2/4 phases complete)
@@ -67,12 +67,12 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 
 #### Phase 3: Migrate availability actions + delete `roleListClient`
 
-- [ ] `src/features/schedule/actions.ts` — 3 sites from `roleListClient(['admin','coach'])` → `capabilityClient('availability:edit')`. Row-level ownership check via `availability-authz.ts` stays in the action body unchanged.
-- [ ] Update `src/features/schedule/actions.test.ts` mocks — replace `roleListClient` import + setup.
-- [ ] Pair check: confirm `<Can>` UI guard exists for any availability-edit affordance (e.g., the Block Date dialog button) — add `<Can capability="availability:edit">` if missing. 0034's pairing script will fail otherwise.
-- [ ] Delete `roleListClient` export from `src/lib/actions/action-client.ts`. Delete the corresponding test cases in `src/lib/actions/action-client.test.ts` (the 3 `describe('roleListClient', ...)` blocks).
-- [ ] Update the 4-tier → 3-tier comment block at the top of `action-client.ts`.
-- [ ] Run 0034 pairing script — should now report 18/18 capabilities paired or opted out (was 14/14 + 3 role-list opt-outs).
+- [x] `src/features/schedule/actions.ts` — 3 sites from `roleListClient(['admin','coach'])` → `capabilityClient('availability:edit')`. Row-level ownership check via `availability-authz.ts` stays in the action body unchanged.
+- [x] ~~Update `src/features/schedule/actions.test.ts` mocks — replace `roleListClient` import + setup.~~ Not needed: `actions.test.ts` doesn't mock `roleListClient` or `requireRole` — it tests action bodies, not the gate factory wiring (which `action-client.test.ts` covers separately).
+- [x] Pair check: wrapped the `Block Date` button in `calendar-view.tsx` with `<Can capability="availability:edit">`. Pairing script now reports 18/18.
+- [x] Delete `roleListClient` export from `src/lib/actions/action-client.ts`. Delete the corresponding test cases in `src/lib/actions/action-client.test.ts` — replaced the 3 roleListClient cases with 2 capabilityClient cases (admit-coach for `availability:edit`, deny-coach for `admin:access`) so the multi-role admit-set is still covered through the capability layer.
+- [x] Update the 4-tier → 3-tier comment block at the top of `action-client.ts`.
+- [x] Run 0034 pairing script — reports 18/18 capabilities paired or opted out (was 17/17 with `availability:edit` server-only-flagged before the `<Can>` was added).
 
 #### Phase 4: Docs + smoke verification
 

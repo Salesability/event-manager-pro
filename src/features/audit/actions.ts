@@ -20,7 +20,8 @@ import { getUser } from '@/lib/supabase/session';
 // auth user keeps the audit history with a tombstoned actor.
 //
 // Throws if no user is signed in — that's a "you wired it wrong" assertion
-// since every caller is downstream of `requireRole(...)`.
+// since every caller is downstream of a capability gate (`assertCan` /
+// `capabilityClient`) that already redirected an unauthed request.
 
 export type AuditActionId =
   | 'user.role_changed'
