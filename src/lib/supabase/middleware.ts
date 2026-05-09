@@ -53,9 +53,9 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // First defence-in-depth gate for /admin/*. Page-level requireRole('admin')
-  // and each Server Action's requireRole('admin') are the deeper layers —
-  // same role string consulted everywhere.
+  // First defence-in-depth gate for /admin/*. Page-level admin:access
+  // capability and each Server Action's capability gate are the deeper
+  // layers — same admin admit-set consulted everywhere.
   if (user && isAdminPath(request.nextUrl.pathname) && !isAdminUser(user.app_metadata?.role)) {
     const url = request.nextUrl.clone();
     url.pathname = '/';

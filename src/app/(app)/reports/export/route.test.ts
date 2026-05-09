@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  requireRole: vi.fn(),
+  assertCan: vi.fn(),
   loadCampaignsByDealer: vi.fn(),
   loadCampaignsByCoach: vi.fn(),
   loadCampaignsByMonth: vi.fn(),
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/auth/require-role', () => ({ requireRole: mocks.requireRole }));
+vi.mock('@/lib/auth/assert-can', () => ({ assertCan: mocks.assertCan }));
 vi.mock('@/features/schedule/queries', () => ({
   loadCampaignsByDealer: mocks.loadCampaignsByDealer,
   loadCampaignsByCoach: mocks.loadCampaignsByCoach,
@@ -33,8 +33,8 @@ async function csvBody(res: Response): Promise<string> {
 describe('GET /reports/export', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // requireRole resolves with a User stub when the gate passes.
-    mocks.requireRole.mockResolvedValue({ id: 'user-uuid' });
+    // assertCan resolves with a User stub when the gate passes.
+    mocks.assertCan.mockResolvedValue({ id: 'user-uuid' });
     mocks.loadCampaignsByDealer.mockResolvedValue([]);
     mocks.loadCampaignsByCoach.mockResolvedValue([]);
     mocks.loadCampaignsByMonth.mockResolvedValue([]);
@@ -53,21 +53,21 @@ describe('GET /reports/export', () => {
       },
     ]);
     await GET(makeRequest({ tab: 'dealer' }));
-    expect(mocks.requireRole).toHaveBeenCalledWith(['admin', 'coach']);
+    expect(mocks.assertCan).toHaveBeenCalledWith('reports:view');
     // Order invariant: gate runs before any loader. If a future refactor
-    // reorders the await chain so a query fires before requireRole resolves,
+    // reorders the await chain so a query fires before assertCan resolves,
     // this assertion via mock invocation order catches it.
-    const gateOrder = mocks.requireRole.mock.invocationCallOrder[0];
+    const gateOrder = mocks.assertCan.mock.invocationCallOrder[0];
     const loaderOrder = mocks.loadCampaignsByDealer.mock.invocationCallOrder[0];
     expect(gateOrder).toBeLessThan(loaderOrder);
   });
 
   it('rejects unauthorized requests without firing any loader (mirrors redirect() throw)', async () => {
-    // Real `requireRole` calls `redirect()` on auth failure, which throws a
+    // Real `assertCan` calls `redirect()` on auth failure, which throws a
     // `NEXT_REDIRECT` error rather than returning. Simulate that here so
     // the test proves the GET handler short-circuits before touching any
     // query function.
-    mocks.requireRole.mockRejectedValue(new Error('NEXT_REDIRECT'));
+    mocks.assertCan.mockRejectedValue(new Error('NEXT_REDIRECT'));
     await expect(GET(makeRequest({ tab: 'dealer' }))).rejects.toThrow('NEXT_REDIRECT');
     expect(mocks.loadCampaignsByDealer).not.toHaveBeenCalled();
     expect(mocks.loadCampaignsByCoach).not.toHaveBeenCalled();

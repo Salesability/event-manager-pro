@@ -11,7 +11,7 @@ type Tab = { href: string; label: string; requiresAdmin?: true };
 // they stay top-level (not in the Admin dropdown, which is settings-shaped)
 // so admins can reach them without a menu click. Coaches don't see them at
 // all. Route-level enforcement is in `src/lib/supabase/middleware.ts`
-// (`ADMIN_PATHS`) + `requireRole('admin')` on each page (0028 Phases 1+2).
+// (`ADMIN_PATHS`) + `assertCan('admin:access')` on each page (0028 → 0036).
 const OPERATIONAL_TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List', requiresAdmin: true },

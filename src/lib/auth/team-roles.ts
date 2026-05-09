@@ -11,7 +11,7 @@ export type TeamMemberRole = 'admin' | 'staff' | 'coach' | 'viewer' | 'dealer';
 
 // Roles that grant staff-app access. `dealer` is deliberately excluded — a
 // person with the `dealer` role is them-side (a contact at a dealership), not
-// us-side, and must not pass `requireStaffAccess()` or `assertCan('app:access')`.
+// us-side, and must not pass `requireStaffAccess()` or the app:access gate.
 export const STAFF_APP_ROLES: readonly TeamMemberRole[] = [
   'admin',
   'staff',

@@ -1,10 +1,10 @@
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import { loadDealers } from '@/features/schedule/queries';
 import { DealersAdmin } from '@/features/dealers/dealers-admin';
 
 // Dealers admin. People (incl. coaches) live on /admin/people.
 export default async function DealershipsPage() {
-  await requireRole('admin');
+  await assertCan('admin:access'); // expected: server-only
   const dealers = await loadDealers();
 
   return (

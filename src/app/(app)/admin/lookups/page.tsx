@@ -1,9 +1,9 @@
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import { loadCampaignStyles, loadSalesLeadSources } from '@/features/schedule/queries';
 
 export default async function LookupsPage() {
-  await requireRole('admin');
+  await assertCan('admin:access'); // expected: server-only
   const [styles, sources] = await Promise.all([loadCampaignStyles(), loadSalesLeadSources()]);
 
   return (

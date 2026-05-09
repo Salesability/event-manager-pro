@@ -11,7 +11,7 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: New capabilities (matrix rows + tests) | Done | `5575c62` |
-| 2: Migrate page + layout gates | Pending | - |
+| 2: Migrate page + layout gates | In Progress | - |
 | 3: Migrate availability actions + delete `roleListClient` | Pending | - |
 | 4: Docs + smoke verification | Pending | - |
 
@@ -56,14 +56,14 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 
 #### Phase 2: Migrate page + layout gates
 
-- [ ] `src/app/(app)/layout.tsx` — `requireStaffAccess()` → `await assertCan(profile, 'app:access')`. Profile loaded via `loadCurrentMembership()`.
-- [ ] `src/app/(app)/admin/lookups/page.tsx` — `requireRole('admin')` → `assertCan(profile, 'admin:access')`.
-- [ ] `src/app/(app)/admin/people/page.tsx` — same.
-- [ ] `src/app/(app)/production/page.tsx` — same.
-- [ ] `src/app/(app)/dealerships/page.tsx` — same.
-- [ ] `src/app/(app)/reports/page.tsx` — `requireRole(['admin','coach'])` → `assertCan(profile, 'reports:view')`.
-- [ ] `src/app/(app)/reports/export/route.ts` — `requireRole(['admin','coach'])` → `assertCan(profile, 'reports:view')` (imperative, mirrors `production/export/route.ts`).
-- [ ] Existing tests update — page-level redirect-on-unauthorized assertions still pass (assertCan redirects identically).
+- [x] ~~`src/app/(app)/layout.tsx` — `requireStaffAccess()` → `await assertCan(profile, 'app:access')`.~~ Refined: kept layout calling `requireStaffAccess` because `assertCan` redirects to `/` on deny — `/` is inside `(app)/` and would loop on a dealer-only contact typing `/calendar` directly. `requireStaffAccess` retains the friendly auth-error redirects (Portal-not-yet-available / Account-not-provisioned). Predicate refactored to delegate to `can(profile, 'app:access')` so the capability is canonical and `<Can>` / `useCan` see the same decision. (Refines plan's working assumption — see Phase 2 commit; refines Open Question #1.)
+- [x] `src/app/(app)/admin/lookups/page.tsx` — `requireRole('admin')` → `assertCan('admin:access')`.
+- [x] `src/app/(app)/admin/people/page.tsx` — same.
+- [x] `src/app/(app)/production/page.tsx` — same.
+- [x] `src/app/(app)/dealerships/page.tsx` — same.
+- [x] `src/app/(app)/reports/page.tsx` — `requireRole(['admin','coach'])` → `assertCan('reports:view')`.
+- [x] `src/app/(app)/reports/export/route.ts` — `requireRole(['admin','coach'])` → `assertCan('reports:view')` (imperative).
+- [x] Existing tests update — `reports/export/route.test.ts` mock swapped to `assertCan('reports:view')` + invocation order assertion. `action-gate-matrix.ts` note updated for `GET /reports/export`. All 489 tests still pass; pairing script reports 17/17.
 
 #### Phase 3: Migrate availability actions + delete `roleListClient`
 

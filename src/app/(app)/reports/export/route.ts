@@ -1,6 +1,6 @@
 import 'server-only';
 import { type NextRequest } from 'next/server';
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import {
   loadCampaignsByCoach,
   loadCampaignsByDealer,
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   // Route Handlers don't run through `(app)/layout.tsx`. Match the page's
   // gate (admin OR coach) so a contact-only auth user can't exfil the
   // aggregations bypassing the UI.
-  await requireRole(['admin', 'coach']);
+  await assertCan('reports:view'); // expected: server-only
 
   const tab = parseTab(request.nextUrl.searchParams.get('tab'));
   const today = new Date().toISOString().slice(0, 10);

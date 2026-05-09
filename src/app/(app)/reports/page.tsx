@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import {
   loadCampaignsByCoach,
   loadCampaignsByDealer,
@@ -8,7 +8,7 @@ import {
 import { ReportsTabs } from '@/features/reports/reports-tabs';
 
 export default async function ReportsPage() {
-  await requireRole(['admin', 'coach']);
+  await assertCan('reports:view'); // expected: server-only
 
   const [byDealer, byCoach, byMonth, full] = await Promise.all([
     loadCampaignsByDealer(),

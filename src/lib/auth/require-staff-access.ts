@@ -1,39 +1,42 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
-import {
-  isStaffAppRole,
-  loadCurrentMembership,
-} from '@/lib/auth/load-team-membership';
-import { isAdmin } from '@/lib/auth/require-admin';
+import { can, type CapabilityProfile } from '@/lib/auth/capabilities';
+import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { getUser } from '@/lib/supabase/session';
 
-// Single staff-app access check. Used by `(app)/layout.tsx` (covers all
-// pages) and by Route Handlers under `(app)/*` (which Next does NOT route
-// through the layout) so a `/production/export` GET can't bypass the gate
-// by virtue of being a non-page surface.
+// Layout-level staff-app gate with friendly auth-error redirects. Wraps the
+// app:access capability predicate so the redirect UX (Portal-not-yet-
+// available for dealer-only contacts, Account-not-provisioned for
+// unprovisioned auth users) lives in one place. Today only the layout
+// (`src/app/(app)/layout.tsx`) calls it; usable by Route Handlers under
+// `(app)/*` if any future handler needs the same friendly redirects (Next
+// does NOT route handlers through the layout).
+//
+// Why a wrapper rather than the bare PEP: assertCan redirects to `/` on deny,
+// but `/` is inside `(app)/` and would loop on a dealer-only contact typing
+// `/calendar` directly. The predicate is canonical (the same one assertCan
+// would invoke); this function adds the redirect targets. Mirrors the auth-
+// callback's own routing decisions in `src/app/auth/callback/route.ts`.
 //
 // Returns the authenticated user on success; throws `redirect(...)` from
-// next/navigation otherwise — same control-flow shape as `requireAdmin`.
+// next/navigation otherwise.
 export async function requireStaffAccess() {
   const user = await getUser();
   if (!user) redirect('/login');
 
-  // Admins always pass — `app_metadata.role` lives on the JWT and survives
-  // before any `team_member_roles` row exists (bootstrap path).
-  if (isAdmin(user)) return user;
-
-  // Filter out `dealer` rows: a dealer-only person is them-side and must NOT
-  // land on the staff app. Closes the 0023 Phase 1 Codex High where adding
-  // `dealer` to the enum would have aliased dealer rows as staff via the
-  // earlier `roles.length > 0` check.
+  // loadCurrentMembership is React-cached for the request, so the layout's
+  // own loadCurrentMembership() call below shares one DB round-trip.
   const membership = await loadCurrentMembership();
-  const hasStaffRole = membership?.roles.some(isStaffAppRole) ?? false;
-  if (!hasStaffRole) {
-    const reason = membership?.hasDealerContact
-      ? 'Portal not yet available'
-      : 'Account not provisioned';
-    redirect(`/auth/auth-error?reason=${encodeURIComponent(reason)}`);
-  }
+  const profile: CapabilityProfile = {
+    user,
+    roles: membership?.roles ?? [],
+    coachContactId: membership?.coachContactId ?? null,
+  };
 
-  return user;
+  if (can(profile, 'app:access')) return user; // expected: server-only
+
+  const reason = membership?.hasDealerContact
+    ? 'Portal not yet available'
+    : 'Account not provisioned';
+  redirect(`/auth/auth-error?reason=${encodeURIComponent(reason)}`);
 }

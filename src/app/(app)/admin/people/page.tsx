@@ -1,11 +1,11 @@
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import { loadAdminPeople, loadOrphanAuthUsers } from '@/features/people/queries';
 import { loadDealers } from '@/features/schedule/queries';
 import { OrphanAuthUsers } from '@/features/people/orphan-auth-users';
 import { PeopleAdmin } from '@/features/people/people-admin';
 
 export default async function PeopleAdminPage() {
-  await requireRole('admin');
+  await assertCan('admin:access'); // expected: server-only
   const [people, dealers, orphans] = await Promise.all([
     loadAdminPeople(),
     loadDealers(),

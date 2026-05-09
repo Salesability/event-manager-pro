@@ -6,6 +6,11 @@ import { isAdmin } from '@/lib/auth/require-admin';
 import { requireStaffAccess } from '@/lib/auth/require-staff-access';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // requireStaffAccess wraps the app:access capability predicate with the
+  // friendly auth-error redirects (Portal-not-yet-available / Account-not-
+  // provisioned) that the layout gate owns. The default redirect target on
+  // capability denial is `/`, which is inside (app)/ and would loop here.
+  // Predicate identical to the app:access capability since 0036 Phase 2.
   const user = await requireStaffAccess();
   // React-cached — same call as requireStaffAccess made internally, so no
   // extra DB hit. Provider only needs roles + coachContactId for capability

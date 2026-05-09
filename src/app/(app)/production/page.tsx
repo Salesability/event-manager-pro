@@ -1,4 +1,4 @@
-import { requireRole } from '@/lib/auth/require-role';
+import { assertCan } from '@/lib/auth/assert-can';
 import {
   loadCampaignStyles,
   loadCampaigns,
@@ -19,7 +19,7 @@ type Props = {
 };
 
 export default async function ProductionPage({ searchParams }: Props) {
-  await requireRole('admin');
+  await assertCan('admin:access'); // expected: server-only
   const { q, status, cancelled } = await searchParams;
   const showCancelled = cancelled === '1';
 

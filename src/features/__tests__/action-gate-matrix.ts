@@ -249,6 +249,6 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     label: 'GET /reports/export',
     invoke: () => reportsExportGET(fakeRequest('http://localhost/x?tab=dealer') as never),
     expectedByRole: ADMIN_OR_COACH,
-    note: 'requireRole(["admin","coach"]) — coach can pull aggregates for the field',
+    note: 'reports:view — admin || coach (coach can pull aggregates for the field)',
   },
 ];
