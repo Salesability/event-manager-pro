@@ -13,7 +13,7 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 | 1: New capabilities (matrix rows + tests) | Done | `5575c62` |
 | 2: Migrate page + layout gates | Done | `d8794b3` |
 | 3: Migrate availability actions + delete `roleListClient` | Done | `0d5ec12` |
-| 4: Docs + smoke verification | Pending | - |
+| 4: Docs + smoke verification | In Progress | - |
 
 **Overall Progress:** 75% (3/4 phases complete)
 
@@ -76,26 +76,21 @@ Done = `pnpm grep -rn 'requireRole\|requireStaffAccess\|requireAdmin\|roleListCl
 
 #### Phase 4: Docs + smoke verification
 
-- [ ] Update `docs/wiki/auth.md`:
-  - Capability matrix table — add the 4 new rows + the migration of the 3 availability actions.
-  - Defense-in-depth section — declare "capabilities-only at gates" as the durable convention.
-  - Edge middleware section — clarify it's a defense Layer 1 (JWT-claim fast-path), not the authorization decision.
-- [ ] Update `docs/wiki/security.md`:
-  - Layer 2/3 description — page + action gates are uniform `assertCan` / `capabilityClient`.
-- [ ] Update `docs/wiki/log.md` with a same-day entry summarising the chunk.
-- [ ] `pnpm test` — full vitest pass (was 453 + 9 from 0033; expect 462+ after Phase 1's new tests).
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm lint` clean.
-- [ ] 0031 lint (action-gate) clean.
-- [ ] 0032 action-matrix test clean.
-- [ ] 0034 pairing check clean — verify it now covers every action.
-- [ ] Smoke (web-test): `goto /production` as admin → renders. As coach → redirects. (auth-injected coach fixture not yet wired; verify by code-trace if no fixture).
-- [ ] Smoke (web-test): `goto /reports` as admin → renders; as coach → renders.
-- [ ] Smoke (web-test): `goto /calendar` → click `Block Date` → dialog opens (admin + coach both reach this surface).
+- [x] Update `docs/wiki/auth.md`: route-gating section rewritten from "four layers" to "three layers, capabilities-only at gates"; capability matrix table — 4 new rows lose "(matrix preview)" notes; per-action gate matrix updated for `reports:view` and `availability:edit`; `<Can>` adoption note refreshed to include `Block Date`; edge middleware called out as Layer 1 fast-path optimization.
+- [x] Update `docs/wiki/security.md`: § 2 (Layout) reworded for `requireStaffAccess` wrapping the `app:access` predicate; § 3 (Action) rewritten for capabilities-only enforcement via `assertCan` / `capabilityClient`; investigation cheat-sheet redirected away from deleted `require-role.ts`.
+- [x] Update `docs/wiki/log.md` with 2026-05-09 entry summarising the chunk.
+- [x] `pnpm test` — 480/481 (was 488/489 in Phase 3; net −8 because `require-role.test.ts` deleted).
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm lint` clean (4 pre-existing warnings unchanged).
+- [x] 0031 lint (action-gate) clean — allow-list narrowed from `['assertCan', 'requireRole', 'requireStaffAccess']` → `['assertCan', 'requireStaffAccess']`; 2 plugin tests updated to use `assertCan`.
+- [x] 0032 action-matrix test clean — drift-detector regex updated from `requireRole` → `capabilityClient`.
+- [x] 0034 pairing check clean — 18/18 capabilities paired or per-line opted out (4 new caps from 0036 added; `availability:edit` paired both sides via the new `<Can capability="availability:edit">`).
+- [x] Smoke (web-test): public surface phase 1 pass (/, /login, /calendar redirect, /share/coach/1). Gated phase 2 pass: /production renders ("Production List"), /reports renders ("Reports"), /admin/lookups renders + admin actions, /calendar renders + Block Date button visible (now wrapped in `<Can capability="availability:edit">`), /dealerships + /admin/people render. Coach-only smoke deferred (no fixture wired); `can(coachProfile, 'admin:access')` → false → redirect to `/` verified by code-trace.
+- [x] **Bonus (Q1 resolution):** Deleted `src/lib/auth/require-role.ts` + its test (0 production callers after Phase 2's page migrations). The middleware doesn't import it (it does inline `app_metadata?.role === 'admin'`), so the working assumption "keep require-role.ts as a middleware-only helper" was actually superseded — the middleware doesn't need it. Outright delete is the cleaner end-state.
 
 ## Open questions
 
-- **#1 — Delete `require-role.ts` entirely, or keep it for the edge middleware path-match?** The edge middleware reads JWT claims, not the team-membership profile, so it can't use `assertCan` (which needs the cached membership row). Today middleware uses string-match on `ADMIN_PATHS` — that doesn't depend on `require-role.ts` at all. **Working assumption: keep `require-role.ts` as a thin internal helper used only by the middleware's defense-in-depth fast-path; remove all `requireRole` / `requireStaffAccess` exports that aren't used by middleware.** Reads as "not part of the public authorization API anymore; an edge optimization."
+- **#1 — Delete `require-role.ts` entirely, or keep it for the edge middleware path-match?** ~~Working assumption: keep `require-role.ts` as a thin internal helper used only by the middleware's defense-in-depth fast-path.~~ **Resolved Phase 4 (2026-05-09):** Deleted outright. The middleware never actually imported `require-role.ts` — it does inline `user.app_metadata?.role === 'admin'` against `ADMIN_PATHS`. After Phase 2's page migrations + Phase 3's action migration, no production code imported the module; only its own test did. ESLint action-gate allow-list narrowed from `['assertCan', 'requireRole', 'requireStaffAccess']` → `['assertCan', 'requireStaffAccess']` to match.
 - **#2 — Should `admin:access` be split into per-area capabilities (`production:view`, `dealerships:view`, `admin-area:access`)?** Today every admin page admits the same set (admin only). Splitting them is forward-compatibility for "what if /production opens up to coach later?" — but it's a 30-minute matrix bump if/when that day arrives. **Working assumption: one `admin:access` until a real divergence appears.** Keeps the matrix readable.
 - **#3 — Does the `(app)/layout.tsx` `app:access` admit-set match `requireStaffAccess()` behavior?** ~~Working assumption: admin || coach.~~ **Resolved Phase 1 (2026-05-08):** `requireStaffAccess()` admits any role in `STAFF_APP_ROLES = {admin, staff, coach, viewer}` (see `src/lib/auth/load-team-membership.ts:16`). To preserve gate semantics on the swap, `app:access` is implemented as `admin || staff || coach || viewer`. Today's coach is the only non-admin holder, but `staff`/`viewer` are reserved enum values per `auth.md`'s "v1 wired roles" note — keeping the broader set means a future `staff` or `viewer` activation doesn't require touching the matrix.
 - **#4 — Pair `<Can capability="app:access">` and `<Can capability="admin:access">` UI guards anywhere?** Today the layout gate is server-side only (no UI element conditionally renders on "are you admin"); the admin nav menu is server-rendered with the role from the cached membership. Adding `<Can>` paired with these capabilities would be churn for no UX gain. **Working assumption: opt out via 0034 inline `// expected: server-only` comments on the page-level `assertCan` calls.** Same pattern 0034 already established for `production:export` and `coach-availability:edit-own`.

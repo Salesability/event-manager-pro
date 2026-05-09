@@ -32,8 +32,9 @@ export type RoleKey =
   | 'orphan';
 
 // Every action redirects on deny; the destination tells you which gate
-// rejected. assertCan + requireRole both redirect to /login when there's
-// no user and to / when the role doesn't match.
+// rejected. assertCan (and the `capabilityClient` middleware that wraps it)
+// redirects to /login when there's no user and to / when the capability
+// denies.
 export type Outcome = 'allow' | 'redirect:/login' | 'redirect:/';
 
 export type ActionMatrixRow = {

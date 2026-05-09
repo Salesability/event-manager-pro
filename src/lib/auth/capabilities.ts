@@ -56,8 +56,9 @@ export function can(
 ): boolean {
   if (!profile?.user) return false;
 
-  // Admin shortcut. Mirrors requireRole's JWT fast-path (`app_metadata.role`)
-  // plus the explicit role-list check; either path is admit-everything.
+  // Admin shortcut. Either the JWT app_metadata.role (bootstrap path —
+  // works pre-team_member_roles row) or a role row containing 'admin' admits
+  // everything. Mirrors the cross-layer admin convention.
   const isAdmin =
     profile.user.app_metadata?.role === 'admin' ||
     profile.roles.includes('admin');

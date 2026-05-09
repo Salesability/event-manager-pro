@@ -24,21 +24,22 @@ What this catches: drive-by URL guessing, cookie-less requests, expired sessions
 
 ### 2. Layout — `src/lib/auth/require-staff-access.ts`
 
-Runs in `(app)/layout.tsx` (covers all gated pages) and from any non-page Route Handler under `(app)/` (today: `src/app/(app)/production/export/route.ts`). Single staff-access decision: admin-via-JWT-fast-path, OR any active `team_member_roles` row (via React-`cache()`-wrapped `loadCurrentMembership()`). Anyone else lands on `/auth/auth-error?reason=...`.
+Runs in `(app)/layout.tsx` (covers all gated pages). Wraps the `app:access` capability predicate with friendly auth-error redirects: admin-via-JWT, or any active `team_member_roles` row whose role is in `STAFF_APP_ROLES = {admin, staff, coach, viewer}` (via React-`cache()`-wrapped `loadCurrentMembership()`). Dealer-only contacts get `/auth/auth-error?reason=Portal+not+yet+available`; unprovisioned auth users get `/auth/auth-error?reason=Account+not+provisioned`. The wrapper exists because bare `assertCan('app:access')` redirects to `/`, which is inside `(app)/` and would loop; the predicate is canonical, only the redirect-target UX is layout-specific.
 
 What this catches: a signed-in customer-only auth user typing `/calendar` directly (no team-member row → portal-or-error). What it misses: Server Actions invoked via direct POST without rendering a layout.
 
-### 3. Action — `src/lib/auth/require-role.ts` + `src/lib/auth/assert-can.ts`
+### 3. Action — `src/lib/auth/assert-can.ts` + `src/lib/actions/action-client.ts`
 
-The deepest enforcement layer. Every Server Action calls one of:
-- `requireRole('admin')` / `requireRole(['admin','coach'])` / `requireRole(['admin','staff','coach'])` / `requireRole(['admin','staff','coach','viewer'])` for role-list shapes; or
-- `assertCan(capability, resource?)` for capability-keyed shapes (0029, 2026-05-08).
+The deepest enforcement layer. Every Server Action and Route Handler runs through the capability layer (capabilities-only at gates, durable as of 0036, 2026-05-09):
+- **Server Actions** use the next-safe-action middleware factory: `capabilityClient('cap').schema(...).action(async ({ parsedInput, ctx }) => { ... })` (0033). The middleware composes auth (`getUser` → `redirect('/login')`) and capability check (`assertCan(cap)` → `redirect('/')`) ahead of every action body, so writing an unauthed action requires explicit opt-out (`baseClient` with `// authz: public`).
+- **Route Handlers** (which don't run through the safe-action middleware) call `await assertCan(cap)` imperatively at the top.
+- **Pages** call `await assertCan(cap)` before any DB read.
 
-Both helpers run before the action's first DB read or external side effect. **Server Actions are public-API-shaped** — a direct POST bypasses the layout — so this layer is load-bearing, not just defence-in-depth. Per-action gate matrix in [auth.md → Per-action gate matrix](auth.md#per-action-gate-matrix); capability ↔ role matrix in [auth.md → Capability matrix](auth.md#capability-matrix).
+All three flows route the predicate through `src/lib/auth/capabilities.ts`'s pure `can(profile, capability, resource?) → boolean`. Returns the `User` on success so callers can use `user.id` for audit columns and `user.email` for outbound mail `replyTo`; redirects on deny.
 
-The `requireRole` helper combines a JWT-fast-path for admins (no DB hit) with `loadCurrentMembership()` (request-cached) for non-admin role checks. Returns the `User` so callers can use `user.id` for audit columns and `user.email` for outbound mail `replyTo`. `assertCan` follows the same redirect-on-fail control flow but routes the predicate through `src/lib/auth/capabilities.ts`'s pure `can(profile, capability, resource?) → boolean`.
+**Server Actions are public-API-shaped** — a direct POST bypasses the layout — so this layer is load-bearing, not just defence-in-depth. Per-action gate matrix in [auth.md → Per-action gate matrix](auth.md#per-action-gate-matrix); capability ↔ role matrix in [auth.md → Capability matrix](auth.md#capability-matrix).
 
-**Capabilities are an intent layer, not a security layer.** The companion `<Can>` / `useCan()` client PEP (`src/components/auth/`) hides UI affordances based on the same predicate, but a determined client can always hand-craft a FormData submit — the load-bearing gate is the server-side `assertCan` (or surviving `requireRole`) at the action's first line. Every `<Can>` must pair with the corresponding server-side gate.
+**Capabilities are intent + security.** `assertCan` redirects on deny, and that server-side gate is what prevents privilege escalation. The companion `<Can>` / `useCan()` client PEP (`src/components/auth/`) hides UI affordances based on the same predicate, but a determined client can always hand-craft a FormData submit — every `<Can>` must pair with the corresponding server-side gate. The 0034 pairing CI script enforces both-sides-paired discipline; today 18/18 capabilities are paired or per-line opted out.
 
 Special case: **`*AvailabilityBlock` actions also call `ensureAvailabilityOwnership(user, ...facets)`** to enforce row-level "is this your own block?" — admin bypasses; non-admin coach can only mutate `kind='coach_unavailable'` rows where `coach_id` matches their own contact. Post-0029 the predicate delegates to `can(profile, 'coach-availability:edit-own', facet)` so the rule lives in capabilities.ts; the soft-error `{ error }` return contract is preserved because "you tried to edit another coach's row" is a validation error, not an auth error. The non-admin UPDATE/archive `WHERE` also pins `kind` + `coach_id` for TOCTOU safety. See `src/features/schedule/availability-authz.ts`.
 
@@ -91,13 +92,13 @@ The helper is **best-effort**: insert failures log via `console.error('audit ins
 
 | Question | Grep / file |
 |---|---|
-| Did the action gate run? | `src/lib/auth/require-role.ts`, `src/lib/auth/require-staff-access.ts` (callers in `src/features/*/actions.ts`, `src/app/(app)/**/page.tsx`) |
+| Did the action gate run? | `src/lib/auth/assert-can.ts`, `src/lib/actions/action-client.ts` (capabilityClient middleware), `src/lib/auth/require-staff-access.ts` (callers in `src/features/*/actions.ts`, `src/app/(app)/**/page.tsx`, `src/app/**/route.ts`) |
 | Who did this admin-y thing two months ago? | `select * from audit_log where action = ? and target_id = ? order by occurred_at desc;` |
 | Is RLS actually enabled? | `select tablename, rowsecurity from pg_tables where schemaname='public';` |
 | What policies exist? | `select tablename, policyname, roles, cmd from pg_policies where schemaname='public';` |
 | Which connection role does Drizzle use? | `.env.local` → `DATABASE_URL`; verify with `select current_user, rolbypassrls from pg_roles where rolname=current_user;` |
 | Did an audit insert fail? | grep deploy logs for `audit insert failed` |
-| Did a Server Action receive an unauthenticated POST? | grep deploy logs for redirect-to-`/login` traces; per-action `requireRole` always errors loudly before any DB write |
+| Did a Server Action receive an unauthenticated POST? | grep deploy logs for redirect-to-`/login` traces; the `capabilityClient` middleware always redirects loudly before any DB write |
 | Did an outbound email use the wrong origin? | `lib/email/send.ts` log lines + `process.env.SITE_URL` on the deploy |
 
 ## Out of scope
@@ -108,7 +109,7 @@ The helper is **best-effort**: insert failures log via `console.error('audit ins
 - **Boundary-discipline `secrets-boundary.test.ts`.** 0019 Phase 5 parked: `'server-only'` already throws at build time when a Client Component imports a server module; the proposed full-build-then-grep test is genuine belt-and-suspenders but slow and low marginal value. Revisit if a regression slips past `'server-only'` in practice.
 - **Per-row encryption for invoices/payments.** Will get its own threat model when payment data lands.
 - **`adoptOrphanAuthUser` audit emission.** Identity-binding event but not in 0019 Phase 4's scope; folds in with the audit-log UI when that lands.
-- **`actorRole` precision for non-admin actors.** Today every audited action is `requireRole('admin')`-gated, so `actorRole` reads `'admin'` from `app_metadata.role` and is never null in practice. The day a non-admin path gains an audited action, join `team_member_roles` at write time.
+- **`actorRole` precision for non-admin actors.** Today every audited action is admin-only-gated (capabilities like `person:archive`, `dealer:archive`, `campaign:cancel`), so `actorRole` reads `'admin'` from `app_metadata.role` and is never null in practice. The day a non-admin path gains an audited action, join `team_member_roles` at write time.
 - **Auth-callback host-header tightening.** `src/features/auth/actions.ts:siteUrl` still has a `headers()` fallback for OAuth/magic-link callbacks. Out of 0019 Phase 7's scope (which covered email-to-recipient). Supabase's redirect allowlist blunts most of the impact, but a small follow-up to apply the same SITE_URL-only pattern is worth it.
 
 ## Decision history

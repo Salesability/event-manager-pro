@@ -20,9 +20,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Next.js redirect throws `Error` with `digest: 'NEXT_REDIRECT;...'`. Both the
-// imperative `assertCan`/`requireRole` callers AND the safe-action middleware
-// (via `isNavigationError`) recognise this digest and let it propagate. The
-// mock matches that shape so post-0033 actions wrapped in `capabilityClient`
+// imperative `assertCan` callers AND the safe-action middleware (via
+// `isNavigationError`) recognise this digest and let it propagate. The mock
+// matches that shape so post-0033 actions wrapped in `capabilityClient`
 // surface the redirect as a thrown error rather than a `{serverError}` body.
 const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
@@ -264,8 +264,9 @@ describe('action gate matrix — every gated action × role × outcome', () => {
 
 // ---- Drift detection ----------------------------------------------------
 // Cheap regex-based grep over the gated source. If a new action lands with
-// `assertCan(...)` or `requireRole(...)` and isn't in the matrix, this fails.
-// Catches the failure mode "matrix went stale because nobody added the row."
+// `assertCan(...)` or `capabilityClient(...)` and isn't in the matrix, this
+// fails. Catches the failure mode "matrix went stale because nobody added
+// the row."
 
 function thisFile() {
   return fileURLToPath(import.meta.url);
@@ -358,7 +359,7 @@ function exportedGatedFunctions(file: string): string[] {
   // via // authz: public is not in scope for the matrix.
   const hasGateCall =
     /assertCan\s*\(/.test(src) ||
-    /requireRole\s*\(/.test(src) ||
+    /capabilityClient\s*\(/.test(src) ||
     /requireStaffAccess\s*\(/.test(src);
   if (!hasGateCall) return [];
 

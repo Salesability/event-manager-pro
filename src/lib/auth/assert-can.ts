@@ -11,9 +11,9 @@ import { getUser } from '@/lib/supabase/session';
 
 // Server PEP for capability checks. Loads user + membership, calls can(),
 // either returns the user (allow) or redirects /login (no user) / /
-// (denied) — same redirect-on-fail control flow as requireRole. Server
-// Actions and Route Handlers should use this when capability semantics
-// tighten intent (e.g. `dealer:archive` over a bare `requireRole('admin')`).
+// (denied). Canonical authorization gate at the application layer; pages,
+// Route Handlers, and the `capabilityClient` middleware factory all delegate
+// here. The single capability matrix lives in `capabilities.ts`.
 export async function assertCan(
   capability: Capability,
   resource?: unknown,

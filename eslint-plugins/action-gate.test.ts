@@ -34,12 +34,12 @@ describe('action-gate/no-ungated-action — Server Actions', () => {
     expect(lintServerAction(code)).toEqual([]);
   });
 
-  it('passes when an exported async function calls requireRole', () => {
+  it('passes when an exported async function calls assertCan with a multi-role capability', () => {
     const code = `
       'use server';
-      import { requireRole } from '@/lib/auth/require-role';
+      import { assertCan } from '@/lib/auth/assert-can';
       export async function createBlock(formData) {
-        const user = await requireRole(['admin', 'coach']);
+        const user = await assertCan('availability:edit');
         return user;
       }
     `;
@@ -412,11 +412,11 @@ describe('action-gate/no-ungated-action — Route Handlers', () => {
     expect(messages[0].message).toContain("'GET'");
   });
 
-  it('passes when the route handler calls requireRole', () => {
+  it('passes when the route handler calls assertCan', () => {
     const code = `
-      import { requireRole } from '@/lib/auth/require-role';
+      import { assertCan } from '@/lib/auth/assert-can';
       export async function GET(request) {
-        await requireRole(['admin', 'coach']);
+        await assertCan('reports:view');
         return new Response('ok');
       }
     `;

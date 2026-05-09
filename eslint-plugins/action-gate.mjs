@@ -20,7 +20,7 @@
 // AST is intentionally walked with parser-agnostic shape — works with espree
 // (default in tests) and `@typescript-eslint/parser` (real codebase).
 
-const DEFAULT_GATE_NAMES = ['assertCan', 'requireRole', 'requireStaffAccess'];
+const DEFAULT_GATE_NAMES = ['assertCan', 'requireStaffAccess'];
 const DEFAULT_OPT_OUT = 'authz: public';
 // Any import source under `@/lib/auth/` (or a relative path resolving to
 // `src/lib/auth/`) is trusted as the gate's origin module.
@@ -245,7 +245,7 @@ const noUngatedAction = {
     type: 'problem',
     docs: {
       description:
-        'Server Actions and protected Route Handlers must call an auth gate (assertCan, requireRole, requireStaffAccess) — or opt out with `// authz: public`.',
+        'Server Actions and protected Route Handlers must call an auth gate (assertCan, requireStaffAccess) — or opt out with `// authz: public`.',
     },
     schema: [
       {

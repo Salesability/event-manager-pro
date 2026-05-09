@@ -23,8 +23,8 @@ type CanProps = {
 // Hide-by-default render gate. Most denials in this app are role-based (a
 // coach won't ever have admin), and rendering-then-hiding causes layout flash.
 // Disable-with-tooltip is opt-in via `<Can ... fallback={…}>`. Pair every
-// `<Can>` with a server-side `assertCan` (or surviving `requireRole`) in the
-// action it triggers — `<Can>` is intent affordance, not enforcement.
+// `<Can>` with a server-side `assertCan` (or `capabilityClient` factory) in
+// the action it triggers — `<Can>` is intent affordance, not enforcement.
 export function Can({ capability, resource, fallback, children }: CanProps) {
   const allowed = useCan(capability, resource);
   if (allowed) return <>{children}</>;

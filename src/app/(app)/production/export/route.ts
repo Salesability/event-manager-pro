@@ -22,9 +22,8 @@ const HEADERS = [
 
 export async function GET(request: NextRequest) {
   // Route Handlers don't run through `(app)/layout.tsx`, so the page-level
-  // gate has to be re-asserted explicitly here. Capability-keyed instead of
-  // role-keyed (0029 Phase 2) so the matrix lives in capabilities.ts; same
-  // admit set as `requireRole('admin')` was — admin is the only role with
+  // gate has to be re-asserted explicitly here. Capability-keyed (0029 Phase
+  // 2) so the matrix lives in capabilities.ts — admin is the only role with
   // `production:export`.
   await assertCan('production:export'); // expected: server-only
 
