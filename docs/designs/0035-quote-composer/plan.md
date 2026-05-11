@@ -10,13 +10,13 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Service catalog data model + admin UI | Pending | - |
+| 1: Service catalog data model + admin UI | Done | `bfaeff7` |
 | 2: Prospect status on dealers + inline-create flow | Pending | - |
 | 3: Pricing logic + quote composer page | Pending | - |
 | 4: PDF preview pane + send wiring | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 ## Code Anchors
 
@@ -26,7 +26,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 |----------|---------------------|-----------------|
 | `src/lib/db/schema/service-items.ts` (new) | `src/lib/db/schema/campaign-styles.ts` | Same shape: small lookup table with `label`, `sortOrder`, `archivable`. Service items extend the same pattern with `unitPrice`, `unit`, `code`. |
 | `src/lib/db/schema/dealers.ts` (modify — add `status`) | `src/lib/db/schema/dealers.ts:4-19` | In-place column add to existing schema; mirror the `archivable` mixin shape for the new `status` enum. Use `pgEnum` like other typed enum columns in the repo. |
-| `drizzle/0007_*.sql` + `drizzle/0008_*.sql` (or single combined) | `drizzle/0006_is_staff_member_excludes_dealer.sql` | Most recent migration; same generate-then-edit flow. |
+| `drizzle/0012_round_skrulls.sql` (schema) + `drizzle/0013_seed_service_items.sql` (seed) + `drizzle/0014_service_items_rls.sql` (RLS — carry-forward from pass-1 eval) | `drizzle/0006_is_staff_member_excludes_dealer.sql` + `drizzle/0009_msa_rls.sql` | Generated migration + `--custom` seed + hand-written RLS mirror of the MSA pattern. |
 | `src/features/services/services-admin.tsx` (new) | `src/features/schedule/lookup-admin.tsx` | Direct precedent: existing single-section admin UI for lookup tables (campaign-styles + sales-lead-sources). Same `<Can>` gating, same `useActionState`, same `toLegacyResult` adapter. |
 | `src/features/services/actions.ts` (new) — `createServiceItem`, `updateServiceItem`, `archiveServiceItem` | `src/features/schedule/actions.ts` (createCampaignStyle / updateCampaignStyle / archiveCampaignStyle) | Identical shape on a sibling lookup table. `capabilityClient('lookup:edit')` per existing lookup actions. |
 | `src/lib/quotes/pricing.ts` (new) — `computeQuoteTotal({ items, audienceSize })` | `src/lib/csv.ts` | Pure-function utility module precedent in `src/lib/`. Stateless, deterministic, fully unit-testable. |
@@ -52,22 +52,23 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 1: Service catalog data model + admin UI
 
-- [ ] **Schema decision: `service_items` columns** — `id`, `code` (unique kebab-case key, e.g. `base-event` / `bdc-call`), `label`, `unit` (`flat` / `per-record` / `per-touch` / `per-day` / `range`), `unitPrice` (numeric — single price for `flat`/`per-*`), `unitPriceMin` + `unitPriceMax` (nullable; populated only when `unit='range'`), `description` (nullable), `sortOrder`, `archivable`.
-- [ ] New schema file `src/lib/db/schema/service-items.ts` per anchor.
-- [ ] `pnpm db:generate` → `drizzle/0007_*.sql`.
-- [ ] Apply migration via session pooler (per `db-conventions`).
-- [ ] **Seed v1 catalog** in a separate idempotent migration (`drizzle/0008_seed_service_items.sql`) keyed by `code`:
+- [x] **Schema decision: `service_items` columns** — `id`, `code` (unique kebab-case key, e.g. `base-event` / `bdc-call`), `label`, `unit` (`flat` / `per-record` / `per-touch` / `per-day` / `range`), `unitPrice` (numeric — single price for `flat`/`per-*`), `unitPriceMin` + `unitPriceMax` (nullable; populated only when `unit='range'`), `description` (nullable), `sortOrder`, `archivable`.
+- [x] New schema file `src/lib/db/schema/service-items.ts` per anchor.
+- [x] `pnpm db:generate` → `drizzle/0012_round_skrulls.sql` (numbering bumped from sketch — 0007–0011 already taken by intervening MSA/quotes migrations).
+- [x] Apply migration via session pooler (per `db-conventions`). Journal `when` bumped to stay monotonic past `0011_slim_wonder_man`.
+- [x] **Seed v1 catalog** in `drizzle/0013_seed_service_items.sql` (idempotent `ON CONFLICT (code) DO NOTHING`):
   - `base-event` — flat, $6,900, label "Base Event (includes 500 records)"
-  - `additional-contact` — per-record, price TBD (open question), label "Additional Contact"
+  - `additional-contact` — per-record, **$3.00** (OQ #4 resolved 2026-05-11), label "Additional Contact"
   - `bdc-call` — per-touch, $2.25, label "BDC Call"
   - `letter-postage` — per-touch, $2.50, label "Letter / Postage"
   - `digital-record` — per-touch, $0.59, label "Digital (SMS / Email)"
   - `additional-day` — per-day, $995, label "Additional Day with Trainer"
   - `record-retrieval` — range, $100–$400, label "Record Retrieval and Preparation"
-  - `travel` — flat (variable; coach types in actual cost at quote time), label "Travel (Hotel / Mileage / Air)"
-- [ ] Server Actions in `src/features/services/actions.ts` — `createServiceItem` / `updateServiceItem` / `archiveServiceItem`. Capability gate `lookup:edit`.
-- [ ] Admin section in `src/features/services/services-admin.tsx` — anchored on `lookup-admin.tsx`. Render at the bottom of `/admin/lookups` (single page) under heading "Services".
-- [ ] Vitest: `service-items.test.ts` (CRUD + archive + duplicate-code rejection).
+  - `travel` — flat (variable; `unit_price` NULL, coach types actual cost at quote time), label "Travel (Hotel / Mileage / Air)"
+- [x] **Carry-forward: RLS migration** `drizzle/0014_service_items_rls.sql` (matches `0009_msa_rls.sql` shape — surfaced because pass-1 eval flagged `service_items` would otherwise drop out of the RLS baseline). `service_items` also added to `tests/integration/rls.test.ts`'s `RLS_TABLES`.
+- [x] Server Actions in `src/features/services/actions.ts` — `createServiceItem` / `updateServiceItem` / `archiveServiceItem`. Capability gate `lookup:edit`. **Carry-forward from pass-1 Codex Mediums:** `createServiceItem` un-archives by `code` (avoids permanent code lockout after archive — mirrors `createCampaignStyle`); money parsing is string-only against `MONEY_RE = /^(0|[1-9]\d{0,7})(\.\d{1,2})?$/` (no IEEE-754 rounding, caps at `numeric(10,2)`); `sortOrder` capped at `MAX_PG_INTEGER`.
+- [x] Admin section in `src/features/services/services-admin.tsx` — anchored on `lookup-admin.tsx`. Render at the bottom of `/admin/lookups` (single page) under heading "Services".
+- [x] Vitest: `service-items.test.ts` — 24 cases (CRUD + archive + duplicate-code rejection + un-archive + decimal-precision + numeric/integer overflow). Three new rows in `src/features/__tests__/action-gate-matrix.ts` (admin-only `lookup:edit`) — adds 21 gate-matrix cases. Repo total: 542 → 568.
 
 #### Phase 2: Prospect status on dealers + inline-create flow
 
@@ -155,7 +156,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 - ~~**#1 — `dealers.status='archived'` vs `archivable.archivedAt`:**~~ **Resolved 2026-05-08: `archivedAt` is the source of truth for archived state.** `status` enum is `'prospect' | 'active'` only — no `'archived'` value. A dealer is archived iff `archivedAt IS NOT NULL`, regardless of `status`. The /dealerships filter pills compute: Active = `status='active' AND archivedAt IS NULL`; Prospect = `status='prospect' AND archivedAt IS NULL`; Archived = `archivedAt IS NOT NULL` (status ignored). Keeps the existing `archivable` mixin authoritative and avoids the "is the dealer archived or just status-archived" ambiguity.
 - ~~**#2 — Audience overage UX:**~~ **Resolved 2026-05-08: full-sync auto-derive.** Composer pivoted from line-item-picker to structured-input calculator (see Phase 3). Audience size is the source of truth; the Additional Contacts line is computed read-only from `max(0, audienceSize-500)`. Same logic generalizes to per-channel counts and event days — every per-unit qty is derived from a coach input, never free-form. Drives the quote→invoice contract: at send time, the input snapshot is locked on the `quotes` row and the invoice recomputes from the same inputs against the same catalog → totals always reconcile.
 - **#3 — Capability for composer-side actions:** reuse `lookup:edit` (already gates the catalog admin) or introduce a new `quote:edit` capability? **Working assumption: new `quote:edit` capability** scoped to admin + coach so the catalog admin (`lookup:edit`, admin-only) is independent. Adds one row to the capability matrix.
-- **#4 — Additional Contact price:** the user added "Additional Contacts" priced per contact, but the actual per-contact rate is undecided. **Open — confirm before Phase 1's seed migration.**
+- ~~**#4 — Additional Contact price:**~~ **Resolved 2026-05-11: $3.00 per record.** Seed migration writes `additional-contact` with `unit='per-record'`, `unitPrice='3.00'`. Round, easy mental math; comfortable add-on uplift on a $6,900-per-500 base. Revisit when pricing data accumulates.
 - **#5 — Travel sub-fields:** single freeform "Travel" line where the coach types one dollar amount + a note (Hotel/Mileage/Air mix), or three separate lines (Hotel, Mileage, Air)? **Working assumption: one line with a notes field** — simpler v1, easier to compute, and dealer-facing PDF shows a clean "Travel" row.
 - **#6 — Composer entry-point on campaigns:** today's `EventDetail` modal lives in `/production`; does the "Create Quote" button live there, or does the modal need to upgrade into a full `/campaigns/[id]` page first? **Working assumption: button in the existing modal for v1**; full campaign-detail page is a separate chunk.
 - **#7 — Quote ↔ campaign relationship:** can one campaign have multiple quotes (different revisions)? Can a quote exist without a campaign (pure-prospect lead)? **Working assumption: campaign-id is nullable on quotes** (pre-campaign quotes are valid); revisions follow 0026's `previousQuoteId` chain.
