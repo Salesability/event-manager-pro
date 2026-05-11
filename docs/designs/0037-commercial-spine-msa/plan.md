@@ -14,7 +14,7 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 |-------|--------|--------|
 | 1: Decision doc + cross-plan reconciliation | Done | `3b9b18e` |
 | 2: `master_service_agreements` schema + migration | Done | `da05c54` |
-| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | - |
+| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | `46db02b` |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
 | 5: Tests + wiki sweep | Pending | - |
 
