@@ -15,6 +15,7 @@ import { campaignStyles } from './campaign-styles';
 import { contacts } from './contacts';
 import { dealers } from './dealers';
 import { audienceSources } from './audience-sources';
+import { quotes } from './quotes';
 
 export const campaignStatus = pgEnum('campaign_status', [
   'draft',
@@ -54,6 +55,10 @@ export const campaigns = pgTable(
     taxPct: numeric('tax_pct', { precision: 5, scale: 2 }).notNull().default('15'),
     quoteValidDays: integer('quote_valid_days').notNull().default(30),
     quoteNotes: text('quote_notes'),
+    acceptedQuoteId: bigint('accepted_quote_id', { mode: 'number' }).references(
+      () => quotes.id,
+      { onDelete: 'restrict' }
+    ),
     status: campaignStatus('status').notNull().default('draft'),
     ...timestamps,
     ...actors,
@@ -63,6 +68,7 @@ export const campaigns = pgTable(
     index('campaigns_coach_id_idx').on(table.coachId),
     index('campaigns_style_id_idx').on(table.styleId),
     index('campaigns_audience_source_id_idx').on(table.audienceSourceId),
+    index('campaigns_accepted_quote_id_idx').on(table.acceptedQuoteId),
     index('campaigns_start_date_idx').on(table.startDate),
     index('campaigns_created_by_id_idx').on(table.createdById),
     index('campaigns_updated_by_id_idx').on(table.updatedById),

@@ -11,12 +11,12 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: PDF library + GCS storage foundation (decisions + adapters) | Done | `3c4b5b9` |
-| 2: Quote data model + Server Actions | Pending | - |
+| 2: Quote data model + Server Actions | Done | - |
 | 3: Quote PDF rendering (real data, real layout, persist to GCS) | Pending | - |
 | 4: Quote email send + public accept/decline flow | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ## Code Anchors
 
@@ -28,6 +28,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 | `src/lib/pdf/render-quote.ts` (new) — code-built Quote PDF | `src/lib/email/send.ts` | Same stateless-module shape; returns a Buffer. `pdf-lib` work happens here, isolated from any feature code. |
 | `src/lib/db/schema/quotes.ts` (new) | `src/lib/db/schema/campaigns.ts` | Mirror existing schema-file shape: Drizzle `pgTable`, audit columns per `db-conventions`, fk to `campaigns.id`. |
 | `src/features/quotes/actions.ts` (new) — `createQuote`, `sendQuote`, `acceptQuote`, `declineQuote` | `src/features/people/actions.ts` | Mirror the `'use server'` + `requireRole(...)` + `recordAudit(...)` pattern; `useActionState`-compatible return contract. |
+| `src/features/quotes/lifecycle.ts` (new, added Phase 2) — `markQuoteAccepted`, `markQuoteDeclined` internal helpers | n/a — first non-Server-Action mutation module under `src/features/` | Sibling to `actions.ts`, intentionally without `'use server'` so the action-gate lint rule (0031) doesn't flag them as ungated. Phase 4's `/quote/[token]` route handler will call them after token validation; the route is the auth gate. |
 | `src/app/quote/[token]/route.ts` (public accept/decline) | `src/app/auth/callback/route.ts` | One of the few existing route handlers; same shape (validate input, do action, redirect to a public confirmation page). The accept link is the public surface — Server Actions stay gated to staff. |
 | `src/lib/email/templates/quote.tsx` (new) | (placeholder — first React Email template; anchor on Resend docs) | First React Email component in the codebase; `src/lib/email/send.ts` is the consumer. |
 
@@ -65,20 +66,20 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 > **Commercial-spine alignment (locked in [0037](../0037-commercial-spine-msa/plan.md), 2026-05-11):** Phase 2's `quotes` schema **must** carry the commercial columns moved off `campaigns` (`fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`) plus `msaId`. The FK direction is **`campaigns.acceptedQuoteId` → `quotes.id`** (lives on campaigns), NOT `quotes.campaignId`. See [`docs/wiki/commercial-spine.md`](../../wiki/commercial-spine.md). 0037 Phase 4 then drops the legacy commercial columns off `campaigns` once this phase + 0035 Phase 3 are writing to the new locations.
 
-- [ ] New schema file `src/lib/db/schema/quotes.ts`:
-  - `quotes` table: `id` (uuid), `dealerId` (fk → `dealers.id`, NOT NULL — the Quote always knows its Client), `msaId` (fk → `master_service_agreements.id`, nullable until the Quote is accepted under a specific MSA term), `status` (enum `draft|sent|accepted|declined`), `acceptToken` (uuid, unique — used for the public accept/decline link), `pdfStorageKey` (nullable; populated when sent), `inputs` (jsonb — typed `QuoteInputs` snapshot; see [0035 Phase 3](../0035-quote-composer/plan.md) for the shape: `audienceSize`, `eventDays`, `bdcCallCount`, `letterCount`, `digitalCount`, `recordRetrievalAmount`, `travelAmount`, `travelNotes`, `quoteNotes`), `fee` (numeric — flat fee, cross-checked against `inputs` × catalog at edit time), `travel` (numeric — flat travel amount), `depositPct` (numeric, default `0`), `taxPct` (numeric, default `15` per NS HST seller-side — see Open Q resolution), `quoteValidDays` (integer, default `30`), `audienceSourceId` (fk → `audience_sources.id`, nullable), `subtotal`, `tax`, `total` (numeric), `lineItems` (jsonb — *computed* output snapshot derived from `inputs` × catalog at edit/send time; revisit normalization in 7.3), `previousQuoteId` (self-fk, nullable; for the revision chain), audit cols (`createdAt`, `updatedAt`, `createdBy`).
+- [x] New schema file `src/lib/db/schema/quotes.ts`:
+  - `quotes` table: `id` (~~uuid~~ **bigIdentity** — deviation from plan body; matches repo convention + Code Anchor `campaigns.ts`. `acceptToken` already provides the unguessable-public-URL role), `dealerId` (fk → `dealers.id`, NOT NULL — the Quote always knows its Client), `msaId` (fk → `master_service_agreements.id`, nullable until the Quote is accepted under a specific MSA term), `status` (enum `draft|sent|accepted|declined`), `acceptToken` (uuid, unique — used for the public accept/decline link), `pdfStorageKey` (nullable; populated when sent), `inputs` (jsonb — typed `QuoteInputs` snapshot; see [0035 Phase 3](../0035-quote-composer/plan.md) for the shape: `audienceSize`, `eventDays`, `bdcCallCount`, `letterCount`, `digitalCount`, `recordRetrievalAmount`, `travelAmount`, `travelNotes`, `quoteNotes`), `fee` (numeric — flat fee, cross-checked against `inputs` × catalog at edit time), `travel` (numeric — flat travel amount), `depositPct` (numeric, default `0`), `taxPct` (numeric, default `15` per NS HST seller-side — see Open Q resolution), `quoteValidDays` (integer, default `30`), `audienceSourceId` (fk → `audience_sources.id`, nullable), `subtotal`, `tax`, `total` (numeric), `lineItems` (jsonb — *computed* output snapshot derived from `inputs` × catalog at edit/send time; revisit normalization in 7.3), `previousQuoteId` (self-fk, nullable; for the revision chain), audit cols (`createdAt`, `updatedAt`, `createdBy`).
   - **No `campaignId` column on `quotes`** — the FK lives on the campaigns side as `campaigns.acceptedQuoteId` (added in this phase or 0037 Phase 3; nullable for backwards compat with pre-0037 campaigns).
-  - Index on `dealerId`, `(dealerId, status)` for the "find latest quote for this dealer" query, `acceptToken`, and `msaId`.
+  - Index on `dealerId`, `(dealerId, status)` for the "find latest quote for this dealer" query, `acceptToken` (UNIQUE), `msaId`, `audienceSourceId`, `previousQuoteId`, and the audit-actor FKs. CHECK constraints on `depositPct`/`taxPct` (0–100) + `quoteValidDays > 0`.
   - Same migration adds `campaigns.acceptedQuoteId` (fk → `quotes.id`, nullable; populated when an accepted quote spawns a delivery campaign).
   - **0035 dependency:** the `inputs` column is the contract that lets the invoice (7.3) recompute totals from the same inputs against the same catalog. Don't drop it from the schema even if the v1 quote PDF doesn't read it directly.
-- [ ] `pnpm db:generate` → `drizzle/0007_*.sql` (next after `0006_is_staff_member_excludes_dealer.sql`).
-- [ ] Apply migration via session pooler (per `db-conventions` connection rule).
-- [ ] Server Actions in `src/features/quotes/actions.ts`:
-  - `createQuote(dealerId, inputs, ...)` — `capabilityClient('quote:edit')` + `recordAudit('quote.create', ...)`. Returns the new quote's id. (Argument shape adjusted post-0037: Quote attaches to a Client/dealer at creation; `campaigns.acceptedQuoteId` gets populated on accept, not at creation.)
-  - `sendQuote(quoteId)` — `requireRole(...)`, render PDF (Phase 3), upload to GCS, send email (Phase 4), flip status to `sent`. Idempotent on the `sent` transition.
-  - `acceptQuote(quoteId)` — internal helper; called from the public accept route on token match.
-  - `declineQuote(quoteId)` — staff-side decline + public-side decline (token).
-- [ ] Vitest suite for each action (parser + side-effect mocks for GCS + Resend).
+- [x] `pnpm db:generate` → ~~`drizzle/0007_*.sql`~~ **`drizzle/0010_busy_warbound.sql`** (0007 was taken by 0038 rename; 0008+0009 by 0037 P2). Also extends `audit_action` enum with `quote.create` / `quote.sent` / `quote.accepted` / `quote.declined` via `ALTER TYPE … ADD VALUE`. Appended hand-written RLS block (mirrors `drizzle/0003_enable_rls.sql` baseline: `service_role` all + `authenticated` staff-only via `is_staff_member()`) — every public domain table now uniformly RLS-gated, same lesson learned from 0037 P2 eval.
+- [x] Apply migration via session pooler (per `db-conventions` connection rule). Journal `when` bumped from auto-generated `1778539391937` → `1778940000000` (= `0009` + 1 day) to keep ordering monotonic, same pattern as `0008`/`0009`.
+- [x] Server Actions in `src/features/quotes/actions.ts`:
+  - `createQuote(formData{dealerId})` — `capabilityClient('quote:edit')` + dealer-exists check + insert with `DEFAULT_QUOTE_INPUTS` snapshot + `recordAudit('quote.create')`. Returns `{ ok: true, quoteId }`. Composer (0035 P3) fills inputs via setters in a follow-up phase.
+  - `sendQuote(formData{quoteId})` — `capabilityClient('quote:edit')` + idempotent `draft → sent` flip + `recordAudit('quote.sent')`. Phase 3/Phase 4 wire the PDF render + email send + GCS persistence inline (TODOs flagged).
+  - `markQuoteAccepted(quoteId, updatedById?)` / `markQuoteDeclined(quoteId, updatedById?)` — internal helpers in `src/features/quotes/lifecycle.ts` (no `'use server'`; not Server Actions). Return `{ ok, transitioned }` so callers skip audit-emit on the idempotent path. The Phase 4 public route handler at `/quote/[token]` will call them after token validation.
+  - `declineQuote(formData{quoteId})` — staff-side decline Server Action. Calls `markQuoteDeclined`; emits `recordAudit('quote.declined', { source: 'staff' })` only when the helper reports `transitioned: true`.
+- [x] Vitest suite — `src/features/quotes/actions.test.ts`: 19 cases covering createQuote (3), sendQuote (5), declineQuote (3), markQuoteAccepted (5), markQuoteDeclined (3). Mocks `assertCan`, `getUser`, `recordAudit`, plus a captured-inserts/updates `db` stub matching `people/actions.test.ts`. Action-gate matrix extended with `createQuote`/`sendQuote`/`declineQuote` rows (ADMIN_OR_COACH).
 
 #### Phase 3: Quote PDF rendering
 - [ ] Wire `renderQuotePdf` into `sendQuote`: assemble `QuoteData` from the row (line items, totals, dealer info, dates), call the renderer, persist the buffer.

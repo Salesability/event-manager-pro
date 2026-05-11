@@ -27,7 +27,11 @@ export type AuditActionId =
   | 'user.role_changed'
   | 'user.deactivated'
   | 'dealer.archived'
-  | 'campaign.cancelled';
+  | 'campaign.cancelled'
+  | 'quote.create'
+  | 'quote.sent'
+  | 'quote.accepted'
+  | 'quote.declined';
 
 export type RecordAuditInput = {
   action: AuditActionId;

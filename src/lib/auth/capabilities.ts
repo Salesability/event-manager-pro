@@ -34,6 +34,7 @@ export type Capability =
   | 'campaign:create'
   | 'campaign:edit'
   | 'campaign:cancel'
+  | 'quote:edit'
   | 'email:send'
   | 'coach-availability:edit-own'
   | 'coach-availability:edit-any';
@@ -74,9 +75,11 @@ export function can(
       return profile.roles.some(isStaffAppRole);
     }
     case 'reports:view':
-    case 'availability:edit': {
+    case 'availability:edit':
+    case 'quote:edit': {
       // Admin || coach. Admin already passed via the shortcut above; check
-      // the membership roles for coach.
+      // the membership roles for coach. Coaches own their own quotes per the
+      // multi-tenant-by-coach model; admins can edit any quote.
       return profile.roles.includes('coach');
     }
     case 'admin:access':

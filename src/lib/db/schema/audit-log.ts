@@ -22,6 +22,10 @@ export const auditAction = pgEnum('audit_action', [
   'user.deactivated',
   'dealer.archived',
   'campaign.cancelled',
+  'quote.create',
+  'quote.sent',
+  'quote.accepted',
+  'quote.declined',
 ]);
 
 export const auditLog = pgTable(

@@ -9,6 +9,7 @@ export * from './contacts';
 export * from './dealer-contacts';
 export * from './dealers';
 export * from './master-service-agreements';
+export * from './quotes';
 export * from './team-member-roles';
 export * from './vehicle-ownerships';
 export * from './vehicles';

@@ -13,6 +13,7 @@
 import * as peopleActions from '@/features/people/actions';
 import * as scheduleActions from '@/features/schedule/actions';
 import * as emailActions from '@/features/email/actions';
+import * as quotesActions from '@/features/quotes/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
 
@@ -237,6 +238,28 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => scheduleActions.archiveAvailabilityBlock(fd()),
     expectedByRole: ADMIN_OR_COACH,
     note: 'availability:edit (admin || coach) + row-level ownership inside',
+  },
+
+  // ---- Quote actions (3) — admin OR coach ------------------------------
+  // `quote:edit` admits admin || coach (multi-tenant-by-coach: coaches own
+  // their own quotes; admins can edit any). Composer surface is admin+coach.
+  {
+    label: 'createQuote',
+    invoke: () => quotesActions.createQuote(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (composer surface)',
+  },
+  {
+    label: 'sendQuote',
+    invoke: () => quotesActions.sendQuote(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach',
+  },
+  {
+    label: 'declineQuote',
+    invoke: () => quotesActions.declineQuote(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (staff-side decline; public-side flows through route handler)',
   },
 
   // ---- Route Handlers (2) -----------------------------------------------

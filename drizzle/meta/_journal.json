@@ -71,6 +71,20 @@
       "when": 1778850000000,
       "tag": "0009_msa_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778940000000,
+      "tag": "0010_busy_warbound",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779030000000,
+      "tag": "0011_slim_wonder_man",
+      "breakpoints": true
     }
   ]
 }
