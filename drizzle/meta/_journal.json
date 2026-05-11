@@ -85,6 +85,27 @@
       "when": 1779030000000,
       "tag": "0011_slim_wonder_man",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779120000000,
+      "tag": "0012_round_skrulls",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1779206400000,
+      "tag": "0013_seed_service_items",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1779292800000,
+      "tag": "0014_service_items_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import * as peopleActions from '@/features/people/actions';
 import * as scheduleActions from '@/features/schedule/actions';
 import * as emailActions from '@/features/email/actions';
 import * as quotesActions from '@/features/quotes/actions';
+import * as servicesActions from '@/features/services/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
 
@@ -192,6 +193,26 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
   {
     label: 'archiveAudienceSource',
     invoke: () => scheduleActions.archiveAudienceSource(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'lookup:edit — admin-only',
+  },
+
+  // ---- Service catalog (3) — admin-only (lookup:edit) -------------------
+  {
+    label: 'createServiceItem',
+    invoke: () => servicesActions.createServiceItem(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'lookup:edit — admin-only (quote-composer catalog admin)',
+  },
+  {
+    label: 'updateServiceItem',
+    invoke: () => servicesActions.updateServiceItem(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'lookup:edit — admin-only',
+  },
+  {
+    label: 'archiveServiceItem',
+    invoke: () => servicesActions.archiveServiceItem(fd()),
     expectedByRole: ADMIN_ONLY,
     note: 'lookup:edit — admin-only',
   },
