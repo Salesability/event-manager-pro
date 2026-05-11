@@ -13,6 +13,18 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-11 — Commercial spine locked: accepted Quote = contract; MSA per-Client; campaign demoted to operational delivery (0037 Phase 1)
+
+- New wiki page [`docs/wiki/commercial-spine.md`](commercial-spine.md) — canonical reference for how a deal flows: Client → MSA → Quote → Event/Campaign → Invoice → Payment. Cites the Salesability MSA template clauses (§1.ii, §1.iii, §2.i, §2.ii, §2.iii, §3.i, §9) verbatim.
+- **Why no `orders` table** — MSA §1.iii: *"Each Quote issued by Salesability and accepted by the Client shall constitute a separate distinct and independent agreement and contractual obligation of the Parties hereto."* The accepted Quote IS the binding agreement; an intermediate `Order` would be vestigial.
+- **`master_service_agreements`** (built in 0037 Phase 2) — per-Client, 12-month term per §2.i. One row per signed MSA; renewals create new rows. Status enum (`pending | active | expired | terminated`). Carries `signedPdfStorageKey`, `dropboxSignDocumentId` (populated by 0025 Phase 7.2's send/sign flow), `templateVersion` (so future template revisions don't silently rebind existing signatories — OQ #6 working assumption).
+- **Commercial column move** (built in 0026 Phase 2 + dropped from campaigns in 0037 Phase 4): `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`, `audience_source_id` move off `campaigns` onto `quotes`. New `quotes.msa_id` FK joins each Quote to the MSA term it was accepted under.
+- **FK direction flip:** instead of `quotes.campaign_id` (current 0026 sketch), the FK lives on the campaigns side as `campaigns.accepted_quote_id` (nullable; populated when an accepted Quote spawns a delivery campaign). Pre-0037 campaigns without a quote stay valid.
+- **First-deal e-sig is a bundled envelope** (OQ #5 working assumption): one Dropbox Sign envelope with two documents (MSA + Quote PDF), each signed separately — so each archives at its own `signedPdfStorageKey`. NOT a merged PDF.
+- **Sibling-plan reconciliation:** 0025 / 0026 / 0035 plan docs edited in place to reflect the spine. 0026 Phase 2 sketch picks up the new `quotes` columns + `msaId` + flipped FK; 0035 Phase 3 picks up the "Send action checks active MSA on Client" gate; 0025 picks up a "Shared foundation" bullet pointing at 0037 and the note that 7.2 (MSA send/sign) is a runtime prerequisite for first-time Quote acceptance.
+- **Carry-forward (deferred chunks):** cancellation-fee math (50% × Quote within 21 days of Event start, OQ #4); daily MSA-expiry sweep job (OQ #3); buyer-province tax auto-compute (0026 OQ); MSA renewal UX beyond "Renew MSA" button (OQ #3 v1 manual flow).
+- The `master_service_agreements` table + `quotes` table sections are NOT yet added to `data-model.md` — those tables don't exist yet. Will land in 0037 Phase 2 (MSA) and when 0026 Phase 2 ships (quotes). `data-model.md`'s `campaigns` section got a forward-looking note pointing to `commercial-spine.md`.
+
 ## 2026-05-11 — `sales_lead_sources` lookup renamed → `audience_sources` (0038)
 
 - Lookup table `sales_lead_sources` → `audience_sources`; FK column `campaigns.sales_lead_source_id` → `campaigns.audience_source_id`; matching TS identifiers (`salesLeadSources`, `salesLeadSourceId`, `salesLeadSourceLabel`, `loadSalesLeadSources`, `createSalesLeadSource` / `updateSalesLeadSource` / `archiveSalesLeadSource`) all swept. Zero data migration (`ALTER TABLE … RENAME TO` preserves rows); 4 seeded labels and 13 campaign FK values intact.

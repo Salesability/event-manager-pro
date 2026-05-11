@@ -12,13 +12,13 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision doc + cross-plan reconciliation | Pending | - |
+| 1: Decision doc + cross-plan reconciliation | Done | - |
 | 2: `master_service_agreements` schema + migration | Pending | - |
 | 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Pending | - |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
 | 5: Tests + wiki sweep | Pending | - |
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 ## Code Anchors
 
@@ -50,13 +50,13 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 1: Decision doc + cross-plan reconciliation
 
-- [ ] Write `docs/wiki/commercial-spine.md` — new wiki reference page. Sections: *Entities and roles* (Client, MSA, Quote, Event/Campaign, Invoice, Payment); *Lifecycle* (lead → quote → MSA-bundle-or-already-signed → accept → campaign+invoice); *Why no `orders` table* (cite MSA §1.iii verbatim); *MSA renewal* (12-month, manual create-new-MSA in v1); *Cancellation fee* (50% × Quote total within 21 days of Event start — computed, deferred to a future chunk).
-- [ ] Update `docs/wiki/data-model.md`: new section for `master_service_agreements`; rewrite the `quotes` section to carry commercial columns + `msaId`; demote the `campaigns` section to "operational delivery / Event" framing; cross-link to `commercial-spine.md`.
-- [ ] Add an entry to `docs/wiki/log.md`: dated, headline "Commercial spine locked: accepted Quote = contract; MSA per-Client; campaign demoted to operational delivery", bullets on the column moves and FK direction flip.
-- [ ] Update `docs/strategy/index.md` or relevant strategy preamble if the legacy-app PRD describes a different spine — no body edits to imported docs, but a clarifying preamble note that the in-app spine has settled here.
-- [ ] **Reconcile `0026-quote-pdf/plan.md` Phase 2 sketch** — add columns `fee` `travel` `depositPct` `taxPct` `quoteValidDays` `audienceSourceId` `msaId` (nullable fk → `master_service_agreements.id`) to the `quotes` table; remove `campaignId`; note the new direction `campaigns.acceptedQuoteId` lives on the campaigns side. Mark 0026 Open Question on tax as partially resolved (NS HST 15% seller-side; buyer-province computation stays open).
-- [ ] **Reconcile `0035-quote-composer/plan.md` Phase 3 sketch** — composer Send action must check for an active MSA on the Client; if none, send routes into the bundled MSA + first-Quote flow (7.2 owns the e-sig envelope). For drafts/send, no MSA check is needed.
-- [ ] **Reconcile `0025-quote-to-payment/plan.md`** — add a "Shared foundation" bullet pointing to this chunk (0037); add a one-liner under sequencing that 7.2's MSA-signing flow is a runtime prerequisite for first-time Quote acceptance, not a post-quote step.
+- [x] Wrote `docs/wiki/commercial-spine.md` — new wiki reference page covering Entities & roles, Lifecycle (incl. happy path + less-happy paths), Why-no-`orders`-table (MSA §1.iii verbatim), MSA renewal (v1 manual), Cancellation fee (deferred), Per-Client one-MSA-at-a-time, Template versioning, What 0037 ships vs doesn't. Cross-linked from `docs/wiki/index.md` Concept pages list.
+- [x] ~~Update `docs/wiki/data-model.md` with new MSA + rewritten quotes sections, demote campaigns~~ — **scope adjusted:** the MSA and `quotes` tables don't exist yet (0037 Phase 2 + 0026 Phase 2 work). Per the wiki rule "describes what is true now," substantive sections wait for those tables. Instead, added a forward-looking note in the `campaigns` section pointing to `commercial-spine.md` and flagging that the commercial columns are moving. MSA section lands in 0037 Phase 2; `quotes` section lands when 0026 Phase 2 ships.
+- [x] Added an entry to `docs/wiki/log.md`: dated 2026-05-11, headline "Commercial spine locked: accepted Quote = contract; MSA per-Client; campaign demoted to operational delivery (0037 Phase 1)", bullets on the column moves, FK direction flip, sibling-plan reconciliation, and carry-forward.
+- [x] Updated `docs/strategy/roadmap.md` preamble (NOT body — imported PRD): added a `⚠ Spine settled differently in-app` callout in the import preamble flagging that the roadmap's Phase 3 sequential-flow description is superseded by the bundled MSA + first-Quote envelope in `commercial-spine.md`. Body untouched.
+- [x] **Reconciled `0026-quote-pdf/plan.md` Phase 2 sketch** — added commercial columns (`fee` `travel` `depositPct` `taxPct` `quoteValidDays` `audienceSourceId`) + `msaId` to the `quotes` table; removed `campaignId`; noted that `campaigns.acceptedQuoteId` lives on the campaigns side; updated `createQuote` signature to take `dealerId` not `campaignId`. Partially resolved the tax Open Question (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
+- [x] **Reconciled `0035-quote-composer/plan.md` Phase 3 + Phase 4** — composer Send action must check active MSA on Client; if none, route into bundled MSA + first-Quote flow (7.2 owns the e-sig envelope). Added explicit note that draft editing (`setQuoteInputs` / `setQuoteTax` / `setQuoteDealer`) does NOT require an MSA — the gate is on Send only.
+- [x] **Reconciled `0025-quote-to-payment/plan.md`** — added a top-level "Commercial spine" bullet to Shared Foundation pointing at 0037; added an "Event/Campaign demotion" line; added under Sequencing that 7.2's MSA send/sign flow is a runtime prerequisite for first-time Quote acceptance (not a post-quote step); added 0037 Phases 1–2 as an explicit prereq.
 
 #### Phase 2: `master_service_agreements` schema + migration
 
@@ -108,7 +108,7 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 ## Open questions
 
 - ~~**#1 — §2.ii termination-notice value `XX days` is unfilled** in the MSA template the user supplied.~~ **Resolved 2026-05-11: 30 days.** The MSA template's `XX days` placeholder is filled with `30`. Schema implication: the gap between `master_service_agreements.terminationNoticeDate` and `.terminationEffectiveDate` must be ≥ 30 days, validated at app-layer when 7.2 builds the termination UI. Carry-forward: someone with edit access to the actual MSA document needs to fill the `XX days` placeholder with `30` so the wording the Client signs matches the schema enforcement.
-- **#2 — Quote validity period.** Today's `campaigns.quoteValidDays` defaults to 30. Moves to `quotes.quoteValidDays`. **Working assumption: 30 days remains the default;** coaches can override per-quote. Confirm.
+- ~~**#2 — Quote validity period.**~~ **Resolved 2026-05-11: 30 days remains the default.** Today's `campaigns.quoteValidDays` defaults to 30; moves to `quotes.quoteValidDays` carrying the same default. Coaches can override per-quote.
 - **#3 — MSA renewal flow.** After 12 months an MSA expires. **Working assumption for v1: manual.** A coach clicks "Renew MSA" on the Client, which kicks off a fresh sign envelope. No auto-prompt 60 days out, no auto-renewal — defer to a later UX chunk. The `status='expired'` rollover does need a daily/nightly sweep job at some point; out of scope here.
 - **#4 — Cancellation-fee math.** MSA §2.iii says 50% of Quote total within 21 days of Event start. Lives in `src/lib/quotes/cancellation.ts` eventually; invoiced as a separate line item. **Out of scope for v1.** Flagged so it's not forgotten.
 - **#5 — Bundled e-sig envelope shape.** "Sign MSA + Accept first Quote" confirmed as a single envelope (user 2026-05-11). Two implementation choices for 7.2: (a) one Dropbox Sign envelope with two documents (MSA + Quote PDF), each requiring signature; (b) one merged PDF that concatenates them. **Working assumption: (a) — two documents in one envelope** so each can be archived separately at the right `signedPdfStorageKey` (MSA → `master_service_agreements.signedPdfStorageKey`; Quote → no signed-PDF storage today since the Quote PDF is unsigned; revisit if we want a counter-signed Quote).

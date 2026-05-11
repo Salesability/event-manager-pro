@@ -123,17 +123,19 @@ For each new file/method below, the builder reads the anchor first and matches i
   - **Output panel** (right or below): computed line-items table (read-only, with `ⓘ auto` badge on each row), subtotal, tax (coach can override the dollar amount only), total. Audience-overage and additional-day rows appear/disappear live as inputs change.
   - **No `+ Add line item` button in v1** — the catalog is the menu and the inputs are the only knobs. Custom one-off lines are a v2 add (Open Question #8).
   - **Save Draft** button — calls 0026's `createQuote` with the input snapshot + computed lines + `status='draft'`.
-- [ ] Composer-side Server Actions in `src/features/quotes/actions.ts`: `setQuoteInputs(quoteId, inputs: Partial<QuoteInputs>)` (single setter — coalesces all input edits), `setQuoteTax(quoteId, amount)`, `setQuoteDealer(quoteId, dealerId)`. Capability gate `quote:edit`. Each setter recomputes lines + totals server-side and persists them alongside the inputs.
+- [ ] Composer-side Server Actions in `src/features/quotes/actions.ts`: `setQuoteInputs(quoteId, inputs: Partial<QuoteInputs>)` (single setter — coalesces all input edits), `setQuoteTax(quoteId, amount)`, `setQuoteDealer(quoteId, dealerId)`. Capability gate `quote:edit`. Each setter recomputes lines + totals server-side and persists them alongside the inputs. **No MSA check on draft editing** (per [0037](../0037-commercial-spine-msa/plan.md)) — coaches can compose a Quote for any Client whether they have an active MSA or not; the MSA gate lives on Phase 4's Send action.
 - [ ] **Data-model handoff to 0026 Phase 2:** the `quotes` table gains an `inputs` jsonb column storing the typed `QuoteInputs` snapshot, plus the `lineItems` jsonb (computed output). Both are persisted on every input edit so the row is always self-consistent. **Note in 0026 plan:** Phase 2's table sketch needs the `inputs` column added before 0035 Phase 3 starts.
 - [ ] Entry-point button on `src/features/dealers/dealers-columns.tsx` (per-row "Quote" action) — links to `/quotes/new?dealerId=<id>`.
 - [ ] Entry-point button on the campaign-detail dialog (today's `EventDetail` modal in `/production`) — links to `/quotes/new?campaignId=<id>`.
 
 #### Phase 4: PDF preview pane + send wiring
 
-- [ ] **Depends on:** 0026 Phase 3 (`renderQuotePdf` wired to real `quotes` row) AND 0026 Phase 4 (`sendQuote` end-to-end).
+> **Commercial-spine alignment ([0037](../0037-commercial-spine-msa/plan.md), 2026-05-11):** the Send action **must check for an active MSA on the Client** before committing to the send path. Two routes: (a) Client has an active MSA → standard `sendQuote` (PDF-only email, public accept link); (b) Client has no active MSA (or it's expired/terminated) → route into the bundled MSA + first-Quote e-sig envelope (Dropbox Sign, two documents) — owned by 0025 Phase 7.2. **Draft editing (`setQuoteInputs`, `setQuoteTax`, `setQuoteDealer`) does NOT require an MSA** — the MSA gate is on Send only. See [`docs/wiki/commercial-spine.md`](../../wiki/commercial-spine.md) for the full lifecycle.
+
+- [ ] **Depends on:** 0026 Phase 3 (`renderQuotePdf` wired to real `quotes` row) AND 0026 Phase 4 (`sendQuote` end-to-end). Routing into the bundled-envelope path also depends on 0025 Phase 7.2 (`sendMsaPlusQuoteEnvelope` or equivalent).
 - [ ] PDF preview pane in `quote-composer.tsx`: live render via Server Action that returns the GCS-stored PDF URL (or a fresh render if the quote is in `draft` and hasn't been sent). Use `<iframe src=...>` for v1.
-- [ ] Send button: fires 0026's `sendQuote` action; on success, redirect to a success view + show "Sent at YYYY-MM-DD HH:MM" + Resend message ID.
-- [ ] Confirm dialog before send (shows recipient email + line-item count + total).
+- [ ] Send button decision: before firing, query the Client's MSA state. If an active MSA exists → fire 0026's `sendQuote`. If none → fire 0025 P7.2's `sendMsaPlusQuoteEnvelope` (bundles MSA + Quote PDF into one Dropbox Sign envelope). On success, redirect to a success view + show "Sent at YYYY-MM-DD HH:MM" + Resend / Dropbox Sign envelope ID.
+- [ ] Confirm dialog before send (shows recipient email + line-item count + total + whether this is a bundled MSA-included send or a plain Quote send).
 - [ ] After send, the composer becomes read-only (status flips `draft → sent`); coach can still revoke via a future "Resend" action that bumps the revision.
 
 #### Phase 5: Tests + smoke verification

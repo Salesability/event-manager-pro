@@ -19,6 +19,7 @@ Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf5
 Cross-cutting topics that span multiple tables/features.
 
 - [lifecycle.md](lifecycle.md) — record lifecycle and dependency: archive the relationship, not the entity. Selection vs display vs workflow-target query semantics.
+- [commercial-spine.md](commercial-spine.md) — how a deal flows: Client → MSA → Quote → Event/Campaign → Invoice → Payment. Why the accepted Quote *is* the contract (no `orders` table). MSA-per-Client, 12-month term. Bundled MSA + first-Quote e-sig envelope.
 
 (Candidate future pages: `calendar-algorithm.md` once the legacy ribbon-packing ports; `quote-lifecycle.md` once quote → contract → invoice → payment ships.)
 

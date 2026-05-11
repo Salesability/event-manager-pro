@@ -334,7 +334,7 @@ VIN is **no longer a useful person-level dedup signal** once we model transfers 
 
 Every campaign references one `dealer` (`ON DELETE RESTRICT` — never orphan a campaign), optionally a coach (`campaigns.coach_id` → `contacts.id`, `ON DELETE SET NULL`, app-enforced `team_member_roles(role='coach')`), and the two lookup tables (`campaign_styles`, `audience_sources`). Date range is enforced by a `CHECK` constraint (`end_date >= start_date`).
 
-Pricing fields are stored on the campaign (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) since these can vary per booking — the legacy schema put them on bookings too.
+Pricing fields are stored on the campaign (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) since these can vary per booking — the legacy schema put them on bookings too. **These columns are moving onto `quotes` per [`commercial-spine.md`](commercial-spine.md) (0037 / 0026 Phase 2);** once 0037 Phase 4 ships, this section is reframed as "operational delivery" — the campaign models the Event being run, the commercial terms live on the accepted Quote.
 
 `status` is the lifecycle (`draft → booked → cancelled → completed`) — **not** soft-delete. Use the lifecycle for state transitions; use `archived_at` (via `archivable`) only on reference data.
 
