@@ -41,7 +41,7 @@ Three things to know up front:
 
 2. **Domain rows are `bigint` IDs** via the `bigIdentity()` helper. There is no longer a uuid-PK domain table — `contacts.user_id` carries the auth uuid as a nullable FK rather than aliasing it as a PK. Tables exposed in dealer-portal URLs (`dealers`, `campaigns`) carry an additional `public_id` (nanoid 12-char URL-safe slug) for unguessable URLs — see *ID types* below.
 
-3. **Audit columns are pervasive.** `timestamps`, `actors` (`created_by_id`, `updated_by_id` → `auth.users`), and `archivable` (`archived_at`) are mixins from `_columns.ts`, applied to every editable domain table. Lookup tables (`campaign_styles`, `audience_sources`, `blocked_dates`) skip `actors` because they're admin-config, not domain data.
+3. **Audit columns are pervasive.** `timestamps` and `actors` (`created_by_id`, `updated_by_id` → `auth.users`) are mixins from `_columns.ts`, applied to every editable domain table. `archivable` (`archived_at`) is applied to most of them, but lifecycle-bearing tables (e.g. `campaigns` with its `status` enum, `master_service_agreements` with its `msa_status` enum) skip it — the lifecycle column carries terminal states like `cancelled` / `expired` / `terminated` instead. Lookup tables (`campaign_styles`, `audience_sources`, `blocked_dates`) skip `actors` because they're admin-config, not domain data.
 
 ## Layout
 
@@ -147,6 +147,7 @@ Edges left out of the diagrams for clarity:
 | `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`, plus inline day-of contact fields and service flags (see `campaigns` section below) |
 | `campaign_styles` | `id` bigint | `label` (UNIQUE), `sort_order` |
 | `audience_sources` | `id` bigint | `label` (UNIQUE), `sort_order` |
+| `master_service_agreements` | `id` bigint | `dealer_id` (FK dealers), `status` enum (`pending\|active\|expired\|terminated`), `signed_at`, `expires_at`, `signed_pdf_storage_key`, `dropbox_sign_document_id`, `termination_notice_date`, `termination_effective_date`, `template_version` — per-Client 12-month commercial frame; see [`commercial-spine.md`](commercial-spine.md) |
 | `availability_blocks` | `id` bigint | `start_date`, `end_date` (inclusive), `kind` enum (`statutory_holiday\|company_closure\|coach_unavailable`), `coach_id` (FK contacts, nullable; required when `kind='coach_unavailable'`), `region` (nullable, e.g. `CA-ON`), `reason`, `source` |
 
 ## Relationships
@@ -167,6 +168,7 @@ Domain edges:
 - `campaign_styles` 1:* `campaigns` via `campaigns.style_id`.
 - `audience_sources` 1:* `campaigns` via `campaigns.audience_source_id`.
 - `contacts` 0..1:* `availability_blocks` via `availability_blocks.coach_id` — per-coach unavailability (expected `team_member_roles(role='coach')`, app-enforced; null for `statutory_holiday` and `company_closure` rows). `ON DELETE CASCADE` — a hard-deleted coach takes their unavailability rows with them.
+- `dealers` 1:* `master_service_agreements` via `master_service_agreements.dealer_id` — per-Client 12-month commercial frame. `ON DELETE RESTRICT` — never orphan an MSA; archive the dealer instead. At most one row in `status='active'` per dealer is an app-layer invariant (no DB-level partial unique today). See [`commercial-spine.md`](commercial-spine.md).
 
 Contact edges:
 
@@ -175,7 +177,7 @@ Contact edges:
 
 Audit edges (every editable domain table):
 
-- `created_by_id`, `updated_by_id` → `auth.users` — `ON DELETE SET NULL`. Applied to `contacts`, `team_member_roles`, `dealer_contacts`, `contact_identifiers`, `dealers`, `vehicles`, `vehicle_ownerships`, `campaigns` via the `actors` mixin. Lookup tables skip this.
+- `created_by_id`, `updated_by_id` → `auth.users` — `ON DELETE SET NULL`. Applied to `contacts`, `team_member_roles`, `dealer_contacts`, `contact_identifiers`, `dealers`, `vehicles`, `vehicle_ownerships`, `campaigns`, `master_service_agreements` via the `actors` mixin. Lookup tables skip this.
 
 ## Identity & people
 
@@ -341,6 +343,33 @@ Pricing fields are stored on the campaign (`fee`, `travel`, `deposit_pct`, `tax_
 `campaigns.contact` / `campaigns.phone` / `campaigns.email` are inline text fields holding the day-of contact — likely to migrate to a `contact_id` FK to `contacts` (open question; see below).
 
 > Naming note: the STAR Standard's *Marketing Campaign* (BC 6) is what this table represents. Internally we still talk about "events" because the user's company runs event-marketing campaigns at dealerships — `campaigns` is the schema-level term, "event" is the day-to-day vocabulary. They mean the same thing.
+
+### `master_service_agreements` — per-Client commercial frame
+
+The 12-month master agreement signed once per Dealer (Client) — the legal frame under which any number of Quotes can be accepted during the term. Shipped 0037 Phase 2; sign / status-transition Server Actions land in 7.2 (Dropbox Sign envelope). See [`commercial-spine.md`](commercial-spine.md) for the full lifecycle and the reasoning behind one-MSA-per-Client + accepted-Quote-as-contract.
+
+Columns:
+
+- `dealer_id` (FK `dealers`, `ON DELETE RESTRICT`) — the Client this MSA binds. NOT NULL.
+- `status` enum (`pending | active | expired | terminated`, default `pending`) — lifecycle. Created `pending`; flips to `active` when Dropbox Sign reports the signed envelope; `expired` on the day `expires_at` passes; `terminated` when either party gives §2.ii notice and the effective date arrives.
+- `signed_at` (nullable until signed) — when Dropbox Sign returns the completed envelope.
+- `expires_at` (nullable until signed) — populated as `signed_at + 12 months` per MSA §2.i.
+- `signed_pdf_storage_key` (nullable) — pointer to the signed PDF in object storage; written by 7.2 on sign completion.
+- `dropbox_sign_document_id` (nullable) — external id from Dropbox Sign; written by 7.2.
+- `termination_notice_date` (nullable) — set when either party gives notice per §2.ii.
+- `termination_effective_date` (nullable) — must be ≥ 30 days after `termination_notice_date` (the MSA's `XX days` placeholder, resolved to 30 in 0037 Open Question #1; app-enforced).
+- `template_version` (NOT NULL) — short string keyed off the date the MSA template body was last revised (e.g. `2026-05`). Captures which wording the Client signed so future template revisions don't silently rebind existing signatories. Hardcoded server-side at sign-start time per 0037 OQ #6; no separate `msa_templates` table for v1.
+- mixins: `timestamps`, `actors` (no `archivable` — terminated/expired MSAs stay on the record).
+
+Indexes:
+
+- `(dealer_id)` — FK lookup.
+- `(dealer_id, status)` — the "find active MSA for this Client" gate used by the Quote-Send action (composer must check `status='active'` before allowing Send; absence routes through the bundled MSA + first-Quote e-sig envelope).
+- `(expires_at)` — for the future nightly expiry-sweep job that rolls `status='active'` rows to `'expired'` once their term ends.
+
+RLS: enabled in `drizzle/0009_msa_rls.sql` matching the baseline (`service_role` permit-all + `authenticated` staff-only via `is_staff_member()`).
+
+Out of scope here: the sign envelope itself (7.2), the cancellation-fee math (50% within 21 days of Event start per §2.iii; deferred), and the renewal UX (manual v1 — coach clicks "Renew MSA" on the Client).
 
 ### Lookup tables
 

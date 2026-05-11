@@ -57,6 +57,20 @@
       "when": 1778677200000,
       "tag": "0007_thin_thor",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778763600000,
+      "tag": "0008_bright_lockjaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778850000000,
+      "tag": "0009_msa_rls",
+      "breakpoints": true
     }
   ]
 }

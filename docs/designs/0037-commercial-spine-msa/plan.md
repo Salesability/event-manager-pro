@@ -13,12 +13,12 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision doc + cross-plan reconciliation | Done | `3b9b18e` |
-| 2: `master_service_agreements` schema + migration | Pending | - |
+| 2: `master_service_agreements` schema + migration | Done | - |
 | 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Pending | - |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
 | 5: Tests + wiki sweep | Pending | - |
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ## Code Anchors
 
@@ -60,14 +60,14 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 2: `master_service_agreements` schema + migration
 
-- [ ] **Schema decision: `master_service_agreements` columns** — `id` (bigIdentity), `dealerId` (fk → `dealers.id`, NOT NULL), `signedAt` (timestamp, nullable until signed), `expiresAt` (timestamp, nullable; populated as `signedAt + 12 months` on signing per MSA §2.i), `status` (`pgEnum('msa_status', ['pending', 'active', 'expired', 'terminated'])`), `signedPdfStorageKey` (text, nullable; populated by 7.2 on sign completion), `dropboxSignDocumentId` (text, nullable; external id from 7.2), `terminationNoticeDate` (timestamp, nullable; set when either party gives notice per §2.ii), `terminationEffectiveDate` (timestamp, nullable), `templateVersion` (text — captures which MSA wording was signed, so future template revisions don't silently rebind existing signatories), audit cols (`createdAt`, `updatedAt`, `createdById`, `updatedById`).
-- [ ] New schema file `src/lib/db/schema/master-service-agreements.ts` per anchor.
-- [ ] Index on `dealerId`, on `(dealerId, status)` for the "find active MSA for this client" query, and on `expiresAt` (for expiry-sweep jobs in the future).
-- [ ] `pnpm db:generate` → next sequential migration file.
-- [ ] Apply migration via session pooler (per `db-conventions`).
-- [ ] Add `master_service_agreements` to `src/lib/db/schema/index.ts` export.
-- [ ] **No Server Actions in this phase.** Sign / status-transition actions are owned by 7.2. This phase just stands up the table so 7.2 has somewhere to write.
-- [ ] Vitest: thin test confirming the table is reachable and the status enum is valid; full action tests land in 7.2.
+- [x] **Schema decision: `master_service_agreements` columns** — `id` (bigIdentity), `dealerId` (fk → `dealers.id`, NOT NULL), `signedAt` (timestamp, nullable until signed), `expiresAt` (timestamp, nullable; populated as `signedAt + 12 months` on signing per MSA §2.i), `status` (`pgEnum('msa_status', ['pending', 'active', 'expired', 'terminated'])`), `signedPdfStorageKey` (text, nullable; populated by 7.2 on sign completion), `dropboxSignDocumentId` (text, nullable; external id from 7.2), `terminationNoticeDate` (timestamp, nullable; set when either party gives notice per §2.ii), `terminationEffectiveDate` (timestamp, nullable), `templateVersion` (text — captures which MSA wording was signed, so future template revisions don't silently rebind existing signatories), audit cols (`createdAt`, `updatedAt`, `createdById`, `updatedById`).
+- [x] New schema file `src/lib/db/schema/master-service-agreements.ts` per anchor.
+- [x] Index on `dealerId`, on `(dealerId, status)` for the "find active MSA for this client" query, and on `expiresAt` (for expiry-sweep jobs in the future).
+- [x] `pnpm db:generate` → next sequential migration file (`drizzle/0008_bright_lockjaw.sql`).
+- [x] Apply migration via session pooler (per `db-conventions`).
+- [x] Add `master_service_agreements` to `src/lib/db/schema/index.ts` export.
+- [x] **No Server Actions in this phase.** Sign / status-transition actions are owned by 7.2. This phase just stands up the table so 7.2 has somewhere to write.
+- [x] Vitest: thin test confirming the table is reachable and the status enum is valid; full action tests land in 7.2.
 
 #### Phase 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`)
 
