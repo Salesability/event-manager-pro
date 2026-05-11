@@ -1,6 +1,8 @@
 # Calendar share UI — legacy parity — 2026-04-30
 
-Stub for sub-plan 5.8 of `docs/designs/0004-port-migration/plan.md`.
+**Closed:** 2026-05-11 — **abandoned without shipping.** Phase 5.8 of `docs/designs/closed/0004-port-migration/plan.md`. Per-coach share (`/share/coach/[id]`) shipped in port-migration Phase 4 covers the real use case; the full-calendar variant was deemed not worth the work. Plan body below stays as the historical record of the legacy-parity scope so future revivals (if "shareable read-only link" comes back per `docs/strategy/roadmap.md` Phase 2) have a starting point.
+
+Stub for sub-plan 5.8 of `docs/designs/closed/0004-port-migration/plan.md`.
 
 The legacy `🔗 Share` toolbar button (`deprecated/index.html:275`) opens `shareModal` (`deprecated/index.html:489–518`) — a single dialog that hands the user **two kinds of URL**:
 

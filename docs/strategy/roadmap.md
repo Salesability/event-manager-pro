@@ -9,7 +9,7 @@
 > | Roadmap phase | Where it lands in this repo |
 > |---|---|
 > | **Phase 1** — Google Calendar Integration | New chunk; not yet scaffolded. Equivalent server-side OAuth flow but via Server Actions, not Netlify Functions. |
-> | **Phase 2** — Shareable Production List | Partial overlap with `docs/designs/closed/0013-production-export/` (CSV/print) and the parked `docs/designs/0010-calendar-share-full/` work. The "shareable read-only link" idea may justify a new design chunk. |
+> | **Phase 2** — Shareable Production List | Partial overlap with `docs/designs/closed/0013-production-export/` (CSV/print) and the abandoned `docs/designs/closed/0010-calendar-share-full/` work (abandoned 2026-05-11 — per-coach share covers the immediate use case). If the "shareable read-only link" comes back, it warrants a fresh design chunk; 0010's plan body stays in `closed/` as a starting point. |
 > | **Phase 3** — Quote / MSA / E-Signature | This is the **"new surface"** in [`docs/wiki/architecture.md`](../wiki/architecture.md) §Migration roadmap step 5: Quote (PDF + email) → Contract (Dropbox Sign send + webhook → store signed PDF) → Invoice (Stripe) → Payment-received webhook. Same Dropbox Sign API key noted in the legacy app's compromised-secrets list (must be rotated — see `architecture.md` §Compromised legacy secrets). |
 >
 > **Why it lives here.** Pairs with [`vision.md`](vision.md) — vision is long-horizon platform expansion (DataLoader + Production Console + Event Manager); this roadmap is the near-term scheduling-app phases that come before any of that.

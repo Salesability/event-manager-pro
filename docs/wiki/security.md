@@ -104,7 +104,7 @@ The helper is **best-effort**: insert failures log via `console.error('audit ins
 ## Out of scope
 
 - **Pen-testing or external audit.** Worth doing before any public-form-of-record opens.
-- **Rate limiting on emails / actions.** Parked Codex High from 0011 — needs a dedicated chunk (outbox table + idempotency keys + per-user buckets). Don't ship `0016-book-your-event-intake` without it.
+- **Rate limiting on emails / actions.** Parked Codex High from 0011 — needs a dedicated chunk (outbox table + idempotency keys + per-user buckets). Required before web intake lands (`future/0016-book-your-event-intake`).
 - **Mandatory MFA for admins.** 0019 Phase 6 was parked because today's threat model (single-admin, ten-employee, closed-signup) doesn't earn the recovery-path foot-gun. Revisit before public launch.
 - **Boundary-discipline `secrets-boundary.test.ts`.** 0019 Phase 5 parked: `'server-only'` already throws at build time when a Client Component imports a server module; the proposed full-build-then-grep test is genuine belt-and-suspenders but slow and low marginal value. Revisit if a regression slips past `'server-only'` in practice.
 - **Per-row encryption for invoices/payments.** Will get its own threat model when payment data lands.

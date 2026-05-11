@@ -2,7 +2,7 @@
 
 **Started:** 2026-05-07
 
-Tracks the four-step billing loop that turns a booked event into signed legal docs, an invoice, and a paid status. Originally Phase 7 of `docs/designs/0004-port-migration/plan.md`; split out on 2026-05-07 into its own epic because each leaf is its own external-integration chunk with its own data model, webhook surface, and idempotency story — and the loop will outlive the port-migration tracker.
+Tracks the four-step billing loop that turns a booked event into signed legal docs, an invoice, and a paid status. Originally Phase 7 of `docs/designs/closed/0004-port-migration/plan.md` (umbrella closed 2026-05-11); split out on 2026-05-07 into its own epic because each leaf is its own external-integration chunk with its own data model, webhook surface, and idempotency story — and the loop now outlives the port-migration tracker.
 
 Done = a campaign can be sent end-to-end through quote → contract → invoice → payment, with branded PDFs, an e-signed MSA archived, Stripe invoicing, and a `Paid` status that flips on the Stripe webhook.
 

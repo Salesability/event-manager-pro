@@ -222,7 +222,7 @@ These are internal hygiene / sequencing / vendor-mechanics trade-offs. Listed fo
 
 **Recommendation.** **B** as the immediate move (text-only Salesability) — it aligns the *name* without waiting for assets, and is reversible. **A** as the target state once assets are sourced. Hold **C** only as long as the marketing-site CTA still points at the Squarespace form.
 
-**Decision needed by.** Before the marketing-site CTA is repointed at this app — i.e. before the [`0016-book-your-event-intake`](../0016-book-your-event-intake/plan.md) cutover phase, and before Phase 6 (`events.salesability.ca` flip), whichever lands first.
+**Decision needed by.** Before the marketing-site CTA is repointed at this app — i.e. before the [`0016-book-your-event-intake`](../../future/0016-book-your-event-intake/plan.md) cutover phase (deferred to v2 — see `docs/designs/future/`), and before Phase 6 (`events.salesability.ca` flip), whichever lands first.
 
 ---
 

@@ -1,6 +1,9 @@
 # Book Your Event — public intake & marketing-site integration
 
 **Started:** 2026-05-03
+**Deferred:** 2026-05-11 (moved to `docs/designs/future/`)
+
+> **Status (2026-05-11): Deferred to v2.** v1 funnel uses **manual in-app intake** via the existing `+ Book Event` modal in `/calendar` + 0035 Phase 2 inline-create dealer flow (`status='prospect'`, captures `acquiredVia`). The public-form, anti-bot, `PUBLIC_PATHS`, and Squarespace-cutover work in this chunk waits until web intake matters — un-defer trigger: prospect volume justifies replacing manual-entry-from-Shannon, OR the marketing-site CTA is ready to point at the app. To un-defer, `mv` this folder back to the top level of `docs/designs/` and reverse the cross-reference sweep (see CLAUDE.md `### Deferring a chunk`). The body below stays as-written from 2026-05-03 for historical context; some details (e.g. status enum values, schema assumptions) may need a refresh on resume.
 
 The "Book Your Event" CTA on [`salesability.ca/book-your-event`](https://www.salesability.ca/book-your-event) is the planned public entry point into this app (per project memory `project_entry_point.md`). Today the page hosts a Squarespace form: prospect submits → email goes to Shannon → manual follow-up → manual campaign creation. "Tight integration" means our app *owns* the booking-form surface so submissions land in our DB as first-class records, and Squarespace's role is reduced to a redirect.
 
@@ -10,7 +13,7 @@ The "Book Your Event" CTA on [`salesability.ca/book-your-event`](https://www.sal
 
 These are real forks. Most should be raised with the user before the public form is locked in. **#1 is the gating decision** — without brand alignment, the seam between the marketing site and the app reads as two different products and "tight integration" doesn't deliver its promise.
 
-1. **Branding (gating).** This work depends on Q10 in [`../0004-port-migration/open-questions.md`](../0004-port-migration/open-questions.md) (SaleDay vs Salesability mark). A prospect on a "Salesability Events" marketing page who clicks "Book Your Event" must not land on a "SaleDay Events"-branded form — that breaks the integration premise. Resolve Q10 *before* Phase 2 starts, or accept the brand mismatch as a temporary state with a planned swap before Phase 5 cutover. Per the user 2026-05-03, this is the *more important* of the two open threads here.
+1. **Branding (gating).** This work depends on Q10 in [`../../closed/0004-port-migration/open-questions.md`](../../closed/0004-port-migration/open-questions.md) (SaleDay vs Salesability mark). A prospect on a "Salesability Events" marketing page who clicks "Book Your Event" must not land on a "SaleDay Events"-branded form — that breaks the integration premise. Resolve Q10 *before* Phase 2 starts, or accept the brand mismatch as a temporary state with a planned swap before Phase 5 cutover. Per the user 2026-05-03, this is the *more important* of the two open threads here.
 2. **Form fields — confirm vs the current Squarespace form.** Snapshot of the live form taken 2026-05-03 (see [`squarespace-form-2026-05-03.png`](squarespace-form-2026-05-03.png)):
 
    | Field | Type | Required? |

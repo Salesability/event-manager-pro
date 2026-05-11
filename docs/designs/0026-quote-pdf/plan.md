@@ -63,8 +63,9 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 2: Quote data model + Server Actions
 - [ ] New schema file `src/lib/db/schema/quotes.ts`:
-  - `quotes` table: `id` (uuid), `campaignId` (fk → `campaigns.id`), `status` (enum `draft|sent|accepted|declined`), `acceptToken` (uuid, unique — used for the public accept/decline link), `pdfStorageKey` (nullable; populated when sent), `subtotal`, `tax`, `total` (numeric), `lineItems` (jsonb v1; revisit normalization in 7.3), `previousQuoteId` (self-fk, nullable; for the revision chain), audit cols (`createdAt`, `updatedAt`, `createdBy`).
-  - Index on `campaignId` and on `acceptToken`.
+  - `quotes` table: `id` (uuid), `campaignId` (fk → `campaigns.id`, **nullable** per 0035 Open Question #7 — pre-campaign quotes valid), `dealerId` (fk → `dealers.id`, also nullable since `campaignId` already implies a dealer when present), `status` (enum `draft|sent|accepted|declined`), `acceptToken` (uuid, unique — used for the public accept/decline link), `pdfStorageKey` (nullable; populated when sent), `inputs` (jsonb — typed `QuoteInputs` snapshot; see [0035 Phase 3](../0035-quote-composer/plan.md) for the shape: `audienceSize`, `eventDays`, `bdcCallCount`, `letterCount`, `digitalCount`, `recordRetrievalAmount`, `travelAmount`, `travelNotes`, `quoteNotes`), `subtotal`, `tax`, `total` (numeric), `lineItems` (jsonb — *computed* output snapshot derived from `inputs` × catalog at edit/send time; revisit normalization in 7.3), `previousQuoteId` (self-fk, nullable; for the revision chain), audit cols (`createdAt`, `updatedAt`, `createdBy`).
+  - Index on `campaignId`, `dealerId`, and on `acceptToken`.
+  - **0035 dependency:** the `inputs` column is the contract that lets the invoice (7.3) recompute totals from the same inputs against the same catalog. Don't drop it from the schema even if the v1 quote PDF doesn't read it directly.
 - [ ] `pnpm db:generate` → `drizzle/0007_*.sql` (next after `0006_is_staff_member_excludes_dealer.sql`).
 - [ ] Apply migration via session pooler (per `db-conventions` connection rule).
 - [ ] Server Actions in `src/features/quotes/actions.ts`:

@@ -13,6 +13,18 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-11 — closed `0004-port-migration` umbrella + `0010-calendar-share-full` abandoned
+
+- Port-migration tracker shipped end-to-end. Phases 1–4 + sub-phases 5.1–5.6 had long since shipped; 5.7 (Booking summary & reports) shipped 2026-05-07 via the now-closed `0014-summary-reports/plan.md` but the umbrella's tracker still showed `Pending` — corrected to `Done` (`155df20`).
+- **5.8 (Full-calendar share link, `0010-calendar-share-full/plan.md`) dropped without shipping** per user 2026-05-11: per-coach share (`/share/coach/[id]`, shipped in port-migration Phase 4) covers the real use case; the full-calendar variant was not worth the work. 0010 also moved to `closed/` with an abandoned-without-shipping header — body stays as a starting point if "shareable read-only link" comes back per `docs/strategy/roadmap.md` Phase 2.
+- Both folders moved to `docs/designs/closed/`. Cross-refs swept in `docs/designs/0025-quote-to-payment/plan.md`, `docs/strategy/roadmap.md`, today's other log entry (above), and `docs/designs/CURRENT.md` (0004 parked bullet removed; History entry added). Inside the moved 0004 plan, `../0025-…` refs climbed to `../../0025-…` (0025 stayed at top level); `../closed/X` refs collapsed to `../X` (now sibling under `closed/`); `../0010-…` ref unchanged (0010 also moved). Link-walk verified clean.
+
+## 2026-05-11 — funnel review: `docs/designs/future/` folder + 0016 deferred to v2
+
+- Funnel review surfaced a folder-organization gap: `docs/designs/` had no place for "scaffolded but explicitly waiting on a trigger event" — `closed/` means done, `CURRENT.md` **Parked** means queued-for-soon. Added `docs/designs/future/` as the third bucket. Convention captured in `CLAUDE.md` `### Deferring a chunk` section, parallel to `### Closing a chunk`. Top-level `ls docs/designs/` now shows only in-flight work.
+- Moved `0016-book-your-event-intake` → `future/0016-book-your-event-intake`. v1 funnel uses manual in-app intake (existing `+ Book Event` booking modal + 0035 Phase 2 inline-create dealer flow); web intake / Squarespace cutover waits until prospect volume justifies it. Cross-refs swept in `docs/designs/closed/0004-port-migration/open-questions.md` (0004 also closed 2026-05-11 — see entry above), `docs/strategy/vision.md`, `docs/wiki/security.md`, and `docs/designs/CURRENT.md` (new **Future:** field).
+- Same review collapsed 0037 Open Question #7 (no upstream lead carries `salesLeadSourceId` forward — set at composer time) and added `dealers.acquiredVia` (nullable text) to 0035 Phase 2. Surfaced that the existing `sales_lead_sources` lookup was being overloaded between *audience source* (consumer list used in a dealer's campaign — e.g. PBS, Previous Buyers) and *acquisition source* (how the dealership found Salesability — e.g. referral, trade show). Split the second concept off onto `dealers.acquiredVia`; the lookup retains its original audience-source meaning.
+
 ## 2026-05-09 — auth.md + security.md: capabilities-only at gates (0036 shipped)
 
 - **Durable convention now declared:** every page, layout, Route Handler, and Server Action uses the capability layer for its decision — `assertCan(cap)` imperative or `capabilityClient(cap)` middleware. The role↔capability matrix in `src/lib/auth/capabilities.ts` is the single source of truth; roles are user identity + matrix input, but no app-code call site checks them directly. [auth.md → Route gating](auth.md#route-gating-rbac) rewritten from "four layers including `requireRole(role | role[])`" to "three layers, capability-keyed at the action gate." [security.md § 3](security.md) similarly rewrote the Action layer description.
