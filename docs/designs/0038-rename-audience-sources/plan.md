@@ -14,8 +14,8 @@ Rename the `sales_lead_sources` lookup table → `audience_sources` (and `campai
 |-------|--------|--------|
 | 1: Schema rename + Drizzle migration | Done | `1b64d12` |
 | 2: Sweep call sites (code) | Done | `1b64d12` |
-| 3: Wiki + cross-plan reconciliation | Done | - |
-| 4: Tests + smoke verification | Done | - |
+| 3: Wiki + cross-plan reconciliation | Done | `31f0ca2` |
+| 4: Tests + smoke verification | Done | `31f0ca2` |
 
 ## Code Anchors
 
