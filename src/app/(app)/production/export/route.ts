@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       c.dealerName,
       formatContact(c),
       c.styleLabel ?? '',
-      c.salesLeadSourceLabel ?? '',
+      c.audienceSourceLabel ?? '',
       c.qtyRecords != null ? String(c.qtyRecords) : '',
       c.smsEmail != null ? String(c.smsEmail) : '',
       c.letters != null ? String(c.letters) : '',

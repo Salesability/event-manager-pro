@@ -65,7 +65,7 @@ export type CampaignInput = {
   dealerId: number;
   coachId: number | null;
   styleId: number | null;
-  salesLeadSourceId: number | null;
+  audienceSourceId: number | null;
   qtyRecords: number | null;
   smsEmail: number | null;
   letters: number | null;
@@ -109,7 +109,7 @@ export function parseCampaignInput(formData: FormData): CampaignInput | { error:
     dealerId,
     coachId: parseOptionalId(formData, 'coachId'),
     styleId: parseOptionalId(formData, 'styleId'),
-    salesLeadSourceId: parseOptionalId(formData, 'salesLeadSourceId'),
+    audienceSourceId: parseOptionalId(formData, 'audienceSourceId'),
     qtyRecords,
     smsEmail,
     letters,

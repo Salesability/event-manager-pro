@@ -109,7 +109,7 @@ function toFullRow(c: Campaign): string[] {
     c.dealerName,
     [c.contact, c.phone, c.email].filter(Boolean).join(' / '),
     c.styleLabel ?? '',
-    c.salesLeadSourceLabel ?? '',
+    c.audienceSourceLabel ?? '',
     c.qtyRecords != null ? String(c.qtyRecords) : '',
     c.smsEmail != null ? String(c.smsEmail) : '',
     c.letters != null ? String(c.letters) : '',

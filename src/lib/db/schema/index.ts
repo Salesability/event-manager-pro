@@ -1,3 +1,4 @@
+export * from './audience-sources';
 export * from './audit-log';
 export * from './auth';
 export * from './availability-blocks';
@@ -7,7 +8,6 @@ export * from './contact-identifiers';
 export * from './contacts';
 export * from './dealer-contacts';
 export * from './dealers';
-export * from './sales-lead-sources';
 export * from './team-member-roles';
 export * from './vehicle-ownerships';
 export * from './vehicles';

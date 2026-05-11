@@ -224,7 +224,7 @@ describe('parseCampaignInput', () => {
       dealerId: 7,
       coachId: null,
       styleId: null,
-      salesLeadSourceId: null,
+      audienceSourceId: null,
       qtyRecords: null,
       smsEmail: null,
       letters: null,
@@ -241,7 +241,7 @@ describe('parseCampaignInput', () => {
       makeForm({
         coachId: '12',
         styleId: '3',
-        salesLeadSourceId: '5',
+        audienceSourceId: '5',
         qtyRecords: '500',
         smsEmail: '0',
         letters: '120',
@@ -255,7 +255,7 @@ describe('parseCampaignInput', () => {
     expect(result).toMatchObject({
       coachId: 12,
       styleId: 3,
-      salesLeadSourceId: 5,
+      audienceSourceId: 5,
       qtyRecords: 500,
       smsEmail: 0,
       letters: 120,

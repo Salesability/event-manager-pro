@@ -111,7 +111,7 @@ const bookedCampaign = {
   startDate: '2026-06-01',
   endDate: '2026-06-03',
   styleLabel: 'VIP',
-  salesLeadSourceLabel: 'PBS',
+  audienceSourceLabel: 'PBS',
   coachId: null,
   qtyRecords: 100,
   smsEmail: 50,

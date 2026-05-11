@@ -14,7 +14,7 @@ import { actors, bigIdentity, timestamps } from './_columns';
 import { campaignStyles } from './campaign-styles';
 import { contacts } from './contacts';
 import { dealers } from './dealers';
-import { salesLeadSources } from './sales-lead-sources';
+import { audienceSources } from './audience-sources';
 
 export const campaignStatus = pgEnum('campaign_status', [
   'draft',
@@ -35,8 +35,8 @@ export const campaigns = pgTable(
       onDelete: 'set null',
     }),
     styleId: bigint('style_id', { mode: 'number' }).references(() => campaignStyles.id),
-    salesLeadSourceId: bigint('sales_lead_source_id', { mode: 'number' }).references(
-      () => salesLeadSources.id
+    audienceSourceId: bigint('audience_source_id', { mode: 'number' }).references(
+      () => audienceSources.id
     ),
     startDate: date('start_date').notNull(),
     endDate: date('end_date').notNull(),
@@ -62,7 +62,7 @@ export const campaigns = pgTable(
     index('campaigns_dealer_id_idx').on(table.dealerId),
     index('campaigns_coach_id_idx').on(table.coachId),
     index('campaigns_style_id_idx').on(table.styleId),
-    index('campaigns_sales_lead_source_id_idx').on(table.salesLeadSourceId),
+    index('campaigns_audience_source_id_idx').on(table.audienceSourceId),
     index('campaigns_start_date_idx').on(table.startDate),
     index('campaigns_created_by_id_idx').on(table.createdById),
     index('campaigns_updated_by_id_idx').on(table.updatedById),

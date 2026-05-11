@@ -93,8 +93,8 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
             }
           />
         )}
-        {campaign.salesLeadSourceLabel && (
-          <Row label="Data Source" value={campaign.salesLeadSourceLabel} />
+        {campaign.audienceSourceLabel && (
+          <Row label="Data Source" value={campaign.audienceSourceLabel} />
         )}
         {campaign.qtyRecords != null && <Row label="Qty Records" value={String(campaign.qtyRecords)} />}
         {campaign.smsEmail != null && <Row label="SMS/Email" value={String(campaign.smsEmail)} />}

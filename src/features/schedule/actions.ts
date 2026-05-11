@@ -12,7 +12,7 @@ import {
   contacts,
   dealerContacts,
   dealers,
-  salesLeadSources,
+  audienceSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
@@ -473,7 +473,7 @@ export const archiveCampaignStyle = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
-export const createSalesLeadSource = capabilityClient('lookup:edit')
+export const createAudienceSource = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
     const label = parseLookupLabel(formData);
@@ -481,12 +481,12 @@ export const createSalesLeadSource = capabilityClient('lookup:edit')
 
     try {
       const restored = await db
-        .update(salesLeadSources)
+        .update(audienceSources)
         .set({ archivedAt: null })
-        .where(and(eq(salesLeadSources.label, label), isNotNull(salesLeadSources.archivedAt)))
-        .returning({ id: salesLeadSources.id });
+        .where(and(eq(audienceSources.label, label), isNotNull(audienceSources.archivedAt)))
+        .returning({ id: audienceSources.id });
       if (!restored.length) {
-        await db.insert(salesLeadSources).values({ label });
+        await db.insert(audienceSources).values({ label });
       }
     } catch (err) {
       return lookupActionResult(err);
@@ -496,7 +496,7 @@ export const createSalesLeadSource = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
-export const updateSalesLeadSource = capabilityClient('lookup:edit')
+export const updateAudienceSource = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
     const id = parseId(formData);
@@ -506,10 +506,10 @@ export const updateSalesLeadSource = capabilityClient('lookup:edit')
 
     try {
       const result = await db
-        .update(salesLeadSources)
+        .update(audienceSources)
         .set({ label })
-        .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)))
-        .returning({ id: salesLeadSources.id });
+        .where(and(eq(audienceSources.id, id), isNull(audienceSources.archivedAt)))
+        .returning({ id: audienceSources.id });
       if (!result.length) return { error: 'Data source not found.' };
     } catch (err) {
       return lookupActionResult(err);
@@ -519,16 +519,16 @@ export const updateSalesLeadSource = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
-export const archiveSalesLeadSource = capabilityClient('lookup:edit')
+export const archiveAudienceSource = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
     const id = parseId(formData);
     if (id == null) return { error: 'Invalid data source id.' };
 
     await db
-      .update(salesLeadSources)
+      .update(audienceSources)
       .set({ archivedAt: new Date() })
-      .where(and(eq(salesLeadSources.id, id), isNull(salesLeadSources.archivedAt)));
+      .where(and(eq(audienceSources.id, id), isNull(audienceSources.archivedAt)));
 
     revalidateLookupViews();
     return { ok: true };

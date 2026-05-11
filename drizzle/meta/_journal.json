@@ -50,6 +50,13 @@
       "when": 1778590800000,
       "tag": "0006_is_staff_member_excludes_dealer",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778677200000,
+      "tag": "0007_thin_thor",
+      "breakpoints": true
     }
   ]
 }

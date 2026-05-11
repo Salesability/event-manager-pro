@@ -32,7 +32,7 @@ const RLS_TABLES = [
   'contacts',
   'dealer_contacts',
   'dealers',
-  'sales_lead_sources',
+  'audience_sources',
   'team_member_roles',
   'vehicle_ownerships',
   'vehicles',

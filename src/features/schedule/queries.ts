@@ -10,7 +10,7 @@ import {
   contacts,
   dealerContacts,
   dealers,
-  salesLeadSources,
+  audienceSources,
   teamMemberRoles,
 } from '@/lib/db/schema';
 
@@ -49,8 +49,8 @@ export type Campaign = {
   coachName: string | null;
   styleId: number | null;
   styleLabel: string | null;
-  salesLeadSourceId: number | null;
-  salesLeadSourceLabel: string | null;
+  audienceSourceId: number | null;
+  audienceSourceLabel: string | null;
   qtyRecords: number | null;
   smsEmail: number | null;
   letters: number | null;
@@ -343,8 +343,8 @@ export async function loadCampaigns(): Promise<Campaign[]> {
       coachLastName: contacts.lastName,
       styleId: campaigns.styleId,
       styleLabel: campaignStyles.label,
-      salesLeadSourceId: campaigns.salesLeadSourceId,
-      salesLeadSourceLabel: salesLeadSources.label,
+      audienceSourceId: campaigns.audienceSourceId,
+      audienceSourceLabel: audienceSources.label,
       qtyRecords: campaigns.qtyRecords,
       smsEmail: campaigns.smsEmail,
       letters: campaigns.letters,
@@ -358,7 +358,7 @@ export async function loadCampaigns(): Promise<Campaign[]> {
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
     .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
     .leftJoin(campaignStyles, eq(campaignStyles.id, campaigns.styleId))
-    .leftJoin(salesLeadSources, eq(salesLeadSources.id, campaigns.salesLeadSourceId))
+    .leftJoin(audienceSources, eq(audienceSources.id, campaigns.audienceSourceId))
     .orderBy(campaigns.startDate);
 
   return rows.map((r) => ({
@@ -377,8 +377,8 @@ export async function loadCampaigns(): Promise<Campaign[]> {
         : null,
     styleId: r.styleId,
     styleLabel: r.styleLabel,
-    salesLeadSourceId: r.salesLeadSourceId,
-    salesLeadSourceLabel: r.salesLeadSourceLabel,
+    audienceSourceId: r.audienceSourceId,
+    audienceSourceLabel: r.audienceSourceLabel,
     qtyRecords: r.qtyRecords,
     smsEmail: r.smsEmail,
     letters: r.letters,
@@ -406,8 +406,8 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
       coachLastName: contacts.lastName,
       styleId: campaigns.styleId,
       styleLabel: campaignStyles.label,
-      salesLeadSourceId: campaigns.salesLeadSourceId,
-      salesLeadSourceLabel: salesLeadSources.label,
+      audienceSourceId: campaigns.audienceSourceId,
+      audienceSourceLabel: audienceSources.label,
       qtyRecords: campaigns.qtyRecords,
       smsEmail: campaigns.smsEmail,
       letters: campaigns.letters,
@@ -421,7 +421,7 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
     .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
     .leftJoin(campaignStyles, eq(campaignStyles.id, campaigns.styleId))
-    .leftJoin(salesLeadSources, eq(salesLeadSources.id, campaigns.salesLeadSourceId))
+    .leftJoin(audienceSources, eq(audienceSources.id, campaigns.audienceSourceId))
     .where(eq(campaigns.id, id))
     .limit(1);
   if (!row) return null;
@@ -441,8 +441,8 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
         : null,
     styleId: row.styleId,
     styleLabel: row.styleLabel,
-    salesLeadSourceId: row.salesLeadSourceId,
-    salesLeadSourceLabel: row.salesLeadSourceLabel,
+    audienceSourceId: row.audienceSourceId,
+    audienceSourceLabel: row.audienceSourceLabel,
     qtyRecords: row.qtyRecords,
     smsEmail: row.smsEmail,
     letters: row.letters,
@@ -462,12 +462,12 @@ export async function loadCampaignStyles(): Promise<LookupOption[]> {
     .orderBy(campaignStyles.sortOrder, campaignStyles.label);
 }
 
-export async function loadSalesLeadSources(): Promise<LookupOption[]> {
+export async function loadAudienceSources(): Promise<LookupOption[]> {
   return db
-    .select({ id: salesLeadSources.id, label: salesLeadSources.label })
-    .from(salesLeadSources)
-    .where(isNull(salesLeadSources.archivedAt))
-    .orderBy(salesLeadSources.sortOrder, salesLeadSources.label);
+    .select({ id: audienceSources.id, label: audienceSources.label })
+    .from(audienceSources)
+    .where(isNull(audienceSources.archivedAt))
+    .orderBy(audienceSources.sortOrder, audienceSources.label);
 }
 
 // Shared shape for the three group-by aggregations on the /reports surface.

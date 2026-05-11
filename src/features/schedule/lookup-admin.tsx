@@ -7,11 +7,11 @@ import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveCampaignStyle,
-  archiveSalesLeadSource,
+  archiveAudienceSource,
   createCampaignStyle,
-  createSalesLeadSource,
+  createAudienceSource,
   updateCampaignStyle,
-  updateSalesLeadSource,
+  updateAudienceSource,
 } from '@/features/schedule/actions';
 import type { LookupOption } from '@/features/schedule/queries';
 
@@ -44,9 +44,9 @@ const configs: Record<
     title: 'Data Sources',
     empty: 'No data sources yet.',
     addLabel: 'Add Source',
-    createAction: createSalesLeadSource,
-    updateAction: updateSalesLeadSource,
-    archiveAction: archiveSalesLeadSource,
+    createAction: createAudienceSource,
+    updateAction: updateAudienceSource,
+    archiveAction: archiveAudienceSource,
   },
 };
 

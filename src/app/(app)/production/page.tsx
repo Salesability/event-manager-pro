@@ -4,7 +4,7 @@ import {
   loadCampaigns,
   loadCoaches,
   loadDealers,
-  loadSalesLeadSources,
+  loadAudienceSources,
   type Campaign,
   type Coach,
   type Dealer,
@@ -28,7 +28,7 @@ export default async function ProductionPage({ searchParams }: Props) {
     loadDealers(),
     loadCoaches(),
     loadCampaignStyles(),
-    loadSalesLeadSources(),
+    loadAudienceSources(),
   ]);
   const filtered = filterCampaigns(all, { q: q ?? '', status: status ?? '', showCancelled });
 
@@ -144,7 +144,7 @@ function CampaignRow({
         )}
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
-        {campaign.salesLeadSourceLabel ?? '—'}
+        {campaign.audienceSourceLabel ?? '—'}
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
         {fmtNum(campaign.qtyRecords)}

@@ -1,10 +1,10 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
-import { loadCampaignStyles, loadSalesLeadSources } from '@/features/schedule/queries';
+import { loadCampaignStyles, loadAudienceSources } from '@/features/schedule/queries';
 
 export default async function LookupsPage() {
   await assertCan('admin:access'); // expected: server-only
-  const [styles, sources] = await Promise.all([loadCampaignStyles(), loadSalesLeadSources()]);
+  const [styles, sources] = await Promise.all([loadCampaignStyles(), loadAudienceSources()]);
 
   return (
     <div className="flex flex-col gap-6">

@@ -147,11 +147,11 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       enableSorting: true,
     },
     {
-      id: 'salesLeadSourceLabel',
-      accessorFn: (c) => c.salesLeadSourceLabel ?? '',
+      id: 'audienceSourceLabel',
+      accessorFn: (c) => c.audienceSourceLabel ?? '',
       header: 'Data Source',
       cell: ({ row }) =>
-        row.original.salesLeadSourceLabel ?? <span className="text-stone-400">—</span>,
+        row.original.audienceSourceLabel ?? <span className="text-stone-400">—</span>,
       enableSorting: true,
     },
     {

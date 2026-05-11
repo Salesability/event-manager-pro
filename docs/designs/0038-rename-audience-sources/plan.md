@@ -12,8 +12,8 @@ Rename the `sales_lead_sources` lookup table → `audience_sources` (and `campai
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema rename + Drizzle migration | Pending | - |
-| 2: Sweep call sites (code) | Pending | - |
+| 1: Schema rename + Drizzle migration | Done | - |
+| 2: Sweep call sites (code) | Done | - |
 | 3: Wiki + cross-plan reconciliation | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -37,7 +37,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/conventions.md` — Drizzle migrations via session pooler.
 - `db-conventions` skill — invoke before running the schema-rename migration.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - **Zero data migration.** The `INSERT INTO sales_lead_sources` rows survive the `RENAME` intact — row contents unchanged.
@@ -48,27 +48,36 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 1: Schema rename + Drizzle migration
 
-- [ ] `git mv src/lib/db/schema/sales-lead-sources.ts src/lib/db/schema/audience-sources.ts`.
-- [ ] In the moved file: rename exported const `salesLeadSources` → `audienceSources` and the `pgTable('sales_lead_sources', ...)` first-arg → `'audience_sources'`. Keep all column definitions identical.
-- [ ] In `src/lib/db/schema/campaigns.ts`: rename the import line, the `salesLeadSourceId` column block, the `salesLeadSources` reference in `.references(() => ...)`, and the index name (`campaigns_sales_lead_source_id_idx` → `campaigns_audience_source_id_idx`). DB column name (`sales_lead_source_id` → `audience_source_id`) renames in the same migration.
-- [ ] In `src/lib/db/schema/index.ts`: update the re-export to point at the renamed file/const.
-- [ ] `pnpm db:generate`. **Verify** the generated `drizzle/00XX_*.sql` uses `ALTER TABLE ... RENAME TO` + `ALTER TABLE ... RENAME COLUMN` — not DROP + CREATE. If Drizzle picks the destructive path, hand-edit into RENAME statements.
-- [ ] Apply migration via the session pooler (per `db-conventions`).
-- [ ] Sanity-check via `psql`: `SELECT count(*) FROM audience_sources;` returns the pre-rename row count (4 in the dev DB); `SELECT count(*) FROM campaigns WHERE audience_source_id IS NOT NULL;` matches the pre-rename count.
+- [x] `git mv src/lib/db/schema/sales-lead-sources.ts src/lib/db/schema/audience-sources.ts`.
+- [x] In the moved file: rename exported const `salesLeadSources` → `audienceSources` and the `pgTable('sales_lead_sources', ...)` first-arg → `'audience_sources'`. Keep all column definitions identical.
+- [x] In `src/lib/db/schema/campaigns.ts`: rename the import line, the `salesLeadSourceId` column block, the `salesLeadSources` reference in `.references(() => ...)`, and the index name (`campaigns_sales_lead_source_id_idx` → `campaigns_audience_source_id_idx`). DB column name (`sales_lead_source_id` → `audience_source_id`) renames in the same migration.
+- [x] In `src/lib/db/schema/index.ts`: update the re-export to point at the renamed file/const. (Also re-sorted alphabetically — `audience-sources` belongs above `audit-log`.)
+- [x] ~~`pnpm db:generate`~~ — **TTY-blocked in this harness** (drizzle-kit's rename-vs-drop prompt needs interactive TTY). Used `pnpm drizzle-kit generate --custom` to scaffold blank `0007_thin_thor.sql` + `0007_snapshot.json`, then hand-wrote the RENAME SQL and patched the snapshot via `sed 's/sales_lead_source/audience_source/g'` (14 occurrences, semantic-key-only — no false positives since the snake_case token is unambiguous). Final SQL covers table, sequence, unique constraint, column, FK constraint, and index — each renamed explicitly because Postgres doesn't cascade name updates from `ALTER TABLE ... RENAME TO`.
+- [x] Apply migration via the session pooler (per `db-conventions`). First run was a silent no-op because the `--custom`-generated journal entry's `when` (`1778521038769`) was earlier than `0006`'s; bumped to `1778677200000` and re-ran successfully.
+- [x] Sanity-check via `psql`: `audience_sources` has 4 rows (matches pre-rename); 13 campaigns retain `audience_source_id` IS NOT NULL; labels in order `Dealer Database / PBS / Third Party List / Previous Buyers`.
 
 #### Phase 2: Sweep call sites (code)
 
-- [ ] `grep -rn 'salesLeadSource\|sales_lead_source\|SalesLeadSource' src/ scripts/` and walk every hit. **Active surfaces (rename):**
+- [x] `grep -rn 'salesLeadSource\|sales_lead_source\|SalesLeadSource' src/ scripts/ tests/` — surfaced **20 files**. Applied via `sed -i -e 's/salesLeadSource/audienceSource/g' -e 's/SalesLeadSource/AudienceSource/g' -e 's/sales_lead_source/audience_source/g'` across all 20 (patterns unambiguous; zero overlap). **Active surfaces (renamed):**
   - `src/features/schedule/actions.ts` — `createSalesLeadSource` / `updateSalesLeadSource` / `archiveSalesLeadSource` → `*AudienceSource` (capability gate `lookup:edit` unchanged).
-  - `src/features/schedule/lookup-admin.tsx` — section heading "Sales Lead Sources" → "Audience Sources"; any prop names; any form field names.
-  - `src/features/schedule/loaders.ts` (if it pre-loads the lookup) — rename the loader.
-  - Test files: `src/features/schedule/*.test.ts` plus any mock fixtures that reference the table.
-  - Reports surfaces: check `src/app/(app)/reports/page.tsx`, `src/app/(app)/reports/export/route.ts`, and `src/features/reports/**` for label refs. If a CSV column header or PDF heading carries the literal string "Sales Lead Source", rename it (see OQ #2 below for customer-facing-label decision).
-- [ ] **Leave alone (historical):**
+  - `src/features/schedule/queries.ts` — table import, `loadSalesLeadSources` → `loadAudienceSources`, plus `salesLeadSourceId` / `salesLeadSourceLabel` on returned-row types and join projections.
+  - `src/features/schedule/validators.ts` + `validators.test.ts` — form-parse helper key + fixtures.
+  - `src/features/schedule/lookup-admin.tsx` — action imports + config entries. **Note:** the user-facing heading was already `Data Sources` (line 44), not "Sales Lead Sources" as this plan assumed. Left "Data Sources" unchanged — it's a UI naming decision separate from the schema rename. Open follow-up: if "Audience Sources" becomes the canonical UX name, file a separate UX-polish chunk.
+  - `src/features/__tests__/action-gate-matrix.ts` — capability-pairing matrix labels + invoke refs.
+  - `src/features/email/actions.ts` + `actions.test.ts` — `salesLeadSourceLabel` on template props/fixtures.
+  - `src/features/reports/reports-columns.tsx` — column id + accessorFn.
+  - `src/lib/email/templates.ts` — template type field (rendered label "Data Source:" stays — that's the email's text, not the internal name).
+  - `src/app/(app)/calendar/booking-form.tsx` — form input `name="salesLeadSourceId"` → `name="audienceSourceId"` + defaultValue accessor.
+  - `src/app/(app)/calendar/page.tsx`, `production/page.tsx`, `admin/lookups/page.tsx` — `loadSalesLeadSources` import + invocation.
+  - `src/app/(app)/calendar/event-detail.tsx`, `production/page.tsx` — `salesLeadSourceLabel` row renders.
+  - `src/app/(app)/production/export/route.ts`, `reports/export/route.ts`, `reports/export/route.test.ts` — CSV exporter `salesLeadSourceLabel` reads.
+  - `scripts/import-from-sheets.ts` — table import, query reads, local var (`scripts/` was not in the plan's original anchor list; added as new row, see anchors table above).
+  - `tests/integration/rls.test.ts` — `RLS_TABLES` literal `'sales_lead_sources'` → `'audience_sources'` (also not enumerated in the plan; the Phase 1 eval surfaced it).
+- [x] **Leave alone (historical):**
   - `drizzle/0001_seed_lookups.sql` (one-time seed; ran against the legacy table name).
   - `docs/designs/closed/**` (closed plans + eval reports — frozen-in-time records).
   - `docs/wiki/log.md` prior entries.
-- [ ] `pnpm tsc --noEmit` — surfaces any missed import / type ref.
+- [x] `pnpm tsc --noEmit` — clean. `pnpm test` — 480/481 (1 pre-existing skip, no regressions).
 
 #### Phase 3: Wiki + cross-plan reconciliation
 

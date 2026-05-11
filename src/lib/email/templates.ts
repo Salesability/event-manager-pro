@@ -40,7 +40,7 @@ export type ClientConfirmationFields = {
   startDate: string;
   endDate: string;
   styleLabel: string | null;
-  salesLeadSourceLabel: string | null;
+  audienceSourceLabel: string | null;
   coachFullName: string | null;
   coachPhone: string | null;
   coachEmail: string | null;
@@ -74,7 +74,7 @@ Email:          ${f.email || 'TBD'}
 Start Date:     ${longDate(f.startDate)}
 End Date:       ${longDate(f.endDate)}
 Event Format:   ${f.styleLabel || 'Standard Sales Event'}
-Data Source:    ${f.salesLeadSourceLabel || 'TBD'}
+Data Source:    ${f.audienceSourceLabel || 'TBD'}
 
 ASSIGNED SALES COACH
 ${RULE}
@@ -105,7 +105,7 @@ export type CoachConfirmationFields = {
   startDate: string;
   endDate: string;
   styleLabel: string | null;
-  salesLeadSourceLabel: string | null;
+  audienceSourceLabel: string | null;
   qtyRecords: number | null;
   smsEmail: number | null;
   letters: number | null;
@@ -130,7 +130,7 @@ Phone:          ${f.phone || 'TBD'}
 Start Date:     ${longDate(f.startDate)}
 End Date:       ${longDate(f.endDate)}
 Event Format:   ${f.styleLabel || 'Standard Sales Event'}
-Data Source:    ${f.salesLeadSourceLabel || 'TBD'}
+Data Source:    ${f.audienceSourceLabel || 'TBD'}
 
 MARKETING TARGETS
 ${RULE}

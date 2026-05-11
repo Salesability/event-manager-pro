@@ -253,8 +253,8 @@ export function BookingForm({
         >
           <select
             id="bk-source"
-            name="salesLeadSourceId"
-            defaultValue={campaign?.salesLeadSourceId ?? ''}
+            name="audienceSourceId"
+            defaultValue={campaign?.audienceSourceId ?? ''}
             className={inputClass}
           >
             <option value="">—</option>

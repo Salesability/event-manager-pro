@@ -5,7 +5,7 @@ import {
   loadCampaigns,
   loadCoaches,
   loadDealers,
-  loadSalesLeadSources,
+  loadAudienceSources,
 } from '@/features/schedule/queries';
 import { CalendarView } from './calendar-view';
 
@@ -22,7 +22,7 @@ export default async function CalendarPage() {
       loadAvailabilityBlocks(rangeStart, rangeEnd),
       loadDealers(),
       loadCampaignStyles(),
-      loadSalesLeadSources(),
+      loadAudienceSources(),
       loadCurrentMembership(),
     ]);
 

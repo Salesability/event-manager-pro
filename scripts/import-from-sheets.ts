@@ -15,7 +15,7 @@ import {
   contacts,
   dealerContacts,
   dealers,
-  salesLeadSources,
+  audienceSources,
   teamMemberRoles,
 } from '../src/lib/db/schema';
 
@@ -443,8 +443,8 @@ async function importCampaigns(
   const styleByLabel = new Map(styleRows.map((s) => [s.label, s.id]));
 
   const sourceRows = await db
-    .select({ id: salesLeadSources.id, label: salesLeadSources.label })
-    .from(salesLeadSources);
+    .select({ id: audienceSources.id, label: audienceSources.label })
+    .from(audienceSources);
   const sourceByLabel = new Map(sourceRows.map((s) => [s.label, s.id]));
 
   let inserted = 0;
@@ -467,13 +467,13 @@ async function importCampaigns(
     }
 
     const styleId = ev.format ? styleByLabel.get(ev.format) ?? null : null;
-    const salesLeadSourceId = ev.dataSource
+    const audienceSourceId = ev.dataSource
       ? sourceByLabel.get(ev.dataSource) ?? null
       : null;
 
     if (ev.format && !styleId)
       warnings.push(`${ev.legacyId}: unseen style ${JSON.stringify(ev.format)}`);
-    if (ev.dataSource && !salesLeadSourceId)
+    if (ev.dataSource && !audienceSourceId)
       warnings.push(`${ev.legacyId}: unseen lead source ${JSON.stringify(ev.dataSource)}`);
 
     const values = {
@@ -481,7 +481,7 @@ async function importCampaigns(
       dealerId,
       coachId: coachId ?? null,
       styleId,
-      salesLeadSourceId,
+      audienceSourceId,
       startDate: ev.startDate,
       endDate: ev.endDate,
       qtyRecords: ev.qtyRecords,
