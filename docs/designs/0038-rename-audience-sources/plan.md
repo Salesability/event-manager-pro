@@ -12,10 +12,10 @@ Rename the `sales_lead_sources` lookup table → `audience_sources` (and `campai
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema rename + Drizzle migration | Done | - |
-| 2: Sweep call sites (code) | Done | - |
-| 3: Wiki + cross-plan reconciliation | Pending | - |
-| 4: Tests + smoke verification | Pending | - |
+| 1: Schema rename + Drizzle migration | Done | `1b64d12` |
+| 2: Sweep call sites (code) | Done | `1b64d12` |
+| 3: Wiki + cross-plan reconciliation | Done | - |
+| 4: Tests + smoke verification | Done | - |
 
 ## Code Anchors
 
@@ -37,7 +37,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/conventions.md` — Drizzle migrations via session pooler.
 - `db-conventions` skill — invoke before running the schema-rename migration.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete) ✅
 
 **Note:**
 - **Zero data migration.** The `INSERT INTO sales_lead_sources` rows survive the `RENAME` intact — row contents unchanged.
@@ -81,12 +81,24 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 3: Wiki + cross-plan reconciliation
 
-- [ ] Edit `docs/wiki/data-model.md` line 14 (STAR vocabulary mapping): rename the `sales_lead_sources` bullet to `audience_sources (lookup) — audience-source provenance for a dealer's marketing campaign (Dealer Database, PBS, Third Party List, Previous Buyers).` Drop the "preserved for the eventual per-campaign target table" parenthetical — that future table, if built, picks a fresh name.
-- [ ] Edit `docs/wiki/data-model.md` line 350 (Lookup tables section): rename the bullet and tighten the meaning ("the source of the dealer's contact list used as the *consumer audience* of the campaign").
-- [ ] Edit `docs/wiki/data-model.md` Open Question #6: prune the "reserved-for `sales_lead_sources` name" claim. Rewrite the future-target-table OQ as: *"Per-campaign target table (name TBD — e.g. `campaign_targets`, `sales_leads`): a row per (campaign × contact) for per-record outcomes. Not built today; picks a fresh name distinct from `audience_sources` if it lands."*
-- [ ] Append to `docs/wiki/log.md`: "2026-MM-DD — 0038 shipped — `sales_lead_sources` lookup renamed to `audience_sources` (and `campaigns.audience_source_id` follows). Breaks a three-way naming overload; clears the path for `quotes.audienceSourceId` in 0037 P3."
-- [ ] Edit `docs/designs/0037-commercial-spine-msa/plan.md` Phase 3 schema-patch checklist (currently lists `salesLeadSourceId` as a column to add to `quotes`): rename to `audienceSourceId` everywhere; add a one-line note pointing at 0038's rename.
-- [ ] Edit `docs/designs/CURRENT.md`: when this plan ships, flip Active to the next queued chunk (likely 0037 if 0036 is also Done by then; otherwise resume whatever was active when this side-task started).
+- [x] Edit `docs/wiki/data-model.md` line 14 (STAR vocabulary mapping): rewritten to `audience_sources (lookup) — audience-source provenance ...`; the "preserved-for-future-target-table" parenthetical dropped. Also removed the (now obsolete) trailing claim that schema source files hadn't been renamed yet (0038 did that).
+- [x] Edit `docs/wiki/data-model.md` line ~348 (Lookup tables section): renamed `sales_lead_sources` → `audience_sources`; tightened meaning to "the source of the dealer's contact list used as the *consumer audience* of a campaign".
+- [x] Edit `docs/wiki/data-model.md` Open Question #6: rewrote to mention the future per-campaign target table picks a fresh name distinct from `audience_sources`; old "reserved-for `sales_lead_sources` name" claim removed.
+- [x] Also-mechanical: 10 snake_case `sales_lead_source` occurrences (mixins table, ASCII diagram, campaigns row in table-by-table list, relationships bullet, campaigns narrative, audit-columns mixin note) renamed via `sed`. Two sed false-positives in historical references (lines 15 + 348 said "Renamed from `audience_sources`") fixed back to `sales_lead_sources` so the historical record reads correctly.
+- [x] Append to `docs/wiki/log.md` with a `2026-05-11` dated entry above the existing 2026-05-11 entries: full headline + why + scope + commit ref + carry-forward.
+- [x] Edit `docs/designs/0037-commercial-spine-msa/plan.md` Phase 3 schema-patch checklist (and OQ #7): renamed all `salesLeadSourceId` → `audienceSourceId` and `sales_lead_sources` → `audience_sources` via `sed`. Fixed the historical-context sentence in OQ #7 to read "the lookup (then named `sales_lead_sources`, renamed to `audience_sources` in 0038)" so the funnel-review narrative stays accurate.
+- [x] Edit `docs/designs/0035-quote-composer/plan.md` line 74: updated the `acquired_via` distinct-from reference to `audience_sources` (with the renamed-from-`sales_lead_sources` note).
+- [x] Edit `docs/designs/CURRENT.md` line 6 (forward-looking 0037 description): `salesLeadSourceId` → `audienceSourceId` in the list of commercial columns moving off campaigns. History entries left as-is (they describe past state, where the old name was canonical).
+- [ ] **Deferred to a separate close-the-chunk step (per CLAUDE.md):** move `docs/designs/0038-rename-audience-sources/` → `docs/designs/closed/0038-rename-audience-sources/`, sweep cross-refs to add `closed/` to the path, flip CURRENT.md Active to 0037 + add a History entry.
+
+#### Phase 4: Tests + smoke verification
+
+- [x] `pnpm tsc --noEmit` clean (verified at end of Phase 2 and again after Phase 3 doc edits).
+- [x] `pnpm lint` clean (4 pre-existing warnings carried forward, 0 errors).
+- [x] `pnpm test` — 480/481 (1 pre-existing skip). RLS integration test now passes against the renamed table.
+- [x] Smoke (web-test): `/admin/lookups` renders the Data Sources section with all 4 seeded rows; `/calendar` + `/production` render cleanly. The renamed `loadAudienceSources` query and the `audienceSourceLabel` join projection both verified working. Screenshot at `/tmp/web-test-0038-lookups.png`. (User-facing label "Data Sources" left as-is — pre-existing UI naming, separate UX decision.)
+- [x] Smoke (web-test): `/admin/lookups` Add-form for the lookup is reachable. **Read-only check** — form not submitted.
+- [x] One-shot psql: `SELECT label FROM audience_sources ORDER BY sort_order;` returned the 4 seeded rows in original order (verified end of Phase 1).
 
 #### Phase 4: Tests + smoke verification
 

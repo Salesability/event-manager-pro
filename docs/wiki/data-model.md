@@ -12,9 +12,7 @@ Reference for the current Postgres schema. Source of truth is `src/lib/db/schema
 > - `contact_identifiers` ← STAR *Identifier* (BC 7, Core & Common Entities)
 > - `vehicles` ← STAR *Vehicle* (BC 2, Inventory & Vehicle Management)
 > - `campaigns` ← STAR *Marketing Campaign* (BC 6, Marketing & Loyalty) — what we run for the dealer
-> - `sales_lead_sources` (lookup) — preserved for the eventual per-campaign target table (STAR *Sales Lead*, BC 3, is a process artifact — a lead being processed — not a master person record; we reserve that name for that future use, see open Q #6)
->
-> The schema source files in `src/lib/db/schema/` and the `drizzle/` migrations have not yet been renamed to match — that's a follow-up alignment step.
+> - `audience_sources` (lookup) — audience-source provenance for a dealer's marketing campaign (Dealer Database, PBS, Third Party List, Previous Buyers). Renamed from `sales_lead_sources` in 0038; the prior name carried three overloaded meanings (audience source, future per-campaign target table, dealership acquisition source) — see [`docs/wiki/log.md`](log.md) 2026-05-11 entry.
 
 ## Overview
 
@@ -43,7 +41,7 @@ Three things to know up front:
 
 2. **Domain rows are `bigint` IDs** via the `bigIdentity()` helper. There is no longer a uuid-PK domain table — `contacts.user_id` carries the auth uuid as a nullable FK rather than aliasing it as a PK. Tables exposed in dealer-portal URLs (`dealers`, `campaigns`) carry an additional `public_id` (nanoid 12-char URL-safe slug) for unguessable URLs — see *ID types* below.
 
-3. **Audit columns are pervasive.** `timestamps`, `actors` (`created_by_id`, `updated_by_id` → `auth.users`), and `archivable` (`archived_at`) are mixins from `_columns.ts`, applied to every editable domain table. Lookup tables (`campaign_styles`, `sales_lead_sources`, `blocked_dates`) skip `actors` because they're admin-config, not domain data.
+3. **Audit columns are pervasive.** `timestamps`, `actors` (`created_by_id`, `updated_by_id` → `auth.users`), and `archivable` (`archived_at`) are mixins from `_columns.ts`, applied to every editable domain table. Lookup tables (`campaign_styles`, `audience_sources`, `blocked_dates`) skip `actors` because they're admin-config, not domain data.
 
 ## Layout
 
@@ -82,10 +80,10 @@ Three things to know up front:
               │          cancelled / completed         │
               └────────────────┬──────────────┬────────┘
                                │              │
-                       style_id│              │ sales_lead_source_id
+                       style_id│              │ audience_source_id
                                ▼              ▼
                       ┌────────────────┐  ┌────────────────────┐
-                      │ campaign_styles│  │ sales_lead_sources │
+                      │ campaign_styles│  │ audience_sources │
                       └────────────────┘  └────────────────────┘
 
    ┌─────────────────────────────────┐
@@ -146,9 +144,9 @@ Edges left out of the diagrams for clarity:
 | `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address` |
 | `vehicles` | `id` bigint | `vin` (UNIQUE, normalized), `year`, `make`, `model`, `trim` — one row per physical vehicle, persists across owners |
 | `vehicle_ownerships` | `id` bigint | `vehicle_id` (FK vehicles), `contact_id` (FK contacts), `acquired_at`, `sold_at` (nullable) — junction; one open ownership per vehicle |
-| `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `sales_lead_source_id` (FK), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`, plus inline day-of contact fields and service flags (see `campaigns` section below) |
+| `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`, plus inline day-of contact fields and service flags (see `campaigns` section below) |
 | `campaign_styles` | `id` bigint | `label` (UNIQUE), `sort_order` |
-| `sales_lead_sources` | `id` bigint | `label` (UNIQUE), `sort_order` |
+| `audience_sources` | `id` bigint | `label` (UNIQUE), `sort_order` |
 | `availability_blocks` | `id` bigint | `start_date`, `end_date` (inclusive), `kind` enum (`statutory_holiday\|company_closure\|coach_unavailable`), `coach_id` (FK contacts, nullable; required when `kind='coach_unavailable'`), `region` (nullable, e.g. `CA-ON`), `reason`, `source` |
 
 ## Relationships
@@ -167,7 +165,7 @@ Domain edges:
 - `dealers` 1:* `campaigns` via `campaigns.dealer_id` — booking owner. `ON DELETE RESTRICT`.
 - `contacts` 0..1:* `campaigns` via `campaigns.coach_id` — assigned coach (expected `team_member_roles(role='coach')`, app-enforced). `ON DELETE SET NULL`.
 - `campaign_styles` 1:* `campaigns` via `campaigns.style_id`.
-- `sales_lead_sources` 1:* `campaigns` via `campaigns.sales_lead_source_id`.
+- `audience_sources` 1:* `campaigns` via `campaigns.audience_source_id`.
 - `contacts` 0..1:* `availability_blocks` via `availability_blocks.coach_id` — per-coach unavailability (expected `team_member_roles(role='coach')`, app-enforced; null for `statutory_holiday` and `company_closure` rows). `ON DELETE CASCADE` — a hard-deleted coach takes their unavailability rows with them.
 
 Contact edges:
@@ -334,7 +332,7 @@ VIN is **no longer a useful person-level dedup signal** once we model transfers 
 
 ### `campaigns` — bookings
 
-Every campaign references one `dealer` (`ON DELETE RESTRICT` — never orphan a campaign), optionally a coach (`campaigns.coach_id` → `contacts.id`, `ON DELETE SET NULL`, app-enforced `team_member_roles(role='coach')`), and the two lookup tables (`campaign_styles`, `sales_lead_sources`). Date range is enforced by a `CHECK` constraint (`end_date >= start_date`).
+Every campaign references one `dealer` (`ON DELETE RESTRICT` — never orphan a campaign), optionally a coach (`campaigns.coach_id` → `contacts.id`, `ON DELETE SET NULL`, app-enforced `team_member_roles(role='coach')`), and the two lookup tables (`campaign_styles`, `audience_sources`). Date range is enforced by a `CHECK` constraint (`end_date >= start_date`).
 
 Pricing fields are stored on the campaign (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) since these can vary per booking — the legacy schema put them on bookings too.
 
@@ -347,7 +345,7 @@ Pricing fields are stored on the campaign (`fee`, `travel`, `deposit_pct`, `tax_
 ### Lookup tables
 
 - **`campaign_styles`** — labels for campaign kinds (`label` unique, `sort_order` for UI ordering, `archived_at` for retiring without deleting). Originated as a legacy `localStorage` list, moved to Postgres so all users share them.
-- **`sales_lead_sources`** — same shape and origin. Where the *dealer's* lead list for a campaign came from (e.g. "in-house DB", "purchased"). Name preserves STAR's *Sales Lead* (BC 3) noun for the future per-campaign target table (open Q #6).
+- **`audience_sources`** — same shape and origin. The source of the dealer's contact list used as the *consumer audience* of a campaign (Dealer Database, PBS, Third Party List, Previous Buyers — seeded). Renamed from `sales_lead_sources` in 0038 to disambiguate from STAR's *Sales Lead* (BC 3, a process artifact — see open Q #6 for the future per-campaign target table, which picks a fresh name).
 
 Both skip the `actors` mixin (they're admin config, not domain data) and carry only `archived_at` for retirement.
 
@@ -394,7 +392,7 @@ Out of scope for this table:
 | Mixin | Columns | Applied to |
 |---|---|---|
 | `timestamps` | `created_at`, `updated_at` (auto-bumped) | All editable domain tables |
-| `actors` | `created_by_id`, `updated_by_id` (uuid → `auth.users`, `ON DELETE SET NULL`) | Editable domain tables, including `availability_blocks` (coach unavailability is recorded per-user). Skipped on pure lookups (`campaign_styles`, `sales_lead_sources`). |
+| `actors` | `created_by_id`, `updated_by_id` (uuid → `auth.users`, `ON DELETE SET NULL`) | Editable domain tables, including `availability_blocks` (coach unavailability is recorded per-user). Skipped on pure lookups (`campaign_styles`, `audience_sources`). |
 | `archivable` | `archived_at` | Tables that need soft-archive (most lookups, `dealers`, `contacts`, `team_member_roles`, `dealer_contacts`, `vehicles`, `vehicle_ownerships`, `availability_blocks`). Note: `contact_identifiers` uses `archived_at` to retire a stale email/phone without breaking dedup history. |
 
 Note: `auth.uid()` does **not** populate over Drizzle's direct connection. Server actions and webhooks must pass `userId` explicitly when writing audit columns.
@@ -425,7 +423,7 @@ These are the design threads not yet resolved as of 2026-04-30. Captured here so
 3. **Role-name collision: `staff` value in two enums** — both `team_member_roles.role` (us-side) and `dealer_contacts.role` (them-side) carry a `staff` value, meaning different things. Cosmetic but worth deciding before migrations harden the enums. Options: rename the us-side `staff` value (`ops`? `general`?), or accept that both enums use `staff` because each is contextually unambiguous (`team_member_roles.role='staff'` = "us-side general staff"; `dealer_contacts.role='staff'` = "dealership employee"). Default: accept; the table-name prefix disambiguates.
 4. ~~**Signup trigger on `auth.users`** — needed to back-fill `contacts.user_id` when a portal user signs up.~~ **Resolved 2026-05-05:** shipped as `drizzle/0002_contact_user_backfill_trigger.sql` (`AFTER INSERT ON auth.users`, `SECURITY DEFINER`, idempotent). Looks up `contact_identifiers(kind='email', value=lower(NEW.email))` against unarchived contacts whose `user_id` is null and writes the linkage. Same logic covers staff and customers — differentiation happens via which role-junction has rows for that contact. Mostly insurance today (signups disabled); load-bearing the day a portal opens.
 5. ~~**Service flags on `campaigns`** — `sms_email`, `letters`, `bdc`, `qty_records` are inline columns inherited from legacy. Decide whether to keep as bools, model as a `services` lookup with a join table, or drop unused ones.~~ **Resolved 2026-04-30:** kept inline as nullable `integer` (per-channel record counts), matching the legacy semantics. The `services` lookup + join-table option is deferred until reporting actually needs it.
-6. **Per-campaign target list (`sales_leads`)** — should we record *which* contacts were targeted at each campaign? Enables per-record outcomes (delivered/bounced/responded), cross-campaign suppression, and ROI per record — at the cost of 10k–100k rows per campaign. This is the natural home for the STAR *Sales Lead* (BC 3) noun: a row per (campaign × contact) pair representing a lead being processed. Not needed day-1 if `campaigns.qty_records` (count) is enough; the `sales_lead_sources` lookup is reserved against this future table.
+6. **Per-campaign target list (name TBD — e.g. `campaign_targets`, `sales_leads`)** — should we record *which* contacts were targeted at each campaign? Enables per-record outcomes (delivered/bounced/responded), cross-campaign suppression, and ROI per record — at the cost of 10k–100k rows per campaign. This is the natural home for the STAR *Sales Lead* (BC 3) noun: a row per (campaign × contact) pair representing a lead being processed. Not needed day-1 if `campaigns.qty_records` (count) is enough. If/when built, picks a fresh name distinct from `audience_sources` (see 0038 for why the prior overloaded name was retired).
 7. **Quote versioning** — pricing fields live on the campaign row, so re-sending a revised quote overwrites the prior numbers. If history matters (customer pushback, "what did we send last week?"), a `quotes` table captures versions; otherwise leave as-is.
 8. **Contact dedup conflict resolution** — when two dealers' lists disagree about a contact's name, phone, or vehicle, who wins? Last-write-wins is simplest. Per-dealer overrides on `dealer_contacts` (a `name_override` / `phone_override` field) is more accurate. A "golden record" curated by an admin is most accurate but has a staffing cost.
 9. **Cross-dealer visibility (RLS)** — Dealer A's portal user should see only contacts Dealer A has a `dealer_contacts` row for. Should they also see *which other dealers* know this contact (cross-pollination value) or be filtered to their own contributions only (privacy default)? Default to the privacy stance unless we explicitly sell cross-dealer enrichment.

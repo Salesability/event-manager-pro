@@ -14,7 +14,7 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 |-------|--------|--------|
 | 1: Decision doc + cross-plan reconciliation | Pending | - |
 | 2: `master_service_agreements` schema + migration | Pending | - |
-| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `salesLeadSourceId`) | Pending | - |
+| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Pending | - |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
 | 5: Tests + wiki sweep | Pending | - |
 
@@ -28,7 +28,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 |----------|---------------------|-----------------|
 | `src/lib/db/schema/master-service-agreements.ts` (new) | `src/lib/db/schema/campaigns.ts` | Same shape: `pgTable` with `bigIdentity()`, fk to `dealers.id`, `timestamps`, `actors`. MSA carries lifecycle status enum (mirror `pgEnum` usage already in repo). |
 | `drizzle/0010_msa.sql` (or whichever next serial after 0035's migrations) | `drizzle/0006_is_staff_member_excludes_dealer.sql` | Most recent migration; same generate-then-edit flow. |
-| Phase 3 edits to `0026-quote-pdf/plan.md` Phase 2 sketch | n/a — plan-doc edit | Adds `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `salesLeadSourceId`, `msaId` to the `quotes` schema sketch; renames `quotes.campaignId` direction to `campaigns.acceptedQuoteId` (move to the campaigns table). |
+| Phase 3 edits to `0026-quote-pdf/plan.md` Phase 2 sketch | n/a — plan-doc edit | Adds `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` to the `quotes` schema sketch; renames `quotes.campaignId` direction to `campaigns.acceptedQuoteId` (move to the campaigns table). |
 | Phase 4 migration `drizzle/00XX_drop_campaign_commercial_cols.sql` | `drizzle/0006_*` | Destructive column drops on `campaigns`. Requires 0026 Phase 2 + 0035 Phase 3 to be writing to the new locations. |
 | `docs/wiki/commercial-spine.md` (new wiki page) | `docs/wiki/data-model.md` | Reference page describing the spine Client → MSA → Quote → Event/Campaign + Invoice + Payment. |
 
@@ -54,7 +54,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [ ] Update `docs/wiki/data-model.md`: new section for `master_service_agreements`; rewrite the `quotes` section to carry commercial columns + `msaId`; demote the `campaigns` section to "operational delivery / Event" framing; cross-link to `commercial-spine.md`.
 - [ ] Add an entry to `docs/wiki/log.md`: dated, headline "Commercial spine locked: accepted Quote = contract; MSA per-Client; campaign demoted to operational delivery", bullets on the column moves and FK direction flip.
 - [ ] Update `docs/strategy/index.md` or relevant strategy preamble if the legacy-app PRD describes a different spine — no body edits to imported docs, but a clarifying preamble note that the in-app spine has settled here.
-- [ ] **Reconcile `0026-quote-pdf/plan.md` Phase 2 sketch** — add columns `fee` `travel` `depositPct` `taxPct` `quoteValidDays` `salesLeadSourceId` `msaId` (nullable fk → `master_service_agreements.id`) to the `quotes` table; remove `campaignId`; note the new direction `campaigns.acceptedQuoteId` lives on the campaigns side. Mark 0026 Open Question on tax as partially resolved (NS HST 15% seller-side; buyer-province computation stays open).
+- [ ] **Reconcile `0026-quote-pdf/plan.md` Phase 2 sketch** — add columns `fee` `travel` `depositPct` `taxPct` `quoteValidDays` `audienceSourceId` `msaId` (nullable fk → `master_service_agreements.id`) to the `quotes` table; remove `campaignId`; note the new direction `campaigns.acceptedQuoteId` lives on the campaigns side. Mark 0026 Open Question on tax as partially resolved (NS HST 15% seller-side; buyer-province computation stays open).
 - [ ] **Reconcile `0035-quote-composer/plan.md` Phase 3 sketch** — composer Send action must check for an active MSA on the Client; if none, send routes into the bundled MSA + first-Quote flow (7.2 owns the e-sig envelope). For drafts/send, no MSA check is needed.
 - [ ] **Reconcile `0025-quote-to-payment/plan.md`** — add a "Shared foundation" bullet pointing to this chunk (0037); add a one-liner under sequencing that 7.2's MSA-signing flow is a runtime prerequisite for first-time Quote acceptance, not a post-quote step.
 
@@ -69,7 +69,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [ ] **No Server Actions in this phase.** Sign / status-transition actions are owned by 7.2. This phase just stands up the table so 7.2 has somewhere to write.
 - [ ] Vitest: thin test confirming the table is reachable and the status enum is valid; full action tests land in 7.2.
 
-#### Phase 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `salesLeadSourceId`)
+#### Phase 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`)
 
 This phase produces **plan-doc edits, not code** — the actual `quotes` table is built by 0026 Phase 2. The point of this phase is to lock the shape *before* 0026 Phase 2 ships so the FK direction and column placement are correct from day one.
 
@@ -79,7 +79,7 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
   - `depositPct` (numeric, default `0`)
   - `taxPct` (numeric, default `15` per NS HST seller-side)
   - `quoteValidDays` (integer, default `30`)
-  - `salesLeadSourceId` (fk → `sales_lead_sources.id`, nullable — carried forward from the lead on convert)
+  - `audienceSourceId` (fk → `audience_sources.id`, nullable — carried forward from the lead on convert)
   - `msaId` (fk → `master_service_agreements.id`, nullable until the Quote is accepted under a specific MSA term)
   - Remove `campaignId` from quotes; the campaign FK lives on the campaigns side instead.
 - [ ] Edit `0026-quote-pdf/plan.md` Phase 2 sketch for `campaigns`: add `acceptedQuoteId` (fk → `quotes.id`, nullable; populated when an accepted quote spawns a delivery campaign). Existing campaigns without an accepted quote stay valid (the column is nullable for backwards compatibility until commercial columns are dropped in this plan's Phase 4).
@@ -90,9 +90,9 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 
 **Gated on:** 0026 Phase 2 (creates `quotes` table with the new columns) AND 0035 Phase 3 (composer writes to the new columns) shipping. Until both land, `campaigns` is still the source of commercial fields for any UI that reads them (notably the legacy /production view).
 
-- [ ] Confirm no code reads `campaigns.fee`, `campaigns.travel`, `campaigns.depositPct`, `campaigns.taxPct`, `campaigns.quoteValidDays`, `campaigns.salesLeadSourceId` for any commercial purpose. (Some reads may still want `salesLeadSourceId` for attribution reports — if so, those reports get rewritten to read from `quotes.salesLeadSourceId` instead.)
+- [ ] Confirm no code reads `campaigns.fee`, `campaigns.travel`, `campaigns.depositPct`, `campaigns.taxPct`, `campaigns.quoteValidDays`, `campaigns.audienceSourceId` for any commercial purpose. (Some reads may still want `audienceSourceId` for attribution reports — if so, those reports get rewritten to read from `quotes.audienceSourceId` instead.)
 - [ ] If any legacy/production data sits on `campaigns` and needs to survive, backfill: for each campaign with non-zero commercial fields, synthesize a `quotes` row at `status='accepted'`, link `campaigns.acceptedQuoteId = newQuoteId`, and copy the commercial values onto the quote. Likely **not needed** if there's no real production data yet — confirm with user before running.
-- [ ] Migration: drop `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `salesLeadSourceId` from `campaigns`.
+- [ ] Migration: drop `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId` from `campaigns`.
 - [ ] Remove those columns from `src/lib/db/schema/campaigns.ts`.
 - [ ] Sweep for any remaining references in code; update or delete.
 
@@ -113,5 +113,5 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 - **#4 — Cancellation-fee math.** MSA §2.iii says 50% of Quote total within 21 days of Event start. Lives in `src/lib/quotes/cancellation.ts` eventually; invoiced as a separate line item. **Out of scope for v1.** Flagged so it's not forgotten.
 - **#5 — Bundled e-sig envelope shape.** "Sign MSA + Accept first Quote" confirmed as a single envelope (user 2026-05-11). Two implementation choices for 7.2: (a) one Dropbox Sign envelope with two documents (MSA + Quote PDF), each requiring signature; (b) one merged PDF that concatenates them. **Working assumption: (a) — two documents in one envelope** so each can be archived separately at the right `signedPdfStorageKey` (MSA → `master_service_agreements.signedPdfStorageKey`; Quote → no signed-PDF storage today since the Quote PDF is unsigned; revisit if we want a counter-signed Quote).
 - **#6 — `templateVersion` on MSA rows.** Including this column so future MSA wording revisions don't silently rebind existing signed agreements. **Working assumption: store a short string like `2026-05` keyed off the date the template body was last revised**, hardcoded server-side when signing starts. A separate `msa_templates` table is overkill for v1.
-- ~~**#7 — Lead-stage attribution flow into `quotes.salesLeadSourceId`.**~~ **Resolved 2026-05-11 — no lead/intake entity in v1.** Manual in-app entry (existing booking modal + 0035 P2 inline-create dealer) creates dealer + contact + campaign directly; public web intake (`future/0016-book-your-event-intake`) is v2 work. `quotes.salesLeadSourceId` is set at composer time alongside the rest of audience selection — there's no upstream "lead" to carry the source forward from. **Dealership-acquisition source** (how the dealer found us) is a separate concept and lives on `dealers.acquiredVia` per 0035 Phase 2 — the funnel review that drove this resolution surfaced that `sales_lead_sources` was being overloaded between *audience source* (consumer list used in the dealer's campaign) and *acquisition source* (how the dealership found Salesability).
+- ~~**#7 — Lead-stage attribution flow into `quotes.audienceSourceId`.**~~ **Resolved 2026-05-11 — no lead/intake entity in v1.** Manual in-app entry (existing booking modal + 0035 P2 inline-create dealer) creates dealer + contact + campaign directly; public web intake (`future/0016-book-your-event-intake`) is v2 work. `quotes.audienceSourceId` is set at composer time alongside the rest of audience selection — there's no upstream "lead" to carry the source forward from. **Dealership-acquisition source** (how the dealer found us) is a separate concept and lives on `dealers.acquiredVia` per 0035 Phase 2 — the funnel review that drove this resolution surfaced that the lookup (then named `sales_lead_sources`, renamed to `audience_sources` in 0038) was being overloaded between *audience source* (consumer list used in the dealer's campaign) and *acquisition source* (how the dealership found Salesability).
 - **#8 — Quotes per MSA term.** §1.ii says "one or more Quotes." **Working assumption: unlimited Quotes per active MSA term; no per-quote re-signing needed.** When the MSA expires/renews, all subsequent Quotes carry the renewed `msaId`. Confirm.

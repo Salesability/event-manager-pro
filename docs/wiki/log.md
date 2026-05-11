@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-11 — `sales_lead_sources` lookup renamed → `audience_sources` (0038)
+
+- Lookup table `sales_lead_sources` → `audience_sources`; FK column `campaigns.sales_lead_source_id` → `campaigns.audience_source_id`; matching TS identifiers (`salesLeadSources`, `salesLeadSourceId`, `salesLeadSourceLabel`, `loadSalesLeadSources`, `createSalesLeadSource` / `updateSalesLeadSource` / `archiveSalesLeadSource`) all swept. Zero data migration (`ALTER TABLE … RENAME TO` preserves rows); 4 seeded labels and 13 campaign FK values intact.
+- **Why:** the prior name carried three overloaded meanings — (a) audience source for a dealer's marketing campaign (the only meaning actually in use; seeded `Dealer Database / PBS / Third Party List / Previous Buyers`), (b) reserved-for-future per-`(campaign × contact)` target table per `data-model.md` OQ #6 (never built; if it lands, picks a fresh name), (c) dealership acquisition source (already split off onto `dealers.acquired_via` per the 2026-05-11 funnel review). Renaming before 0037 Phase 3 means `quotes.audience_source_id` lands cleanly under the right name.
+- `data-model.md` updated: STAR vocab mapping (line 15), Audit-columns mixin note, ASCII diagram, campaigns row + lookup row in the table-by-table list, Lookup tables narrative, mixins table, and OQ #6 rewrite (future per-campaign target table picks a fresh name like `campaign_targets` / `sales_leads` — name TBD).
+- Migration: `drizzle/0007_thin_thor.sql` (table + sequence + unique constraint + column + FK constraint + index, all renamed explicitly since Postgres doesn't cascade name updates from `ALTER TABLE … RENAME TO`). Hand-written via `--custom` because drizzle-kit's rename-vs-drop prompt needs TTY which the harness lacks. Snapshot `drizzle/meta/0007_snapshot.json` patched via `sed`. Journal `when` for 0007 bumped to come after 0006 so the migrator wouldn't silently skip it. Shipped as commit `1b64d12`.
+- **Carry-forward:** RLS policy names `sales_lead_sources_service_role_all` / `sales_lead_sources_staff_all` in `drizzle/0003_enable_rls.sql:188-198` still carry the old name — policies stay attached by OID so behavior is correct, but pg_dump-visible names are stale. Optional `ALTER POLICY … RENAME TO` for a future pass. Also out of scope: UX-label rename ("Data Source(s)" → "Audience Source(s)" on `/admin/lookups` heading + `/production` column header) if the new schema name should become canonical UI vocabulary.
+
 ## 2026-05-11 — closed `0004-port-migration` umbrella + `0010-calendar-share-full` abandoned
 
 - Port-migration tracker shipped end-to-end. Phases 1–4 + sub-phases 5.1–5.6 had long since shipped; 5.7 (Booking summary & reports) shipped 2026-05-07 via the now-closed `0014-summary-reports/plan.md` but the umbrella's tracker still showed `Pending` — corrected to `Done` (`155df20`).
