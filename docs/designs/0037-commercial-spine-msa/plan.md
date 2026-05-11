@@ -14,11 +14,11 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 |-------|--------|--------|
 | 1: Decision doc + cross-plan reconciliation | Done | `3b9b18e` |
 | 2: `master_service_agreements` schema + migration | Done | `da05c54` |
-| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Pending | - |
+| 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | - |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
 | 5: Tests + wiki sweep | Pending | - |
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 ## Code Anchors
 
@@ -73,7 +73,9 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 This phase produces **plan-doc edits, not code** — the actual `quotes` table is built by 0026 Phase 2. The point of this phase is to lock the shape *before* 0026 Phase 2 ships so the FK direction and column placement are correct from day one.
 
-- [ ] Edit `0026-quote-pdf/plan.md` Phase 2 schema sketch to add to the `quotes` table:
+**Already done out-of-band in Phase 1 (commit `3b9b18e`).** Phase 1's "Reconciled 0026 Phase 2 sketch" + "Reconciled 0035 Phase 3 + Phase 4" checklist items executed everything Phase 3 was scoped to do. Items below struck through with verification.
+
+- [x] ~~Edit `0026-quote-pdf/plan.md` Phase 2 schema sketch to add to the `quotes` table:~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:69-71` carries `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` on `quotes`; `campaignId` removed (line 70).
   - `fee` (numeric — flat fee component; cross-checked against `inputs` × catalog at edit time, persisted alongside)
   - `travel` (numeric — flat travel amount; mirrors `inputs.travelAmount`)
   - `depositPct` (numeric, default `0`)
@@ -82,9 +84,9 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
   - `audienceSourceId` (fk → `audience_sources.id`, nullable — carried forward from the lead on convert)
   - `msaId` (fk → `master_service_agreements.id`, nullable until the Quote is accepted under a specific MSA term)
   - Remove `campaignId` from quotes; the campaign FK lives on the campaigns side instead.
-- [ ] Edit `0026-quote-pdf/plan.md` Phase 2 sketch for `campaigns`: add `acceptedQuoteId` (fk → `quotes.id`, nullable; populated when an accepted quote spawns a delivery campaign). Existing campaigns without an accepted quote stay valid (the column is nullable for backwards compatibility until commercial columns are dropped in this plan's Phase 4).
-- [ ] Edit `0026-quote-pdf/plan.md` Open Questions: resolve the "Tax calculation" question by noting that NS HST 15% is the seller-side default (confirmed by MSA §9 / Dartmouth NS address); buyer-province auto-compute stays open for 7.3.
-- [ ] Edit `0035-quote-composer/plan.md` Phase 3 to note that `setQuoteInputs` and friends do **not** require an MSA; the MSA gate lives on the Send action, not on draft editing.
+- [x] ~~Edit `0026-quote-pdf/plan.md` Phase 2 sketch for `campaigns`: add `acceptedQuoteId`~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:72` carries the `campaigns.acceptedQuoteId` line.
+- [x] ~~Edit `0026-quote-pdf/plan.md` Open Questions: resolve the "Tax calculation" question~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:108` records the partial resolution (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
+- [x] ~~Edit `0035-quote-composer/plan.md` Phase 3 to note `setQuoteInputs` doesn't require MSA~~ **Done in Phase 1** — `0035-quote-composer/plan.md:126` carries "**No MSA check on draft editing** (per 0037) — ... the MSA gate lives on Phase 4's Send action."
 
 #### Phase 4: Drop commercial columns from `campaigns`
 
