@@ -14,11 +14,11 @@ Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals
 |-------|--------|--------|
 | 1: Quote query layer + types (`loadQuotes`, `loadQuote`, `loadQuotesByDealer`) | Done | `d04afeb` |
 | 2: `/quotes` index page (filter pills + search + table) | Done | `4a772d2` |
-| 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Pending | - |
+| 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Done | `56006fb` |
 | 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 ## Code Anchors
 
@@ -72,11 +72,11 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching
 
-- [ ] Extend the `QuoteComposer` component (`src/features/quotes/quote-composer.tsx`) to accept an optional `initial?: { quoteId: number; dealerId: number; inputs: QuoteInputs; taxPct: number; status: QuoteStatus }` prop. When absent, behaviour is identical to today (fresh draft from `DEFAULT_QUOTE_INPUTS`). When present, the component's `useState` hooks initialise from the prop.
-- [ ] Branch `onSaveDraft` (currently `quote-composer.tsx:78-101`): if `initial?.quoteId` is set, build a FormData with `quoteId` / `inputs` / `tax` and call `setQuoteInputs` (existing `quote:edit` Server Action at `actions.ts:263`). Otherwise call `createQuote` as today. The setter is atomic + status-guarded — UI just surfaces the error if a non-draft slips through.
-- [ ] Replace `router.push('/production')` with: on `createQuote` success → `router.push(\`/quotes/\${result.quoteId}\`)`; on `setQuoteInputs` success → `router.refresh()` (stay on the edit page). On error → toast as today.
-- [ ] Lifecycle-aware rendering: when `initial.status !== 'draft'`, render the composer read-only (disabled inputs, hidden Save Draft button, banner: "This quote is `{status}` and can no longer be edited."). Server-side guard remains the real defence; UI is just the courtesy.
-- [ ] New file `src/app/(app)/quotes/[id]/page.tsx` — gated server component. Resolves `params.id` (Next 16 async params shape), parses as number, calls `loadQuote(id)`. If `null`, render a "Quote not found" empty state (or `notFound()`). If present, render `<QuoteComposer initial={...} />` plus a header showing the quote id, status pill, dealer name, and a "Back to quotes" link.
+- [x] Extended `QuoteComposer` with `initial?: InitialQuote` (exported type — `{ quoteId, dealerId, inputs, tax, status }`). When absent, behaviour is identical to today; when present, `useState` hydrates from the prop. (Renamed `taxPct` → `tax` in the prop shape since the composer's `taxOverride` is a dollar amount, not a percent — matches `computeQuote`'s `taxOverride` parameter + the FormData `tax` field consumed by `setQuoteInputs`.)
+- [x] Branched `onSaveDraft`: if `initial?.quoteId` is set, builds `{ quoteId, inputs, tax }` FormData and calls `setQuoteInputs` (atomic guarded UPDATE per `actions.ts:281-289`); otherwise calls `createQuote` as today.
+- [x] Replaced `router.push('/production')` with: on `createQuote` success → `router.push('/quotes/${result.quoteId}')` (subsequent saves on that URL become UPDATEs and stay put); on `setQuoteInputs` success → `router.refresh()`.
+- [x] Lifecycle-aware rendering: when `initial.status !== 'draft'`, the composer body is wrapped in `<fieldset disabled>` (HTML cascade disables every form control, including the Combobox button) and the Save button is hidden. Banner reads: "This quote is `{status}` and can no longer be edited." When in edit mode regardless of status, the Dealer field renders as a static label instead of the Combobox — `setQuoteInputs` doesn't accept dealer changes (`setQuoteDealer` is a separate setter, deferred per plan OQ #5).
+- [x] New file `src/app/(app)/quotes/[id]/page.tsx` — gated server component, resolves `params.id` (Next 16 async params), validates positive int, calls `loadQuote(id)`. Missing → `notFound()` (404). Present → renders header (`← Quotes` link + `Quote #N` + status pill + dealer subhead) and `<QuoteComposer initial={...}/>`.
 
 #### Phase 4: `/dealerships/[id]` detail page with quote history; nav + dealer-name link
 
