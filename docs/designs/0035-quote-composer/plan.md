@@ -14,7 +14,7 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 | 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
 | 3: Pricing logic + quote composer page | Done | `0a17124` |
 | 4: PDF preview pane + send wiring | Blocked on 0026 P3+P4 | - |
-| 5: Tests + smoke verification | Done | - |
+| 5: Tests + smoke verification | Done | `3f9edbe` |
 
 **Overall Progress:** 80% (4/5 phases complete; Phase 4 blocked on 0026 P3+P4)
 
