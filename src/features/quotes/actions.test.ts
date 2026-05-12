@@ -291,12 +291,16 @@ describe('sendQuote', () => {
     expect(uploadArg.contentType).toBe('application/pdf');
     expect(uploadArg.ifGenerationMatch).toBeUndefined();
 
-    // Transition update carries the storage key + sentAt timestamp.
+    // Transition update carries the storage key + sentAt timestamp + the
+    // recipient denorm (0040: lets the UI show the address the email actually
+    // went to without resolving from current dealer state).
     expect(mocks.updates).toHaveLength(1);
     const patch = mocks.updates[0].patch as Record<string, unknown>;
     expect(patch.status).toBe('sent');
     expect(patch.sentAt).toBeInstanceOf(Date);
     expect(patch.pdfStorageKey).toBe('quotes/42/1.pdf');
+    expect(patch.sentToEmail).toBe('buyer@dealer.test');
+    expect(patch.sentToFirstName).toBe('Pat');
 
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'quote.sent',

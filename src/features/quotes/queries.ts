@@ -142,6 +142,10 @@ export type QuoteSendReceipt = {
 // renders the send-receipt panel off this + the row-level denorm on `quotes`.
 // Returns `null` when the quote was never sent (no audit row); `payload` stays
 // `unknown` here so callers cast/validate at the UI boundary.
+// One `quote.sent` audit row per quote in v1 (sendQuote is idempotent on the
+// already-sent path and only emits the audit on the successful draft→sent
+// transition). When 0026 follow-up (a) "degraded-send retry" lands, multiple
+// rows are possible — add `.orderBy(desc(auditLog.occurredAt))` then.
 export async function loadQuoteSendReceipt(
   quoteId: number,
 ): Promise<QuoteSendReceipt | null> {
@@ -159,7 +163,6 @@ export async function loadQuoteSendReceipt(
         eq(auditLog.action, 'quote.sent'),
       ),
     )
-    .orderBy(desc(auditLog.occurredAt))
     .limit(1);
   return row ?? null;
 }

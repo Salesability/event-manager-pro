@@ -33,7 +33,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { loadQuote, loadQuotes, loadQuotesByDealer } from './queries';
+import { loadQuote, loadQuoteSendReceipt, loadQuotes, loadQuotesByDealer } from './queries';
 
 const baseRow = {
   id: 7,
@@ -50,8 +50,11 @@ const baseRow = {
   audienceSourceId: null,
   audienceSourceLabel: null,
   sentAt: null,
+  sentToEmail: null,
+  sentToFirstName: null,
   acceptedAt: null,
   declinedAt: null,
+  pdfStorageKey: null,
   createdAt: new Date('2026-05-01T12:00:00Z'),
   createdById: 'user-1',
 };
@@ -85,8 +88,11 @@ describe('loadQuotes', () => {
       audienceSourceId: null,
       audienceSourceLabel: null,
       sentAt: null,
+      sentToEmail: null,
+      sentToFirstName: null,
       acceptedAt: null,
       declinedAt: null,
+      pdfStorageKey: null,
       createdAt: baseRow.createdAt,
       createdById: 'user-1',
     });
@@ -103,6 +109,9 @@ describe('loadQuotes', () => {
           audienceSourceId: 4,
           audienceSourceLabel: 'Previous Buyers',
           sentAt,
+          sentToEmail: 'buyer@dealer.test',
+          sentToFirstName: 'Pat',
+          pdfStorageKey: 'quotes/8/1.pdf',
         },
       ],
     ];
@@ -111,6 +120,9 @@ describe('loadQuotes', () => {
     expect(q.audienceSourceId).toBe(4);
     expect(q.audienceSourceLabel).toBe('Previous Buyers');
     expect(q.sentAt).toBe(sentAt);
+    expect(q.sentToEmail).toBe('buyer@dealer.test');
+    expect(q.sentToFirstName).toBe('Pat');
+    expect(q.pdfStorageKey).toBe('quotes/8/1.pdf');
   });
 });
 
@@ -142,6 +154,37 @@ describe('loadQuote', () => {
     expect(q?.dealerName).toBe('Capital Ford');
     expect(q?.inputs).toEqual({ audienceSize: 500, eventDays: 3 });
     expect(q?.lineItems).toEqual(lineItems);
+  });
+});
+
+describe('loadQuoteSendReceipt', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.selectResults = [];
+  });
+
+  it('returns null when no quote.sent audit row exists', async () => {
+    mocks.selectResults = [[]];
+    expect(await loadQuoteSendReceipt(7)).toBeNull();
+  });
+
+  it('returns the audit row when present', async () => {
+    const occurredAt = new Date('2026-05-12T10:00:00Z');
+    mocks.selectResults = [
+      [
+        {
+          occurredAt,
+          actorUserId: 'coach-uuid',
+          payload: { pdfStorageKey: 'quotes/7/1.pdf', emailId: 'resend-msg-id' },
+        },
+      ],
+    ];
+    const receipt = await loadQuoteSendReceipt(7);
+    expect(receipt).toEqual({
+      occurredAt,
+      actorUserId: 'coach-uuid',
+      payload: { pdfStorageKey: 'quotes/7/1.pdf', emailId: 'resend-msg-id' },
+    });
   });
 });
 
