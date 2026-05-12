@@ -288,6 +288,24 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_OR_COACH,
     note: 'quote:edit — admin || coach (staff-side decline; public-side flows through route handler)',
   },
+  {
+    label: 'setQuoteInputs',
+    invoke: () => quotesActions.setQuoteInputs(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (composer setter)',
+  },
+  {
+    label: 'setQuoteTax',
+    invoke: () => quotesActions.setQuoteTax(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (composer setter)',
+  },
+  {
+    label: 'setQuoteDealer',
+    invoke: () => quotesActions.setQuoteDealer(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (composer setter)',
+  },
 
   // ---- Route Handlers (2) -----------------------------------------------
   {

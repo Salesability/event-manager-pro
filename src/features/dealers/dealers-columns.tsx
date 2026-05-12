@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
 import type { Dealer } from '@/features/schedule/queries';
@@ -118,6 +119,16 @@ export function buildDealersColumns(
                 >
                   Mark active
                 </button>
+              </Can>
+            )}
+            {!d.archivedAt && (
+              <Can capability="quote:edit">
+                <Link
+                  href={`/quotes/new?dealerId=${d.id}`}
+                  className="rounded border border-accent/40 bg-white px-2 py-0.5 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10"
+                >
+                  Quote
+                </Link>
               </Can>
             )}
             {!d.archivedAt && (

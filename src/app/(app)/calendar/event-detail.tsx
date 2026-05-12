@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -136,6 +137,16 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
           </button>
         </Can>
         <span className="flex-1" />
+        {campaign.status !== 'cancelled' && (
+          <Can capability="quote:edit">
+            <Link
+              href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
+              className="rounded-lg border border-accent/40 bg-white px-3 py-1.5 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10"
+            >
+              Create Quote
+            </Link>
+          </Can>
+        )}
         {campaign.status !== 'cancelled' && (
           <Can capability="campaign:cancel">
             <button

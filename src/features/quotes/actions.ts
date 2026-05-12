@@ -3,10 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealers, quotes } from '@/lib/db/schema';
+import { dealers, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { recordAudit } from '@/features/audit/actions';
-import { parseId } from '@/features/schedule/validators';
+import { field, parseId } from '@/features/schedule/validators';
+import {
+  computeQuote,
+  DEFAULT_QUOTE_INPUTS,
+  MAX_DOLLARS,
+  QuoteInputsError,
+  type QuoteInputs,
+} from '@/lib/quotes/pricing';
+import type { ServiceItem } from '@/features/services/queries';
 import { markQuoteDeclined } from './lifecycle';
 
 // 0026 Phase 2 — `quotes` data model + bare-bones Server Actions.
@@ -34,24 +42,126 @@ import { markQuoteDeclined } from './lifecycle';
 type ActionResult = { ok: true } | { error: string };
 type CreateQuoteResult = { ok: true; quoteId: number } | { error: string };
 
-// Empty `QuoteInputs` snapshot — the composer (0035 P3) writes real values
-// via `setQuoteInputs`. Default audience size of 500 + 1-day event keeps the
-// base-event line viable on day-one of editing.
-const DEFAULT_QUOTE_INPUTS = {
-  audienceSize: 500,
-  eventDays: 1,
-  bdcCallCount: 0,
-  letterCount: 0,
-  digitalCount: 0,
-  recordRetrievalAmount: 0,
-  travelAmount: 0,
-  travelNotes: '',
-  quoteNotes: '',
-} as const;
+// 0035 P3: `DEFAULT_QUOTE_INPUTS` was inlined here in 0026 P2; moved to
+// src/lib/quotes/pricing.ts so the composer + action layer share the same
+// default shape.
 
 function revalidateQuoteViews() {
   revalidatePath('/quotes');
   revalidatePath('/production');
+}
+
+async function loadActiveCatalog(): Promise<ServiceItem[]> {
+  return db
+    .select({
+      id: serviceItems.id,
+      code: serviceItems.code,
+      label: serviceItems.label,
+      unit: serviceItems.unit,
+      unitPrice: serviceItems.unitPrice,
+      unitPriceMin: serviceItems.unitPriceMin,
+      unitPriceMax: serviceItems.unitPriceMax,
+      description: serviceItems.description,
+      sortOrder: serviceItems.sortOrder,
+    })
+    .from(serviceItems)
+    .where(isNull(serviceItems.archivedAt));
+}
+
+function pickNumber(v: unknown, fallback: number): number {
+  return typeof v === 'number' ? v : fallback;
+}
+function pickString(v: unknown, fallback: string): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+/** Parse a `QuoteInputs` payload from FormData. The composer submits it as a
+ *  single `inputs` JSON string; the action **canonicalizes** field-by-field
+ *  to drop any unknown keys (prevents arbitrary JSON ending up in the
+ *  `quotes.inputs` jsonb column). The pricing module's `validateQuoteInputs`
+ *  then enforces per-field shape.
+ */
+function parseQuoteInputs(formData: FormData): QuoteInputs | { error: string } {
+  const raw = field(formData, 'inputs');
+  if (!raw) return { error: 'Quote inputs are required.' };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { error: 'Quote inputs payload is not valid JSON.' };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { error: 'Quote inputs must be an object.' };
+  }
+  const p = parsed as Record<string, unknown>;
+
+  // Canonical extraction — only known fields survive. Unknown keys (incl.
+  // any `__proto__` / `constructor` JSON payloads) are silently discarded.
+  return {
+    audienceSize: pickNumber(p.audienceSize, DEFAULT_QUOTE_INPUTS.audienceSize),
+    eventDays: pickNumber(p.eventDays, DEFAULT_QUOTE_INPUTS.eventDays),
+    bdcCallCount: pickNumber(p.bdcCallCount, DEFAULT_QUOTE_INPUTS.bdcCallCount),
+    letterCount: pickNumber(p.letterCount, DEFAULT_QUOTE_INPUTS.letterCount),
+    digitalCount: pickNumber(p.digitalCount, DEFAULT_QUOTE_INPUTS.digitalCount),
+    recordRetrievalAmount: pickNumber(
+      p.recordRetrievalAmount,
+      DEFAULT_QUOTE_INPUTS.recordRetrievalAmount,
+    ),
+    travelAmount: pickNumber(p.travelAmount, DEFAULT_QUOTE_INPUTS.travelAmount),
+    travelNotes: pickString(p.travelNotes, DEFAULT_QUOTE_INPUTS.travelNotes),
+    quoteNotes: pickString(p.quoteNotes, DEFAULT_QUOTE_INPUTS.quoteNotes),
+  };
+}
+
+// Reject more than 2 decimal places so the persisted tax value cannot diverge
+// between paths (`setQuoteTax` writes `tax.toFixed(2)`, `computeQuote` rounds
+// via `roundCents`; the two can drift on >2-decimal inputs like `2.675`).
+// Canonicalizing here means every call site sees the same cents.
+const TAX_RE = /^\d+(\.\d{1,2})?$/;
+
+function parseTax(formData: FormData): number | { error: string } {
+  const raw = field(formData, 'tax');
+  if (!raw) return 0;
+  if (!TAX_RE.test(raw)) {
+    return { error: 'Tax must be a non-negative number with at most 2 decimal places.' };
+  }
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) {
+    return { error: 'Tax must be a non-negative number.' };
+  }
+  // Match `computeQuote`'s tax cap so the `setQuoteTax` standalone path can't
+  // bypass the same guard that `setQuoteInputs` / `createQuote` enforce
+  // through the pricing module.
+  if (n > MAX_DOLLARS) {
+    return { error: `Tax must be ≤ ${MAX_DOLLARS}.` };
+  }
+  return n;
+}
+
+function moneyString(n: number): string {
+  return n.toFixed(2);
+}
+
+/** Apply a freshly-computed `QuoteComputation` + `inputs` snapshot to a row.
+ *  Used by the create path (in-flight insert) and the setter actions. */
+function persistComputationPatch(
+  inputs: QuoteInputs,
+  out: ReturnType<typeof computeQuote>,
+): {
+  inputs: QuoteInputs;
+  lineItems: ReturnType<typeof computeQuote>['lines'];
+  subtotal: string;
+  tax: string;
+  total: string;
+} {
+  return {
+    inputs,
+    lineItems: out.lines,
+    subtotal: moneyString(out.subtotal),
+    tax: moneyString(out.tax),
+    total: moneyString(out.total),
+  };
 }
 
 export const createQuote = capabilityClient('quote:edit')
@@ -62,38 +172,253 @@ export const createQuote = capabilityClient('quote:edit')
     const dealerId = parseId(formData, 'dealerId');
     if (dealerId == null) return { error: 'Dealer is required.' };
 
-    // Verify the dealer exists and is unarchived. `quotes.dealer_id` has
-    // `ON DELETE RESTRICT` so a stale id would surface as an opaque FK
-    // violation — explicit check yields a friendlier message. The
-    // `archivedAt IS NULL` clause matches `createCampaign`'s active-dealer
-    // check in src/features/schedule/actions.ts so archived dealers don't
-    // get new quotes through the back door.
-    const dealer = await db
-      .select({ id: dealers.id })
-      .from(dealers)
-      .where(and(eq(dealers.id, dealerId), isNull(dealers.archivedAt)))
-      .limit(1);
-    if (!dealer.length) return { error: 'Dealer not found or archived.' };
+    // Composer Save-Draft path: callers can pass `inputs` (JSON-serialized
+    // QuoteInputs) and `tax` to seed the row with a real snapshot. Absent
+    // → fall back to the default empty inputs + zeroed lines/total
+    // (existing 0026 P2 behavior).
+    let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
+    let computed: ReturnType<typeof computeQuote> | null = null;
+    if (formData.has('inputs')) {
+      const parsed = parseQuoteInputs(formData);
+      if ('error' in parsed) return parsed;
+      const taxResult = parseTax(formData);
+      if (typeof taxResult === 'object') return taxResult;
 
-    const [row] = await db
-      .insert(quotes)
-      .values({
-        dealerId,
-        inputs: DEFAULT_QUOTE_INPUTS,
-        createdById: userId,
-        updatedById: userId,
-      })
-      .returning({ id: quotes.id });
+      const catalog = await loadActiveCatalog();
+      try {
+        computed = computeQuote(parsed, catalog, taxResult);
+      } catch (err) {
+        if (err instanceof QuoteInputsError) return { error: err.message };
+        throw err;
+      }
+      inputsSnapshot = parsed;
+    }
+
+    const baseInsert = {
+      dealerId,
+      inputs: inputsSnapshot,
+      createdById: userId,
+      updatedById: userId,
+    };
+    const insertValues = computed
+      ? {
+          ...baseInsert,
+          ...(() => {
+            const patch = persistComputationPatch(inputsSnapshot, computed);
+            return {
+              lineItems: patch.lineItems,
+              subtotal: patch.subtotal,
+              tax: patch.tax,
+              total: patch.total,
+            };
+          })(),
+        }
+      : baseInsert;
+
+    // Verify dealer is active **inside the transaction with a row lock** so a
+    // concurrent `archiveDealer` between our SELECT and the INSERT cannot
+    // attach the quote to a freshly-archived dealer. `FOR UPDATE` on the
+    // dealer row blocks concurrent archive until our tx commits.
+    const result = await db.transaction(async (tx) => {
+      const [dealer] = await tx
+        .select({ id: dealers.id })
+        .from(dealers)
+        .where(and(eq(dealers.id, dealerId), isNull(dealers.archivedAt)))
+        .for('update')
+        .limit(1);
+      if (!dealer) {
+        return { ok: false as const, error: 'Dealer not found or archived.' };
+      }
+
+      const [inserted] = await tx
+        .insert(quotes)
+        .values(insertValues)
+        .returning({ id: quotes.id });
+      return { ok: true as const, quoteId: inserted.id };
+    });
+
+    if (!result.ok) return { error: result.error };
 
     await recordAudit({
       action: 'quote.create',
       targetTable: 'quotes',
-      targetId: row.id,
+      targetId: result.quoteId,
       payload: { dealerId },
     });
 
     revalidateQuoteViews();
-    return { ok: true, quoteId: row.id };
+    return { ok: true, quoteId: result.quoteId };
+  });
+
+/** Composer-side setter: replace the input snapshot, recompute lines + totals
+ *  against the live catalog, persist atomically. Only allowed on `draft`
+ *  rows — `sent` / `accepted` / `declined` quotes are immutable. */
+export const setQuoteInputs = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const parsed = parseQuoteInputs(formData);
+    if ('error' in parsed) return parsed;
+
+    // `tax` is optional — if absent, preserve whatever's on the row.
+    const taxRequested = formData.has('tax') ? parseTax(formData) : null;
+    if (taxRequested && typeof taxRequested === 'object') return taxRequested;
+
+    // Load current tax (when not being changed) — we still need it to
+    // recompute the total. Doing this read + the guarded update inside a
+    // transaction keeps the snapshot consistent with the row state.
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ status: quotes.status, tax: quotes.tax })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+      if (!row) return { error: 'Quote not found.' };
+      if (row.status !== 'draft') {
+        return { error: `Quote cannot be edited in status '${row.status}'.` };
+      }
+
+      const taxNumber = taxRequested != null ? (taxRequested as number) : Number(row.tax) || 0;
+      const catalog = await loadActiveCatalog();
+      let computed: ReturnType<typeof computeQuote>;
+      try {
+        computed = computeQuote(parsed, catalog, taxNumber);
+      } catch (err) {
+        if (err instanceof QuoteInputsError) return { error: err.message };
+        throw err;
+      }
+
+      const patch = persistComputationPatch(parsed, computed);
+      const updated = await tx
+        .update(quotes)
+        .set({
+          inputs: patch.inputs,
+          lineItems: patch.lineItems,
+          subtotal: patch.subtotal,
+          tax: patch.tax,
+          total: patch.total,
+          updatedById: userId,
+        })
+        .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+        .returning({ id: quotes.id });
+      if (!updated.length) {
+        // Concurrent send/decline raced past the read-then-write window.
+        // Re-classify against the latest row state so the UI sees an
+        // accurate error rather than a stale "saved" toast.
+        const [latest] = await tx
+          .select({ status: quotes.status })
+          .from(quotes)
+          .where(eq(quotes.id, quoteId))
+          .limit(1);
+        if (!latest) return { error: 'Quote not found.' };
+        return { error: `Quote cannot be edited in status '${latest.status}'.` };
+      }
+
+      revalidateQuoteViews();
+      return { ok: true };
+    });
+  });
+
+/** Composer-side setter: override just the tax amount on a draft quote.
+ *  Recomputes total = subtotal + tax (lines untouched). */
+export const setQuoteTax = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const tax = parseTax(formData);
+    if (typeof tax === 'object') return tax;
+
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({ status: quotes.status, subtotal: quotes.subtotal })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+      if (!row) return { error: 'Quote not found.' };
+      if (row.status !== 'draft') {
+        return { error: `Quote cannot be edited in status '${row.status}'.` };
+      }
+
+      const subtotal = Number(row.subtotal) || 0;
+      const total = subtotal + tax;
+
+      const updated = await tx
+        .update(quotes)
+        .set({
+          tax: moneyString(tax),
+          total: moneyString(total),
+          updatedById: userId,
+        })
+        .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+        .returning({ id: quotes.id });
+      if (!updated.length) {
+        // Concurrent send/decline raced past the read-then-write window;
+        // re-classify against the latest row state.
+        const [latest] = await tx
+          .select({ status: quotes.status })
+          .from(quotes)
+          .where(eq(quotes.id, quoteId))
+          .limit(1);
+        if (!latest) return { error: 'Quote not found.' };
+        return { error: `Quote cannot be edited in status '${latest.status}'.` };
+      }
+
+      revalidateQuoteViews();
+      return { ok: true };
+    });
+  });
+
+/** Composer-side setter: swap the dealer on a draft quote (e.g. coach picks a
+ *  different dealer from the picker). Verifies the new dealer is active. */
+export const setQuoteDealer = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const dealerId = parseId(formData, 'dealerId');
+    if (dealerId == null) return { error: 'Dealer is required.' };
+
+    // Dealer-active check + quote update inside the same transaction with
+    // `FOR UPDATE` on the dealer row — concurrent archive can't race past
+    // the active-dealer guard.
+    return db.transaction(async (tx) => {
+      const [dealer] = await tx
+        .select({ id: dealers.id })
+        .from(dealers)
+        .where(and(eq(dealers.id, dealerId), isNull(dealers.archivedAt)))
+        .for('update')
+        .limit(1);
+      if (!dealer) return { error: 'Dealer not found or archived.' };
+
+      const result = await tx
+        .update(quotes)
+        .set({ dealerId, updatedById: userId })
+        .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+        .returning({ id: quotes.id });
+      if (!result.length) {
+        const [row] = await tx
+          .select({ status: quotes.status })
+          .from(quotes)
+          .where(eq(quotes.id, quoteId))
+          .limit(1);
+        if (!row) return { error: 'Quote not found.' };
+        return { error: `Quote cannot be edited in status '${row.status}'.` };
+      }
+
+      revalidateQuoteViews();
+      return { ok: true };
+    });
   });
 
 export const sendQuote = capabilityClient('quote:edit')
