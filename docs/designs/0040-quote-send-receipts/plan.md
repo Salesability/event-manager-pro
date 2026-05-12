@@ -9,7 +9,7 @@
 | 1: Schema add — `sent_to_email` + `sent_to_first_name` on `quotes` | Done | ba16de8 |
 | 2: Wire `sendQuote` to denormalize recipient + extend `loadQuote` | Done | 3d0aed1 |
 | 3: Audit-row reader + `signedQuotePdfUrl` Server Action | Done | 023a7cc |
-| 4: Send-receipt panel on `/quotes/[id]` | Pending | - |
+| 4: Send-receipt panel on `/quotes/[id]` | Done | 52a0ddd |
 | 5: Tests + smoke verification | Pending | - |
 
 Today `sendQuote` writes `sentAt` / `pdfStorageKey` to the row and a `quote.sent` audit entry with `payload.emailId`, but the UI doesn't surface any of it — the only post-send hint on `/quotes/[id]` is the status pill flipping from `draft` to `sent`. This chunk closes that gap. "Done" means a coach landing on a sent quote sees: when it was sent, who sent it, the exact address it went to (denormalized at send-time so it survives the dealer's primary-contact rotating), the Resend message ID (link out for support debugging), and a download link for the PDF that was actually attached. The denorm columns are the load-bearing piece — they unblock a correct "Sent to …" line without an audit-payload schema fork and without re-resolving the recipient from current dealer state.
@@ -32,7 +32,7 @@ Today `sendQuote` writes `sentAt` / `pdfStorageKey` to the row and a `quote.sent
 - `docs/wiki/lifecycle.md` — `quote.sent` transition; new denorm fields are written in the same atomic UPDATE as `sentAt`.
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - The denorm pair is **set-once on the `draft → sent` flip** and never updated thereafter — re-sends are not a thing in v1 (the row is locked once `sent`). If 0026 follow-up (a) "degraded-send retry" lands later, that chunk owns whether re-send updates these fields or appends to a history table.
@@ -57,9 +57,10 @@ Today `sendQuote` writes `sentAt` / `pdfStorageKey` to the row and a `quote.sent
 - [x] Fast gate green (`tsc --noEmit` clean, `pnpm test` 687 passed)
 
 #### Phase 4: Send-receipt panel on `/quotes/[id]`
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
+- [x] Extended `Promise.all` in `src/app/(app)/quotes/[id]/page.tsx` to also fetch `loadQuoteSendReceipt(id)`; resolves the GCS signed URL via `signedUrl()` directly (we already passed `assertCan('quote:edit')`, so going through the Server Action is unnecessary on the server render path)
+- [x] Inserted send-receipt `<section>` between the header `<div>` and `<QuoteComposer>`, rendered only when `quote.status !== 'draft'`. Rows: Sent (formatted `sentAt`), Sent to (`sentToFirstName <sentToEmail>`, fallback "(recipient unknown)" for pre-0040 sends), Resend ID (from `payload.emailId`, narrowed at the boundary), Download sent PDF (`<a href={url} target="_blank">`, omitted when no signed URL was resolvable)
+- [x] Side-fix: `loadQuote` projection didn't carry `pdfStorageKey` to the `Quote` type — added column + type field + `QuoteRow` field + `mapRow` projection (caught by `tsc` on first fast-gate run)
+- [x] Fast gate green (`tsc --noEmit` clean, `pnpm test` 687 passed)
 
 #### Phase 5: Tests + smoke verification
 - [ ] Service-level integration test for `sendQuote` recipient-denorm write (real DB)
