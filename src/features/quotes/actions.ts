@@ -692,7 +692,13 @@ export const sendQuote = capabilityClient('quote:edit')
         and(
           eq(quotes.id, quoteId),
           eq(quotes.status, 'draft'),
-          sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${draft.updatedAt}`,
+          // `${...toISOString()}::timestamptz` is load-bearing: drizzle's
+          // `sql\`\`` template doesn't carry column-type metadata for raw
+          // bindings, so `${draft.updatedAt}` (a JS `Date`) reaches
+          // `postgres-js` as a `Date` instance and throws
+          // `ERR_INVALID_ARG_TYPE`. The explicit ISO + cast forces a
+          // string parameter that Postgres parses back to `timestamptz`.
+          sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${draft.updatedAt.toISOString()}::timestamptz`,
         ),
       )
       .returning({ id: quotes.id });
