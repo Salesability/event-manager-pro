@@ -12,7 +12,7 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 |-------|--------|--------|
 | 1: PDF library + GCS storage foundation (decisions + adapters) | Done | `3c4b5b9` |
 | 2: Quote data model + Server Actions | Done | `6c65c80` |
-| 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | - |
+| 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | `df1f580` |
 | 4: Quote email send + public accept/decline flow | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
