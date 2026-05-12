@@ -14,7 +14,7 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 | 2: Quote data model + Server Actions | Done | `6c65c80` |
 | 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | `df1f580` |
 | 4: Quote email send + staff accept/decline (reshaped 2026-05-12: dropped public token flow) | Done | `15830f8` |
-| 5: Tests + smoke verification | Done | - |
+| 5: Tests + smoke verification | Done | `7842063` |
 
 **Overall Progress:** 100% (5/5 phases complete)
 
