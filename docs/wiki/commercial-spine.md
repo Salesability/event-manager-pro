@@ -11,7 +11,7 @@ Reference for how a deal flows through the system: **Client → MSA → Quote �
 - **The accepted Quote IS the contract for a project.** No separate `orders` table — that abstraction would duplicate what §1.iii already establishes legally.
 - **The MSA is per-Client, 12-month, signed once.** All Quotes during that term hang off the same MSA. Renewal is manual in v1.
 - **Campaigns are demoted to operational delivery.** They model the Event being run for the dealer (dates, format, coach, day-of contacts) — *not* the commercial terms. Those move onto the Quote.
-- **First deal bundles MSA + first Quote into one e-sig envelope.** After that, subsequent Quotes under the same active MSA accept on a tokenised public link (no re-signing the MSA).
+- **First deal bundles MSA + first Quote into one e-sig envelope.** After that, subsequent Quotes under the same active MSA accept via the staff `acceptQuote` Server Action (coach phones / replies-to-email with the Client, then flips the row — no re-signing the MSA). The originally-planned tokenised public accept link was dropped in 0026 Phase 4 (2026-05-12) after Codex flagged that corporate email security scanners auto-prefetch URLs and would silently accept Quotes on the recipient's behalf; `quotes.accept_token` stays on the schema for forward-compat with a future v2 POST-only confirmation-page button.
 
 ## Entities
 
@@ -41,11 +41,11 @@ The accepted Quote *is* the binding agreement. There's no business event between
    Quote.draft
      │
      ▼  Send (0035 Phase 4)
-   Quote.sent  ── email to Client with public accept link ───┐
-                                                              │
-       ┌──────────────────────────────────────────────────────┘
+   Quote.sent  ── PDF email to Client; Client phones/replies ──┐
+                                                                │
+       ┌────────────────────────────────────────────────────────┘
        │
-       ▼  Client clicks accept
+       ▼  Coach runs staff `acceptQuote` Server Action (v1; no public surface)
    MSA exists?
      │
      ├── YES (active MSA on Client) ──▶ Quote.accepted
@@ -69,7 +69,7 @@ The accepted Quote *is* the binding agreement. There's no business event between
 ### Less-happy paths
 
 - **Cancellation within 21 days of Event start** — 50% × Quote total per §2.iii. Owned by `src/lib/quotes/cancellation.ts` eventually; invoiced as a separate Stripe line item. **Out of v1 scope** (see 0037 OQ #4).
-- **Quote expired before acceptance** — Quote's `quoteValidDays` window (default 30) closes; coach must clone-and-resend with refreshed pricing. App-layer guard on the public accept route checks `sentAt + quoteValidDays < now()` before accepting.
+- **Quote expired before acceptance** — Quote's `quoteValidDays` window (default 30) closes; coach must clone-and-resend with refreshed pricing. The expiry guard belongs on the staff `acceptQuote` Server Action (planned — not yet wired): refuse `sent → accepted` when `sentAt + quoteValidDays < now()`.
 - **MSA terminated mid-term** — either party gives notice per §2.ii. Schema records `terminationNoticeDate` and `terminationEffectiveDate`; the gap must be ≥ 30 days (OQ #1 resolution). Quotes under the terminated MSA cannot be accepted after `terminationEffectiveDate`; existing accepted Quotes (already-running campaigns) honor their commitments.
 - **MSA expires (12 months elapse, no termination)** — daily sweep (deferred) flips `status='expired'`. Composer Send rejects until renewed. Renewal = coach clicks "Renew MSA" on the Client → new `master_service_agreements` row + fresh e-sig envelope (v1 manual flow per OQ #3).
 

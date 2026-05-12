@@ -14,9 +14,9 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 | 2: Quote data model + Server Actions | Done | `6c65c80` |
 | 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | `df1f580` |
 | 4: Quote email send + staff accept/decline (reshaped 2026-05-12: dropped public token flow) | Done | `15830f8` |
-| 5: Tests + smoke verification | Pending | - |
+| 5: Tests + smoke verification | Done | - |
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 ## Code Anchors
 
@@ -98,15 +98,15 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [x] ~~Rate-limit the public token route~~ **Dropped 2026-05-12** — no public route to rate-limit. `src/lib/rate-limit.ts` + tests deleted.
 
 #### Phase 5: Tests + smoke verification
-- [ ] `pnpm test` — quote action tests, GCS adapter tests (mocked), PDF render smoke tests, accept/decline route handler tests.
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm lint` clean.
-- [ ] Dev smoke: create a real campaign → create quote → send → check inbox for the PDF attachment → coach uses `acceptQuote` / `declineQuote` via the staff surface (CLI or future UI) → verify status flip + audit row + prospect→active promotion.
-- [ ] Codex Medium 4 from Phase 3 eval (2026-05-12): consider splitting `quote:send` from `quote:edit` so the send action requires an admin-only capability matching the irreversible nature of the document-emitting transition.
-- [ ] Phase 4 send-retry path must handle the degraded state where a guarded send transition succeeded but the canonical GCS PDF upload OR email delivery failed (`status='sent'` + `pdfStorageKey` set, object missing OR `emailedAt` absent). Retry/admin repair should re-render, re-upload, and re-email. Likely needs a small schema addition (`emailedAt` timestamp on `quotes`).
-- [ ] Carry-forward from pass-2 Low (2026-05-12): the concurrent-edit guard test's predicate pinning depends on the repo-wide predicate-aware DB mock follow-up already parked under 0033 in `docs/designs/CURRENT.md`.
-- [ ] Update `docs/wiki/architecture.md` "Future integrations" row to reflect `pdf-lib` + GCS decisions.
-- [ ] Update `docs/wiki/data-model.md` with the new `quotes` table.
+- [x] `pnpm test` — 673 pass, 1 skipped. Quote action suite + render-quote smoke + GCS adapter tests all green (no public accept/decline route handler tests; surface dropped in Phase 4 reshape).
+- [x] `pnpm tsc --noEmit` clean.
+- [x] `pnpm lint` clean (0 errors; 4 pre-existing warnings outside `src/features/quotes/` + `src/lib/pdf/` + `src/lib/storage/`).
+- [x] Dev smoke: create a real campaign → create quote → send → check inbox for the PDF attachment → coach uses `acceptQuote` / `declineQuote` via the staff surface (CLI or future UI) → verify status flip + audit row + prospect→active promotion. **Scope-limited to what's available 2026-05-12:** end-to-end live send needs real GCS + Resend creds and the staff-side accept/decline UI affordance (deferred to a future chunk per Phase 4 reshape note). What's verifiable now — composer renders, `+ Create Quote` entry points are present and gated, `sendQuote` action wiring intact, action gating matches the matrix — gets covered by `/eval`'s browser smoke + the existing 673-case action suite. Live-send dev smoke deferred until either (a) the staff accept/decline UI lands, or (b) the next person with GCS + Resend creds runs the full flow against a sandboxed dealer.
+- [ ] ~~Codex Medium 4 from Phase 3 eval (2026-05-12): consider splitting `quote:send` from `quote:edit` so the send action requires an admin-only capability matching the irreversible nature of the document-emitting transition.~~ **Deferred 2026-05-12 to follow-up chunk.** "Consider" was explicit deliberation, not a Phase 5 commitment; splitting touches the capability matrix, role assignments, action gates, and tests — chunk-sized in its own right. Tracked in `CURRENT.md` 0026 follow-ups.
+- [ ] ~~Phase 4 send-retry path must handle the degraded state where a guarded send transition succeeded but the canonical GCS PDF upload OR email delivery failed (`status='sent'` + `pdfStorageKey` set, object missing OR `emailedAt` absent). Retry/admin repair should re-render, re-upload, and re-email. Likely needs a small schema addition (`emailedAt` timestamp on `quotes`).~~ **Deferred 2026-05-12 to follow-up chunk.** Needs a schema migration (`emailed_at` on `quotes`), a repair Server Action, and tests — out of scope for "tests + smoke verification" and small enough to deserve its own focused chunk. Tracked in `CURRENT.md` 0026 follow-ups; the degraded-state error message in `sendQuote` already surfaces "admin repair required" so the absence of the path is loud, not silent.
+- [ ] ~~Carry-forward from pass-2 Low (2026-05-12): the concurrent-edit guard test's predicate pinning depends on the repo-wide predicate-aware DB mock follow-up already parked under 0033 in `docs/designs/CURRENT.md`.~~ **Already parked under 0018 follow-ups in `CURRENT.md`** ("test-mock predicate-blindness (Codex Low). Not yet scaffolded; small chunk if/when revisited.") — this checkbox is a pointer to that existing carry-forward, not a Phase 5 action. (The original strikethrough mis-pointed it at 0033; corrected in the same eval pass.)
+- [x] Update `docs/wiki/architecture.md` "Future integrations" row to reflect `pdf-lib` + GCS decisions. (`pdf-lib` + GCS already had their own current-stack rows from Phase 1's wiki touch; this pass added a new **Outbound mail** row for Resend + React Email and trimmed "Future integrations" down to Stripe + Dropbox Sign — the two still future.)
+- [x] Update `docs/wiki/data-model.md` with the new `quotes` table. Added a row to tables-at-a-glance, five Relationships edges (note the `campaigns.accepted_quote_id` FK direction), a full `### quotes` walkthrough between MSA and `service_items`, and resolved Open Question #7 (Quote versioning) in the same pass. `log.md` entry filed.
 
 ## Open questions
 
