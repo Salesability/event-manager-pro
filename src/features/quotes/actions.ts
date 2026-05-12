@@ -16,7 +16,7 @@ import {
 } from '@/lib/quotes/pricing';
 import type { ServiceItem } from '@/features/services/queries';
 import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
-import { putObject } from '@/lib/storage/gcs';
+import { putObject, signedUrl } from '@/lib/storage/gcs';
 import type { ComputedLine } from '@/lib/quotes/pricing';
 import { sendEmail } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
@@ -504,6 +504,47 @@ function sameTimestamp(a: unknown, b: unknown): boolean {
 type PreviewResult =
   | { ok: true; dataUrl: string }
   | { error: string };
+
+type SignedQuotePdfUrlResult =
+  | { ok: true; url: string }
+  | { error: string };
+
+const QUOTE_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
+
+// Returns a short-lived V4 signed read URL for the persisted quote PDF — the
+// "Download sent PDF" link on the send-receipt panel. Only valid for rows that
+// reached `sent` (a draft has no `pdfStorageKey`); draft requests reject with
+// `error`. TTL is 5 minutes — much tighter than the 7-day cap; the panel
+// re-resolves on each render.
+export const signedQuotePdfUrl = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<SignedQuotePdfUrlResult> => {
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const bucket = process.env.GCS_BUCKET;
+    if (!bucket) {
+      return { error: 'GCS_BUCKET is not configured; cannot sign quote PDF URL.' };
+    }
+
+    const [quote] = await db
+      .select({ status: quotes.status, pdfStorageKey: quotes.pdfStorageKey })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!quote) return { error: 'Quote not found.' };
+    if (quote.status === 'draft' || !quote.pdfStorageKey) {
+      return { error: 'Quote PDF is not available until the quote is sent.' };
+    }
+
+    const signed = await signedUrl(
+      bucket,
+      quote.pdfStorageKey,
+      QUOTE_PDF_SIGNED_URL_TTL_SECONDS,
+    );
+    if ('error' in signed) return { error: signed.error };
+    return { ok: true, url: signed.url };
+  });
 
 // Preview action — renders the PDF from the persisted snapshot (no GCS, no
 // email, no lifecycle change) and returns it as a base64 data URL the

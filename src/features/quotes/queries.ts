@@ -1,7 +1,7 @@
 import 'server-only';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { audienceSources, dealers, quotes } from '@/lib/db/schema';
+import { audienceSources, auditLog, dealers, quotes } from '@/lib/db/schema';
 import type { ComputedLine, QuoteInputs } from '@/lib/quotes/pricing';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined';
@@ -125,6 +125,39 @@ export async function loadQuote(id: number): Promise<Quote | null> {
     .where(eq(quotes.id, id))
     .limit(1);
   return row ? mapRow(row) : null;
+}
+
+export type QuoteSendReceipt = {
+  occurredAt: Date;
+  actorUserId: string | null;
+  payload: unknown;
+};
+
+// Reads the `quote.sent` audit row for a quote — the source of truth for the
+// Resend message ID (`payload.emailId`) and the actor who fired send. Phase 4
+// renders the send-receipt panel off this + the row-level denorm on `quotes`.
+// Returns `null` when the quote was never sent (no audit row); `payload` stays
+// `unknown` here so callers cast/validate at the UI boundary.
+export async function loadQuoteSendReceipt(
+  quoteId: number,
+): Promise<QuoteSendReceipt | null> {
+  const [row] = await db
+    .select({
+      occurredAt: auditLog.occurredAt,
+      actorUserId: auditLog.actorUserId,
+      payload: auditLog.payload,
+    })
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.targetTable, 'quotes'),
+        eq(auditLog.targetId, quoteId),
+        eq(auditLog.action, 'quote.sent'),
+      ),
+    )
+    .orderBy(desc(auditLog.occurredAt))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function loadQuotesByDealer(dealerId: number): Promise<Quote[]> {
