@@ -16,7 +16,7 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 | 2: `master_service_agreements` schema + migration | Done | `da05c54` |
 | 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | `46db02b` |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Done | `b089d47` |
-| 5: Tests + wiki sweep | Done | - |
+| 5: Tests + wiki sweep | Done | `035d5e6` |
 
 **Overall Progress:** 100% (5/5 phases complete)
 
