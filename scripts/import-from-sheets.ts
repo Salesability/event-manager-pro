@@ -492,11 +492,6 @@ async function importCampaigns(
       phone: ev.phone,
       email: ev.email,
       notes: ev.notes,
-      fee: ev.fee ?? undefined,
-      depositPct: ev.depositPct ?? undefined,
-      taxPct: ev.taxPct ?? undefined,
-      travel: ev.travel ?? undefined,
-      quoteValidDays: ev.quoteValidDays ?? undefined,
       quoteNotes: ev.quoteNotes,
       createdAt: ev.createdAt ? new Date(ev.createdAt) : undefined,
     } satisfies typeof campaigns.$inferInsert;
