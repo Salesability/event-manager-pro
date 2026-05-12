@@ -31,6 +31,7 @@ export type Quote = {
   sentToFirstName: string | null;
   acceptedAt: Date | null;
   declinedAt: Date | null;
+  pdfStorageKey: string | null;
   createdAt: Date;
   createdById: string | null;
 };
@@ -54,6 +55,7 @@ const projection = {
   sentToFirstName: quotes.sentToFirstName,
   acceptedAt: quotes.acceptedAt,
   declinedAt: quotes.declinedAt,
+  pdfStorageKey: quotes.pdfStorageKey,
   createdAt: quotes.createdAt,
   createdById: quotes.createdById,
 };
@@ -77,6 +79,7 @@ type QuoteRow = {
   sentToFirstName: string | null;
   acceptedAt: Date | null;
   declinedAt: Date | null;
+  pdfStorageKey: string | null;
   createdAt: Date;
   createdById: string | null;
 };
@@ -101,6 +104,7 @@ function mapRow(row: QuoteRow): Quote {
     sentToFirstName: row.sentToFirstName,
     acceptedAt: row.acceptedAt,
     declinedAt: row.declinedAt,
+    pdfStorageKey: row.pdfStorageKey,
     createdAt: row.createdAt,
     createdById: row.createdById,
   };
