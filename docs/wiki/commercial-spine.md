@@ -97,7 +97,7 @@ MSA wording isn't immutable. The legal team may revise clauses (notice period, g
 Phase 1 (this doc + cross-plan reconciliation) — pure docs.
 Phase 2 — `master_service_agreements` schema + migration; no Server Actions (those belong to 0025 Phase 7.2's MSA send/sign flow).
 Phase 3 — plan-doc edits to lock the `quotes` schema shape *before* 0026 Phase 2 ships.
-Phase 4 — drop the commercial columns from `campaigns` once 0026 Phase 2 + 0035 Phase 3 are writing to the new locations.
+Phase 4 — drop the strictly-commercial columns from `campaigns` (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) once 0026 Phase 2 + 0035 Phase 3 are writing to the new locations on `quotes`. **Scope narrowed 2026-05-12 during the `/build` chunk loop:** `audience_source_id` deferred to a follow-up because the booking-form Data Source dropdown + production/reports/calendar reads still consume it (none for commercial purposes) and the composer-driven flow that would replace them isn't fully wired yet. The five strictly-commercial drops shipped at `b089d47`.
 Phase 5 — wiki + test sweep.
 
 What 0037 does **NOT** do:
@@ -109,7 +109,7 @@ What 0037 does **NOT** do:
 
 ## Cross-links
 
-- [`docs/wiki/data-model.md`](data-model.md) — the per-table reference. `master_service_agreements` section lands in 0037 Phase 2; `quotes` section lands when 0026 Phase 2 ships.
+- [`docs/wiki/data-model.md`](data-model.md) — the per-table reference. Carries the current `master_service_agreements` and `quotes` table descriptions, plus the updated `campaigns` walkthrough framing the table as operational-delivery after 0037 Phase 4's commercial-column drop.
 - [`docs/wiki/auth.md`](auth.md) — gating conventions for MSA-related Server Actions (admin + coach with per-Client ownership).
 - [`docs/wiki/conventions.md`](conventions.md) — Drizzle ID/audit-column defaults; session-pooler for migrations.
 - [`docs/strategy/roadmap.md`](../strategy/roadmap.md) — long-horizon framing of the quote→MSA→e-sig surface area.

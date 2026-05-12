@@ -35,7 +35,7 @@ Done = a campaign can be sent end-to-end through quote → contract → invoice 
 - **GCS storage adapter** — credentials + bucket + signed-URL helper. Reused for storing rendered quote PDFs, signed MSA PDFs (after Dropbox Sign webhook), and any other archived business docs.
 - **Document-status state machine** — quotes carry `draft|sent|accepted|declined`; contracts and invoices follow analogous shapes.
 - **Email-send foundation** — already in place from 5.5 (`src/lib/email/send.ts`); 7.x adds React Email templates per doc type.
-- **Event/Campaign demotion (0037 Phase 4):** by the time 7.4 (Payment) flips `campaigns.status`, the `campaigns` table is purely operational (delivery date range, coach, day-of contacts, channels). Commercial fields (`fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`) live on `quotes`. The webhook reads the linked `campaigns.acceptedQuoteId → quotes` for amount reconciliation.
+- **Event/Campaign demotion (0037 Phase 4):** by the time 7.4 (Payment) flips `campaigns.status`, the `campaigns` table is purely operational (delivery date range, coach, day-of contacts, channels). Commercial fields (`fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`) live on `quotes` — dropped from `campaigns` 2026-05-12 in `drizzle/0017_tranquil_living_mummy.sql`. The webhook reads the linked `campaigns.acceptedQuoteId → quotes` for amount reconciliation. *`audienceSourceId` was scope-narrowed off Phase 4's drop list (still on `campaigns` today; tracked as a follow-up to fold once the booking-form/composer flow is reconciled).*
 
 ## Sequencing
 

@@ -16,9 +16,9 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 | 2: `master_service_agreements` schema + migration | Done | `da05c54` |
 | 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | `46db02b` |
 | 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Done | `b089d47` |
-| 5: Tests + wiki sweep | Pending | - |
+| 5: Tests + wiki sweep | Done | - |
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 ## Code Anchors
 
@@ -104,12 +104,12 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 
 #### Phase 5: Tests + wiki sweep
 
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm lint` clean.
-- [ ] `pnpm test` — new MSA schema reachability test passes; no regressions in existing campaign/quote tests.
-- [ ] Re-read `docs/wiki/commercial-spine.md`, `docs/wiki/data-model.md`, and the three reconciled plan docs (0025/0026/0035) for internal consistency. Fix any drift introduced during Phases 2–4.
-- [ ] Append to `docs/wiki/log.md`: "0037 shipped — commercial spine + MSA model locked; `master_service_agreements` table live; commercial columns dropped from campaigns."
-- [ ] Update `docs/designs/CURRENT.md` — flip Active to the next plan (likely 0026 unparking, given the sequencing).
+- [x] `pnpm tsc --noEmit` clean. (Verified in Phase 4 eval at `eval-2026-05-12-1230.md`; no code changed since, only docs.)
+- [x] `pnpm lint` clean. (Same — Phase 4 eval.)
+- [x] `pnpm test` — green; MSA schema reachability test added in Phase 2 still passes; no regressions in campaign/quote tests after the column drop. (Phase 4 eval.)
+- [x] Re-read `docs/wiki/commercial-spine.md`, `docs/wiki/data-model.md`, and the three reconciled plan docs (0025/0026/0035) for internal consistency. Phase 4's narrowed scope flushed three doc-drift Lows (Codex pass-1 in Phase 4 eval): `data-model.md`'s `campaigns` row + `### campaigns` walkthrough updated to drop the 5 commercial cols + reframe as "operational delivery"; `commercial-spine.md`'s Phase 4 description updated to record the narrowed scope; `0025-quote-to-payment/plan.md:38` annotated to note `audienceSourceId` stays on `campaigns` for now. `closed/0026-quote-pdf/plan.md`'s Phase 2 sketch left intact (historical record of the Phase 2 decision; `quotes.audienceSourceId` claim still accurate). `0035-quote-composer/plan.md` re-read — no drift.
+- [x] Append to `docs/wiki/log.md`: 2026-05-12 entry "Commercial spine landed: `campaigns` shed legacy commercial columns (0037 Phase 4 + 5)" — records the column drop, the scope narrowing, and the supersession of the 2026-05-11 "Commercial spine locked" entry's six-column claim.
+- [ ] Update `docs/designs/CURRENT.md` — line 5 already updated to reflect Phase 4 shipped + Phase 5 in progress. The "flip Active to the next plan" lands after Phase 5 commits — target is 0035 P4 polish (unblocked, low-urgency) per the queued sequence, falling back to "_None — pick a new plan_" if the user wants to set direction.
 
 ## Open questions
 
