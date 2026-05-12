@@ -12,11 +12,11 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 |-------|--------|--------|
 | 1: Service catalog data model + admin UI | Done | `bfaeff7` |
 | 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
-| 3: Pricing logic + quote composer page | Pending | - |
-| 4: PDF preview pane + send wiring | Pending | - |
-| 5: Tests + smoke verification | Pending | - |
+| 3: Pricing logic + quote composer page | Done | `0a17124` |
+| 4: PDF preview pane + send wiring | Blocked on 0026 P3+P4 | - |
+| 5: Tests + smoke verification | Partial — static + smoke green; wiki updates + inline-prospect smoke pending | - |
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 ## Code Anchors
 
@@ -102,35 +102,16 @@ For each new file/method below, the builder reads the anchor first and matches i
     quoteNotes: string;            // optional — additional notes rendered on PDF
   };
   ```
-- [ ] New `src/lib/quotes/pricing.ts`:
-  - `computeQuote(inputs: QuoteInputs, catalog: ServiceItem[]): { lines: ComputedLine[]; subtotal: number; tax: number; total: number }` — pure function. Walks the catalog, applies the input rules:
-    - `base-event` always present, qty 1
-    - `additional-contact` qty = `max(0, audienceSize - 500)`; line omitted if 0
-    - `additional-day` qty = `max(0, eventDays - 1)`; line omitted if 0
-    - `bdc-call` / `letter-postage` / `digital-record` qty = corresponding count input; line omitted if 0
-    - `record-retrieval` line emitted iff `recordRetrievalAmount > 0`; unit price = the chosen amount (range item)
-    - `travel` line emitted iff `travelAmount > 0`; unit price = `travelAmount` (variable)
-  - `tax`: 0035 returns 0 by default; coach can override via the `tax` field on the quote (final tax decision deferred to 0026 Open Question on NS HST vs buyer-province).
-  - All inputs validated: `Number.isFinite`, `>= 0`, integer for counts, currency-cents-or-dollars consistent with `service_items.unitPrice` storage.
-  - **No coach-side line-item editing.** `ComputedLine[]` is output; if pricing changes are needed, the inputs change.
-- [ ] Vitest `pricing.test.ts`: ≥ 15 cases — base-only, audience > 500, multi-channel mix, multi-day event, record-retrieval present/absent, travel present/absent, all-zero counts, NaN/Infinity guards, negative inputs rejected, very large numbers, catalog rows missing/archived.
-- [ ] New page `src/app/(app)/quotes/new/page.tsx` — gated by `requireRole(['admin', 'coach'])`. Reads `?campaignId=...` and/or `?dealerId=...` from query string; preloads dealer + campaign + catalog.
-- [ ] New client component `src/features/quotes/quote-composer.tsx`:
-  - **Header:** dealer picker (Combobox; "Add new prospect" affordance opens inline-create dialog from Phase 2). Below: campaign linkage (read-only if `campaignId` passed; campaign picker otherwise).
-  - **Inputs panel** (left or top):
-    - Audience size (number input)
-    - Event days (number input)
-    - Per-channel touches: BDC calls / Letters / Digital records (three number inputs)
-    - Record retrieval: radio for $0 / $100 / $200 / $300 / $400 (or freeform within range)
-    - Travel: dollar input + optional notes textarea
-    - Quote notes (textarea — renders on PDF)
-  - **Output panel** (right or below): computed line-items table (read-only, with `ⓘ auto` badge on each row), subtotal, tax (coach can override the dollar amount only), total. Audience-overage and additional-day rows appear/disappear live as inputs change.
-  - **No `+ Add line item` button in v1** — the catalog is the menu and the inputs are the only knobs. Custom one-off lines are a v2 add (Open Question #8).
-  - **Save Draft** button — calls 0026's `createQuote` with the input snapshot + computed lines + `status='draft'`.
-- [ ] Composer-side Server Actions in `src/features/quotes/actions.ts`: `setQuoteInputs(quoteId, inputs: Partial<QuoteInputs>)` (single setter — coalesces all input edits), `setQuoteTax(quoteId, amount)`, `setQuoteDealer(quoteId, dealerId)`. Capability gate `quote:edit`. Each setter recomputes lines + totals server-side and persists them alongside the inputs. **No MSA check on draft editing** (per [0037](../0037-commercial-spine-msa/plan.md)) — coaches can compose a Quote for any Client whether they have an active MSA or not; the MSA gate lives on Phase 4's Send action.
-- [ ] **Data-model handoff to 0026 Phase 2:** the `quotes` table gains an `inputs` jsonb column storing the typed `QuoteInputs` snapshot, plus the `lineItems` jsonb (computed output). Both are persisted on every input edit so the row is always self-consistent. **Note in 0026 plan:** Phase 2's table sketch needs the `inputs` column added before 0035 Phase 3 starts.
-- [ ] Entry-point button on `src/features/dealers/dealers-columns.tsx` (per-row "Quote" action) — links to `/quotes/new?dealerId=<id>`.
-- [ ] Entry-point button on the campaign-detail dialog (today's `EventDetail` modal in `/production`) — links to `/quotes/new?campaignId=<id>`.
+- [x] New `src/lib/quotes/pricing.ts` — `computeQuote(inputs, catalog, taxOverride=0)` pure function. Implements the locked rules (base-event always; additional-contact/day; bdc/letter/digital per-touch; record-retrieval range-bound; travel variable). **Carry-forward from pass-2 Codex:** range-bound items fail closed when catalog row has null/non-finite `unitPriceMin/Max`. `validateQuoteInputs` throws `QuoteInputsError` on NaN/Infinity/negatives/non-integer counts/oversized notes; sanity caps `MAX_AUDIENCE=1M`, `MAX_DAYS=365`, `MAX_TOUCHES=1M`, `MAX_DOLLARS=9_999_999`. `roundCents` helper.
+- [x] Vitest `pricing.test.ts` — 25 cases covering all rules + edge cases + range-bound enforcement.
+- [x] New page `src/app/(app)/quotes/new/page.tsx` — gated by `assertCan('quote:edit')` (admin || coach per capabilities.ts). Reads `?campaignId=` / `?dealerId=` from query string; preloads dealers + catalog.
+- [x] New client component `src/features/quotes/quote-composer.tsx` — two-column layout: header (dealer Combobox + optional campaign label) + inputs panel + computed line-items table + Save Draft.
+  - [ ] ~~"Add new prospect" affordance in dealer picker~~ **Deferred.** Combobox primitive doesn't support an inline-add button cleanly; prospect dealers added via /dealerships show up in the picker labelled `(prospect)`. Re-visit when a richer picker component lands (post-0035) — the DealerForm already accepts `defaultStatus='prospect'` for when this affordance is wired.
+- [x] Composer-side Server Actions: `setQuoteInputs` (full-snapshot setter; recomputes lines + totals server-side; guarded UPDATE returning + race-classification per pass-1 Codex High), `setQuoteTax` (overrides tax, recomputes total; same race-classification), `setQuoteDealer` (verifies new dealer is active inside a transaction with `FOR UPDATE` on the dealer row per pass-1 Codex M4). Capability gate `quote:edit`. **Carry-forward from pass-1+2+3 Codex Mediums:** `parseQuoteInputs` canonicalizes field-by-field (drops unknown JSON keys); `parseTax` rejects `>MAX_DOLLARS` and `>2-decimal-place` inputs to keep all three persistence paths writing the same cents.
+- [x] **Data-model handoff to 0026 Phase 2:** already in place from 0026 P2 (the `quotes` table has `inputs` jsonb NOT NULL + `lineItems` jsonb default '[]'). No additional migration needed.
+- [x] Entry-point button on `src/features/dealers/dealers-columns.tsx` — per-row Quote link to `/quotes/new?dealerId=<id>`, gated `quote:edit`, hidden on archived rows.
+- [x] Entry-point button on the campaign-detail dialog (`src/app/(app)/calendar/event-detail.tsx`) — "Create Quote" button next to Cancel Campaign, links to `/quotes/new?campaignId=<id>&dealerId=<dealerId>`, gated `quote:edit`.
+- [x] Vitest extended: composer-action coverage (`createQuote` Save-Draft path, all three setters, race-classification on the setters, JSON-canonicalization, range-bound enforcement, tax decimal-precision). Three new rows in `action-gate-matrix.ts` (admin || coach for each setter). Repo total: 591 → 655.
 
 #### Phase 4: PDF preview pane + send wiring
 
