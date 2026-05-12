@@ -686,6 +686,8 @@ export const sendQuote = capabilityClient('quote:edit')
         status: 'sent',
         sentAt: new Date(),
         pdfStorageKey: storageKey,
+        sentToEmail: recipient.email,
+        sentToFirstName: recipient.firstName,
         updatedById: userId,
       })
       .where(

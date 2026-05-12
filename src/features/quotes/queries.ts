@@ -27,6 +27,8 @@ export type Quote = {
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
   sentAt: Date | null;
+  sentToEmail: string | null;
+  sentToFirstName: string | null;
   acceptedAt: Date | null;
   declinedAt: Date | null;
   createdAt: Date;
@@ -48,6 +50,8 @@ const projection = {
   audienceSourceId: quotes.audienceSourceId,
   audienceSourceLabel: audienceSources.label,
   sentAt: quotes.sentAt,
+  sentToEmail: quotes.sentToEmail,
+  sentToFirstName: quotes.sentToFirstName,
   acceptedAt: quotes.acceptedAt,
   declinedAt: quotes.declinedAt,
   createdAt: quotes.createdAt,
@@ -69,6 +73,8 @@ type QuoteRow = {
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
   sentAt: Date | null;
+  sentToEmail: string | null;
+  sentToFirstName: string | null;
   acceptedAt: Date | null;
   declinedAt: Date | null;
   createdAt: Date;
@@ -91,6 +97,8 @@ function mapRow(row: QuoteRow): Quote {
     audienceSourceId: row.audienceSourceId,
     audienceSourceLabel: row.audienceSourceLabel,
     sentAt: row.sentAt,
+    sentToEmail: row.sentToEmail,
+    sentToFirstName: row.sentToFirstName,
     acceptedAt: row.acceptedAt,
     declinedAt: row.declinedAt,
     createdAt: row.createdAt,
