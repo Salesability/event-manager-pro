@@ -6,7 +6,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Dropbox Sign client + env wiring (`src/lib/dropbox-sign/`) | Pending | - |
+| 1: Dropbox Sign client + env wiring (`src/lib/dropbox-sign/`) | Done | `3e1b6bd` |
 | 2: MSA template render (`renderMsaPdf`) + storage layout | Pending | - |
 | 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Pending | - |
 | 4: Webhook route handler at `/api/dropbox-sign/webhook` | Pending | - |
@@ -39,7 +39,7 @@ This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 - Project memory `project_msa_structure` — 12-month MSA term per §2.i; accepted Quote IS the contract per §1.iii (no separate `orders`); 50% cancel fee within 21 days of Event start.
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 17% (1/6 phases complete)
 
 ## Open Questions
 
@@ -56,11 +56,11 @@ These are inherited from closed/0037-commercial-spine-msa (eight OQs there) plus
 
 ## Phase 1: Dropbox Sign client + env wiring
 
-- [ ] Add Dropbox Sign SDK dependency (`@dropbox/sign` or `hellosign-sdk` — pick the actively maintained one)
-- [ ] Create `src/lib/dropbox-sign/client.ts` — lazy singleton (anchored on `gcs.ts:22-50`), env vars `DROPBOX_SIGN_API_KEY` + `DROPBOX_SIGN_CLIENT_ID` + `DROPBOX_SIGN_WEBHOOK_SECRET` documented in `.env.example`
-- [ ] Add `src/lib/dropbox-sign/templates.ts` — `MSA_TEMPLATE_VERSION` env mapping
-- [ ] Unit-test the credential parse + a `client()` cache hit
-- [ ] Resolve Open Question #3 (template vs upload-inline) and #4 (`templateVersion` source) before Phase 3 kicks off
+- [x] Add Dropbox Sign SDK dependency (`@dropbox/sign` v1.10.0 — the official, actively maintained Node client; `hellosign-sdk` is the legacy pre-rebrand package)
+- [x] Create `src/lib/dropbox-sign/client.ts` — lazy singleton (anchored on `gcs.ts:22-50`), env vars `DROPBOX_SIGN_API_KEY` + `DROPBOX_SIGN_CLIENT_ID` + `DROPBOX_SIGN_WEBHOOK_SECRET` documented in `.env.example`. Phase 1 ships the API-key-driven `SignatureRequestApi` init only; `DROPBOX_SIGN_CLIENT_ID` (embedded-signing iframe id) + `DROPBOX_SIGN_WEBHOOK_SECRET` (HMAC verify) are documented in `.env.example` for the operator but only read in Phases 4/5 when the webhook + dialog land. Helpers `createEmbeddedSignatureRequest()` / `getSignedFileBytes()` from the Code Anchor row will land in Phase 3 alongside `sendMsaEnvelope` (their first caller).
+- [x] Add `src/lib/dropbox-sign/templates.ts` — `MSA_TEMPLATE_VERSION` env mapping (exports `currentMsaTemplateVersion()`; per OQ#3 resolved inline-upload, no Dropbox-side template id lookup needed)
+- [x] Unit-test the credential parse + a `client()` cache hit (also covers `currentMsaTemplateVersion` env trim + unset cases; 7 new tests, 695/696 PASS)
+- [x] ~~Resolve Open Question #3 (template vs upload-inline) and #4 (`templateVersion` source) before Phase 3 kicks off~~ — both resolved 2026-05-12 in plan body before Phase 1 kicked off
 
 ## Phase 2: MSA template render (`renderMsaPdf`) + storage layout
 
