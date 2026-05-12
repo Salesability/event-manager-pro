@@ -83,6 +83,25 @@ Each substantive feature gets `src/features/<feature-name>/` with `actions.ts` (
 
 See [conventions.md](conventions.md) for the full rule set.
 
+### Quote composer — calculator, not a line-item picker
+
+The Quote composer (`src/app/(app)/quotes/new/page.tsx` + `src/features/quotes/quote-composer.tsx`) is shaped as a **structured-input calculator**, not a list-picker. The coach edits a small `QuoteInputs` payload (`audienceSize`, `eventDays`, per-channel touch counts, `recordRetrievalAmount`, `travelAmount`, plus freeform `travelNotes` / `quoteNotes`); the line-item table is **computed read-only output**. The same input snapshot is persisted on the `quotes` row so the downstream Invoice (7.3) can recompute against the same inputs against the same catalog and always reconcile.
+
+Three load-bearing pieces:
+
+1. **Pricing module** — `src/lib/quotes/pricing.ts`. Pure function `computeQuote(inputs, catalog, taxOverride?)`. Stateless: no Date, no randomness, no DB — same inputs + catalog produce the same lines, subtotal, tax, total. Sanity caps (`MAX_AUDIENCE=1M`, `MAX_DAYS=365`, `MAX_TOUCHES=1M`, `MAX_DOLLARS=9_999_999`) live here; `validateQuoteInputs` throws `QuoteInputsError` on NaN/Infinity/negatives/non-integer counts/oversized notes. `roundCents` is the single rounding boundary. Fail-closed on `range`-unit catalog rows with null/non-finite `unit_price_min/max`.
+2. **Service-item catalog** — `service_items` table (see [data-model.md](data-model.md) → `service_items`). The 8 v1 rows are seeded by `drizzle/0013_seed_service_items.sql` and edited from `/admin/lookups` (gated `lookup:edit`). The `unit` enum (`flat | per-record | per-touch | per-day | range`) discriminates how each row's qty is derived from `QuoteInputs` at compute time.
+3. **Composer Server Actions** — `src/features/quotes/actions.ts`. Three composer-side setters, all gated `quote:edit` (admin || coach) and all using the guarded-UPDATE-then-classify-the-miss pattern (mirrors `cancelCampaign`):
+   - `setQuoteInputs` — full-snapshot setter: parses the incoming `inputs` JSON via `parseQuoteInputs` (field-by-field canonicalization drops unknown keys), recomputes lines + subtotal + tax + total against the active catalog, and persists both the input snapshot AND the computed `lineItems` on the `quotes` row.
+   - `setQuoteTax` — tax-override only: parses the override against `TAX_RE` (then `Number()`), recomputes total from existing subtotal, and writes only `tax` + `total` (lineItems untouched).
+   - `setQuoteDealer` — dealer swap only: opens a transaction with `FOR UPDATE` on the candidate dealer row to close the archive-race window, then writes only `dealerId` (no recompute).
+
+   Tax parsing on the composer setter is `TAX_RE` + `Number()`. The `quotes` row mixes precisions — `fee` / `travel` are `numeric(10,2)` (input-shape money) while `subtotal` / `tax` / `total` are `numeric(12,2)` (computed aggregates that need the wider band). The string-only `MONEY_RE` + `numeric(10,2)` discipline (and the un-archive-by-`code` behaviour, and the `MAX_PG_INTEGER`-capped `sortOrder`) belongs to the **service-item catalog actions** at `src/features/services/actions.ts`, not the composer setters.
+
+**Send-time MSA gate (planned — 0035 Phase 4 + 0025 Phase 7.2).** Draft editing requires no MSA today. The MSA gate is the **planned** posture for Send: when 0035 Phase 4 lands, `sendQuote` will check the Client's `master_service_agreements.status='active'` row; if present, fire the standard PDF-only flow (0026 Phase 4's `sendQuote`); if absent, route into the bundled MSA + first-Quote e-sig envelope (0025 Phase 7.2, Dropbox Sign, two documents). The current `sendQuote` stub performs only the guarded `draft → sent` transition + a `quote.sent` audit row; PDF render + GCS persistence + email send are TODOs flagged inline in `actions.ts`, and the MSA gate itself is a Phase 4 add (not yet flagged in code). See [commercial-spine.md](commercial-spine.md) for the full lifecycle.
+
+**Entry points.** Two surfaces link into the composer today: the per-row "Quote" action on `/dealerships` (hidden on archived rows, gated `quote:edit`) and the "Create Quote" button on the campaign-detail dialog inside `/calendar` — both pass `?dealerId=` (the campaign-detail variant also passes `?campaignId=`). The inline "Add new prospect" entry point inside the composer's dealer picker is **deferred** (the current Combobox primitive doesn't support an inline-add affordance cleanly); the DealerForm itself already accepts `defaultStatus='prospect'`, so wiring this up later is a small chunk. Until then, the dealer-creation path is `/dealerships` → `Add` (admin-only — coaches do not have `dealer:create`), and the composer picks up the new row with a `(prospect)` suffix on prospect dealers.
+
 ## Migration roadmap
 
 Per `docs/designs/closed/0001-port-stack-analysis/notes.md`, work is sequenced as:

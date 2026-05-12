@@ -13,6 +13,7 @@ Reference for the current Postgres schema. Source of truth is `src/lib/db/schema
 > - `vehicles` ← STAR *Vehicle* (BC 2, Inventory & Vehicle Management)
 > - `campaigns` ← STAR *Marketing Campaign* (BC 6, Marketing & Loyalty) — what we run for the dealer
 > - `audience_sources` (lookup) — audience-source provenance for a dealer's marketing campaign (Dealer Database, PBS, Third Party List, Previous Buyers). Renamed from `sales_lead_sources` in 0038; the prior name carried three overloaded meanings (audience source, future per-campaign target table, dealership acquisition source) — see [`docs/wiki/log.md`](log.md) 2026-05-11 entry.
+> - `service_items` (Salesability extension; no direct STAR mapping) — the quote-composer pricing catalog (`base-event`, `additional-contact`, `bdc-call`, …). Drives line-item generation in `src/lib/quotes/pricing.ts`. Not in STAR's domain map because it's our productized service catalog, not a vehicle/dealer/lead entity.
 
 ## Overview
 
@@ -41,7 +42,7 @@ Three things to know up front:
 
 2. **Domain rows are `bigint` IDs** via the `bigIdentity()` helper. There is no longer a uuid-PK domain table — `contacts.user_id` carries the auth uuid as a nullable FK rather than aliasing it as a PK. Tables exposed in dealer-portal URLs (`dealers`, `campaigns`) carry an additional `public_id` (nanoid 12-char URL-safe slug) for unguessable URLs — see *ID types* below.
 
-3. **Audit columns are pervasive.** `timestamps` and `actors` (`created_by_id`, `updated_by_id` → `auth.users`) are mixins from `_columns.ts`, applied to every editable domain table. `archivable` (`archived_at`) is applied to most of them, but lifecycle-bearing tables (e.g. `campaigns` with its `status` enum, `master_service_agreements` with its `msa_status` enum) skip it — the lifecycle column carries terminal states like `cancelled` / `expired` / `terminated` instead. Lookup tables (`campaign_styles`, `audience_sources`, `blocked_dates`) skip `actors` because they're admin-config, not domain data.
+3. **Audit columns are pervasive.** `timestamps` and `actors` (`created_by_id`, `updated_by_id` → `auth.users`) are mixins from `_columns.ts`, applied to every editable domain table. `archivable` (`archived_at`) is applied to most of them, but lifecycle-bearing tables (e.g. `campaigns` with its `status` enum, `master_service_agreements` with its `msa_status` enum) skip it — the lifecycle column carries terminal states like `cancelled` / `expired` / `terminated` instead. Lookup / catalog tables (`campaign_styles`, `audience_sources`, `service_items`) skip `actors` because they're admin-config, not domain data.
 
 ## Layout
 
@@ -141,7 +142,8 @@ Edges left out of the diagrams for clarity:
 | `team_member_roles` | `id` bigint | `contact_id` (FK contacts, cascade), `role` enum (`admin\|staff\|coach\|viewer\|dealer`), `specialty` (nullable, used when `role='coach'`) — UNIQUE on `(contact_id, role)` |
 | `dealer_contacts` | `id` bigint | `dealer_id` (FK dealers), `contact_id` (FK contacts), `role` enum (`customer\|staff\|prospect`), `do_not_contact`, `since` date, `source` text, `last_contacted_at`, `title` text (used when `role='staff'`) — UNIQUE on `(dealer_id, contact_id, role)` |
 | `contact_identifiers` | `id` bigint | `contact_id` (FK contacts, cascade), `kind` enum (`email\|phone`), `value` (normalized), `is_primary` |
-| `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address` |
+| `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address`, `status` enum (`prospect\|active`, default `active`), `acquired_via` text (nullable) |
+| `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit` enum (`flat\|per-record\|per-touch\|per-day\|range`), `unit_price` numeric(10,2), `unit_price_min` / `unit_price_max` numeric(10,2) (range items only), `description`, `sort_order` — quote-composer catalog; see [`commercial-spine.md`](commercial-spine.md) |
 | `vehicles` | `id` bigint | `vin` (UNIQUE, normalized), `year`, `make`, `model`, `trim` — one row per physical vehicle, persists across owners |
 | `vehicle_ownerships` | `id` bigint | `vehicle_id` (FK vehicles), `contact_id` (FK contacts), `acquired_at`, `sold_at` (nullable) — junction; one open ownership per vehicle |
 | `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`, plus inline day-of contact fields and service flags (see `campaigns` section below) |
@@ -254,7 +256,16 @@ The trade-off vs the old shape:
 
 ### `dealers` — paying companies (typically dealerships)
 
-Just `name` + `address` for now. The legacy app flattened the company and primary contact into a single row (`name | contact | phone | email | address`); the new schema does **not** — dealers have many contacts (via `dealer_contacts`), contacts can change role over time, and a portal user has to be a person rather than a company. Org-level `email` / `phone` are intentionally absent until there's a clear use (switchboard line, billing alias) — push contact info down to `contacts`/`contact_identifiers` by default.
+Identity columns are `name` + `address`; contacts and channels live in `dealer_contacts` / `contact_identifiers`. The legacy app flattened the company and primary contact into a single row (`name | contact | phone | email | address`); the new schema does **not** — dealers have many contacts (via `dealer_contacts`), contacts can change role over time, and a portal user has to be a person rather than a company. Org-level `email` / `phone` are intentionally absent until there's a clear use (switchboard line, billing alias) — push contact info down to `contacts`/`contact_identifiers` by default.
+
+Lifecycle columns (added 0035 Phase 2):
+
+- `status` enum (`prospect | active`, NOT NULL DEFAULT `active`) — funnel stage. `prospect` = a quote has been drafted but no signed relationship yet; `active` = quote accepted (or admin manually flipped via `convertProspectToActive`). The `/dealerships` filter pills surface Active / Prospect / Archived (admin-gated; coaches do not have `dealer:create`). DealerForm accepts a `defaultStatus='prospect'` prop intended for an inline-create affordance inside the quote composer's dealer picker — the entry point itself is **deferred** until a richer picker component lands (Combobox primitive doesn't support inline-add). Indexed (`dealers_status_idx`) for the filter-pill counts.
+- `acquired_via` text (nullable) — free-form provenance of *how the dealership found Salesability* (`"Book Your Event form"`, `"referral"`, `"trade show"`, `"outbound"`). Distinct from `audience_sources` (which provides the per-campaign consumer list). Free-form in v1; formalize to a lookup table once web intake lands and the values stabilize.
+
+**Archived state is orthogonal to `status`.** A dealer is archived iff `archived_at IS NOT NULL`, independent of whether `status='prospect'` or `'active'`. The /dealerships filter pills compute: Active = `status='active' AND archived_at IS NULL`; Prospect = `status='prospect' AND archived_at IS NULL`; Archived = `archived_at IS NOT NULL` (status ignored). Keeps the existing `archivable` mixin authoritative — see 0035 plan Open Question #1.
+
+Update-action concurrency: `updateDealer` is patch-style on `status` and `acquired_via` — omitted-from-FormData fields don't appear in SET, so a concurrent `convertProspectToActive` flip can't be clobbered by a stale edit. The status transition action itself is a guarded UPDATE keyed on `(id, status='prospect', archived_at IS NULL)` — idempotent on already-active or archived rows.
 
 The table is named `dealers` (matching the STAR Standard's *Dealer Profile* noun). The 99% case is automotive dealerships; STAR's umbrella also covers marine, powersports, medium/heavy-duty trucks, and construction equipment dealers, so the name holds even if we expand beyond cars.
 
@@ -371,6 +382,29 @@ RLS: enabled in `drizzle/0009_msa_rls.sql` matching the baseline (`service_role`
 
 Out of scope here: the sign envelope itself (7.2), the cancellation-fee math (50% within 21 days of Event start per §2.iii; deferred), and the renewal UX (manual v1 — coach clicks "Renew MSA" on the Client).
 
+### `service_items` — quote-composer catalog
+
+The price list driving Quote line items. Shipped 0035 Phase 1. The composer is a calculator, not a line-item picker — coaches edit a structured `QuoteInputs` payload (audience size, days, per-channel touch counts, etc.) and the line-item table is computed read-only output by joining `inputs × catalog`. See [`commercial-spine.md`](commercial-spine.md) and the pricing module at `src/lib/quotes/pricing.ts`.
+
+Columns:
+
+- `code` text NOT NULL UNIQUE — stable kebab-case key referenced from the pricing module (`base-event`, `additional-contact`, `bdc-call`, `letter-postage`, `digital-record`, `additional-day`, `record-retrieval`, `travel`). The code is the API surface; coaches see the `label`.
+- `label` text NOT NULL — display name on the composer + PDF.
+- `unit` enum (`flat | per-record | per-touch | per-day | range`, NOT NULL) — discriminates how a `QuoteInputs` field maps to a line qty. `flat` rows are once-off (e.g. base event); `per-record` multiplies by `(audience_size - 500)` for the additional-contact overage; `per-touch` multiplies by the matching count input; `per-day` multiplies by `(event_days - 1)` for the extra-day overage; `range` rows present a coach-typed amount bounded by `unit_price_min..unit_price_max` (the record-retrieval row).
+- `unit_price` numeric(10,2) (nullable) — populated for `flat` and `per-*` rows. **Null for `range` rows.** Also null for `flat`-with-variable rows (`travel`), where the coach types the actual dollar amount at quote-edit time.
+- `unit_price_min`, `unit_price_max` numeric(10,2) (nullable) — populated for `range` rows; min/max bracket the coach's typed amount. The pricing module fails closed when a `range` row has null or non-finite bracket bounds (carry-forward from 0035 Phase 3 Codex pass-2).
+- `description` text (nullable) — optional admin-facing note (not rendered to dealers).
+- `sort_order` integer NOT NULL DEFAULT 0 — UI ordering on `/admin/lookups`. Capped at `MAX_PG_INTEGER` by the Server Action.
+- mixins: `archivable` only (no `timestamps`, no `actors` — admin-config, not domain data).
+
+Seeded v1 catalog (migration `drizzle/0013_seed_service_items.sql`, idempotent on `code`): `base-event` $6,900 flat, `additional-contact` $3.00 per-record, `bdc-call` $2.25 per-touch, `letter-postage` $2.50 per-touch, `digital-record` $0.59 per-touch, `additional-day` $995 per-day, `record-retrieval` range $100–$400, `travel` flat with null `unit_price`.
+
+CRUD via Server Actions at `src/features/services/actions.ts` (`createServiceItem` / `updateServiceItem` / `archiveServiceItem`), gated `lookup:edit` (admin-only). `createServiceItem` un-archives by `code` to avoid permanent code lockout after an archive (mirrors `createCampaignStyle`). Money parsing is string-only against `MONEY_RE = /^(0|[1-9]\d{0,7})(\.\d{1,2})?$/` (no IEEE-754 rounding; caps at the column's `numeric(10,2)` precision). Admin UI at `src/features/services/services-admin.tsx` renders under heading "Services" on `/admin/lookups`.
+
+RLS: `drizzle/0014_service_items_rls.sql` matches the MSA baseline (`service_role` permit-all + `authenticated` staff-only via `is_staff_member()`); included in `tests/integration/rls.test.ts`'s `RLS_TABLES`.
+
+> Beyond STAR: this is a Salesability-specific pricing catalog, not in the STAR domain map. Per-campaign line totals derived from this catalog land on `quotes.line_items` (jsonb) as the immutable snapshot — see 0026 Phase 2.
+
 ### Lookup tables
 
 - **`campaign_styles`** — labels for campaign kinds (`label` unique, `sort_order` for UI ordering, `archived_at` for retiring without deleting). Originated as a legacy `localStorage` list, moved to Postgres so all users share them.
@@ -421,8 +455,8 @@ Out of scope for this table:
 | Mixin | Columns | Applied to |
 |---|---|---|
 | `timestamps` | `created_at`, `updated_at` (auto-bumped) | All editable domain tables |
-| `actors` | `created_by_id`, `updated_by_id` (uuid → `auth.users`, `ON DELETE SET NULL`) | Editable domain tables, including `availability_blocks` (coach unavailability is recorded per-user). Skipped on pure lookups (`campaign_styles`, `audience_sources`). |
-| `archivable` | `archived_at` | Tables that need soft-archive (most lookups, `dealers`, `contacts`, `team_member_roles`, `dealer_contacts`, `vehicles`, `vehicle_ownerships`, `availability_blocks`). Note: `contact_identifiers` uses `archived_at` to retire a stale email/phone without breaking dedup history. |
+| `actors` | `created_by_id`, `updated_by_id` (uuid → `auth.users`, `ON DELETE SET NULL`) | Editable domain tables, including `availability_blocks` (coach unavailability is recorded per-user). Skipped on pure lookups / catalogs (`campaign_styles`, `audience_sources`, `service_items`). |
+| `archivable` | `archived_at` | Tables that need soft-archive (most lookups + `service_items`, `dealers`, `contacts`, `team_member_roles`, `dealer_contacts`, `vehicles`, `vehicle_ownerships`, `availability_blocks`). Note: `contact_identifiers` uses `archived_at` to retire a stale email/phone without breaking dedup history. |
 
 Note: `auth.uid()` does **not** populate over Drizzle's direct connection. Server actions and webhooks must pass `userId` explicitly when writing audit columns.
 

@@ -14,9 +14,9 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 | 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
 | 3: Pricing logic + quote composer page | Done | `0a17124` |
 | 4: PDF preview pane + send wiring | Blocked on 0026 P3+P4 | - |
-| 5: Tests + smoke verification | Partial — static + smoke green; wiki updates + inline-prospect smoke pending | - |
+| 5: Tests + smoke verification | Done | - |
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete; Phase 4 blocked on 0026 P3+P4)
 
 ## Code Anchors
 
@@ -125,15 +125,15 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 5: Tests + smoke verification
 
-- [ ] `pnpm test` — pricing module + service-items CRUD + dealer status transitions + composer Server Actions. Aim for ≥ 25 new test cases.
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm lint` clean.
-- [ ] Smoke (web-test): `goto /admin/lookups`; section "Services" lists 8 v1 items with prices; `Add` form present.
-- [ ] Smoke (web-test): `goto /dealerships`; status filter pills present (Active / Prospect / Archived); default view Active.
-- [ ] Smoke (web-test): `goto /quotes/new`; composer renders dealer picker + audience input + line-items table + total panel.
-- [ ] Smoke (web-test): click "Add new prospect" in the dealer picker; DealerForm dialog opens with status pre-set to "Prospect".
-- [ ] Update `docs/wiki/data-model.md` with the new `service_items` table + `dealers.status` column.
-- [ ] Update `docs/wiki/architecture.md` quote-composer section.
+- [x] `pnpm test` — pricing module + service-items CRUD + dealer status transitions + composer Server Actions. Aim for ≥ 25 new test cases. **Green from P1–P3 ship: 542 → 655 (+113 cases) covering pricing rules, range-bound enforcement, decimal-precision, overflow caps, race-classification on all three composer setters, JSON canonicalization, tax canonicalization, gate-matrix coverage for the new `quote:edit` + `lookup:edit` + `dealer:edit` rows.**
+- [x] `pnpm tsc --noEmit` clean. **Verified green at each P1/P2/P3 eval pass.**
+- [x] `pnpm lint` clean. **Verified green at each P1/P2/P3 eval pass.**
+- [x] Smoke (web-test): `goto /admin/lookups`; section "Services" lists 8 v1 items with prices; `Add` form present. **Verified green via web-test in 0035 P1 eval (pass-2).**
+- [x] Smoke (web-test): `goto /dealerships`; status filter pills present (Active / Prospect / Archived); default view Active. **Verified green via web-test in 0035 P2 eval (pass-2).**
+- [x] Smoke (web-test): `goto /quotes/new`; composer renders dealer picker + audience input + line-items table + total panel. **Verified green via web-test in 0035 P3 eval (pass-3).**
+- [ ] ~~Smoke (web-test): click "Add new prospect" in the dealer picker; DealerForm dialog opens with status pre-set to "Prospect".~~ **Deferred** — the inline "Add new prospect" affordance was itself deferred in Phase 3 (Combobox primitive doesn't support inline-add cleanly); prospects are added via `/dealerships` and picked up in the composer labelled `(prospect)`. DealerForm already accepts `defaultStatus='prospect'` for when the affordance is wired in a future chunk.
+- [x] Update `docs/wiki/data-model.md` with the new `service_items` table + `dealers.status` column. **Landed 2026-05-12: tables-at-a-glance updated, `dealers` section grew a "Lifecycle columns" subsection, new `service_items` section between MSA and Lookup tables, STAR vocab preamble + mixins reference + audit-columns paragraph all picked up the new entities.**
+- [x] Update `docs/wiki/architecture.md` quote-composer section. **Landed 2026-05-12: new "Quote composer — calculator, not a line-item picker" subsection under Patterns covering the pricing module, catalog, composer Server Actions, Send-time MSA gate, entry points, and deferred inline-add-prospect affordance.**
 
 ## Open questions
 
