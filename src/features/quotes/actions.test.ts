@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   loadCurrentMembership: vi.fn(),
   recordAudit: vi.fn(),
+  renderQuotePdf: vi.fn(),
+  putObject: vi.fn(),
   // Queue consumed by both `.returning()` calls and `.then()` / `.limit()`
   // terminals on the predicate-blind db mock. Push one entry per DB round-trip
   // in the order the code under test will issue them.
@@ -36,6 +38,12 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
 });
 vi.mock('@/features/audit/actions', () => ({
   recordAudit: mocks.recordAudit,
+}));
+vi.mock('@/lib/pdf/render-quote', () => ({
+  renderQuotePdf: mocks.renderQuotePdf,
+}));
+vi.mock('@/lib/storage/gcs', () => ({
+  putObject: mocks.putObject,
 }));
 
 vi.mock('@/lib/db', () => {
@@ -110,6 +118,7 @@ import {
   setQuoteInputs,
   setQuoteTax,
 } from './actions';
+import { MAX_ADDRESS_LINES } from './constants';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 
 // Unwrap the next-safe-action envelope into the legacy ActionResult shape.
@@ -146,9 +155,15 @@ beforeEach(() => {
     app_metadata: { role: 'admin' },
   });
   mocks.loadCurrentMembership.mockResolvedValue(null);
+  mocks.renderQuotePdf.mockResolvedValue({ ok: true, body: Buffer.from('%PDF-1.7 stub') });
+  mocks.putObject.mockResolvedValue({ ok: true, key: 'stub' });
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
+  // sendQuote requires GCS_BUCKET — the dev .env carries it, but vitest
+  // doesn't pull dotenv. Set it explicitly per-test so the action doesn't
+  // bail before the render/upload path is exercised.
+  process.env.GCS_BUCKET = 'test-bucket';
 });
 
 describe('createQuote', () => {
@@ -188,46 +203,224 @@ describe('createQuote', () => {
   });
 });
 
+// Realistic draft row that sendQuote pre-loads. Tests can override fields
+// via spread; the mocked db queue feeds the values through.
+const DRAFT_ROW = {
+  id: 42,
+  status: 'draft',
+  dealerId: 7,
+  updatedAt: new Date('2026-05-12T12:00:00.000Z'),
+  lineItems: [
+    {
+      code: 'base-event',
+      label: 'Base Event (includes 500 records)',
+      unit: 'flat',
+      unitPrice: 6900,
+      qty: 1,
+      lineTotal: 6900,
+    },
+  ],
+  subtotal: '6900.00',
+  tax: '0.00',
+  total: '6900.00',
+};
+
+const DEALER_ROW = {
+  id: 7,
+  name: 'Acme Auto Group',
+  address:
+    '456 Dealership Boulevard\nSuite 200\nMississauga, ON  L5B 3C2\nCanada',
+};
+
 describe('sendQuote', () => {
-  it('flips draft → sent atomically, sets sentAt, and emits audit', async () => {
-    // Guarded UPDATE returns one row → transition succeeded.
-    mocks.dbResults.push([{ id: 42 }]);
+  it('renders PDF, flips draft → sent, uploads to GCS, sets sentAt + pdfStorageKey, and emits audit', async () => {
+    // Pre-load: draft row + dealer; then guarded UPDATE returns one row.
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW], [{ id: 42 }]);
+
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
+
+    // Renderer received a QuoteData assembled from the row + dealer.
+    expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
+    const quoteData = mocks.renderQuotePdf.mock.calls[0][0] as Record<string, unknown>;
+    expect(quoteData.quoteNumber).toBe('42');
+    expect(quoteData.clientName).toBe('Acme Auto Group');
+    expect(quoteData.clientAddress).toEqual([
+      '456 Dealership Boulevard',
+      'Suite 200',
+      'Mississauga, ON  L5B 3C2',
+      'Canada',
+    ]);
+    expect(quoteData.subtotal).toBe(6900);
+    expect(quoteData.total).toBe(6900);
+    // Line-items mapped from {label, qty, lineTotal} → {description, quantity, total}.
+    const lines = quoteData.lineItems as Array<Record<string, unknown>>;
+    expect(lines[0].description).toBe('Base Event (includes 500 records)');
+    expect(lines[0].quantity).toBe(1);
+    expect(lines[0].total).toBe(6900);
+
+    // Upload landed at the canonical key.
+    expect(mocks.putObject).toHaveBeenCalledTimes(1);
+    const uploadArg = mocks.putObject.mock.calls[0][0] as Record<string, unknown>;
+    expect(uploadArg.bucket).toBe('test-bucket');
+    expect(uploadArg.key).toBe('quotes/42/1.pdf');
+    expect(uploadArg.contentType).toBe('application/pdf');
+    expect(uploadArg.ifGenerationMatch).toBeUndefined();
+
+    // Transition update carries the storage key + sentAt timestamp.
     expect(mocks.updates).toHaveLength(1);
-    expect(mocks.updates[0].table).toBe('quotes');
     const patch = mocks.updates[0].patch as Record<string, unknown>;
     expect(patch.status).toBe('sent');
     expect(patch.sentAt).toBeInstanceOf(Date);
-    expect(mocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'quote.sent', targetId: 42 }),
-    );
+    expect(patch.pdfStorageKey).toBe('quotes/42/1.pdf');
+
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'quote.sent',
+      targetTable: 'quotes',
+      targetId: 42,
+      payload: { pdfStorageKey: 'quotes/42/1.pdf' },
+    });
   });
 
-  it('is idempotent on already-sent (UPDATE misses, re-select finds sent)', async () => {
-    // Guarded UPDATE returns no rows (guard missed) → re-select finds 'sent'.
-    mocks.dbResults.push([], [{ id: 42, status: 'sent' }]);
+  it('handles a null dealer.address without breaking the renderer call', async () => {
+    mocks.dbResults.push(
+      [DRAFT_ROW],
+      [{ ...DEALER_ROW, address: null }],
+      [{ id: 42 }],
+    );
+    await call(sendQuote(fd({ quoteId: '42' })));
+    const quoteData = mocks.renderQuotePdf.mock.calls[0][0] as Record<string, unknown>;
+    expect(quoteData.clientAddress).toBeUndefined();
+  });
+
+  it('caps multi-line dealer.address before passing it to the renderer', async () => {
+    mocks.dbResults.push(
+      [DRAFT_ROW],
+      [
+        {
+          ...DEALER_ROW,
+          address: 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6',
+        },
+      ],
+      [{ id: 42 }],
+    );
+    await call(sendQuote(fd({ quoteId: '42' })));
+    const quoteData = mocks.renderQuotePdf.mock.calls[0][0] as Record<string, unknown>;
+    expect(quoteData.clientAddress).toEqual(['Line 1', 'Line 2', 'Line 3', 'Line 4']);
+    expect((quoteData.clientAddress as string[]).length).toBe(MAX_ADDRESS_LINES);
+  });
+
+  it('is idempotent on already-sent (pre-load finds status=sent, no render)', async () => {
+    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'sent' }]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('rejects send from accepted or declined (illegal source status)', async () => {
-    mocks.dbResults.push([], [{ id: 42, status: 'accepted' }]);
+  it('rejects send from accepted or declined (illegal source status, no render)', async () => {
+    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'accepted' }]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ error: "Quote cannot be sent from status 'accepted'." });
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+    expect(mocks.putObject).not.toHaveBeenCalled();
   });
 
-  it('rejects when the quote does not exist', async () => {
-    mocks.dbResults.push([], []); // guard miss + row gone
+  it('rejects when the quote does not exist (pre-load returns nothing)', async () => {
+    mocks.dbResults.push([]);
     const result = await call(sendQuote(fd({ quoteId: '999' })));
     expect(result).toEqual({ error: 'Quote not found.' });
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the dealer behind the quote is missing', async () => {
+    mocks.dbResults.push([DRAFT_ROW], []);
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: 'Dealer not found.' });
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+  });
+
+  it('surfaces render errors without flipping status or uploading', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW]);
+    mocks.renderQuotePdf.mockResolvedValueOnce({ error: 'too many line items' });
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: 'Quote PDF render failed: too many line items' });
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('surfaces upload errors after the successful sent transition as degraded state', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW], [{ id: 42 }]);
+    mocks.putObject.mockResolvedValueOnce({ error: 'bucket unavailable' });
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: 'Quote sent but PDF upload failed; admin repair required.',
+    });
+    expect(mocks.updates).toHaveLength(1);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('falls back to idempotent on a UPDATE race (already sent by a concurrent caller)', async () => {
+    // Pre-load + dealer succeed; render succeeds; UPDATE misses before upload;
+    // re-select finds the row in 'sent'. Mimics a concurrent send winning
+    // the race after our pre-load saw it as draft.
+    mocks.dbResults.push(
+      [DRAFT_ROW],
+      [DEALER_ROW],
+      [],
+      [{ id: 42, status: 'sent' }],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects when a concurrent edit changes updatedAt before the final UPDATE', async () => {
+    mocks.dbResults.push(
+      [DRAFT_ROW],
+      [DEALER_ROW],
+      [],
+      [
+        {
+          id: 42,
+          status: 'draft',
+          updatedAt: new Date('2026-05-12T12:01:00.000Z'),
+        },
+      ],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: 'Quote was edited concurrently; please retry.' });
+    expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('classifies UPDATE race against illegal-status (raced to declined)', async () => {
+    mocks.dbResults.push(
+      [DRAFT_ROW],
+      [DEALER_ROW],
+      [],
+      [{ id: 42, status: 'declined' }],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: "Quote cannot be sent from status 'declined'." });
+  });
+
+  it('rejects when GCS_BUCKET is unset (no render, no DB)', async () => {
+    delete process.env.GCS_BUCKET;
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect((result as { error: string }).error).toContain('GCS_BUCKET');
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
   });
 
   it('rejects invalid quote id without any db round-trip', async () => {
     const result = await call(sendQuote(fd({})));
     expect(result).toEqual({ error: 'Invalid quote id.' });
     expect(mocks.updates).toHaveLength(0);
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
   });
 });
 

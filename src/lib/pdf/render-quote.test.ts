@@ -1,10 +1,10 @@
 import { writeFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFPage } from 'pdf-lib';
 
 vi.mock('server-only', () => ({}));
 
-import { renderQuotePdf, type QuoteData } from './render-quote';
+import { MAX_LINE_ITEMS, renderQuotePdf, type QuoteData, type QuoteLineItem } from './render-quote';
 
 const fixture: QuoteData = {
   quoteNumber: 'Q-2026-0001',
@@ -46,6 +46,53 @@ describe('renderQuotePdf', () => {
     const page = reloaded.getPage(0);
     expect(page.getWidth()).toBe(612);
     expect(page.getHeight()).toBe(792);
+  });
+
+  it('renders MAX_LINE_ITEMS lines on a single page', async () => {
+    const drawnY: number[] = [];
+    const originalDrawText = PDFPage.prototype.drawText;
+    const drawTextSpy = vi
+      .spyOn(PDFPage.prototype, 'drawText')
+      .mockImplementation(function (
+        this: PDFPage,
+        text: string,
+        options?: Parameters<PDFPage['drawText']>[1],
+      ) {
+        if (typeof options?.y === 'number') drawnY.push(options.y);
+        return originalDrawText.call(this, text, options);
+      });
+    const many: QuoteLineItem[] = Array.from({ length: MAX_LINE_ITEMS }, (_, i) => ({
+      description: `Line item ${i + 1}`,
+      quantity: 1,
+      unitPrice: 10,
+      total: 10,
+    }));
+    const result = await renderQuotePdf({
+      ...fixture,
+      lineItems: many,
+      subtotal: MAX_LINE_ITEMS * 10,
+      tax: 0,
+      total: MAX_LINE_ITEMS * 10,
+    });
+    drawTextSpy.mockRestore();
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    const reloaded = await PDFDocument.load(result.body);
+    expect(reloaded.getPageCount()).toBe(1);
+    expect(Math.min(...drawnY)).toBeGreaterThanOrEqual(50);
+  });
+
+  it('refuses to render more than MAX_LINE_ITEMS line items', async () => {
+    const tooMany: QuoteLineItem[] = Array.from({ length: MAX_LINE_ITEMS + 1 }, (_, i) => ({
+      description: `Line item ${i + 1}`,
+      quantity: 1,
+      unitPrice: 10,
+      total: 10,
+    }));
+    const result = await renderQuotePdf({ ...fixture, lineItems: tooMany });
+    expect('error' in result).toBe(true);
+    if (!('error' in result)) return;
+    expect(result.error).toContain(String(MAX_LINE_ITEMS));
   });
 
   // Opt-in visual smoke: WRITE_SMOKE_PDF=1 pnpm vitest run src/lib/pdf

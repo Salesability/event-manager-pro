@@ -15,7 +15,11 @@ import {
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
 import type { ServiceItem } from '@/features/services/queries';
+import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
+import { putObject } from '@/lib/storage/gcs';
+import type { ComputedLine } from '@/lib/quotes/pricing';
 import { markQuoteDeclined } from './lifecycle';
+import { MAX_ADDRESS_LINES } from './constants';
 
 // 0026 Phase 2 — `quotes` data model + bare-bones Server Actions.
 //
@@ -421,6 +425,79 @@ export const setQuoteDealer = capabilityClient('quote:edit')
     });
   });
 
+// Stored revision number on the GCS key. Quote revisions in v1 are tracked
+// across rows via `previousQuoteId` (each revision is a new row), so within a
+// single row the renderer always writes revision 1. The path shape
+// `quotes/{quoteId}/{revision}.pdf` is forward-compatible with a future
+// in-row revision counter (e.g. a "Resend" action that bumps the revision
+// and re-renders) without needing a key-shape migration.
+const QUOTE_PDF_REVISION = 1;
+
+function pdfStorageKey(quoteId: number): string {
+  return `quotes/${quoteId}/${QUOTE_PDF_REVISION}.pdf`;
+}
+
+type ValidatedLines = { ok: true; lines: QuoteLineItem[] } | { error: string };
+
+const CORRUPTED_LINES_ERROR = 'Quote line items are corrupted; cannot render.';
+// MAX_ADDRESS_LINES lives in ./constants because `'use server'` files may
+// only export async functions (Next 16 RSC constraint).
+
+function isFiniteNonNegative(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0;
+}
+
+/** Validate a persisted `ComputedLine` snapshot before mapping into the
+ *  renderer's shape. Corrupt jsonb must fail closed rather than rendering
+ *  blanks/zeroes into a client-visible PDF. */
+function validatePersistedLines(raw: unknown): ValidatedLines {
+  if (!Array.isArray(raw)) return { error: CORRUPTED_LINES_ERROR };
+  const lines: QuoteLineItem[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      return { error: CORRUPTED_LINES_ERROR };
+    }
+    const l = item as Partial<ComputedLine>;
+    if (
+      typeof l.label !== 'string' ||
+      l.label.trim().length === 0 ||
+      !isFiniteNonNegative(l.qty) ||
+      !isFiniteNonNegative(l.unitPrice) ||
+      !isFiniteNonNegative(l.lineTotal)
+    ) {
+      return { error: CORRUPTED_LINES_ERROR };
+    }
+    lines.push({
+      description: l.label,
+      quantity: l.qty,
+      unitPrice: l.unitPrice,
+      total: l.lineTotal,
+    });
+  }
+  return { ok: true, lines };
+}
+
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Split a free-form multi-line address into the renderer's array shape.
+ *  Empty / null input yields `undefined` (renderer skips the block). */
+function splitClientAddress(address: string | null): string[] | undefined {
+  if (!address) return undefined;
+  const lines = address
+    .split(/\r?\n/)
+    .map((s) => s.trim().slice(0, 120))
+    .filter(Boolean)
+    .slice(0, MAX_ADDRESS_LINES);
+  return lines.length ? lines : undefined;
+}
+
+function sameTimestamp(a: unknown, b: unknown): boolean {
+  if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
+  return String(a) === String(b);
+}
+
 export const sendQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -429,39 +506,134 @@ export const sendQuote = capabilityClient('quote:edit')
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
 
-    // TODO(Phase 3): call `renderQuotePdf` + `putObject` to GCS, persist
-    // `pdfStorageKey` here. TODO(Phase 4): send the React Email + PDF
-    // attachment via the Resend wiring; route handler at /quote/[token]
-    // serves the accept/decline links.
+    const bucket = process.env.GCS_BUCKET;
+    if (!bucket) {
+      return { error: 'GCS_BUCKET is not configured; cannot persist quote PDF.' };
+    }
+
+    // Phase 3 send flow:
+    //   1. Pre-load the draft row + dealer (early-fail when the quote is
+    //      already sent / accepted / declined; avoids wasted render work).
+    //   2. Render the PDF from the persisted line-item + totals snapshot.
+    //   3. Atomic guarded UPDATE `draft → sent` + sentAt + pdfStorageKey.
+    //   4. On miss, re-select to classify (gone / idempotent / illegal).
+    //   5. Upload to GCS at `quotes/{quoteId}/{revision}.pdf` only after
+    //      winning the guarded transition.
+    //
+    // TODO(Phase 4): wire the email send + accept/decline route handler.
+
+    const [draft] = await db
+      .select({
+        id: quotes.id,
+        status: quotes.status,
+        dealerId: quotes.dealerId,
+        updatedAt: quotes.updatedAt,
+        lineItems: quotes.lineItems,
+        subtotal: quotes.subtotal,
+        tax: quotes.tax,
+        total: quotes.total,
+      })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!draft) return { error: 'Quote not found.' };
+    if (draft.status === 'sent') {
+      revalidateQuoteViews();
+      return { ok: true }; // idempotent
+    }
+    if (draft.status !== 'draft') {
+      return { error: `Quote cannot be sent from status '${draft.status}'.` };
+    }
+
+    const [dealer] = await db
+      .select({
+        id: dealers.id,
+        name: dealers.name,
+        address: dealers.address,
+      })
+      .from(dealers)
+      .where(eq(dealers.id, draft.dealerId))
+      .limit(1);
+    if (!dealer) return { error: 'Dealer not found.' };
+
+    const lineResult = validatePersistedLines(draft.lineItems);
+    if ('error' in lineResult) return lineResult;
+
+    const quoteData: QuoteData = {
+      quoteNumber: String(quoteId),
+      issuedDate: todayIsoDate(),
+      clientName: dealer.name,
+      clientAddress: splitClientAddress(dealer.address),
+      // v1 placeholder: quotes don't yet carry an event-name column. The
+      // composer's `quoteNotes` is freeform and not appropriate as a title.
+      // TODO(post-0026): add `eventName` to QuoteInputs (or link quote ↔
+      // campaign by then) and source from there.
+      eventName: 'Sales Event',
+      lineItems: lineResult.lines,
+      subtotal: Number(draft.subtotal),
+      tax: Number(draft.tax),
+      total: Number(draft.total),
+    };
+
+    const rendered = await renderQuotePdf(quoteData);
+    if ('error' in rendered) {
+      return { error: `Quote PDF render failed: ${rendered.error}` };
+    }
+
+    const storageKey = pdfStorageKey(quoteId);
 
     // Atomic guarded transition — only flip rows currently in draft. On
     // miss, re-select to classify (gone / idempotent / illegal). Same
     // pattern as `cancelCampaign`.
     const updated = await db
       .update(quotes)
-      .set({ status: 'sent', sentAt: new Date(), updatedById: userId })
-      .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+      .set({
+        status: 'sent',
+        sentAt: new Date(),
+        pdfStorageKey: storageKey,
+        updatedById: userId,
+      })
+      .where(
+        and(
+          eq(quotes.id, quoteId),
+          eq(quotes.status, 'draft'),
+          eq(quotes.updatedAt, draft.updatedAt),
+        ),
+      )
       .returning({ id: quotes.id });
 
     if (!updated.length) {
       const [row] = await db
-        .select({ id: quotes.id, status: quotes.status })
+        .select({ id: quotes.id, status: quotes.status, updatedAt: quotes.updatedAt })
         .from(quotes)
         .where(eq(quotes.id, quoteId))
         .limit(1);
       if (!row) return { error: 'Quote not found.' };
       if (row.status === 'sent') {
         revalidateQuoteViews();
-        return { ok: true }; // idempotent
+        return { ok: true }; // idempotent — concurrent caller won the race
+      }
+      if (row.status === 'draft' && !sameTimestamp(row.updatedAt, draft.updatedAt)) {
+        return { error: 'Quote was edited concurrently; please retry.' };
       }
       return { error: `Quote cannot be sent from status '${row.status}'.` };
+    }
+
+    const uploaded = await putObject({
+      bucket,
+      key: storageKey,
+      body: rendered.body,
+      contentType: 'application/pdf',
+    });
+    if ('error' in uploaded) {
+      return { error: 'Quote sent but PDF upload failed; admin repair required.' };
     }
 
     await recordAudit({
       action: 'quote.sent',
       targetTable: 'quotes',
       targetId: quoteId,
-      payload: null,
+      payload: { pdfStorageKey: storageKey },
     });
 
     revalidateQuoteViews();

@@ -24,6 +24,11 @@ export type QuoteData = {
 
 export type RenderResult = { ok: true; body: Buffer } | { error: string };
 
+// Hard cap on line-item count for the single-page layout. The current y-axis
+// math leaves the lowest text above the 50pt bottom margin at 13 items for
+// the fixture-size Bill To block used by the composer.
+export const MAX_LINE_ITEMS = 13;
+
 // Quote document is built programmatically with pdf-lib — code is the source
 // of truth for layout (logo, fonts, margins, text). Rendered output persists
 // to GCS at `quotes/{quoteId}/{revision}.pdf`; templates are not stored.
@@ -60,6 +65,26 @@ const cadFormatter = new Intl.NumberFormat('en-CA', {
   currency: 'CAD',
   currencyDisplay: 'narrowSymbol',
 });
+
+const WINANSI_RE = /[^ -ÿ]/g;
+
+function sanitizeWinAnsi(text: string): string {
+  return text.replace(WINANSI_RE, '?');
+}
+
+function truncateToWidth(text: string, font: PDFFont, size: number, maxWidth: number): string {
+  const sanitized = sanitizeWinAnsi(text);
+  if (font.widthOfTextAtSize(sanitized, size) <= maxWidth) return sanitized;
+  const suffix = '...';
+  const suffixWidth = font.widthOfTextAtSize(suffix, size);
+  if (suffixWidth >= maxWidth) return '';
+
+  let out = sanitized;
+  while (out.length && font.widthOfTextAtSize(out, size) + suffixWidth > maxWidth) {
+    out = out.slice(0, -1);
+  }
+  return `${out}${suffix}`;
+}
 
 function formatCurrency(n: number): string {
   return cadFormatter.format(n);
@@ -103,6 +128,11 @@ function drawRight(opts: DrawOpts, text: string, rightX: number, y: number) {
 
 export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
   try {
+    if (quote.lineItems.length > MAX_LINE_ITEMS) {
+      return {
+        error: `Quote has ${quote.lineItems.length} line items; max ${MAX_LINE_ITEMS} fit on a single page.`,
+      };
+    }
     const doc = await PDFDocument.create();
     const page = doc.addPage([612, 792]); // US Letter
     const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -110,6 +140,7 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
 
     const margin = 50;
     const rightEdge = 612 - margin;
+    const contentWidth = rightEdge - margin;
     const black = rgb(0, 0, 0);
     const grey = rgb(0.4, 0.4, 0.4);
     const yTop = 792 - margin;
@@ -176,11 +207,23 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
     // --- Bill To block. Stacked under the QUOTE meta on the left.
     page.drawText('Bill To', { x: margin, y, size: 10, font: bold, color: black });
     y -= 14;
-    page.drawText(quote.clientName, { x: margin, y, size: 11, font, color: black });
+    page.drawText(truncateToWidth(quote.clientName, font, 11, contentWidth), {
+      x: margin,
+      y,
+      size: 11,
+      font,
+      color: black,
+    });
     y -= 14;
     if (quote.clientAddress) {
       for (const line of quote.clientAddress) {
-        page.drawText(line, { x: margin, y, size: 10, font, color: grey });
+        page.drawText(truncateToWidth(line, font, 10, contentWidth), {
+          x: margin,
+          y,
+          size: 10,
+          font,
+          color: grey,
+        });
         y -= 12;
       }
     }

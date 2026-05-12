@@ -6,10 +6,13 @@ export type PutInput = {
   key: string;
   body: Buffer;
   contentType: string;
+  ifGenerationMatch?: number;
 };
 
 export type GetResult = { ok: true; body: Buffer } | { error: string };
-export type PutResult = { ok: true; key: string } | { error: string };
+export type PutResult =
+  | { ok: true; key: string }
+  | { error: string; code?: 'precondition' };
 export type SignedUrlResult = { ok: true; url: string } | { error: string };
 
 // 7-day cap on signed-URL TTL — anything customer-facing should be re-issued
@@ -46,6 +49,12 @@ function client(): Storage | { error: string } {
   return cached;
 }
 
+function isPreconditionError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { code?: unknown; statusCode?: unknown };
+  return e.code === 412 || e.statusCode === 412;
+}
+
 export async function putObject(input: PutInput): Promise<PutResult> {
   const storage = client();
   if ('error' in storage) return storage;
@@ -54,9 +63,19 @@ export async function putObject(input: PutInput): Promise<PutResult> {
     await file.save(input.body, {
       contentType: input.contentType,
       resumable: false,
+      preconditionOpts:
+        input.ifGenerationMatch === undefined
+          ? undefined
+          : { ifGenerationMatch: input.ifGenerationMatch },
     });
     return { ok: true, key: input.key };
   } catch (err) {
+    if (isPreconditionError(err)) {
+      return {
+        error: err instanceof Error ? err.message : 'GCS putObject precondition failed.',
+        code: 'precondition',
+      };
+    }
     return { error: err instanceof Error ? err.message : 'GCS putObject failed.' };
   }
 }
