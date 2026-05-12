@@ -6,7 +6,7 @@ Quotes are fully tracked in the DB (lifecycle status, sent/accepted/declined tim
 
 The edit-mode plumbing is light because the composer-side Server Actions already exist (`setQuoteInputs` / `setQuoteTax` / `setQuoteDealer`, all `quote:edit`-gated, draft-only via atomic guarded UPDATE per `actions.ts:281-289`). The composer is a single client component that today takes no props and starts from `DEFAULT_QUOTE_INPUTS`; this chunk extends it with an optional initial-values prop (`{ quoteId, dealerId, inputs, taxPct, status }`) and branches the save handler to call the existing setters when `quoteId` is present. No new actions, no migration.
 
-Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals + sent_at, filterable by status + search, row click routes to `/quotes/<id>`; (b) `/quotes/[id]` exists and renders the composer in edit-mode, calling `setQuoteInputs` instead of `createQuote` on save; (c) `/dealerships/[id]` exists and shows the dealer's quote history inline; (d) saving a fresh quote in the composer routes to `/quotes/<id>` (its new edit-mode home) instead of `/production`. Sub-plan of [`0025-quote-to-payment`](../0025-quote-to-payment/plan.md).
+Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals + sent_at, filterable by status + search, row click routes to `/quotes/<id>`; (b) `/quotes/[id]` exists and renders the composer in edit-mode, calling `setQuoteInputs` instead of `createQuote` on save; (c) `/dealerships/[id]` exists and shows the dealer's quote history inline; (d) saving a fresh quote in the composer routes to `/quotes/<id>` (its new edit-mode home) instead of `/production`. Sub-plan of [`0025-quote-to-payment`](../../0025-quote-to-payment/plan.md).
 
 ## Progress Tracker
 
