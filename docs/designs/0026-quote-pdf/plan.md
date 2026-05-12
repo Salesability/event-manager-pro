@@ -12,11 +12,11 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 |-------|--------|--------|
 | 1: PDF library + GCS storage foundation (decisions + adapters) | Done | `3c4b5b9` |
 | 2: Quote data model + Server Actions | Done | `6c65c80` |
-| 3: Quote PDF rendering (real data, real layout, persist to GCS) | Pending | - |
+| 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | - |
 | 4: Quote email send + public accept/decline flow | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 ## Code Anchors
 
@@ -82,9 +82,9 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [x] Vitest suite — `src/features/quotes/actions.test.ts`: 19 cases covering createQuote (3), sendQuote (5), declineQuote (3), markQuoteAccepted (5), markQuoteDeclined (3). Mocks `assertCan`, `getUser`, `recordAudit`, plus a captured-inserts/updates `db` stub matching `people/actions.test.ts`. Action-gate matrix extended with `createQuote`/`sendQuote`/`declineQuote` rows (ADMIN_OR_COACH).
 
 #### Phase 3: Quote PDF rendering
-- [ ] Wire `renderQuotePdf` into `sendQuote`: assemble `QuoteData` from the row (line items, totals, dealer info, dates), call the renderer, persist the buffer.
-- [ ] Verify rendered output across line-item count edge cases (1 item, 50 items). If a quote can overflow a single page, add a multi-page path to the renderer or define a hard cap on line items.
-- [ ] Persist rendered PDF at `quotes/{quoteId}/{revision}.pdf` in GCS via `putObject`; save `pdfStorageKey` on the quote row. (Revisions stay pinned — re-rendering an old quote is not a v1 concern, since the layout lives in code and a code change would change historical quotes if we re-rendered.)
+- [x] Wire `renderQuotePdf` into `sendQuote`: assemble `QuoteData` from the row (line items, totals, dealer info, dates), call the renderer, persist the buffer. `sendQuote` now pre-loads the draft row + dealer, maps the persisted `ComputedLine[]` snapshot into the renderer's `{description, quantity, total}` shape via `toRendererLines`, formats `clientAddress` from the dealer's free-form `text` column, and uses `'Sales Event'` as a v1 `eventName` placeholder (TODO flagged inline — revisit when quote ↔ campaign linking matures).
+- [x] Verify rendered output across line-item count edge cases (1 item, 50 items). **Hard cap chosen** (single-page renderer): exported `MAX_LINE_ITEMS = 25` from `src/lib/pdf/render-quote.ts` — well clear of the composer's max of 8 emitted lines (one per v1 catalog code). Renderer fails closed when exceeded. Two new render-quote tests pin the cap (MAX renders one page; MAX+1 errors with the cap in the message).
+- [x] Persist rendered PDF at `quotes/{quoteId}/{revision}.pdf` in GCS via `putObject`; save `pdfStorageKey` on the quote row. Revision is fixed at `1` for v1 (the path shape is forward-compatible — future in-row "Resend" can bump the revision counter without a key-shape migration). Atomic guarded `draft → sent` UPDATE also persists `pdfStorageKey`; race-classification mirrors `cancelCampaign` (gone / idempotent / illegal). 11 new `sendQuote` test cases (was 5) cover the full flow + render/upload failure paths + GCS_BUCKET-missing guard + concurrent-send race classification.
 
 #### Phase 4: Quote email send + public accept/decline flow
 - [ ] React Email template at `src/lib/email/templates/quote.tsx` — branded body with quote summary + Accept-link button + Decline-link button. PDF attached.
@@ -99,6 +99,9 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm lint` clean.
 - [ ] Dev smoke: create a real campaign → create quote → send → check inbox → click Accept link → verify status flip + audit row.
+- [ ] Codex Medium 4 from Phase 3 eval (2026-05-12): consider splitting `quote:send` from `quote:edit` so the send action requires an admin-only capability matching the irreversible nature of the document-emitting transition. Defer until Phase 4's UI + accept-route is wired so the gate can be decided in light of the full surface.
+- [ ] Phase 4 send-retry path must handle the degraded state where a guarded send transition succeeded but the canonical GCS PDF upload failed (`status='sent'` + `pdfStorageKey` set, object missing); retry/admin repair should re-render and upload the PDF.
+- [ ] Carry-forward from pass-2 Low (2026-05-12): the concurrent-edit guard test's predicate pinning depends on the repo-wide predicate-aware DB mock follow-up already parked under 0033 in `docs/designs/CURRENT.md`.
 - [ ] Update `docs/wiki/architecture.md` "Future integrations" row to reflect `pdf-lib` + GCS decisions.
 - [ ] Update `docs/wiki/data-model.md` with the new `quotes` table.
 
