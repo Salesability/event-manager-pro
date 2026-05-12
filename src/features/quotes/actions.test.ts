@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   renderQuotePdf: vi.fn(),
   putObject: vi.fn(),
+  resolveQuoteRecipient: vi.fn(),
+  sendEmail: vi.fn(),
+  quoteEmail: vi.fn(),
   // Queue consumed by both `.returning()` calls and `.then()` / `.limit()`
   // terminals on the predicate-blind db mock. Push one entry per DB round-trip
   // in the order the code under test will issue them.
@@ -44,6 +47,15 @@ vi.mock('@/lib/pdf/render-quote', () => ({
 }));
 vi.mock('@/lib/storage/gcs', () => ({
   putObject: mocks.putObject,
+}));
+vi.mock('./recipient', () => ({
+  resolveQuoteRecipient: mocks.resolveQuoteRecipient,
+}));
+vi.mock('@/lib/email/send', () => ({
+  sendEmail: mocks.sendEmail,
+}));
+vi.mock('@/lib/email/templates/quote', () => ({
+  quoteEmail: mocks.quoteEmail,
 }));
 
 vi.mock('@/lib/db', () => {
@@ -111,6 +123,7 @@ vi.mock('@/lib/db', () => {
 });
 
 import {
+  acceptQuote,
   createQuote,
   declineQuote,
   sendQuote,
@@ -157,6 +170,16 @@ beforeEach(() => {
   mocks.loadCurrentMembership.mockResolvedValue(null);
   mocks.renderQuotePdf.mockResolvedValue({ ok: true, body: Buffer.from('%PDF-1.7 stub') });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'stub' });
+  mocks.resolveQuoteRecipient.mockResolvedValue({
+    ok: true,
+    recipient: { email: 'buyer@dealer.test', firstName: 'Pat' },
+  });
+  mocks.quoteEmail.mockResolvedValue({
+    subject: 'Your Salesability Quote — Quote #42',
+    text: 'Plain text body',
+    html: '<p>HTML body</p>',
+  });
+  mocks.sendEmail.mockResolvedValue({ ok: true, id: 'resend-msg-id' });
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
@@ -210,6 +233,7 @@ const DRAFT_ROW = {
   status: 'draft',
   dealerId: 7,
   updatedAt: new Date('2026-05-12T12:00:00.000Z'),
+  acceptToken: '11111111-2222-3333-4444-555555555555',
   lineItems: [
     {
       code: 'base-event',
@@ -278,8 +302,51 @@ describe('sendQuote', () => {
       action: 'quote.sent',
       targetTable: 'quotes',
       targetId: 42,
-      payload: { pdfStorageKey: 'quotes/42/1.pdf' },
+      payload: { pdfStorageKey: 'quotes/42/1.pdf', emailId: 'resend-msg-id' },
     });
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    const sendArg = mocks.sendEmail.mock.calls[0][0] as Record<string, unknown>;
+    expect(sendArg.to).toBe('buyer@dealer.test');
+    expect(sendArg.subject).toBe('Your Salesability Quote — Quote #42');
+    expect(sendArg.html).toBe('<p>HTML body</p>');
+    const attachments = sendArg.attachments as Array<Record<string, unknown>>;
+    expect(attachments[0].filename).toBe('quote-42.pdf');
+    expect(attachments[0].contentType).toBe('application/pdf');
+
+    // Email template received the recipient name + quote summary; no
+    // accept/decline URLs in v1 (the coach flips the status via the staff
+    // surface after the customer phones or replies).
+    expect(mocks.quoteEmail).toHaveBeenCalledTimes(1);
+    const tplArg = mocks.quoteEmail.mock.calls[0][0] as Record<string, unknown>;
+    expect(tplArg.firstName).toBe('Pat');
+    expect(tplArg.quoteNumber).toBe('42');
+    expect(tplArg).not.toHaveProperty('acceptUrl');
+    expect(tplArg).not.toHaveProperty('declineUrl');
+  });
+
+  it('fails closed when the dealer has no customer-contact primary email (no render, no transition)', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW]);
+    mocks.resolveQuoteRecipient.mockResolvedValueOnce({
+      error: 'Dealer has no customer contact with a primary email address. Add a customer contact before sending.',
+    });
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect((result as { error: string }).error).toContain('primary email');
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a degraded-state error when email send fails after the transition', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW], [{ id: 42 }]);
+    mocks.sendEmail.mockResolvedValueOnce({ error: 'Resend rejected the send' });
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: 'Quote sent but email delivery failed; admin repair required.',
+    });
+    // Row is already flipped — the UPDATE landed before the email attempt.
+    expect((mocks.updates[0].patch as Record<string, unknown>).status).toBe('sent');
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
   it('handles a null dealer.address without breaking the renderer call', async () => {
@@ -335,10 +402,10 @@ describe('sendQuote', () => {
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
   });
 
-  it('rejects when the dealer behind the quote is missing', async () => {
+  it('rejects when the dealer behind the quote is missing or archived', async () => {
     mocks.dbResults.push([DRAFT_ROW], []);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ error: 'Dealer not found.' });
+    expect(result).toEqual({ error: 'Dealer not found or archived.' });
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
   });
 
@@ -452,6 +519,74 @@ describe('declineQuote (staff-side)', () => {
     mocks.dbResults.push([], [{ id: 42, status: 'draft' }]);
     const result = await call(declineQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ error: "Quote cannot be declined from status 'draft'." });
+  });
+});
+
+describe('acceptQuote (staff-side)', () => {
+  it('flips sent → accepted, emits audit, and promotes a prospect dealer to active', async () => {
+    // 1. markQuoteAccepted UPDATE returns one row.
+    // 2. SELECT quotes.dealerId.
+    // 3. UPDATE dealers (prospect → active) returns one row.
+    mocks.dbResults.push(
+      [{ id: 42 }],
+      [{ dealerId: 7 }],
+      [{ id: 7 }],
+    );
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+
+    // First UPDATE: the quote transition.
+    expect((mocks.updates[0].patch as Record<string, unknown>).status).toBe('accepted');
+    expect((mocks.updates[0].patch as Record<string, unknown>).acceptedAt).toBeInstanceOf(Date);
+    // Second UPDATE: the dealer promotion.
+    expect((mocks.updates[1].patch as Record<string, unknown>).status).toBe('active');
+
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'quote.accepted',
+      targetTable: 'quotes',
+      targetId: 42,
+      payload: { source: 'staff' },
+    });
+    expect(mocks.recordAudit).toHaveBeenCalledWith({
+      action: 'dealer.activated',
+      targetTable: 'dealers',
+      targetId: 7,
+      payload: { from: 'prospect', via: 'quote.accepted' },
+    });
+  });
+
+  it('does not emit dealer.activated when the dealer is already active', async () => {
+    // markQuoteAccepted UPDATE wins; SELECT dealerId; UPDATE dealers misses
+    // (guard `status='prospect'` falsy on an already-active dealer).
+    mocks.dbResults.push([{ id: 42 }], [{ dealerId: 7 }], []);
+    await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote.accepted' }),
+    );
+    expect(mocks.recordAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'dealer.activated' }),
+    );
+  });
+
+  it('is idempotent on already-accepted — no audit, no dealer promotion', async () => {
+    // markQuoteAccepted guard misses → re-select finds 'accepted'.
+    mocks.dbResults.push([], [{ id: 42, status: 'accepted' }]);
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects accept of a draft quote', async () => {
+    mocks.dbResults.push([], [{ id: 42, status: 'draft' }]);
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: "Quote cannot be accepted from status 'draft'." });
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid quote id without any db round-trip', async () => {
+    const result = await call(acceptQuote(fd({})));
+    expect(result).toEqual({ error: 'Invalid quote id.' });
+    expect(mocks.updates).toHaveLength(0);
   });
 });
 

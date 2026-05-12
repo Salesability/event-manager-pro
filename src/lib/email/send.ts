@@ -1,11 +1,22 @@
 import 'server-only';
 import { Resend } from 'resend';
 
+export type SendAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
+
 export type SendInput = {
   to: string;
   subject: string;
   text: string;
+  /** Optional HTML body (Resend renders both `text` and `html` side-by-side
+   *  in the client's preference order). Added for 0026 Phase 4 — the quote
+   *  email is the first React Email template in the codebase. */
+  html?: string;
   replyTo?: string;
+  attachments?: SendAttachment[];
 };
 
 export type SendResult = { ok: true; id: string } | { error: string };
@@ -72,7 +83,17 @@ export async function sendEmail(input: SendInput): Promise<SendResult> {
     to,
     subject,
     text: input.text,
+    ...(input.html ? { html: input.html } : {}),
     ...(input.replyTo ? { replyTo: input.replyTo } : {}),
+    ...(input.attachments?.length
+      ? {
+          attachments: input.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            ...(a.contentType ? { contentType: a.contentType } : {}),
+          })),
+        }
+      : {}),
   });
 
   if (error) return { error: error.message ?? 'Email send failed.' };

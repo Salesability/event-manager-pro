@@ -18,8 +18,11 @@ import type { ServiceItem } from '@/features/services/queries';
 import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
 import { putObject } from '@/lib/storage/gcs';
 import type { ComputedLine } from '@/lib/quotes/pricing';
-import { markQuoteDeclined } from './lifecycle';
+import { sendEmail } from '@/lib/email/send';
+import { quoteEmail } from '@/lib/email/templates/quote';
+import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 import { MAX_ADDRESS_LINES } from './constants';
+import { resolveQuoteRecipient } from './recipient';
 
 // 0026 Phase 2 — `quotes` data model + bare-bones Server Actions.
 //
@@ -511,16 +514,20 @@ export const sendQuote = capabilityClient('quote:edit')
       return { error: 'GCS_BUCKET is not configured; cannot persist quote PDF.' };
     }
 
-    // Phase 3 send flow:
-    //   1. Pre-load the draft row + dealer (early-fail when the quote is
-    //      already sent / accepted / declined; avoids wasted render work).
-    //   2. Render the PDF from the persisted line-item + totals snapshot.
-    //   3. Atomic guarded UPDATE `draft → sent` + sentAt + pdfStorageKey.
-    //   4. On miss, re-select to classify (gone / idempotent / illegal).
-    //   5. Upload to GCS at `quotes/{quoteId}/{revision}.pdf` only after
-    //      winning the guarded transition.
-    //
-    // TODO(Phase 4): wire the email send + accept/decline route handler.
+    // Phase 4 send flow:
+    //   1. Pre-load draft row + dealer; early-fail on non-draft / missing.
+    //   2. Resolve the customer recipient (primary email of the dealer's
+    //      first 'customer' contact); fail closed before any side-effects.
+    //   3. Render the PDF from the persisted snapshot.
+    //   4. Atomic guarded UPDATE `draft → sent` + sentAt + pdfStorageKey,
+    //      WHERE status='draft' AND updatedAt=preloaded — eliminates the
+    //      stale-snapshot race.
+    //   5. On miss, re-select to classify (gone / idempotent /
+    //      concurrent-edit / illegal).
+    //   6. Upload PDF to GCS — we already own the slot, no precondition.
+    //   7. Render + send the email (HTML body + plain-text fallback + PDF
+    //      attachment) via the existing Resend wiring.
+    //   8. Audit-emit + revalidate.
 
     const [draft] = await db
       .select({
@@ -545,6 +552,9 @@ export const sendQuote = capabilityClient('quote:edit')
       return { error: `Quote cannot be sent from status '${draft.status}'.` };
     }
 
+    // Archive-aware dealer lookup. createQuote / setQuoteDealer already
+    // reject archived dealers, but we re-check here so a dealer archived
+    // between draft-save and send doesn't leak a quote out the door.
     const [dealer] = await db
       .select({
         id: dealers.id,
@@ -552,16 +562,24 @@ export const sendQuote = capabilityClient('quote:edit')
         address: dealers.address,
       })
       .from(dealers)
-      .where(eq(dealers.id, draft.dealerId))
+      .where(and(eq(dealers.id, draft.dealerId), isNull(dealers.archivedAt)))
       .limit(1);
-    if (!dealer) return { error: 'Dealer not found.' };
+    if (!dealer) return { error: 'Dealer not found or archived.' };
+
+    // Resolve recipient before any side effects. If the dealer doesn't have a
+    // customer contact with a primary email, we fail closed — the row stays
+    // in `draft`, the coach sees a clear error, and no PDF gets uploaded.
+    const recipientResult = await resolveQuoteRecipient(draft.dealerId);
+    if ('error' in recipientResult) return recipientResult;
+    const recipient = recipientResult.recipient;
 
     const lineResult = validatePersistedLines(draft.lineItems);
     if ('error' in lineResult) return lineResult;
 
+    const issuedDate = todayIsoDate();
     const quoteData: QuoteData = {
       quoteNumber: String(quoteId),
-      issuedDate: todayIsoDate(),
+      issuedDate,
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       // v1 placeholder: quotes don't yet carry an event-name column. The
@@ -629,11 +647,39 @@ export const sendQuote = capabilityClient('quote:edit')
       return { error: 'Quote sent but PDF upload failed; admin repair required.' };
     }
 
+    // Render the email body + send. After-transition degraded-state failure
+    // surfaces a clear error message; Phase 5 follow-up will add retry
+    // detection + remediation. The row is already `sent`, so the coach will
+    // see the next send attempt early-fail on the idempotent path until then.
+    const email = await quoteEmail({
+      firstName: recipient.firstName,
+      quoteNumber: String(quoteId),
+      clientName: dealer.name,
+      issuedDate,
+      total: Number(draft.total),
+    });
+    const emailResult = await sendEmail({
+      to: recipient.email,
+      subject: email.subject,
+      text: email.text,
+      html: email.html,
+      attachments: [
+        {
+          filename: `quote-${quoteId}.pdf`,
+          content: rendered.body,
+          contentType: 'application/pdf',
+        },
+      ],
+    });
+    if ('error' in emailResult) {
+      return { error: 'Quote sent but email delivery failed; admin repair required.' };
+    }
+
     await recordAudit({
       action: 'quote.sent',
       targetTable: 'quotes',
       targetId: quoteId,
-      payload: { pdfStorageKey: storageKey },
+      payload: { pdfStorageKey: storageKey, emailId: emailResult.id },
     });
 
     revalidateQuoteViews();
@@ -641,10 +687,74 @@ export const sendQuote = capabilityClient('quote:edit')
   });
 
 // Staff-side decline. The client-side decline path goes through the public
-// /quote/[token] route handler in Phase 4, which calls `markQuoteDeclined`
-// directly after token validation (no audit-emit there because the actor is
-// the client, not a staff user — Phase 4 extends `recordAudit` to accept
-// `actorRole='client'`).
+// Staff-side accept / decline. v1 design: the customer phones or replies to
+// the quote email, and the coach flips the quote status through these
+// actions. No public token-validated route — `acceptToken` exists on the
+// schema for forward compatibility, but no public surface uses it today.
+//
+// `acceptQuote` also flips a prospect-status dealer to active on a
+// successful sent→accepted transition. Mirrors the atomic guarded UPDATE
+// shape of `convertProspectToActive` in src/features/schedule/actions.ts so
+// a concurrent archive/already-active race is a no-op rather than an error.
+export const acceptQuote = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const result = await markQuoteAccepted(quoteId, userId);
+    if ('error' in result) return result;
+
+    // Only emit on the actual sent → accepted transition. Idempotent re-
+    // accept of an already-accepted row is a no-op (no audit row, no
+    // dealer-status side effect).
+    if (result.transitioned) {
+      await recordAudit({
+        action: 'quote.accepted',
+        targetTable: 'quotes',
+        targetId: quoteId,
+        payload: { source: 'staff' },
+      });
+
+      // Promote a prospect dealer to active. Same atomic-transition shape as
+      // `convertProspectToActive`: only flip rows currently `prospect` AND
+      // not archived. Archived or already-active rows fall through silently.
+      const [row] = await db
+        .select({ dealerId: quotes.dealerId })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+      if (row) {
+        const promoted = await db
+          .update(dealers)
+          .set({ status: 'active', updatedById: userId })
+          .where(
+            and(
+              eq(dealers.id, row.dealerId),
+              eq(dealers.status, 'prospect'),
+              isNull(dealers.archivedAt),
+            ),
+          )
+          .returning({ id: dealers.id });
+        if (promoted.length) {
+          await recordAudit({
+            action: 'dealer.activated',
+            targetTable: 'dealers',
+            targetId: row.dealerId,
+            payload: { from: 'prospect', via: 'quote.accepted' },
+          });
+        }
+      }
+    }
+
+    revalidateQuoteViews();
+    return { ok: true };
+  });
+
+// Staff-side decline. v1 has no client-self-serve decline either — the
+// customer phones or emails the coach, and the coach flips the row here.
 export const declineQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {

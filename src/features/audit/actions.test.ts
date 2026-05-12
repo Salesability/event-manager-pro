@@ -115,4 +115,5 @@ describe('recordAudit', () => {
     });
     expect(mocks.inserts[0].values).toMatchObject({ targetId: null });
   });
+
 });
