@@ -3,8 +3,11 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useContext } from 'react';
+import { CapabilityContext } from '@/components/auth/capability-provider';
+import type { Capability } from '@/lib/auth/capabilities';
 
-type Tab = { href: string; label: string; requiresAdmin?: true };
+type Tab = { href: string; label: string; requiresAdmin?: true; capability?: Capability };
 
 // `requiresAdmin` hides the tab from coaches in the bar. Production + Dealers
 // are operationally-shaped (daily back-office views) but admin-audience —
@@ -17,6 +20,7 @@ const OPERATIONAL_TABS: readonly Tab[] = [
   { href: '/production', label: 'Production List', requiresAdmin: true },
   { href: '/reports', label: 'Reports' },
   { href: '/dealerships', label: 'Dealers', requiresAdmin: true },
+  { href: '/quotes', label: 'Quotes', capability: 'quote:edit' },
 ];
 
 // Admin lives behind a single labeled dropdown rather than as flat top-level
@@ -36,7 +40,14 @@ function isActive(pathname: string, href: string): boolean {
 
 export function AppNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
-  const operationalTabs = OPERATIONAL_TABS.filter((t) => !t.requiresAdmin || isAdmin);
+  // Pull the bound `can` predicate from context once at the top level so
+  // capability checks inside the filter callback aren't hook calls (which
+  // would violate rules-of-hooks even with a constant tab list).
+  const ctx = useContext(CapabilityContext);
+  const can = ctx?.can ?? (() => false);
+  const operationalTabs = OPERATIONAL_TABS.filter(
+    (t) => (!t.requiresAdmin || isAdmin) && (!t.capability || can(t.capability)),
+  );
   const adminActive = ADMIN_TABS.some((t) => isActive(pathname, t.href));
 
   return (
