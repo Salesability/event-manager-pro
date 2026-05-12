@@ -61,6 +61,8 @@ export const quotes = pgTable(
     declinedAt: timestamp('declined_at', { withTimezone: true }),
     acceptToken: uuid('accept_token').notNull().unique().default(sql`gen_random_uuid()`),
     pdfStorageKey: text('pdf_storage_key'),
+    sentToEmail: text('sent_to_email'),
+    sentToFirstName: text('sent_to_first_name'),
     inputs: jsonb('inputs').notNull(),
     fee: numeric('fee', { precision: 10, scale: 2 }).notNull().default('0'),
     travel: numeric('travel', { precision: 10, scale: 2 }).notNull().default('0'),

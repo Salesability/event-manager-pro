@@ -127,6 +127,13 @@
       "when": 1779552000000,
       "tag": "0017_tranquil_living_mummy",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1779638400000,
+      "tag": "0018_acoustic_cannonball",
+      "breakpoints": true
     }
   ]
 }
