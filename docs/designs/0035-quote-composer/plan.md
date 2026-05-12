@@ -13,7 +13,7 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 | 1: Service catalog data model + admin UI | Done | `bfaeff7` |
 | 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
 | 3: Pricing logic + quote composer page | Done | `0a17124` |
-| 4: PDF preview pane + send wiring | Done | - |
+| 4: PDF preview pane + send wiring | Done | `fea4d82` |
 | 5: Tests + smoke verification | Done | `3f9edbe` |
 
 **Overall Progress:** 100% (5/5 phases complete)
