@@ -5,26 +5,48 @@ import { useRouter } from 'next/navigation';
 import { Combobox } from '@/components/ui/combobox';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { createQuote } from '@/features/quotes/actions';
+import { createQuote, setQuoteInputs } from '@/features/quotes/actions';
 import type { Dealer } from '@/features/schedule/queries';
+import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
 import {
   computeQuote,
   DEFAULT_QUOTE_INPUTS,
   QuoteInputsError,
+  type ComputedLine,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
 
 // Quote composer — structured-input calculator (per 0035 plan Phase 3 OQ #2
 // resolution). Coach edits the small input set on the left; the computed
-// line-items table is read-only output on the right. Saving creates a draft
-// row; subsequent editing (post-MVP) flows through `setQuoteInputs` etc.
+// line-items table is read-only output on the right. Saving a fresh quote
+// creates a draft row and routes to `/quotes/<id>` (edit-mode home); saving
+// from edit-mode hits `setQuoteInputs` (draft-only, atomic guarded UPDATE
+// per actions.ts:281-289) and stays put. Non-draft statuses render
+// read-only — server-side guard is the real defence.
+
+export type InitialQuote = {
+  quoteId: number;
+  dealerId: number;
+  dealerName: string;
+  inputs: QuoteInputs;
+  lineItems: ComputedLine[];
+  subtotal: number;
+  /** Tax dollar amount (not %). Matches `computeQuote`'s `taxOverride` and
+   *  the FormData `tax` field consumed by `setQuoteInputs`. */
+  tax: number;
+  total: number;
+  status: QuoteStatus;
+};
 
 type Props = {
   dealers: Dealer[];
   catalog: ServiceItem[];
   initialDealerId: number | null;
   initialCampaignId: number | null;
+  /** When set, the composer hydrates from this row and saves through
+   *  `setQuoteInputs` (UPDATE) instead of `createQuote` (INSERT). */
+  initial?: InitialQuote;
 };
 
 const inputClass =
@@ -45,13 +67,22 @@ function fmtMoney(n: number): string {
   return currency.format(Number.isFinite(n) ? n : 0);
 }
 
-export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampaignId }: Props) {
+export function QuoteComposer({
+  dealers,
+  catalog,
+  initialDealerId,
+  initialCampaignId,
+  initial,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const [dealerId, setDealerId] = useState<number | null>(initialDealerId);
-  const [inputs, setInputs] = useState<QuoteInputs>(DEFAULT_QUOTE_INPUTS);
-  const [taxOverride, setTaxOverride] = useState<number>(0);
+  const isEdit = initial != null;
+  const isReadOnly = isEdit && initial.status !== 'draft';
+
+  const [dealerId, setDealerId] = useState<number | null>(initial?.dealerId ?? initialDealerId);
+  const [inputs, setInputs] = useState<QuoteInputs>(initial?.inputs ?? DEFAULT_QUOTE_INPUTS);
+  const [taxOverride, setTaxOverride] = useState<number>(initial?.tax ?? 0);
 
   const dealerOptions = useMemo(
     () => dealers.map((d) => ({ value: String(d.id), label: dealerLabel(d) })),
@@ -70,12 +101,30 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
       return { ok: false as const, error: msg };
     }
   }, [inputs, catalog, taxOverride]);
+  const display = isReadOnly && initial
+    ? {
+        ok: true as const,
+        lines: initial.lineItems,
+        subtotal: initial.subtotal,
+        tax: initial.tax,
+        total: initial.total,
+      }
+    : computed.ok
+      ? {
+          ok: true as const,
+          lines: computed.out.lines,
+          subtotal: computed.out.subtotal,
+          tax: computed.out.tax,
+          total: computed.out.total,
+        }
+      : computed;
 
   function patch<K extends keyof QuoteInputs>(key: K, value: QuoteInputs[K]) {
     setInputs((prev) => ({ ...prev, [key]: value }));
   }
 
   function onSaveDraft() {
+    if (isReadOnly) return;
     if (!dealerId) {
       toast.error('Pick a dealer first.');
       return;
@@ -86,14 +135,24 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
     }
     startTransition(async () => {
       const fd = new FormData();
-      fd.set('dealerId', String(dealerId));
       fd.set('inputs', JSON.stringify(inputs));
       fd.set('tax', String(taxOverride));
+      if (initial?.quoteId) {
+        fd.set('quoteId', String(initial.quoteId));
+        const result = toLegacyResult(await setQuoteInputs(fd));
+        if ('ok' in result) {
+          toast.success('Quote saved');
+          router.refresh();
+        } else {
+          toast.error(result.error);
+        }
+        return;
+      }
+      fd.set('dealerId', String(dealerId));
       const result = toLegacyResult<{ ok: true; quoteId: number }>(await createQuote(fd));
       if ('ok' in result) {
         toast.success(`Draft saved (quote #${result.quoteId})`);
-        router.refresh();
-        router.push('/production');
+        router.push(`/quotes/${result.quoteId}`);
       } else {
         toast.error(result.error);
       }
@@ -101,19 +160,36 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+    <fieldset disabled={isReadOnly} className="contents">
+      {isReadOnly && initial && (
+        <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+          This quote is <span className="font-semibold capitalize">{initial.status}</span> and can
+          no longer be edited.
+        </div>
+      )}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-col gap-3">
           <h2 className="font-display text-xl text-navy">Quote header</h2>
           <div className={fieldClass}>
             <span className={labelClass}>Dealer</span>
-            <Combobox
-              options={dealerOptions}
-              value={dealerId ? String(dealerId) : ''}
-              onChange={(v) => setDealerId(v ? Number(v) : null)}
-              placeholder="Pick a dealer…"
-              ariaLabel="Dealer"
-            />
+            {isEdit ? (
+              // The composer wires `setQuoteInputs` only; dealer swap on an
+              // existing quote routes through `setQuoteDealer` (separate
+              // setter, not surfaced in this phase). Render a static label
+              // so a user can't think they're editing the dealer mid-save.
+              <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-800">
+                {initial.dealerName}
+              </div>
+            ) : (
+              <Combobox
+                options={dealerOptions}
+                value={dealerId ? String(dealerId) : ''}
+                onChange={(v) => setDealerId(v ? Number(v) : null)}
+                placeholder="Pick a dealer…"
+                ariaLabel="Dealer"
+              />
+            )}
           </div>
           {initialCampaignId ? (
             <p className="text-xs text-stone-500">
@@ -219,7 +295,7 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
 
       <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <h2 className="font-display text-xl text-navy">Line items (computed)</h2>
-        {computed.ok ? (
+        {display.ok ? (
           <div className="overflow-hidden rounded-xl border border-stone-200">
             <table className="w-full text-sm">
               <thead className="bg-stone-50 text-xs text-stone-500">
@@ -231,14 +307,14 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {computed.out.lines.length === 0 ? (
+                {display.lines.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-6 text-center text-xs text-stone-500">
                       No lines yet. Set inputs on the left.
                     </td>
                   </tr>
                 ) : (
-                  computed.out.lines.map((l) => (
+                  display.lines.map((l) => (
                     <tr key={l.code}>
                       <td className="px-3 py-2 align-top text-stone-800">
                         <div className="font-medium">{l.label}</div>
@@ -261,21 +337,25 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
                     Subtotal
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {fmtMoney(computed.out.subtotal)}
+                    {fmtMoney(display.subtotal)}
                   </td>
                 </tr>
                 <tr className="text-sm">
                   <td colSpan={2} />
                   <td className="px-3 py-2 text-right text-stone-500">Tax override</td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={taxOverride}
-                      onChange={(e) => setTaxOverride(Number(e.currentTarget.value) || 0)}
-                      className="w-28 rounded border border-stone-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
-                    />
+                    {isReadOnly && initial ? (
+                      <span className="tabular-nums">{fmtMoney(initial.tax)}</span>
+                    ) : (
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={taxOverride}
+                        onChange={(e) => setTaxOverride(Number(e.currentTarget.value) || 0)}
+                        className="w-28 rounded border border-stone-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                      />
+                    )}
                   </td>
                 </tr>
                 <tr className="border-t border-stone-200 bg-navy text-sm text-white">
@@ -283,7 +363,7 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
                     Total
                   </td>
                   <td className="px-3 py-2 text-right font-bold tabular-nums">
-                    {fmtMoney(computed.out.total)}
+                    {fmtMoney(display.total)}
                   </td>
                 </tr>
               </tfoot>
@@ -291,22 +371,25 @@ export function QuoteComposer({ dealers, catalog, initialDealerId, initialCampai
           </div>
         ) : (
           <div className="rounded-xl border border-status-red/40 bg-status-red/5 px-3 py-2 text-xs text-status-red">
-            {computed.error}
+            {display.error}
           </div>
         )}
 
-        <div className="mt-2 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onSaveDraft}
-            disabled={pending || !computed.ok}
-            className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {pending ? 'Saving…' : 'Save Draft'}
-          </button>
-        </div>
+        {!isReadOnly && (
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onSaveDraft}
+              disabled={pending || !computed.ok}
+              className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
+            </button>
+          </div>
+        )}
       </section>
-    </div>
+      </div>
+    </fieldset>
   );
 }
 

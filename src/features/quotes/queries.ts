@@ -2,7 +2,7 @@ import 'server-only';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { audienceSources, dealers, quotes } from '@/lib/db/schema';
-import type { QuoteInputs } from '@/lib/quotes/pricing';
+import type { ComputedLine, QuoteInputs } from '@/lib/quotes/pricing';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined';
 
@@ -23,6 +23,7 @@ export type Quote = {
   total: string;
   taxPct: string;
   inputs: QuoteInputs;
+  lineItems: ComputedLine[];
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
   sentAt: Date | null;
@@ -43,6 +44,7 @@ const projection = {
   total: quotes.total,
   taxPct: quotes.taxPct,
   inputs: quotes.inputs,
+  lineItems: quotes.lineItems,
   audienceSourceId: quotes.audienceSourceId,
   audienceSourceLabel: audienceSources.label,
   sentAt: quotes.sentAt,
@@ -63,6 +65,7 @@ type QuoteRow = {
   total: string;
   taxPct: string;
   inputs: unknown;
+  lineItems: unknown;
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
   sentAt: Date | null;
@@ -84,6 +87,7 @@ function mapRow(row: QuoteRow): Quote {
     total: row.total,
     taxPct: row.taxPct,
     inputs: row.inputs as QuoteInputs,
+    lineItems: row.lineItems as unknown as ComputedLine[],
     audienceSourceId: row.audienceSourceId,
     audienceSourceLabel: row.audienceSourceLabel,
     sentAt: row.sentAt,

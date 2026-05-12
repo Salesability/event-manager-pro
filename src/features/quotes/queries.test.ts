@@ -46,6 +46,7 @@ const baseRow = {
   total: '7935.00',
   taxPct: '15.00',
   inputs: { audienceSize: 500, eventDays: 3 },
+  lineItems: [],
   audienceSourceId: null,
   audienceSourceLabel: null,
   sentAt: null,
@@ -80,6 +81,7 @@ describe('loadQuotes', () => {
       total: '7935.00',
       taxPct: '15.00',
       inputs: { audienceSize: 500, eventDays: 3 },
+      lineItems: [],
       audienceSourceId: null,
       audienceSourceLabel: null,
       sentAt: null,
@@ -124,11 +126,22 @@ describe('loadQuote', () => {
   });
 
   it('returns the mapped Quote when the id resolves', async () => {
-    mocks.selectResults = [[baseRow]];
+    const lineItems = [
+      {
+        code: 'event-package',
+        label: 'Event package',
+        unit: 'flat',
+        unitPrice: 5000,
+        qty: 1,
+        lineTotal: 5000,
+      },
+    ];
+    mocks.selectResults = [[{ ...baseRow, lineItems }]];
     const q = await loadQuote(7);
     expect(q?.id).toBe(7);
     expect(q?.dealerName).toBe('Capital Ford');
     expect(q?.inputs).toEqual({ audienceSize: 500, eventDays: 3 });
+    expect(q?.lineItems).toEqual(lineItems);
   });
 });
 
