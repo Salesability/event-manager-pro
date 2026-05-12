@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Dropbox Sign client + env wiring (`src/lib/dropbox-sign/`) | Done | `3e1b6bd` |
-| 2: MSA template render (`renderMsaPdf`) + storage layout | Pending | - |
+| 2: MSA template render (`renderMsaPdf`) + storage layout | Done | `f07a952` |
 | 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Pending | - |
 | 4: Webhook route handler at `/api/dropbox-sign/webhook` | Pending | - |
 | 5: MSA panel on `/dealerships/[id]` + create-MSA dialog | Pending | - |
@@ -39,7 +39,7 @@ This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 - Project memory `project_msa_structure` — 12-month MSA term per §2.i; accepted Quote IS the contract per §1.iii (no separate `orders`); 50% cancel fee within 21 days of Event start.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 ## Open Questions
 
@@ -64,9 +64,9 @@ These are inherited from closed/0037-commercial-spine-msa (eight OQs there) plus
 
 ## Phase 2: MSA template render (`renderMsaPdf`) + storage layout
 
-- [ ] Create `src/lib/pdf/render-msa.ts` mirroring `render-quote.ts` shape — input type `MsaPdfData` (client name, address, MSA prose blocks, termination-notice days, governing law, signature placeholders)
-- [ ] Test `render-msa.test.ts` matches the `render-quote.test.ts` pattern (snapshot the rendered PDF's text content)
-- [ ] GCS key shape: `msa/<msaId>/draft.pdf` for the draft (pre-sign), `msa/<msaId>/signed.pdf` for the post-sign artifact (parallels `quotes/<quoteId>/<rev>.pdf`)
+- [x] Create `src/lib/pdf/render-msa.ts` mirroring `render-quote.ts` shape — input type `MsaPdfData` (client name, address, signer name + email, term start/end, termination-notice days, governing law, templateVersion); §-clauses (§1 Services, §2 Term+Termination, §3 Payment, §5 Cancellation, §9 Governing Law) hardcoded in `buildSections` matching `docs/wiki/commercial-spine.md` citations; multi-page renderer with auto-paginate on body + signature-block overflow
+- [x] Test `render-msa.test.ts` matches the `render-quote.test.ts` pattern (PDF magic header, US-Letter round-trip, ≥1 page, missing `clientAddress` optional, opt-in `/tmp/msa-smoke.pdf` writer gated on `WRITE_SMOKE_PDF=1`)
+- [x] GCS key shape: `msa/<msaId>/draft.pdf` for the draft (pre-sign), `msa/<msaId>/signed.pdf` for the post-sign artifact (parallels `quotes/<quoteId>/<rev>.pdf`) — decision-only deliverable; the keys are written by Phase 3 (`sendMsaEnvelope`) and Phase 4 (`markMsaSigned`)
 
 ## Phase 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions
 
