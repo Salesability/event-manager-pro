@@ -27,8 +27,8 @@ export default async function QuoteEditPage({
 }) {
   await assertCan('quote:edit'); // expected: server-only — admin || coach
   const { id: idParam } = await params;
-  const id = Number(idParam);
-  if (!Number.isInteger(id) || id <= 0) notFound();
+  const id = parsePositiveIntPathSegment(idParam);
+  if (id == null) notFound();
 
   const quote = await loadQuote(id);
   if (!quote) notFound();
@@ -77,4 +77,15 @@ export default async function QuoteEditPage({
       />
     </div>
   );
+}
+
+// Strict decimal-only path-segment validator. Rejects `1e10`, `0x10`,
+// `1.0`, `-1`, `0`, leading-`+`, and non-digit input — the dynamic-route
+// `params.id` should be a plain canonical integer. Capped at
+// `Number.MAX_SAFE_INTEGER` since the underlying column is `bigint`.
+function parsePositiveIntPathSegment(v: string): number | null {
+  if (!/^\d+$/.test(v)) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER) return null;
+  return n;
 }

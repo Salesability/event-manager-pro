@@ -31,9 +31,24 @@ export function buildDealersColumns(
       id: 'name',
       accessorKey: 'name',
       header: 'Name',
-      cell: ({ row }) => (
-        <div className="font-medium text-stone-800">{row.original.name}</div>
-      ),
+      cell: ({ row }) => {
+        const d = row.original;
+        // Archived dealers can't be loaded via `loadDealer` (which filters
+        // `archivedAt IS NULL`), so a link would route to a guaranteed 404.
+        // Render plain text instead until an archived-capable detail
+        // loader exists.
+        if (d.archivedAt) {
+          return <span className="font-medium text-stone-500">{d.name}</span>;
+        }
+        return (
+          <Link
+            href={`/dealerships/${d.id}`}
+            className="font-medium text-stone-800 transition hover:text-navy hover:underline"
+          >
+            {d.name}
+          </Link>
+        );
+      },
       enableSorting: true,
     },
     {
