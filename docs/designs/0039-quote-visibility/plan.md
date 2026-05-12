@@ -13,12 +13,12 @@ Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Quote query layer + types (`loadQuotes`, `loadQuote`, `loadQuotesByDealer`) | Done | `d04afeb` |
-| 2: `/quotes` index page (filter pills + search + table) | Pending | - |
+| 2: `/quotes` index page (filter pills + search + table) | Done | `4a772d2` |
 | 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Pending | - |
 | 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ## Code Anchors
 
@@ -64,11 +64,11 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 2: `/quotes` index page
 
-- [ ] New file `src/app/(app)/quotes/page.tsx` — server component, gated under `(app)/`. Reads `loadQuotes()` + filter/search query params from the URL the same way `production/page.tsx` does.
-- [ ] New file `src/app/(app)/quotes/quotes-filters.tsx` — client component with status pills (`All` / `Draft` / `Sent` / `Accepted` / `Declined`) + search box (matches dealer name). Reuse the visual pattern from `production/production-filters.tsx`.
-- [ ] New file `src/app/(app)/quotes/row-actions.tsx` — read-only row actions; v1 just has a "View" affordance (links to `/quotes/<id>` — the edit-mode page built in Phase 3).
-- [ ] Page layout: heading "Quotes", paragraph subhead, the filters component, a table with columns `Dealer` / `Status` / `Total` / `Sent` / `Created` / actions. Status as a pill (mirror dealer status pills on `/dealerships`).
-- [ ] Add a `Quotes` link to the gated nav (between `Dealers` and `Production List`). Match the existing nav-entry shape in the layout.
+- [x] New file `src/app/(app)/quotes/page.tsx` — server component, gated on `quote:edit` (admin || coach, matches `/quotes/new`). Reads `loadQuotes()` + `q`/`status` query params, projects counts + filtered list, renders heading + `QuotesFilters` + table.
+- [x] New file `src/app/(app)/quotes/quotes-filters.tsx` — client component with status pills (`All` / `Draft` / `Sent` / `Accepted` / `Declined`) + search box. URL-driven (`router.replace` with `useSearchParams`, 250 ms debounce on search) — mirrors `production/production-filters.tsx`.
+- [x] New file `src/app/(app)/quotes/row-actions.tsx` — read-only row actions; v1 has a `View` link to `/quotes/<id>` (the Phase 3 edit-mode page). Server component for now; flips to `'use client'` when 0026 follow-up (c) adds the accept/decline buttons.
+- [x] Page layout: heading "Quotes" + subhead, filters component, table with `Dealer` / `Status` / `Total` / `Sent` / `Created` / actions. Status pill colour map: `draft` neutral grey, `sent` status-blue, `accepted` status-green, `declined` status-red. (OQ #3 resolution: no `amber` palette exists, so used `status-blue` for in-flight `sent` — visually consistent with the existing palette.)
+- [x] Added a `Quotes` link to the gated nav at the end of `OPERATIONAL_TABS` (after `Dealers`, before the Admin dropdown). Not `requiresAdmin` — both admin and coach gate clear `quote:edit`.
 
 #### Phase 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching
 
