@@ -1,6 +1,6 @@
 # Commercial spine
 
-Reference for how a deal flows through the system: **Client → MSA → Quote → Event/Campaign → Invoice → Payment**. Anchors the legal layer (master agreement + per-deal contract) to the operational layer (the delivery campaign). Locked in 0037 (2026-05-11); see [`docs/designs/closed/0037-…/plan.md`] once shipped for the design history.
+Reference for how a deal flows through the system: **Client → MSA → Quote → Event/Campaign → Invoice → Payment**. Anchors the legal layer (master agreement + per-deal contract) to the operational layer (the delivery campaign). Locked in 0037 (2026-05-11; shipped 2026-05-12); see [`docs/designs/closed/0037-commercial-spine-msa/plan.md`](../designs/closed/0037-commercial-spine-msa/plan.md) for the design history.
 
 > Part of `docs/wiki/`. See [`docs/wiki/index.md`](index.md) for the full catalog and [`docs/wiki/log.md`](log.md) for the maintenance log. Per-chunk working notes (plans, decisions, research) live in `docs/designs/NNNN-slug/`.
 
