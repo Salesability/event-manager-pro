@@ -16,7 +16,7 @@ Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals
 | 2: `/quotes` index page (filter pills + search + table) | Done | `4a772d2` |
 | 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Done | `56006fb` |
 | 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Done | `b484de4` |
-| 5: Tests + smoke verification | Done | - |
+| 5: Tests + smoke verification | Done | `5eded2d` |
 
 **Overall Progress:** 100% (5/5 phases complete)
 
