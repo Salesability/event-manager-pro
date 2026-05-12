@@ -27,6 +27,7 @@ export type AuditActionId =
   | 'user.role_changed'
   | 'user.deactivated'
   | 'dealer.archived'
+  | 'dealer.activated'
   | 'campaign.cancelled'
   | 'quote.create'
   | 'quote.sent'

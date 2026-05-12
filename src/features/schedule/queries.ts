@@ -19,6 +19,12 @@ export type Dealer = {
   publicId: string;
   name: string;
   address: string | null;
+  status: 'prospect' | 'active';
+  acquiredVia: string | null;
+  /** ISO timestamp when archived, else null. Surfaced for the /dealerships
+   *  filter pills (Active / Prospect / Archived). Other surfaces (calendar,
+   *  production, admin/people) get only non-archived dealers via `loadDealers`. */
+  archivedAt: Date | null;
   contactId: number | null;
   contactFirstName: string | null;
   contactLastName: string | null;
@@ -159,16 +165,19 @@ async function fetchPrimaryIdentifiers(contactIds: number[]) {
   return map;
 }
 
-export async function loadDealers(): Promise<Dealer[]> {
+async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dealer[]> {
   const rows = await db
     .select({
       id: dealers.id,
       publicId: dealers.publicId,
       name: dealers.name,
       address: dealers.address,
+      status: dealers.status,
+      acquiredVia: dealers.acquiredVia,
+      archivedAt: dealers.archivedAt,
     })
     .from(dealers)
-    .where(isNull(dealers.archivedAt))
+    .where(opts.includeArchived ? undefined : isNull(dealers.archivedAt))
     .orderBy(dealers.name);
 
   const dealerIds = rows.map((r) => r.id);
@@ -185,6 +194,9 @@ export async function loadDealers(): Promise<Dealer[]> {
       publicId: r.publicId,
       name: r.name,
       address: r.address,
+      status: r.status,
+      acquiredVia: r.acquiredVia,
+      archivedAt: r.archivedAt,
       contactId: link?.contactId ?? null,
       contactFirstName: link?.firstName ?? null,
       contactLastName: link?.lastName ?? null,
@@ -194,6 +206,18 @@ export async function loadDealers(): Promise<Dealer[]> {
   });
 }
 
+export async function loadDealers(): Promise<Dealer[]> {
+  // Non-archived only — calendar / production / people pickers want a live
+  // dealer list, not a historical roster.
+  return loadDealersInner({ includeArchived: false });
+}
+
+// /dealerships filter pills surface archived rows too. Archived =
+// `archived_at IS NOT NULL` (independent of `status`, per 0035 plan OQ #1).
+export async function loadDealersIncludingArchived(): Promise<Dealer[]> {
+  return loadDealersInner({ includeArchived: true });
+}
+
 export async function loadDealer(id: number): Promise<Dealer | null> {
   const [row] = await db
     .select({
@@ -201,6 +225,9 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
       publicId: dealers.publicId,
       name: dealers.name,
       address: dealers.address,
+      status: dealers.status,
+      acquiredVia: dealers.acquiredVia,
+      archivedAt: dealers.archivedAt,
     })
     .from(dealers)
     .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
@@ -217,6 +244,9 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
     publicId: row.publicId,
     name: row.name,
     address: row.address,
+    status: row.status,
+    acquiredVia: row.acquiredVia,
+    archivedAt: row.archivedAt,
     contactId: link?.contactId ?? null,
     contactFirstName: link?.firstName ?? null,
     contactLastName: link?.lastName ?? null,

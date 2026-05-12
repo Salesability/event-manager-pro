@@ -60,10 +60,15 @@ export function DealerForm({
   mode,
   dealer,
   onSuccess,
+  defaultStatus,
 }: {
   mode: Mode;
   dealer?: Dealer;
   onSuccess: () => void;
+  /** When set, hides the status select and submits this value. Used by the
+   *  composer's inline "Add new prospect" flow (defaultStatus='prospect') so
+   *  the back-office UI choice doesn't pollute the prospect-create path. */
+  defaultStatus?: 'prospect' | 'active';
 }) {
   const router = useRouter();
   const { touched, fieldHandlers } = useTouched();
@@ -162,6 +167,36 @@ export function DealerForm({
           <input
             type="text"
             defaultValue={dealer?.address ?? ''}
+            className={inputClass}
+          />
+        </Form.Control>
+      </Form.Field>
+
+      {/* `defaultStatus` is a create-only hint (composer's inline-prospect
+          flow). Editing a dealer always uses the visible select so an admin
+          can flip status — passing the prop in edit mode is ignored. */}
+      {defaultStatus && mode === 'create' ? (
+        <input type="hidden" name="status" value={defaultStatus} />
+      ) : (
+        <Form.Field name="status" className={fieldClass}>
+          <Form.Label className={labelClass}>Status</Form.Label>
+          <Form.Control asChild>
+            <select defaultValue={dealer?.status ?? 'active'} className={inputClass}>
+              <option value="active">Active</option>
+              <option value="prospect">Prospect</option>
+            </select>
+          </Form.Control>
+        </Form.Field>
+      )}
+
+      <Form.Field name="acquiredVia" className={fieldClass}>
+        <Form.Label className={labelClass}>How did this dealer find us? (optional)</Form.Label>
+        <Form.Control asChild>
+          <input
+            type="text"
+            defaultValue={dealer?.acquiredVia ?? ''}
+            placeholder="Book Your Event form / referral / outbound / trade show"
+            maxLength={200}
             className={inputClass}
           />
         </Form.Control>

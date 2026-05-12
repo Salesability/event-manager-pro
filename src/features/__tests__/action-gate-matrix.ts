@@ -138,6 +138,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'dealer:archive — admin-only',
   },
+  {
+    label: 'convertProspectToActive',
+    invoke: () => scheduleActions.convertProspectToActive(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'dealer:edit — admin-only since 2026-05-08; prospect → active flip',
+  },
 
   // ---- Campaign CRUD (3) — admin-only -----------------------------------
   {

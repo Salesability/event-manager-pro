@@ -53,6 +53,25 @@ function toActionResult(err: unknown): ActionResult {
   throw err;
 }
 
+type DealerStatus = 'prospect' | 'active';
+const DEALER_STATUSES: readonly DealerStatus[] = ['prospect', 'active'];
+
+function parseDealerStatus(formData: FormData, fallback: DealerStatus): DealerStatus | ActionError {
+  const raw = field(formData, 'status');
+  if (!raw) return fallback;
+  if (!DEALER_STATUSES.includes(raw as DealerStatus)) {
+    return { error: 'Invalid dealer status.' };
+  }
+  return raw as DealerStatus;
+}
+
+function parseAcquiredVia(formData: FormData): string | null | ActionError {
+  const raw = field(formData, 'acquiredVia');
+  if (!raw) return null;
+  if (raw.length > 200) return { error: 'Acquired-via must be 200 characters or fewer.' };
+  return raw;
+}
+
 export const createDealer = capabilityClient('dealer:create')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -74,6 +93,15 @@ export const createDealer = capabilityClient('dealer:create')
     });
     if (contactErr) return { error: contactErr };
 
+    // Default for first-class /dealerships entry: 'active' (back-office adds a
+    // dealer who's already a customer). The composer's inline-create flow
+    // submits an explicit `status=prospect` so a quote-driven add lands as a
+    // prospect — see 0035 Phase 2/3.
+    const status = parseDealerStatus(formData, 'active');
+    if (typeof status === 'object' && 'error' in status) return status;
+    const acquiredVia = parseAcquiredVia(formData);
+    if (typeof acquiredVia === 'object' && acquiredVia && 'error' in acquiredVia) return acquiredVia;
+
     try {
       await db.transaction(async (tx) => {
         const [dealerRow] = await tx
@@ -82,6 +110,8 @@ export const createDealer = capabilityClient('dealer:create')
             publicId: generatePublicId(),
             name,
             address: address || null,
+            status,
+            acquiredVia: acquiredVia as string | null,
             createdById: userId,
             updatedById: userId,
           })
@@ -155,19 +185,51 @@ export const updateDealer = capabilityClient('dealer:edit')
     });
     if (contactErr) return { error: contactErr };
 
-    const dealerExists = await db
-      .select({ id: dealers.id })
-      .from(dealers)
-      .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
-      .limit(1);
-    if (!dealerExists.length) return { error: 'Dealer not found.' };
+    // Parse status / acquiredVia as "patches" — omit-when-absent so a
+    // caller that doesn't submit the field can't clobber a concurrent flip
+    // (e.g. `convertProspectToActive` racing with the form-save). Empty
+    // string is treated as "absent" since the existing field() helper trims.
+    const statusRaw = field(formData, 'status');
+    let statusPatch: DealerStatus | undefined;
+    if (statusRaw) {
+      if (!DEALER_STATUSES.includes(statusRaw as DealerStatus)) {
+        return { error: 'Invalid dealer status.' };
+      }
+      statusPatch = statusRaw as DealerStatus;
+    }
 
+    let acquiredViaPatch: string | null | undefined;
+    if (formData.has('acquiredVia')) {
+      const raw = field(formData, 'acquiredVia');
+      if (raw.length > 200) {
+        return { error: 'Acquired-via must be 200 characters or fewer.' };
+      }
+      acquiredViaPatch = raw || null;
+    }
+
+    const dealerPatch: Record<string, unknown> = {
+      name,
+      address: address || null,
+      updatedById: userId,
+    };
+    if (statusPatch !== undefined) dealerPatch.status = statusPatch;
+    if (acquiredViaPatch !== undefined) dealerPatch.acquiredVia = acquiredViaPatch;
+
+  let notFound = false;
   try {
     await db.transaction(async (tx) => {
-      await tx
+      // Guarded UPDATE — `archivedAt IS NULL` in the WHERE closes the TOCTOU
+      // window where a concurrent `archiveDealer` could land between a
+      // SELECT-existence check and the UPDATE-by-id.
+      const updated = await tx
         .update(dealers)
-        .set({ name, address: address || null, updatedById: userId })
-        .where(eq(dealers.id, id));
+        .set(dealerPatch)
+        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+        .returning({ id: dealers.id });
+      if (!updated.length) {
+        notFound = true;
+        return;
+      }
 
       const hasContactInputs = contactFirst || contactLast || contactEmail || contactPhone;
       if (!hasContactInputs) return;
@@ -252,6 +314,7 @@ export const updateDealer = capabilityClient('dealer:edit')
     } catch (err) {
       return toActionResult(err);
     }
+    if (notFound) return { error: 'Dealer not found.' };
 
     revalidatePath('/dealerships');
     revalidatePath('/production');
@@ -284,6 +347,45 @@ export const archiveDealer = capabilityClient('dealer:archive')
         targetTable: 'dealers',
         targetId: id,
         payload: null,
+      });
+    }
+
+    revalidatePath('/dealerships');
+    revalidatePath('/production');
+    return { ok: true };
+  });
+
+// Flip a prospect dealer to `active`. Called manually from the dealer detail
+// in v1 and automatically by 0026's `acceptQuote` when an accepted quote ties
+// to a prospect dealer (the implicit "first signed deal" promotion). Idempotent
+// — re-running on an already-active or archived row is a no-op that emits no
+// audit row, matching the cancelCampaign atomic-transition pattern.
+export const convertProspectToActive = capabilityClient('dealer:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid dealer id.' };
+
+    const result = await db
+      .update(dealers)
+      .set({ status: 'active', updatedById: userId })
+      .where(
+        and(
+          eq(dealers.id, id),
+          eq(dealers.status, 'prospect'),
+          isNull(dealers.archivedAt),
+        ),
+      )
+      .returning({ id: dealers.id });
+
+    if (result.length) {
+      await recordAudit({
+        action: 'dealer.activated',
+        targetTable: 'dealers',
+        targetId: id,
+        payload: { from: 'prospect' },
       });
     }
 

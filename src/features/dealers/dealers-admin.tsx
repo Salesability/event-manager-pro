@@ -8,10 +8,32 @@ import { Dialog } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { archiveDealer } from '@/features/schedule/actions';
+import { archiveDealer, convertProspectToActive } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import { buildDealersColumns } from '@/features/dealers/dealers-columns';
 import { DealerForm } from '@/features/dealers/dealer-form';
+
+type StatusPill = 'active' | 'prospect' | 'archived';
+
+function pillClass(active: boolean): string {
+  return active
+    ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
+    : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+}
+
+function matchesPill(dealer: Dealer, pill: StatusPill): boolean {
+  // Archived takes precedence: `archivedAt IS NOT NULL` regardless of status.
+  // 0035 plan OQ #1 resolution: status enum is only `prospect | active`; the
+  // archived state lives on the existing `archivable.archivedAt` timestamp.
+  switch (pill) {
+    case 'archived':
+      return dealer.archivedAt !== null;
+    case 'active':
+      return dealer.archivedAt === null && dealer.status === 'active';
+    case 'prospect':
+      return dealer.archivedAt === null && dealer.status === 'prospect';
+  }
+}
 
 const dealersGlobalFilterFn: FilterFn<Dealer> = (row, _columnId, filterValue) => {
   const q = String(filterValue ?? '').toLowerCase().trim();
@@ -49,10 +71,14 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Dealer | null>(null);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [pill, setPill] = useState<StatusPill>('active');
   const [, startTransition] = useTransition();
 
-  const isFiltered = globalFilter.trim().length > 0;
-  const clearFilters = () => setGlobalFilter('');
+  const isFiltered = globalFilter.trim().length > 0 || pill !== 'active';
+  const clearFilters = () => {
+    setGlobalFilter('');
+    setPill('active');
+  };
 
   function archive(dealer: Dealer) {
     if (!confirm(buildArchiveConfirmMessage(dealer))) {
@@ -71,18 +97,51 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
     });
   }
 
+  function activate(dealer: Dealer) {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('id', String(dealer.id));
+      const result = toLegacyResult(await convertProspectToActive(fd));
+      if ('ok' in result) {
+        toast.success(`${dealer.name} marked active`);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  const filteredDealers = useMemo(
+    () => dealers.filter((d) => matchesPill(d, pill)),
+    [dealers, pill],
+  );
+
   const columns = useMemo(
-    () => buildDealersColumns({ onEdit: setEditing, onArchive: archive }),
-    // See people-admin.tsx — `archive` closes over per-render state setters but
+    () =>
+      buildDealersColumns({
+        onEdit: setEditing,
+        onArchive: archive,
+        onActivate: activate,
+      }),
+    // See people-admin.tsx — `archive`/`activate` close over per-render state setters but
     // their identity is stable; rebuild is cheap given the column count.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
+  const counts = useMemo(
+    () => ({
+      active: dealers.filter((d) => matchesPill(d, 'active')).length,
+      prospect: dealers.filter((d) => matchesPill(d, 'prospect')).length,
+      archived: dealers.filter((d) => matchesPill(d, 'archived')).length,
+    }),
+    [dealers],
+  );
+
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-stone-500">{dealers.length} dealers</p>
+        <p className="text-xs text-stone-500">{filteredDealers.length} dealers</p>
         <Can capability="dealer:create">
           <button onClick={() => setAddOpen(true)} className={headerAddClass}>
             + Add Dealer
@@ -99,12 +158,36 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
           aria-label="Search dealers"
           className="min-w-[16rem] flex-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
         />
+        <button
+          type="button"
+          aria-pressed={pill === 'active'}
+          onClick={() => setPill('active')}
+          className={pillClass(pill === 'active')}
+        >
+          Active ({counts.active})
+        </button>
+        <button
+          type="button"
+          aria-pressed={pill === 'prospect'}
+          onClick={() => setPill('prospect')}
+          className={pillClass(pill === 'prospect')}
+        >
+          Prospect ({counts.prospect})
+        </button>
+        <button
+          type="button"
+          aria-pressed={pill === 'archived'}
+          onClick={() => setPill('archived')}
+          className={pillClass(pill === 'archived')}
+        >
+          Archived ({counts.archived})
+        </button>
       </div>
 
       <div className="mt-3">
         <DataTable
           columns={columns}
-          data={dealers}
+          data={filteredDealers}
           initialSorting={[{ id: 'name', desc: false }]}
           initialPageSize={50}
           globalFilter={globalFilter}
