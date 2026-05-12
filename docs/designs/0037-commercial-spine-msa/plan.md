@@ -28,7 +28,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 |----------|---------------------|-----------------|
 | `src/lib/db/schema/master-service-agreements.ts` (new) | `src/lib/db/schema/campaigns.ts` | Same shape: `pgTable` with `bigIdentity()`, fk to `dealers.id`, `timestamps`, `actors`. MSA carries lifecycle status enum (mirror `pgEnum` usage already in repo). |
 | `drizzle/0010_msa.sql` (or whichever next serial after 0035's migrations) | `drizzle/0006_is_staff_member_excludes_dealer.sql` | Most recent migration; same generate-then-edit flow. |
-| Phase 3 edits to `0026-quote-pdf/plan.md` Phase 2 sketch | n/a — plan-doc edit | Adds `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` to the `quotes` schema sketch; renames `quotes.campaignId` direction to `campaigns.acceptedQuoteId` (move to the campaigns table). |
+| Phase 3 edits to `closed/0026-quote-pdf/plan.md` Phase 2 sketch | n/a — plan-doc edit | Adds `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` to the `quotes` schema sketch; renames `quotes.campaignId` direction to `campaigns.acceptedQuoteId` (move to the campaigns table). |
 | Phase 4 migration `drizzle/00XX_drop_campaign_commercial_cols.sql` | `drizzle/0006_*` | Destructive column drops on `campaigns`. Requires 0026 Phase 2 + 0035 Phase 3 to be writing to the new locations. |
 | `docs/wiki/commercial-spine.md` (new wiki page) | `docs/wiki/data-model.md` | Reference page describing the spine Client → MSA → Quote → Event/Campaign + Invoice + Payment. |
 
@@ -43,7 +43,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 - This chunk is **pure foundation.** It defines the spine; it does not implement the MSA send/sign flow (that's 7.2) or the cancellation-fee math (deferred, see Open Question #4).
 - Phase 1 reconciles three other plan docs by editing them in place:
   - `0025-quote-to-payment/plan.md` — Sub-plans table gets an "Event/Campaign demotion" line; sequencing note that 7.2 (MSA) must be signable independently of 7.1's send flow.
-  - `0026-quote-pdf/plan.md` Phase 2 sketch — schema additions per Phase 3 of this plan; FK direction flip.
+  - `closed/0026-quote-pdf/plan.md` Phase 2 sketch — schema additions per Phase 3 of this plan; FK direction flip.
   - `0035-quote-composer/plan.md` Phase 3 sketch — composer must check there's an active MSA on the Client before allowing Send; if none, send goes through the bundled MSA + Quote e-sig flow (7.2's domain).
 
 ### Phase Checklist
@@ -54,7 +54,7 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [x] ~~Update `docs/wiki/data-model.md` with new MSA + rewritten quotes sections, demote campaigns~~ — **scope adjusted:** the MSA and `quotes` tables don't exist yet (0037 Phase 2 + 0026 Phase 2 work). Per the wiki rule "describes what is true now," substantive sections wait for those tables. Instead, added a forward-looking note in the `campaigns` section pointing to `commercial-spine.md` and flagging that the commercial columns are moving. MSA section lands in 0037 Phase 2; `quotes` section lands when 0026 Phase 2 ships.
 - [x] Added an entry to `docs/wiki/log.md`: dated 2026-05-11, headline "Commercial spine locked: accepted Quote = contract; MSA per-Client; campaign demoted to operational delivery (0037 Phase 1)", bullets on the column moves, FK direction flip, sibling-plan reconciliation, and carry-forward.
 - [x] Updated `docs/strategy/roadmap.md` preamble (NOT body — imported PRD): added a `⚠ Spine settled differently in-app` callout in the import preamble flagging that the roadmap's Phase 3 sequential-flow description is superseded by the bundled MSA + first-Quote envelope in `commercial-spine.md`. Body untouched.
-- [x] **Reconciled `0026-quote-pdf/plan.md` Phase 2 sketch** — added commercial columns (`fee` `travel` `depositPct` `taxPct` `quoteValidDays` `audienceSourceId`) + `msaId` to the `quotes` table; removed `campaignId`; noted that `campaigns.acceptedQuoteId` lives on the campaigns side; updated `createQuote` signature to take `dealerId` not `campaignId`. Partially resolved the tax Open Question (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
+- [x] **Reconciled `closed/0026-quote-pdf/plan.md` Phase 2 sketch** — added commercial columns (`fee` `travel` `depositPct` `taxPct` `quoteValidDays` `audienceSourceId`) + `msaId` to the `quotes` table; removed `campaignId`; noted that `campaigns.acceptedQuoteId` lives on the campaigns side; updated `createQuote` signature to take `dealerId` not `campaignId`. Partially resolved the tax Open Question (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
 - [x] **Reconciled `0035-quote-composer/plan.md` Phase 3 + Phase 4** — composer Send action must check active MSA on Client; if none, route into bundled MSA + first-Quote flow (7.2 owns the e-sig envelope). Added explicit note that draft editing (`setQuoteInputs` / `setQuoteTax` / `setQuoteDealer`) does NOT require an MSA — the gate is on Send only.
 - [x] **Reconciled `0025-quote-to-payment/plan.md`** — added a top-level "Commercial spine" bullet to Shared Foundation pointing at 0037; added an "Event/Campaign demotion" line; added under Sequencing that 7.2's MSA send/sign flow is a runtime prerequisite for first-time Quote acceptance (not a post-quote step); added 0037 Phases 1–2 as an explicit prereq.
 
@@ -75,7 +75,7 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 
 **Already done out-of-band in Phase 1 (commit `3b9b18e`).** Phase 1's "Reconciled 0026 Phase 2 sketch" + "Reconciled 0035 Phase 3 + Phase 4" checklist items executed everything Phase 3 was scoped to do. Items below struck through with verification.
 
-- [x] ~~Edit `0026-quote-pdf/plan.md` Phase 2 schema sketch to add to the `quotes` table:~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:69-71` carries `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` on `quotes`; `campaignId` removed (line 70).
+- [x] ~~Edit `closed/0026-quote-pdf/plan.md` Phase 2 schema sketch to add to the `quotes` table:~~ **Done in Phase 1** — `closed/0026-quote-pdf/plan.md:69-71` carries `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`, `msaId` on `quotes`; `campaignId` removed (line 70).
   - `fee` (numeric — flat fee component; cross-checked against `inputs` × catalog at edit time, persisted alongside)
   - `travel` (numeric — flat travel amount; mirrors `inputs.travelAmount`)
   - `depositPct` (numeric, default `0`)
@@ -84,8 +84,8 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
   - `audienceSourceId` (fk → `audience_sources.id`, nullable — carried forward from the lead on convert)
   - `msaId` (fk → `master_service_agreements.id`, nullable until the Quote is accepted under a specific MSA term)
   - Remove `campaignId` from quotes; the campaign FK lives on the campaigns side instead.
-- [x] ~~Edit `0026-quote-pdf/plan.md` Phase 2 sketch for `campaigns`: add `acceptedQuoteId`~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:72` carries the `campaigns.acceptedQuoteId` line.
-- [x] ~~Edit `0026-quote-pdf/plan.md` Open Questions: resolve the "Tax calculation" question~~ **Done in Phase 1** — `0026-quote-pdf/plan.md:108` records the partial resolution (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
+- [x] ~~Edit `closed/0026-quote-pdf/plan.md` Phase 2 sketch for `campaigns`: add `acceptedQuoteId`~~ **Done in Phase 1** — `closed/0026-quote-pdf/plan.md:72` carries the `campaigns.acceptedQuoteId` line.
+- [x] ~~Edit `closed/0026-quote-pdf/plan.md` Open Questions: resolve the "Tax calculation" question~~ **Done in Phase 1** — `closed/0026-quote-pdf/plan.md:108` records the partial resolution (NS HST 15% seller-side per MSA §9; buyer-province auto-compute stays open for 7.3).
 - [x] ~~Edit `0035-quote-composer/plan.md` Phase 3 to note `setQuoteInputs` doesn't require MSA~~ **Done in Phase 1** — `0035-quote-composer/plan.md:126` carries "**No MSA check on draft editing** (per 0037) — ... the MSA gate lives on Phase 4's Send action."
 
 #### Phase 4: Drop commercial columns from `campaigns`

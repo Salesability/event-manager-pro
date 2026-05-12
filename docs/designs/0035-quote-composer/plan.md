@@ -2,7 +2,7 @@
 
 **Started:** 2026-05-08
 
-Sub-plan of [`../0025-quote-to-payment/plan.md`](../0025-quote-to-payment/plan.md) (sibling of [`../0026-quote-pdf/plan.md`](../0026-quote-pdf/plan.md)). Stand up the **composer side** of the Quote loop: a coach picks line items from a DB-backed service catalog, edits quantities, sees a live total, optionally creates a prospect dealer inline, previews the PDF, and sends. Done = a coach can build a quote end-to-end starting from either a campaign-detail page or a dealer page, without leaving the app, against either an existing dealer or a freshly-created prospect.
+Sub-plan of [`../0025-quote-to-payment/plan.md`](../0025-quote-to-payment/plan.md) (sibling of [`../closed/0026-quote-pdf/plan.md`](../closed/0026-quote-pdf/plan.md)). Stand up the **composer side** of the Quote loop: a coach picks line items from a DB-backed service catalog, edits quantities, sees a live total, optionally creates a prospect dealer inline, previews the PDF, and sends. Done = a coach can build a quote end-to-end starting from either a campaign-detail page or a dealer page, without leaving the app, against either an existing dealer or a freshly-created prospect.
 
 This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/accept flow — those are 0026 Phases 2–4. 0035 is the **layer that calls into them.** Sequencing: 0026 Phase 2 (table + bare-bones actions) must ship before 0035 Phase 3; 0026 Phase 3 (PDF render wired to real data) must ship before 0035 Phase 4's preview pane lights up; 0026 Phase 4 (send + accept route) must ship before 0035 Phase 4's "Send" button works.
 

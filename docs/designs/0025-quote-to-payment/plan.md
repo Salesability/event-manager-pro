@@ -21,7 +21,7 @@ Done = a campaign can be sent end-to-end through quote → contract → invoice 
 
 | # | Chunk | Plan |
 |---|-------|------|
-| 7.1 | Quote (PDF + email send) | [`../0026-quote-pdf/plan.md`](../0026-quote-pdf/plan.md) |
+| 7.1 | Quote (PDF + email send) | [`../closed/0026-quote-pdf/plan.md`](../closed/0026-quote-pdf/plan.md) |
 | 7.2 | Contract (Dropbox Sign + signed-PDF archive) | _not yet scaffolded_ |
 | 7.3 | Invoice (Stripe invoice from accepted quote) | _not yet scaffolded_ |
 | 7.4 | Payment (webhook + campaign status flip) | _not yet scaffolded_ |
