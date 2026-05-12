@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { dealers, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
@@ -592,8 +592,13 @@ export const sendQuote = capabilityClient('quote:edit')
     //      first 'customer' contact); fail closed before any side-effects.
     //   3. Render the PDF from the persisted snapshot.
     //   4. Atomic guarded UPDATE `draft → sent` + sentAt + pdfStorageKey,
-    //      WHERE status='draft' AND updatedAt=preloaded — eliminates the
-    //      stale-snapshot race.
+    //      WHERE status='draft' AND date_trunc('ms', updatedAt)=preloaded —
+    //      eliminates the stale-snapshot race. The `date_trunc('ms', …)`
+    //      is load-bearing: `postgres-js` decodes `timestamp with time zone`
+    //      into a JS `Date` (ms precision), so any out-of-app SQL write
+    //      with microsecond precision (e.g. `updated_at = now()`) would
+    //      otherwise miss the equality check and trip the fallthrough
+    //      "cannot be sent from status 'draft'" branch.
     //   5. On miss, re-select to classify (gone / idempotent /
     //      concurrent-edit / illegal).
     //   6. Upload PDF to GCS — we already own the slot, no precondition.
@@ -687,7 +692,7 @@ export const sendQuote = capabilityClient('quote:edit')
         and(
           eq(quotes.id, quoteId),
           eq(quotes.status, 'draft'),
-          eq(quotes.updatedAt, draft.updatedAt),
+          sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${draft.updatedAt}`,
         ),
       )
       .returning({ id: quotes.id });
