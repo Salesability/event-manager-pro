@@ -11,12 +11,12 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Service catalog data model + admin UI | Done | `bfaeff7` |
-| 2: Prospect status on dealers + inline-create flow | Pending | - |
+| 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
 | 3: Pricing logic + quote composer page | Pending | - |
 | 4: PDF preview pane + send wiring | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ## Code Anchors
 
@@ -72,14 +72,17 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 #### Phase 2: Prospect status on dealers + inline-create flow
 
-- [ ] Migration `drizzle/0009_dealers_add_status.sql`: `pgEnum('dealer_status', ['prospect', 'active'])`; add `status` column to `dealers` with default `'active'` for the backfill of existing rows. **Same migration adds `acquired_via` text column (nullable)** — captures how the dealership found Salesability ("Book Your Event form", "referral", "outbound", "trade show"). Distinct from `audience_sources` (audience-source for a campaign — renamed from `sales_lead_sources` in 0038); see 0037 OQ #7 resolution for the rationale. Free-form text in v1; formalize into a lookup once web intake lands and the values stabilize.
-- [ ] Update `src/lib/db/schema/dealers.ts` to add both the `status` column and the `acquiredVia` text column.
-- [ ] **Status semantics:** `prospect` = quote drafted, no signed relationship yet. `active` = quote accepted OR coach manually flips. **Archived state is owned by the existing `archivedAt` timestamp from the `archivable` mixin** (resolved Open Question #1) — no `'archived'` enum value. A dealer is archived iff `archivedAt IS NOT NULL`, independent of `status`. The /dealerships filter pills compute "Archived" as `archivedAt IS NOT NULL` regardless of status.
-- [ ] Modify `src/features/dealers/dealer-form.tsx` to expose the `status` field (default `'prospect'` for new-dealer inline-create from the composer; default `'active'` from /dealerships) AND the `acquiredVia` text field (nullable, helper text "How did this dealer find us?"). Hidden status field in the inline-create case; `acquiredVia` visible for both entry points.
-- [ ] Inline-create entry point: from the quote composer's dealer picker, an "Add new prospect" affordance opens DealerForm in dialog mode with status pre-set to `'prospect'`.
-- [ ] `/dealerships` page: add status filter pills (Active / Prospect / Archived); default view is Active. Anchor the filter shape on the people-admin filter bar.
-- [ ] Server Action: `convertProspectToActive(dealerId)` — flips status; called automatically when 0026's `acceptQuote` lands, manually from a "Mark active" button on the dealer detail in v1.
-- [ ] Vitest: `dealers/actions.test.ts` extended for status transitions + default-status behaviors.
+- [x] Migration `drizzle/0015_cultured_tinkerer.sql`: `pgEnum('dealer_status', ['prospect', 'active'])`; `status` column to `dealers` with default `'active'` for the backfill (numbering bumped from sketch — sequence advanced past `0008` via intervening work).
+- [x] Same migration adds `acquired_via` text column (nullable) — free-form text in v1; formalize into a lookup once web intake lands and the values stabilize.
+- [x] Update `src/lib/db/schema/dealers.ts` — both `status` (pgEnum, NOT NULL DEFAULT 'active') and `acquiredVia` columns + status index.
+- [x] **Status semantics:** `prospect` = quote drafted, no signed relationship yet. `active` = quote accepted OR admin manually flips. **Archived state is owned by the existing `archivedAt` timestamp from the `archivable` mixin** (resolved Open Question #1) — no `'archived'` enum value. A dealer is archived iff `archivedAt IS NOT NULL`, independent of `status`. The /dealerships filter pills compute "Archived" as `archivedAt IS NOT NULL` regardless of status.
+- [x] Modify `src/features/dealers/dealer-form.tsx` — expose the `status` field (default `'active'` from /dealerships, hidden + value=`'prospect'` only when `defaultStatus='prospect'` passed in **create** mode — edit mode always renders the visible select per pass-1 Codex Low #3) AND the `acquiredVia` text field (nullable, helper text).
+- [ ] ~~Inline-create entry point: from the quote composer's dealer picker, an "Add new prospect" affordance opens DealerForm in dialog mode with status pre-set to `'prospect'`.~~ **Deferred to Phase 3.** The composer doesn't exist yet (it's Phase 3 scope); the DealerForm now accepts the `defaultStatus` prop that Phase 3 will wire up via the composer's dealer picker. The form itself is ready; only the entry-point button + dialog plumbing remain for P3.
+- [x] `/dealerships` page: status filter pills (Active / Prospect / Archived) with per-pill counts; default Active. New `loadDealersIncludingArchived()` query feeds this surface; other call sites (`loadDealers`) still filter archived.
+- [x] Server Action: `convertProspectToActive(dealerId)` — guarded UPDATE keyed on `(id, status='prospect', archivedAt IS NULL)`; idempotent no-op on already-active or archived rows; emits `dealer.activated` audit on transition. Wired via "Mark active" button on prospect rows.
+- [x] **Carry-forward:** audit enum gained `dealer.activated` — migration `drizzle/0016_flat_typhoid_mary.sql` (`ALTER TYPE audit_action ADD VALUE 'dealer.activated' BEFORE 'campaign.cancelled'`).
+- [x] **Carry-forward from pass-1 Codex Mediums:** `updateDealer` rewritten with patch-style parsing (`status` and `acquiredVia` are omitted from SET when absent from FormData, preventing clobber of a concurrent `convertProspectToActive` flip) and a guarded UPDATE atomic with `archivedAt IS NULL` (closes archive race). Edit button hidden on archived rows. `formData.has('acquiredVia')` correctly distinguishes absent vs empty-submitted (`null` clears the column only when explicitly submitted empty).
+- [x] Vitest: `dealers/actions.test.ts` (new, 16 cases) — createDealer status defaults + acquiredVia persistence + invalid-status rejection; updateDealer patch semantics + not-found path + clear-acquiredVia; convertProspectToActive happy-path + idempotency on already-active + idempotency on archived + invalid-id. `action-gate-matrix.ts` gains `convertProspectToActive` row (admin-only `dealer:edit`).
 
 #### Phase 3: Pricing logic + quote composer page (structured-input shape)
 
