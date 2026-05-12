@@ -3,9 +3,15 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Combobox } from '@/components/ui/combobox';
+import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { createQuote, setQuoteInputs } from '@/features/quotes/actions';
+import {
+  createQuote,
+  previewQuotePdf,
+  sendQuote,
+  setQuoteInputs,
+} from '@/features/quotes/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
@@ -39,6 +45,11 @@ export type InitialQuote = {
   status: QuoteStatus;
 };
 
+/** Resolved Quote recipient for the Send confirm dialog (edit-mode only).
+ *  Pre-resolved server-side so the dialog can render the recipient email
+ *  without a round-trip; `error` is forwarded into the disabled-Send copy. */
+export type Recipient = { email: string; firstName: string } | { error: string };
+
 type Props = {
   dealers: Dealer[];
   catalog: ServiceItem[];
@@ -47,6 +58,8 @@ type Props = {
   /** When set, the composer hydrates from this row and saves through
    *  `setQuoteInputs` (UPDATE) instead of `createQuote` (INSERT). */
   initial?: InitialQuote;
+  /** Edit-mode only. Drives the Send confirm dialog. */
+  recipient?: Recipient;
 };
 
 const inputClass =
@@ -73,16 +86,28 @@ export function QuoteComposer({
   initialDealerId,
   initialCampaignId,
   initial,
+  recipient,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [sendPending, startSendTransition] = useTransition();
+  const [previewPending, startPreviewTransition] = useTransition();
 
   const isEdit = initial != null;
   const isReadOnly = isEdit && initial.status !== 'draft';
+  const canSend = isEdit && initial.status === 'draft';
 
   const [dealerId, setDealerId] = useState<number | null>(initial?.dealerId ?? initialDealerId);
   const [inputs, setInputs] = useState<QuoteInputs>(initial?.inputs ?? DEFAULT_QUOTE_INPUTS);
   const [taxOverride, setTaxOverride] = useState<number>(initial?.tax ?? 0);
+
+  // Preview state. `pdfUrl` cleared on every open so the user always sees the
+  // latest persisted snapshot — stale state would be worse than a half-second
+  // load shimmer.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
 
   const dealerOptions = useMemo(
     () => dealers.map((d) => ({ value: String(d.id), label: dealerLabel(d) })),
@@ -118,6 +143,16 @@ export function QuoteComposer({
           total: computed.out.total,
         }
       : computed;
+
+  // Local-state divergence from the persisted snapshot. Send must refuse to
+  // fire while dirty — the action renders from the saved jsonb, so the email
+  // would emit older numbers than the confirm dialog implied. Flat-object
+  // JSON-compare is sufficient given `QuoteInputs` has no nested shapes.
+  const isDirty = useMemo(() => {
+    if (!initial) return false;
+    if (taxOverride !== initial.tax) return true;
+    return JSON.stringify(inputs) !== JSON.stringify(initial.inputs);
+  }, [inputs, taxOverride, initial]);
 
   function patch<K extends keyof QuoteInputs>(key: K, value: QuoteInputs[K]) {
     setInputs((prev) => ({ ...prev, [key]: value }));
@@ -159,14 +194,60 @@ export function QuoteComposer({
     });
   }
 
+  function onPreview() {
+    if (!initial?.quoteId) return;
+    setPreviewOpen(true);
+    setPdfUrl(null);
+    setPreviewError(null);
+    startPreviewTransition(async () => {
+      const fd = new FormData();
+      fd.set('quoteId', String(initial.quoteId));
+      const result = toLegacyResult<{ ok: true; dataUrl: string }>(await previewQuotePdf(fd));
+      if ('ok' in result) {
+        setPdfUrl(result.dataUrl);
+      } else {
+        setPreviewError(result.error);
+      }
+    });
+  }
+
+  function onSend() {
+    if (!canSend || !initial?.quoteId) return;
+    startSendTransition(async () => {
+      const fd = new FormData();
+      fd.set('quoteId', String(initial.quoteId));
+      const result = toLegacyResult(await sendQuote(fd));
+      if ('ok' in result) {
+        setConfirmSendOpen(false);
+        toast.success('Quote sent');
+        // router.refresh() re-hydrates the page with the new `sent` status,
+        // which flips `isReadOnly=true` and hides the Save / Send buttons.
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  const recipientEmail =
+    recipient && 'email' in recipient ? recipient.email : null;
+  const recipientErrorMessage =
+    recipient && 'error' in recipient ? recipient.error : null;
+  // Confirm dialog must show the persisted-snapshot numbers, not the live
+  // computed ones — `sendQuote` emits from the saved jsonb, so live numbers
+  // would lie to the coach when the form is dirty.
+  const persistedLineCount = initial?.lineItems.length ?? 0;
+  const persistedTotal = initial?.total ?? 0;
+
   return (
-    <fieldset disabled={isReadOnly} className="contents">
+    <>
       {isReadOnly && initial && (
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
           This quote is <span className="font-semibold capitalize">{initial.status}</span> and can
           no longer be edited.
         </div>
       )}
+      <fieldset disabled={isReadOnly} className="contents">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-col gap-3">
@@ -374,22 +455,181 @@ export function QuoteComposer({
             {display.error}
           </div>
         )}
-
-        {!isReadOnly && (
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={onSaveDraft}
-              disabled={pending || !computed.ok}
-              className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
-            </button>
-          </div>
-        )}
       </section>
       </div>
-    </fieldset>
+      </fieldset>
+
+      {/* Buttons row lives OUTSIDE the disabled fieldset so Preview stays
+       *  clickable on sent (read-only) quotes — `<fieldset disabled>` would
+       *  otherwise cascade through the browser and disable any descendant
+       *  <button>. Save / Send still gate themselves via `!isReadOnly` and
+       *  `canSend`, so they correctly hide when the quote isn't a draft. */}
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+        {isEdit && (
+          <button
+            type="button"
+            onClick={onPreview}
+            disabled={previewPending}
+            className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {previewPending ? 'Loading…' : 'Preview PDF'}
+          </button>
+        )}
+        {!isReadOnly && (
+          <button
+            type="button"
+            onClick={onSaveDraft}
+            disabled={pending || !computed.ok}
+            className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
+          </button>
+        )}
+        {canSend && (
+          <button
+            type="button"
+            onClick={() => setConfirmSendOpen(true)}
+            disabled={!recipientEmail || isDirty || pending || sendPending}
+            title={
+              isDirty
+                ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
+                : recipientErrorMessage ??
+                  (recipientEmail ? `Send Quote to ${recipientEmail}` : undefined)
+            }
+            className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Send Quote
+          </button>
+        )}
+      </div>
+      {canSend && isDirty && (
+        <p className="mt-1 text-right text-[11px] text-stone-500">
+          You have unsaved changes — save before sending.
+        </p>
+      )}
+      {canSend && !isDirty && recipientErrorMessage && (
+        <p className="mt-1 text-right text-[11px] text-status-red">
+          Send disabled: {recipientErrorMessage}
+        </p>
+      )}
+
+      <PreviewDialog
+        open={previewOpen}
+        onClose={setPreviewOpen}
+        loading={previewPending}
+        pdfUrl={pdfUrl}
+        error={previewError}
+      />
+
+      <ConfirmSendDialog
+        open={confirmSendOpen}
+        onClose={setConfirmSendOpen}
+        pending={sendPending}
+        recipientEmail={recipientEmail}
+        lineCount={persistedLineCount}
+        total={persistedTotal}
+        onConfirm={onSend}
+      />
+    </>
+  );
+}
+
+function PreviewDialog({
+  open,
+  onClose,
+  loading,
+  pdfUrl,
+  error,
+}: {
+  open: boolean;
+  onClose: (next: false) => void;
+  loading: boolean;
+  pdfUrl: string | null;
+  error: string | null;
+}) {
+  return (
+    <Dialog.Root open={open} onClose={onClose}>
+      <Dialog.Backdrop />
+      <Dialog.Panel className="w-full max-w-4xl">
+        <Dialog.Title>Quote preview</Dialog.Title>
+        <Dialog.Description>
+          PDF rendered from the saved snapshot. Matches what gets emailed on
+          Send.
+        </Dialog.Description>
+        <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
+          {error ? (
+            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
+              {error}
+            </div>
+          ) : loading || !pdfUrl ? (
+            <div className="flex h-full items-center justify-center text-sm text-stone-500">
+              Rendering PDF…
+            </div>
+          ) : (
+            <iframe
+              title="Quote PDF preview"
+              src={pdfUrl}
+              className="h-full w-full"
+            />
+          )}
+        </div>
+      </Dialog.Panel>
+    </Dialog.Root>
+  );
+}
+
+function ConfirmSendDialog({
+  open,
+  onClose,
+  pending,
+  recipientEmail,
+  lineCount,
+  total,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: (next: false) => void;
+  pending: boolean;
+  recipientEmail: string | null;
+  lineCount: number;
+  total: number;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog.Root open={open} onClose={onClose}>
+      <Dialog.Backdrop />
+      <Dialog.Panel>
+        <Dialog.Title>Send this quote?</Dialog.Title>
+        <Dialog.Description>
+          Once sent, the quote is locked and cannot be edited.
+        </Dialog.Description>
+        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+          <dt className="text-stone-500">Recipient</dt>
+          <dd className="font-medium text-stone-800">
+            {recipientEmail ?? <span className="text-status-red">none</span>}
+          </dd>
+          <dt className="text-stone-500">Line items</dt>
+          <dd className="tabular-nums text-stone-800">{lineCount}</dd>
+          <dt className="text-stone-500">Total</dt>
+          <dd className="font-semibold tabular-nums text-stone-800">
+            {fmtMoney(total)}
+          </dd>
+        </dl>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          <Dialog.Close className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
+            Cancel
+          </Dialog.Close>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending || !recipientEmail}
+            className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pending ? 'Sending…' : 'Send'}
+          </button>
+        </div>
+      </Dialog.Panel>
+    </Dialog.Root>
   );
 }
 

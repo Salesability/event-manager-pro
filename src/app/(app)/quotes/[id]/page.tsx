@@ -2,9 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadQuote, type Quote } from '@/features/quotes/queries';
+import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
-import { QuoteComposer } from '@/features/quotes/quote-composer';
+import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
 import { type QuoteInputs } from '@/lib/quotes/pricing';
 
 // Edit-mode quote page. Mirrors `/quotes/new` but hydrates the composer from
@@ -33,7 +34,13 @@ export default async function QuoteEditPage({
   const quote = await loadQuote(id);
   if (!quote) notFound();
 
-  const [dealers, catalog] = await Promise.all([loadDealers(), loadServiceItems()]);
+  const [dealers, catalog, recipientResult] = await Promise.all([
+    loadDealers(),
+    loadServiceItems(),
+    resolveQuoteRecipient(quote.dealerId),
+  ]);
+  const recipient: Recipient =
+    'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 
   return (
     <div className="flex flex-col gap-6">
@@ -74,6 +81,7 @@ export default async function QuoteEditPage({
           total: Number(quote.total) || 0,
           status: quote.status,
         }}
+        recipient={recipient}
       />
     </div>
   );

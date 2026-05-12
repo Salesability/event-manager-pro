@@ -283,6 +283,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'quote:edit — admin || coach',
   },
   {
+    label: 'previewQuotePdf',
+    invoke: () => quotesActions.previewQuotePdf(fd()),
+    expectedByRole: ADMIN_OR_COACH,
+    note: 'quote:edit — admin || coach (composer-side PDF preview; no side effects)',
+  },
+  {
     label: 'declineQuote',
     invoke: () => quotesActions.declineQuote(fd()),
     expectedByRole: ADMIN_OR_COACH,

@@ -13,10 +13,10 @@ This chunk does **not** own the `quotes` table or `renderQuotePdf` or the send/a
 | 1: Service catalog data model + admin UI | Done | `bfaeff7` |
 | 2: Prospect status on dealers + inline-create flow | Done | `dcc80bc` |
 | 3: Pricing logic + quote composer page | Done | `0a17124` |
-| 4: PDF preview pane + send wiring | Blocked on 0026 P3+P4 | - |
+| 4: PDF preview pane + send wiring | Done | - |
 | 5: Tests + smoke verification | Done | `3f9edbe` |
 
-**Overall Progress:** 80% (4/5 phases complete; Phase 4 blocked on 0026 P3+P4)
+**Overall Progress:** 100% (5/5 phases complete)
 
 ## Code Anchors
 
@@ -36,6 +36,9 @@ For each new file/method below, the builder reads the anchor first and matches i
 | `src/features/quotes/quote-composer.tsx` (new — client component) | `src/features/dealers/dealer-form.tsx` | Same Radix Form shape from 0024; structured-inputs panel uses the same labeled-text/number-field pattern. Dealer picker still reuses the 0024 Combobox. |
 | `src/features/quotes/quote-line-output.tsx` (new — read-only computed-lines table) | `src/features/people/people-columns.tsx` | Closest precedent for a read-only labeled rows + right-aligned numeric column shape. Computed-lines table renders the output of `computeQuote()`; not a TanStack DataTable since rows are derived not interactive. |
 | `src/features/quotes/actions.ts` (extend — composer-side actions: `setQuoteInputs`, `setQuoteTax`, `setQuoteDealer`) | `src/features/people/actions.ts` | Long actions file with multiple gated actions; mirror `capabilityClient('quote:edit')` pattern. **Note:** the `quotes` table + `createQuote`/`sendQuote` arrive in 0026 Phase 2; 0035 extends what's there. Each setter recomputes lines + totals and persists both the input snapshot and the computed lines. |
+| `src/features/quotes/actions.ts` (extend P4 — `previewQuotePdf`) | `src/features/quotes/actions.ts:504` (`sendQuote`) | Same load-quote+dealer+validatePersistedLines+renderQuotePdf path as `sendQuote`, minus the lifecycle UPDATE / GCS upload / email-send side effects. Returns `{ ok: true, dataUrl }` where `dataUrl` is `data:application/pdf;base64,…`. Capability gate `quote:edit`. |
+| `src/features/quotes/quote-composer.tsx` (extend P4 — Preview + Send buttons + two `Dialog`s) | `src/features/quotes/quote-composer.tsx:70` (current shape) + `src/components/ui/dialog.tsx` (Radix wrapper) | Add an `isEdit` Preview button that loads a data-URL PDF into an iframe modal; add a draft-only Send button that opens a confirm modal and fires `sendQuote`. `router.refresh()` after send picks up the read-only state already wired at `quote-composer.tsx:81`. |
+| `src/features/__tests__/action-gate-matrix.ts` (extend — `previewQuotePdf` row) | `:280` (`sendQuote` row) | Single new row, `quote:edit` admit, same `fd()` factory. Adds 7 gate-matrix cases (one per role). |
 
 **Conventions referenced:**
 - `docs/wiki/conventions.md` — Drizzle ID/audit-column defaults; `db` client connection pool.
@@ -117,11 +120,13 @@ For each new file/method below, the builder reads the anchor first and matches i
 
 > **Commercial-spine alignment ([0037](../closed/0037-commercial-spine-msa/plan.md), 2026-05-11):** the Send action **must check for an active MSA on the Client** before committing to the send path. Two routes: (a) Client has an active MSA → standard `sendQuote` (PDF-only email, public accept link); (b) Client has no active MSA (or it's expired/terminated) → route into the bundled MSA + first-Quote e-sig envelope (Dropbox Sign, two documents) — owned by 0025 Phase 7.2. **Draft editing (`setQuoteInputs`, `setQuoteTax`, `setQuoteDealer`) does NOT require an MSA** — the MSA gate is on Send only. See [`docs/wiki/commercial-spine.md`](../../wiki/commercial-spine.md) for the full lifecycle.
 
-- [ ] **Depends on:** 0026 Phase 3 (`renderQuotePdf` wired to real `quotes` row) AND 0026 Phase 4 (`sendQuote` end-to-end). Routing into the bundled-envelope path also depends on 0025 Phase 7.2 (`sendMsaPlusQuoteEnvelope` or equivalent).
-- [ ] PDF preview pane in `quote-composer.tsx`: live render via Server Action that returns the GCS-stored PDF URL (or a fresh render if the quote is in `draft` and hasn't been sent). Use `<iframe src=...>` for v1.
-- [ ] Send button decision: before firing, query the Client's MSA state. If an active MSA exists → fire 0026's `sendQuote`. If none → fire 0025 P7.2's `sendMsaPlusQuoteEnvelope` (bundles MSA + Quote PDF into one Dropbox Sign envelope). On success, redirect to a success view + show "Sent at YYYY-MM-DD HH:MM" + Resend / Dropbox Sign envelope ID.
-- [ ] Confirm dialog before send (shows recipient email + line-item count + total + whether this is a bundled MSA-included send or a plain Quote send).
-- [ ] After send, the composer becomes read-only (status flips `draft → sent`); coach can still revoke via a future "Resend" action that bumps the revision.
+> **MSA-gate deferral (2026-05-12):** the bundled-envelope path (route (b) above) lives in 0025 Phase 7.2 which is **not yet scaffolded**, and there is no in-app surface to create an MSA today either. Shipping route (a) only would block every Send in dev (no MSA rows exist). For Phase 4 v1, the Send button calls `sendQuote` directly with no MSA gate; the bundled-envelope routing returns when 0025 P7.2 lands. This matches the narrower scope captured in `CURRENT.md` for 0035 P4 ("Send button on the composer that calls `sendQuote`").
+
+- [x] **Depends on:** 0026 Phase 3 (`renderQuotePdf` wired to real `quotes` row) AND 0026 Phase 4 (`sendQuote` end-to-end). ~~Routing into the bundled-envelope path also depends on 0025 Phase 7.2 (`sendMsaPlusQuoteEnvelope` or equivalent).~~ MSA-gate deferred per above. 0026 P3/P4 shipped (closed 2026-05-12).
+- [x] PDF preview pane in `quote-composer.tsx`: live render via Server Action `previewQuotePdf` that returns a `data:application/pdf;base64,…` URL (works for both `draft` and `sent`; re-renders from the persisted `lineItems`/`subtotal`/`tax`/`total` snapshot so the iframe never drifts from what `sendQuote` would emit). Use `<iframe src=...>` for v1. Preview is opt-in (button-triggered modal) — not every input edit re-renders. **Shipped:** `previewQuotePdf` in `src/features/quotes/actions.ts` (mirrors `sendQuote`'s load+validate+render path, no side effects) + `PreviewDialog` in `quote-composer.tsx` (Radix `Dialog` with `max-w-4xl` + `h-[70vh]` iframe).
+- [x] Send button on `/quotes/[id]` (edit mode, draft only) fires `sendQuote` directly. ~~On success, redirect to a success view + show "Sent at YYYY-MM-DD HH:MM" + Resend / Dropbox Sign envelope ID.~~ Simpler: `router.refresh()` re-hydrates the composer in read-only mode; the page header's status pill flips to `sent` and the existing read-only banner surfaces the new status. No separate success route. **Shipped:** the Send button only renders for `isEdit && status === 'draft'` and is disabled when `resolveQuoteRecipient` failed server-side (no customer contact / no primary email).
+- [x] Confirm dialog before send (shows recipient email + line-item count + total). ~~+ whether this is a bundled MSA-included send or a plain Quote send.~~ MSA-bundled distinction removed per deferral above. **Shipped:** `ConfirmSendDialog` in `quote-composer.tsx`.
+- [x] After send, the composer becomes read-only (status flips `draft → sent`); coach can still revoke via a future "Resend" action that bumps the revision. **Shipped:** `router.refresh()` after a successful `sendQuote` reloads the page; the existing `isReadOnly = isEdit && initial.status !== 'draft'` line at `quote-composer.tsx:84` disables the fieldset and hides Save / Send.
 
 #### Phase 5: Tests + smoke verification
 

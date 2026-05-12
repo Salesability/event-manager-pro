@@ -501,6 +501,78 @@ function sameTimestamp(a: unknown, b: unknown): boolean {
   return String(a) === String(b);
 }
 
+type PreviewResult =
+  | { ok: true; dataUrl: string }
+  | { error: string };
+
+// Preview action — renders the PDF from the persisted snapshot (no GCS, no
+// email, no lifecycle change) and returns it as a base64 data URL the
+// composer can drop into an `<iframe src=…>`. Works for both `draft` and
+// `sent`: the render input is the same `lineItems`/`subtotal`/`tax`/`total`
+// snapshot that `sendQuote` uses, so a draft preview matches exactly what
+// will be emailed on Send (modulo `issuedDate`, which is today for drafts
+// and the `sentAt` date for sent rows).
+export const previewQuotePdf = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<PreviewResult> => {
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const [quote] = await db
+      .select({
+        id: quotes.id,
+        status: quotes.status,
+        dealerId: quotes.dealerId,
+        sentAt: quotes.sentAt,
+        lineItems: quotes.lineItems,
+        subtotal: quotes.subtotal,
+        tax: quotes.tax,
+        total: quotes.total,
+      })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!quote) return { error: 'Quote not found.' };
+
+    const [dealer] = await db
+      .select({
+        id: dealers.id,
+        name: dealers.name,
+        address: dealers.address,
+      })
+      .from(dealers)
+      .where(and(eq(dealers.id, quote.dealerId), isNull(dealers.archivedAt)))
+      .limit(1);
+    if (!dealer) return { error: 'Dealer not found or archived.' };
+
+    const lineResult = validatePersistedLines(quote.lineItems);
+    if ('error' in lineResult) return lineResult;
+
+    const issuedDate = quote.sentAt
+      ? quote.sentAt.toISOString().slice(0, 10)
+      : todayIsoDate();
+
+    const rendered = await renderQuotePdf({
+      quoteNumber: String(quoteId),
+      issuedDate,
+      clientName: dealer.name,
+      clientAddress: splitClientAddress(dealer.address),
+      eventName: 'Sales Event',
+      lineItems: lineResult.lines,
+      subtotal: Number(quote.subtotal),
+      tax: Number(quote.tax),
+      total: Number(quote.total),
+    });
+    if ('error' in rendered) {
+      return { error: `Quote PDF render failed: ${rendered.error}` };
+    }
+
+    return {
+      ok: true,
+      dataUrl: `data:application/pdf;base64,${rendered.body.toString('base64')}`,
+    };
+  });
+
 export const sendQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
