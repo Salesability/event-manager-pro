@@ -1,0 +1,109 @@
+# Quote visibility + edit-mode route — `/quotes` index, `/quotes/[id]`, per-dealer quote history
+
+**Started:** 2026-05-12
+
+Quotes are fully tracked in the DB (lifecycle status, sent/accepted/declined timestamps, GCS-pinned PDFs, audit-log rows) but **invisible in the UI** — there is no `/quotes` index page, no per-dealer quote history, and no draft-resume surface. Today the only way for a coach (or anyone else) to see what quotes exist is `pnpm db:studio` against the `quotes` table, which is fine for engineering and useless for product. This chunk closes the gap with three new routes: `/quotes` (filterable list), `/quotes/[id]` (edit-mode composer hydrated from an existing draft), and `/dealerships/[id]` (dealer detail with per-dealer quote history). Also folds in the composer's leftover `router.push('/production')` from the 0035 P3 ship (`quote-composer.tsx:96`) — once `/quotes` exists and the edit route lives at `/quotes/[id]`, a successful first save can push to `/quotes/<newId>` so subsequent saves are updates instead of creating duplicate drafts.
+
+The edit-mode plumbing is light because the composer-side Server Actions already exist (`setQuoteInputs` / `setQuoteTax` / `setQuoteDealer`, all `quote:edit`-gated, draft-only via atomic guarded UPDATE per `actions.ts:281-289`). The composer is a single client component that today takes no props and starts from `DEFAULT_QUOTE_INPUTS`; this chunk extends it with an optional initial-values prop (`{ quoteId, dealerId, inputs, taxPct, status }`) and branches the save handler to call the existing setters when `quoteId` is present. No new actions, no migration.
+
+Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals + sent_at, filterable by status + search, row click routes to `/quotes/<id>`; (b) `/quotes/[id]` exists and renders the composer in edit-mode, calling `setQuoteInputs` instead of `createQuote` on save; (c) `/dealerships/[id]` exists and shows the dealer's quote history inline; (d) saving a fresh quote in the composer routes to `/quotes/<id>` (its new edit-mode home) instead of `/production`. Sub-plan of [`0025-quote-to-payment`](../0025-quote-to-payment/plan.md).
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: Quote query layer + types (`loadQuotes`, `loadQuote`, `loadQuotesByDealer`) | Done | `d04afeb` |
+| 2: `/quotes` index page (filter pills + search + table) | Pending | - |
+| 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Pending | - |
+| 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Pending | - |
+| 5: Tests + smoke verification | Pending | - |
+
+**Overall Progress:** 20% (1/5 phases complete)
+
+## Code Anchors
+
+For each new file or method below, the builder reads the anchor first and matches its shape (length, error handling, naming, query style).
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| `src/features/quotes/queries.ts` (new — `loadQuotes()`, `loadQuote(id)`, `loadQuotesByDealer(dealerId)`, `Quote` type) | `src/features/schedule/queries.ts:360` (`loadCampaigns`) + `:423` (`loadCampaign`) + `:517` (`loadCampaignsByDealer`) | Same shape: server-only module, Drizzle select-then-join-then-map, returns typed array (or single). Quote queries mirror campaign queries one-for-one — join `dealers` + (optional) `master_service_agreements` + (optional) `audience_sources`. `loadQuote(id)` is the hydrate-the-composer query for Phase 3. |
+| `src/app/(app)/quotes/page.tsx` (new — gated list page) | `src/app/(app)/production/page.tsx` | Same shape: gated server-component list page with filter pills + search + table + row actions. Production hosts campaigns; this hosts quotes. Same layer, same data-shape, same I/O. |
+| `src/app/(app)/quotes/quotes-filters.tsx` (new — client component) | `src/app/(app)/production/production-filters.tsx` | Same: client-side status+search filter component shaped for its parent list page. |
+| `src/app/(app)/quotes/row-actions.tsx` (new) | `src/app/(app)/production/row-actions.tsx` | Same row-action pattern. Read-only for now (no destructive actions). Eventually grows the staff accept/decline buttons (0026 follow-up (c)). |
+| `src/app/(app)/quotes/[id]/page.tsx` (new — edit-mode page) | `src/app/(app)/quotes/new/page.tsx` | Same shape: gated server-component that resolves params then renders `<QuoteComposer .../>`. Difference: this one `await`s `loadQuote(id)` and threads the result into the composer as initial-values props. |
+| `src/features/quotes/quote-composer.tsx` extension (accept `initial?: { quoteId, dealerId, inputs, taxPct, status }` prop; branch `onSaveDraft` to call `setQuoteInputs` when `initial.quoteId` is present, else `createQuote`) | self — same file. Sibling pattern in the file is the existing `onSaveDraft` handler at `:78-101` | One handler, two paths. Reading the existing handler before editing keeps the FormData shape (`quoteId` / `inputs` / `tax`) consistent with what `setQuoteInputs` parses (`actions.ts:268-289`). |
+| `src/app/(app)/dealerships/[id]/page.tsx` (new — first dynamic segment under `/dealerships`) | `src/features/schedule/queries.ts:221` (`loadDealer`) for the loader + `src/app/(app)/production/page.tsx` for the page layout | Loader exists; page layout mirrors production. Add a `<DealerName>` link on `/dealerships`'s table to make the route reachable. |
+| Composer redirect fix in `src/features/quotes/quote-composer.tsx:96` | n/a — one-line bug fix | Replace `router.push('/production')` with `router.push('/quotes/<newQuoteId>')` so the post-save destination is the edit-mode home for the just-created quote. Subsequent saves on that URL go through `setQuoteInputs` (UPDATE) and stay put. |
+| Nav entry for `Quotes` in the gated header | wherever `Production List` / `Reports` / `Dealers` is wired (likely a layout component under `src/app/(app)/`) | Same nav-entry pattern; insert `Quotes` between `Dealers` and `Production List`. |
+
+**Conventions referenced:**
+- `docs/wiki/data-model.md` — `quotes` table reference (columns, lifecycle, joins, RLS).
+- `docs/wiki/commercial-spine.md` — accepted Quote = the contract; status enum semantics.
+- `docs/wiki/auth.md` — gating for the new routes (admin + coach can see all; coach-scoped filtering TBD if multi-tenant-by-coach kicks in).
+- `docs/wiki/conventions.md` — server-only modules, Drizzle query patterns.
+- CLAUDE.md → "Conventions" — mutations go through Server Actions (this chunk is read-only; relevant only for the future edit-route follow-up).
+
+## Notes
+
+- **No new Server Actions, no migration.** Edit-mode reuses the existing `setQuoteInputs` / `setQuoteTax` / `setQuoteDealer` composer-side setters (gated on `quote:edit`, draft-only via atomic guarded UPDATE at `actions.ts:281-289`). The lifecycle guard is what makes this safe: any attempt to `setQuoteInputs` on a `sent`/`accepted`/`declined` quote returns `{ error: "Quote cannot be edited in status '<x>'." }` and the row is unchanged.
+- **Lifecycle gating in the UI.** When loading a non-`draft` quote on `/quotes/[id]`, the composer renders read-only (or shows a banner: "This quote is `<status>` and can no longer be edited."). Server-side guard is the real defence; UI is just the courtesy.
+- **Coach-scope filtering** (multi-tenant-by-coach per `project_coach_owned_business` memory) — every quote has `createdById` so a coach-scoped query is straightforward. **Working assumption for v1: admins see all; coaches see all.** Tighten only if user calls out the leak; the alternative is a route-level capability split that's not yet justified.
+- **Closed/0026 follow-ups** that this chunk does *not* tackle: (a) degraded-send retry path, (b) split `quote:send` from `quote:edit`, (c) staff accept/decline UI affordance, (d) live-send dev smoke. Those stay parked under 0026 follow-ups.
+
+### Phase Checklist
+
+#### Phase 1: Quote query layer + types
+
+- [x] New file `src/features/quotes/queries.ts` with `import 'server-only'` and the standard `db` client import.
+- [x] Define `Quote` type — pick the columns the three pages actually render: `id`, `dealerId`, `dealerName`, `dealerArchivedAt`, `status`, `subtotal`, `tax`, `total`, `inputs` (jsonb — needed by `loadQuote` for composer hydration), `taxPct`, `sentAt`, `acceptedAt`, `declinedAt`, `createdAt`, `createdById`. Match the precision and nullable-ness of the schema.
+- [x] Implement `loadQuotes(): Promise<Quote[]>` — select + inner-join `dealers`, leave `audience_sources` as left-join (nullable). Order by `createdAt DESC` (newest first). Mirror `loadCampaigns` line-for-line on the projection-to-row mapping shape.
+- [x] Implement `loadQuote(id: number): Promise<Quote | null>` — same query, `where(eq(quotes.id, id))`, `.limit(1)`. The composer-hydration query.
+- [x] Implement `loadQuotesByDealer(dealerId: number): Promise<Quote[]>` — same query with `where(eq(quotes.dealerId, dealerId))`. Order by `createdAt DESC`.
+- [x] Vitest in `src/features/quotes/queries.test.ts` — mock the `db` client (`vi.mock('@/lib/db')` style, mirror `src/features/schedule/queries.test.ts`'s setup). Test cases: (a) empty result → `[]` / `null`; (b) result with a dealer + nullable joins maps fields correctly; (c) `loadQuotesByDealer` filters by `dealerId`; (d) `loadQuote` returns `null` for a missing id and the mapped row for a present one. Don't over-test SQL shape — test the row-mapping.
+- Out-of-scope mechanical unblocker applied this phase: pre-existing tsc fallout from 0037 P4 (`scripts/import-from-sheets.ts:495-499` referenced the five dropped commercial columns) — dead lines removed so the Phase 1 `tsc --noEmit` gate clears. Zero behavior change.
+
+#### Phase 2: `/quotes` index page
+
+- [ ] New file `src/app/(app)/quotes/page.tsx` — server component, gated under `(app)/`. Reads `loadQuotes()` + filter/search query params from the URL the same way `production/page.tsx` does.
+- [ ] New file `src/app/(app)/quotes/quotes-filters.tsx` — client component with status pills (`All` / `Draft` / `Sent` / `Accepted` / `Declined`) + search box (matches dealer name). Reuse the visual pattern from `production/production-filters.tsx`.
+- [ ] New file `src/app/(app)/quotes/row-actions.tsx` — read-only row actions; v1 just has a "View" affordance (links to `/quotes/<id>` — the edit-mode page built in Phase 3).
+- [ ] Page layout: heading "Quotes", paragraph subhead, the filters component, a table with columns `Dealer` / `Status` / `Total` / `Sent` / `Created` / actions. Status as a pill (mirror dealer status pills on `/dealerships`).
+- [ ] Add a `Quotes` link to the gated nav (between `Dealers` and `Production List`). Match the existing nav-entry shape in the layout.
+
+#### Phase 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching
+
+- [ ] Extend the `QuoteComposer` component (`src/features/quotes/quote-composer.tsx`) to accept an optional `initial?: { quoteId: number; dealerId: number; inputs: QuoteInputs; taxPct: number; status: QuoteStatus }` prop. When absent, behaviour is identical to today (fresh draft from `DEFAULT_QUOTE_INPUTS`). When present, the component's `useState` hooks initialise from the prop.
+- [ ] Branch `onSaveDraft` (currently `quote-composer.tsx:78-101`): if `initial?.quoteId` is set, build a FormData with `quoteId` / `inputs` / `tax` and call `setQuoteInputs` (existing `quote:edit` Server Action at `actions.ts:263`). Otherwise call `createQuote` as today. The setter is atomic + status-guarded — UI just surfaces the error if a non-draft slips through.
+- [ ] Replace `router.push('/production')` with: on `createQuote` success → `router.push(\`/quotes/\${result.quoteId}\`)`; on `setQuoteInputs` success → `router.refresh()` (stay on the edit page). On error → toast as today.
+- [ ] Lifecycle-aware rendering: when `initial.status !== 'draft'`, render the composer read-only (disabled inputs, hidden Save Draft button, banner: "This quote is `{status}` and can no longer be edited."). Server-side guard remains the real defence; UI is just the courtesy.
+- [ ] New file `src/app/(app)/quotes/[id]/page.tsx` — gated server component. Resolves `params.id` (Next 16 async params shape), parses as number, calls `loadQuote(id)`. If `null`, render a "Quote not found" empty state (or `notFound()`). If present, render `<QuoteComposer initial={...} />` plus a header showing the quote id, status pill, dealer name, and a "Back to quotes" link.
+
+#### Phase 4: `/dealerships/[id]` detail page with quote history; nav + dealer-name link
+
+- [ ] New file `src/app/(app)/dealerships/[id]/page.tsx` — server component, gated. Loads the dealer via `loadDealer(id)` and the dealer's quotes via `loadQuotesByDealer(id)`.
+- [ ] Page layout: heading is the dealer name, subhead has address / status pill / acquiredVia / archivedAt-if-set. Below it: "Quotes" section with the same table shape as the index page (Dealer column collapsed since it's redundant here). Row click → `/quotes/<id>`.
+- [ ] Empty state when the dealer has no quotes: a short message + a "New quote" button linking to `/quotes/new?dealerId=<id>` (the same target the per-row Quote button on `/dealerships` already uses).
+- [ ] Make the dealer name on `/dealerships` link to `/dealerships/[id]` (currently plain text in the table). One-line cell change.
+- [ ] Decide: keep `/dealerships/[id]` admin-only, or admin+coach. **Working assumption: admin+coach** (every staff role can already see the dealer list). Document the decision inline and call it out if it changes during build.
+
+#### Phase 5: Tests + smoke verification
+
+- [ ] Query tests from Phase 1 pass.
+- [ ] `pnpm tsc --noEmit` clean.
+- [ ] `pnpm lint` clean.
+- [ ] `pnpm test` green; no regression in existing schedule/quotes tests. Composer prop extension shouldn't break the existing render — add a thin test for the prop-present branch if the composer test suite has fixtures.
+- [ ] Smoke (web-test): `goto /quotes`; expect heading "Quotes" + filter pills (`All` / `Draft` / `Sent` / `Accepted` / `Declined`) + search box + table.
+- [ ] Smoke (web-test): click a `View` row action → lands on `/quotes/<id>` (the edit-mode page) — heading shows quote id + status pill, composer hydrated with the row's inputs.
+- [ ] Smoke (web-test): `goto /quotes/<knownDraftId>`; expect composer fields populated from the loaded row (audience size, event days, tax%, etc.). Read-only smoke can stop short of clicking `Save Draft` to avoid mutating dev data; if dev DB tolerance allows, click `Save Draft`, verify URL stays at `/quotes/<id>` and a toast appears.
+- [ ] Smoke (web-test): `goto /quotes/<knownSentId>` (if a sent/accepted/declined quote exists) — expect read-only banner + disabled inputs. If no non-draft exists, document as manual.
+- [ ] Smoke (web-test): `goto /dealerships/1`; expect dealer-name heading + "Quotes" section (table or empty state).
+- [ ] Smoke (web-test): from `/dealerships`, click the dealer name in the first row → routes to `/dealerships/[id]` correctly.
+- [ ] Smoke (web-test): from `/quotes/new?dealerId=1` composer, click `Save Draft` (if dev DB tolerance allows); verify post-save URL is `/quotes/<newId>` and the composer remains populated for further editing. If real-save is too noisy for the smoke, document the manual step.
+
+## Open questions
+
+- **#1 — Coach-scope on `/quotes` and `/dealerships/[id]`.** v1 assumption: everyone with `app:access` sees all. If the project's coach-owned-business posture (per `project_coach_owned_business` memory) requires coaches to see only their own quotes, that's a route-level filter + a capability story. Defer to v2 unless user calls it out. **No code in this chunk gates per-coach.**
+- **#2 — Pagination on `/quotes`.** With only a handful of quotes today, no pagination. If volume grows past ~100 the table renders need cursor-based paging. Out of scope here.
+- **#3 — Status pill colours.** `draft` (neutral grey), `sent` (amber/in-flight), `accepted` (green), `declined` (red) is the obvious mapping. Confirm match with existing dealer status pills on `/dealerships` (active/prospect/archived) so the visual language stays consistent. Not a blocker — pick reasonable defaults and tighten in Phase 5 if anyone notices.
+- ~~**#4 — Edit-route (`/quotes/[id]`) entry into composer.**~~ **Folded into this chunk 2026-05-12 (user-confirmed).** Phase 3 owns the composer prop extension + `/quotes/[id]` page. No new Server Action needed — the existing `setQuoteInputs` / `setQuoteTax` / `setQuoteDealer` setters already provide the draft-only atomic UPDATE surface.
+- **#5 — Tax + dealer swap on the edit page.** Phase 3 wires `setQuoteInputs` for the audience-size / event-days / catalog inputs. The tax-rate change path lives in `setQuoteTax` and the dealer-swap path in `setQuoteDealer` — they're separate setters because they validate different shape. **Working assumption: Phase 3 wires only `setQuoteInputs` (the common edit) for v1; tax-rate edits + dealer swap on existing quotes follow as a small carry-forward if a real coach workflow surfaces the need.** Today the composer doesn't expose a UI control for changing dealer after creation (Combobox limitation per 0035 P3 history), and tax-rate edits in the existing draft-creation flow already work via `setQuoteTax` if the composer chooses to call it. Don't pre-wire what users haven't asked for.
