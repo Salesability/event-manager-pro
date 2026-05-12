@@ -18,9 +18,9 @@ type Tab = { href: string; label: string; requiresAdmin?: true; capability?: Cap
 const OPERATIONAL_TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List', requiresAdmin: true },
-  { href: '/reports', label: 'Reports' },
   { href: '/dealerships', label: 'Dealers', requiresAdmin: true },
   { href: '/quotes', label: 'Quotes', capability: 'quote:edit' },
+  { href: '/reports', label: 'Reports' },
 ];
 
 // Admin lives behind a single labeled dropdown rather than as flat top-level

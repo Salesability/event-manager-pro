@@ -52,10 +52,10 @@ export default async function QuotesPage({ searchParams }: Props) {
               </span>
             </div>
           ) : (
-            <table className="min-w-[900px] table-auto border-separate border-spacing-0 text-sm">
+            <table className="w-full min-w-[900px] table-auto border-separate border-spacing-0 text-sm">
               <thead>
                 <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
-                  <th className="px-3 py-2.5">Dealer</th>
+                  <th className="w-full px-3 py-2.5">Dealer</th>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5 text-right">Total</th>
                   <th className="px-3 py-2.5">Sent</th>
@@ -123,10 +123,10 @@ function QuoteRow({ quote }: { quote: Quote }) {
       <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
         {fmtMoney(quote.total)}
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+      <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
         {fmtDate(quote.sentAt)}
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+      <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
         {fmtDate(quote.createdAt)}
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
