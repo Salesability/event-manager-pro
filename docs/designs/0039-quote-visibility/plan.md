@@ -15,10 +15,10 @@ Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals
 | 1: Quote query layer + types (`loadQuotes`, `loadQuote`, `loadQuotesByDealer`) | Done | `d04afeb` |
 | 2: `/quotes` index page (filter pills + search + table) | Done | `4a772d2` |
 | 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Done | `56006fb` |
-| 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Pending | - |
+| 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Done | `b484de4` |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 ## Code Anchors
 
@@ -80,11 +80,11 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 4: `/dealerships/[id]` detail page with quote history; nav + dealer-name link
 
-- [ ] New file `src/app/(app)/dealerships/[id]/page.tsx` — server component, gated. Loads the dealer via `loadDealer(id)` and the dealer's quotes via `loadQuotesByDealer(id)`.
-- [ ] Page layout: heading is the dealer name, subhead has address / status pill / acquiredVia / archivedAt-if-set. Below it: "Quotes" section with the same table shape as the index page (Dealer column collapsed since it's redundant here). Row click → `/quotes/<id>`.
-- [ ] Empty state when the dealer has no quotes: a short message + a "New quote" button linking to `/quotes/new?dealerId=<id>` (the same target the per-row Quote button on `/dealerships` already uses).
-- [ ] Make the dealer name on `/dealerships` link to `/dealerships/[id]` (currently plain text in the table). One-line cell change.
-- [ ] Decide: keep `/dealerships/[id]` admin-only, or admin+coach. **Working assumption: admin+coach** (every staff role can already see the dealer list). Document the decision inline and call it out if it changes during build.
+- [x] New file `src/app/(app)/dealerships/[id]/page.tsx` — gated server component, `loadDealer(id)` + `loadQuotesByDealer(id)`, `notFound()` on missing.
+- [x] Page layout: `← Dealers` link + dealer-name heading + status pill (Active / Prospect / Archived); subhead shows address / acquiredVia / primary email / primary phone in a flex-wrap row. `Quotes` section below: header + `+ New quote` link (hidden on archived dealers), table with `Status` / `Total` / `Sent` / `Created` / `View` columns; `View` link routes to `/quotes/<id>`.
+- [x] Empty state when the dealer has no quotes: clipboard glyph + "No quotes yet" + `Create the first quote →` link to `/quotes/new?dealerId=<id>`.
+- [x] Made the dealer name on `/dealerships` link to `/dealerships/[id]` via a wrapping `<Link>` in `dealers-columns.tsx`. Hover state mirrors the existing nav-link affordance.
+- [x] Gated `admin:access` (not `quote:edit`). Plan's working-assumption was "admin+coach" but coaches don't currently see the parent `/dealerships` index (gated `admin:access` on both page and nav), so making detail admin+coach would create a deep-link asymmetry. Documented inline at the page-gate comment — flips with the parent if/when the dealer-tab gate ever opens for coaches.
 
 #### Phase 5: Tests + smoke verification
 
