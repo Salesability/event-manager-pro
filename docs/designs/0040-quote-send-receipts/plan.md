@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema add — `sent_to_email` + `sent_to_first_name` on `quotes` | Done | ba16de8 |
-| 2: Wire `sendQuote` to denormalize recipient + extend `loadQuote` | Pending | - |
+| 2: Wire `sendQuote` to denormalize recipient + extend `loadQuote` | Done | 3d0aed1 |
 | 3: Audit-row reader + `signedQuotePdfUrl` Server Action | Pending | - |
 | 4: Send-receipt panel on `/quotes/[id]` | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -32,7 +32,7 @@ Today `sendQuote` writes `sentAt` / `pdfStorageKey` to the row and a `quote.sent
 - `docs/wiki/lifecycle.md` — `quote.sent` transition; new denorm fields are written in the same atomic UPDATE as `sentAt`.
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - The denorm pair is **set-once on the `draft → sent` flip** and never updated thereafter — re-sends are not a thing in v1 (the row is locked once `sent`). If 0026 follow-up (a) "degraded-send retry" lands later, that chunk owns whether re-send updates these fields or appends to a history table.
@@ -47,11 +47,9 @@ Today `sendQuote` writes `sentAt` / `pdfStorageKey` to the row and a `quote.sent
 - [x] Type-check passes (`tsc --noEmit` clean)
 
 #### Phase 2: Wire `sendQuote` to denormalize recipient + extend `loadQuote`
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] Extend `sendQuote` UPDATE in `src/features/quotes/actions.ts:685-692` — added `sentToEmail: recipient.email` + `sentToFirstName: recipient.firstName` to the atomic `.set({...})` block (same window as `sentAt`/`pdfStorageKey`)
+- [x] Extend `loadQuote` projection in `src/features/quotes/queries.ts` — added `sentToEmail` + `sentToFirstName` to `Quote` type, projection map, `QuoteRow` type, and `mapRow`
+- [x] Type-check + tests pass (`tsc --noEmit` clean, `pnpm test` 687 passed)
 
 #### Phase 3: Audit-row reader + `signedQuotePdfUrl` Server Action
 - [ ] Task 1
