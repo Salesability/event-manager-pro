@@ -16,9 +16,9 @@ Done = (a) a `/quotes` page lists every quote with status pill + dealer + totals
 | 2: `/quotes` index page (filter pills + search + table) | Done | `4a772d2` |
 | 3: `/quotes/[id]` edit-mode + composer initial-values prop + save-handler branching | Done | `56006fb` |
 | 4: `/dealerships/[id]` detail page with quote history; nav entry + dealer-name link | Done | `b484de4` |
-| 5: Tests + smoke verification | Pending | - |
+| 5: Tests + smoke verification | Done | - |
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 ## Code Anchors
 
@@ -88,17 +88,17 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 5: Tests + smoke verification
 
-- [ ] Query tests from Phase 1 pass.
-- [ ] `pnpm tsc --noEmit` clean.
-- [ ] `pnpm lint` clean.
-- [ ] `pnpm test` green; no regression in existing schedule/quotes tests. Composer prop extension shouldn't break the existing render — add a thin test for the prop-present branch if the composer test suite has fixtures.
-- [ ] Smoke (web-test): `goto /quotes`; expect heading "Quotes" + filter pills (`All` / `Draft` / `Sent` / `Accepted` / `Declined`) + search box + table.
-- [ ] Smoke (web-test): click a `View` row action → lands on `/quotes/<id>` (the edit-mode page) — heading shows quote id + status pill, composer hydrated with the row's inputs.
-- [ ] Smoke (web-test): `goto /quotes/<knownDraftId>`; expect composer fields populated from the loaded row (audience size, event days, tax%, etc.). Read-only smoke can stop short of clicking `Save Draft` to avoid mutating dev data; if dev DB tolerance allows, click `Save Draft`, verify URL stays at `/quotes/<id>` and a toast appears.
-- [ ] Smoke (web-test): `goto /quotes/<knownSentId>` (if a sent/accepted/declined quote exists) — expect read-only banner + disabled inputs. If no non-draft exists, document as manual.
-- [ ] Smoke (web-test): `goto /dealerships/1`; expect dealer-name heading + "Quotes" section (table or empty state).
-- [ ] Smoke (web-test): from `/dealerships`, click the dealer name in the first row → routes to `/dealerships/[id]` correctly.
-- [ ] Smoke (web-test): from `/quotes/new?dealerId=1` composer, click `Save Draft` (if dev DB tolerance allows); verify post-save URL is `/quotes/<newId>` and the composer remains populated for further editing. If real-save is too noisy for the smoke, document the manual step.
+- [x] Query tests from Phase 1 pass — 7 cases in `src/features/quotes/queries.test.ts` green (covers `loadQuotes` / `loadQuote` / `loadQuotesByDealer` + row-mapping + nullable joins + lineItems round-trip).
+- [x] `pnpm tsc --noEmit` clean (exit 0).
+- [x] `pnpm lint` clean (exit 0; 6 pre-existing stylistic warnings — same set carried across Phases 2/3/4).
+- [x] `pnpm test` green; 680/680 + 1 skipped. No regression in existing schedule/quotes tests. ~~Composer-prop test~~ — skipped per the conditional ("if the composer test suite has fixtures"); no existing composer test file in `src/features/quotes/`.
+- [x] Smoke: `/quotes` renders heading "Quotes" + 5 filter pills (`All (1)` / `Draft (1)` / `Sent (0)` / `Accepted (0)` / `Declined (0)`) + search box + table with 1 row.
+- [x] Smoke: click `View` row action → lands on `/quotes/1` (edit-mode page), header "Quote #1 / Draft pill", composer hydrated.
+- [x] Smoke: `/quotes/1` (known draft) hydrates the composer — audience 512, BDC 150, Letters 456, Digital 567, Retrieval `None`, subtotal $8,748.03. `Save Draft` not exercised (dev-data hygiene); code-traced through the `setQuoteInputs` branch + Phase 3 eval already confirmed the TOCTOU path.
+- ~~Smoke: `/quotes/<knownSentId>` read-only~~ — no non-draft quotes in the dev fixture set. Documented as manual; the read-only branch is covered by Phase 3's Codex pass-2 reading of the `display = isReadOnly && initial ? persisted : computed` discriminant.
+- [x] Smoke: `/dealerships/1` renders dealer-name heading + status pill + subhead + Quotes section with 1-row history; `/dealerships/2` (Century Honda, no quotes) renders the empty state.
+- [x] Smoke: from `/dealerships`, dealer name resolves as a `<Link>` to `/dealerships/<id>` (post-Phase-4-fix; archived rows render plain text and don't link).
+- ~~Smoke: `/quotes/new?dealerId=1` save-and-redirect~~ — not exercised end-to-end to avoid mutating dev data. Verified by code-trace: the `createQuote`-success branch in `quote-composer.tsx:152-159` calls `router.push('/quotes/${result.quoteId}')`. Phase 3's live `/quotes/1` render is the post-create destination shape.
 
 ## Open questions
 
