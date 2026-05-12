@@ -15,10 +15,10 @@ Done = (a) decision is written and cross-plans reconciled (0025 / 0026 / 0035 pl
 | 1: Decision doc + cross-plan reconciliation | Done | `3b9b18e` |
 | 2: `master_service_agreements` schema + migration | Done | `da05c54` |
 | 3: Quotes schema patch into 0026 Phase 2 sketch (FK flip + commercial columns + `audienceSourceId`) | Done | `46db02b` |
-| 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Pending | - |
+| 4: Drop commercial columns from `campaigns` (gated on 0026 P2 + 0035 P3) | Done | - |
 | 5: Tests + wiki sweep | Pending | - |
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 ## Code Anchors
 
@@ -92,11 +92,15 @@ This phase produces **plan-doc edits, not code** — the actual `quotes` table i
 
 **Gated on:** 0026 Phase 2 (creates `quotes` table with the new columns) AND 0035 Phase 3 (composer writes to the new columns) shipping. Until both land, `campaigns` is still the source of commercial fields for any UI that reads them (notably the legacy /production view).
 
-- [ ] Confirm no code reads `campaigns.fee`, `campaigns.travel`, `campaigns.depositPct`, `campaigns.taxPct`, `campaigns.quoteValidDays`, `campaigns.audienceSourceId` for any commercial purpose. (Some reads may still want `audienceSourceId` for attribution reports — if so, those reports get rewritten to read from `quotes.audienceSourceId` instead.)
-- [ ] If any legacy/production data sits on `campaigns` and needs to survive, backfill: for each campaign with non-zero commercial fields, synthesize a `quotes` row at `status='accepted'`, link `campaigns.acceptedQuoteId = newQuoteId`, and copy the commercial values onto the quote. Likely **not needed** if there's no real production data yet — confirm with user before running.
-- [ ] Migration: drop `fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId` from `campaigns`.
-- [ ] Remove those columns from `src/lib/db/schema/campaigns.ts`.
-- [ ] Sweep for any remaining references in code; update or delete.
+**Scope adjusted 2026-05-12** during the `/build` chunk loop. Original plan was to drop all six commercial columns including `audience_source_id`. Audit found `audienceSourceId` has real readers — the booking-form Data Source `<select>`, `Campaign` type + `loadCampaign`/`loadCampaigns` joins, event-detail popover, production view, and two CSV exports — none of which are "commercial purpose" (the qualifier the phase's first checklist item used). Per the spine, audience source should live on `quotes`, but the quote composer doesn't yet populate `quotes.audienceSourceId`, and the direct-booking path on `/calendar` would lose Data Source attribution entirely if the column were dropped today. **Decision (user-confirmed 2026-05-12):** drop the five strictly-commercial columns now; defer `audience_source_id` to a follow-up chunk once the booking-form/quote-composer flow is reconciled.
+
+- [x] Audited code for reads of `campaigns.fee`, `campaigns.travel`, `campaigns.depositPct`, `campaigns.taxPct`, `campaigns.quoteValidDays`, `campaigns.audienceSourceId`. Five commercial columns: zero non-schema reads anywhere in `src/` — clean drops. `audienceSourceId`: 7 reader sites (queries.ts, validators.ts, booking-form.tsx, event-detail.tsx, production/page.tsx, two export routes) — deferred per scope adjustment above.
+- [x] ~~Backfill for legacy/production data~~ — **not needed.** User confirmed (2026-05-12) no real prod data in the doomed columns; straight `DROP COLUMN` migration.
+- [x] Migration: drop `fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days` from `campaigns`. (`audience_source_id` deferred — see scope note above.) `drizzle/0017_tranquil_living_mummy.sql` applied via session pooler. Journal `when` bumped from generator default (1778602355754, which fell before 0016's `when`) to 1779552000000 (one day after 0016) to keep monotonic ordering — same pattern as the 0026 P2 / 0035 P3 carry-forward.
+- [x] Remove those five columns from `src/lib/db/schema/campaigns.ts`. Schema dropped `fee` / `travel` / `depositPct` / `taxPct` / `quoteValidDays` plus the now-unused `numeric` import. `audienceSourceId` kept (deferred).
+- [x] Sweep for any remaining references in code; update or delete. Pre-migration audit found zero non-schema references to the 5 dropped column names; no app-code edits needed. (Drizzle ORM is the single producer of column-name reads.)
+
+**Follow-up captured for Parked:** `audience_source_id` drop — write `quotes.audienceSourceId` from the composer; remove the Data Source select from the booking form; switch `event-detail`, production view, and the two CSV exports to read the joined quote's audience source instead; then drop the column from `campaigns`. Chunk-sized work; not blocked on anything but the booking-form/composer reconciliation.
 
 #### Phase 5: Tests + wiki sweep
 
