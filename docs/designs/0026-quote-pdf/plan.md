@@ -13,10 +13,10 @@ This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MS
 | 1: PDF library + GCS storage foundation (decisions + adapters) | Done | `3c4b5b9` |
 | 2: Quote data model + Server Actions | Done | `6c65c80` |
 | 3: Quote PDF rendering (real data, real layout, persist to GCS) | Done | `df1f580` |
-| 4: Quote email send + public accept/decline flow | Pending | - |
+| 4: Quote email send + staff accept/decline (reshaped 2026-05-12: dropped public token flow) | Done | `15830f8` |
 | 5: Tests + smoke verification | Pending | - |
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 ## Code Anchors
 
@@ -86,21 +86,24 @@ For each new file/method below, the builder reads the anchor first and matches i
 - [x] Verify rendered output across line-item count edge cases (1 item, 50 items). **Hard cap chosen** (single-page renderer): exported `MAX_LINE_ITEMS = 25` from `src/lib/pdf/render-quote.ts` — well clear of the composer's max of 8 emitted lines (one per v1 catalog code). Renderer fails closed when exceeded. Two new render-quote tests pin the cap (MAX renders one page; MAX+1 errors with the cap in the message).
 - [x] Persist rendered PDF at `quotes/{quoteId}/{revision}.pdf` in GCS via `putObject`; save `pdfStorageKey` on the quote row. Revision is fixed at `1` for v1 (the path shape is forward-compatible — future in-row "Resend" can bump the revision counter without a key-shape migration). Atomic guarded `draft → sent` UPDATE also persists `pdfStorageKey`; race-classification mirrors `cancelCampaign` (gone / idempotent / illegal). 11 new `sendQuote` test cases (was 5) cover the full flow + render/upload failure paths + GCS_BUCKET-missing guard + concurrent-send race classification.
 
-#### Phase 4: Quote email send + public accept/decline flow
-- [ ] React Email template at `src/lib/email/templates/quote.tsx` — branded body with quote summary + Accept-link button + Decline-link button. PDF attached.
-- [ ] `sendQuote` calls the existing `src/lib/email/send.ts` helper with the rendered PDF as attachment + the React Email template as the body.
-- [ ] Public route handler `src/app/quote/[token]/route.ts` — validates token, dispatches to `acceptQuote` or `declineQuote` based on action query param, redirects to a small public confirmation page.
-- [ ] Public confirmation page at `src/app/quote/[token]/page.tsx` — read-only summary + "Quote accepted on YYYY-MM-DD" or equivalent.
-- [ ] Audit-log emit on accept/decline with `actorRole='client'` + `actorId=null` to mark public-source actions (extend `recordAudit` if needed; document the new actor convention in `docs/wiki/auth.md`).
-- [ ] Rate-limit the public token route (0019 carry-forward) — even if just an in-memory or per-IP bucket for v1.
+#### Phase 4: Quote email send + staff accept/decline
+
+> **Reshape 2026-05-12 (mid-Phase-4):** the public token-validated accept/decline flow was dropped — Codex flagged that one-click GET-as-mutation links would be auto-accepted by corporate email security scanners (Microsoft Safe Links / Mimecast / Proofpoint prefetch every URL in incoming mail before the human reads it). v1 design becomes: **email delivers the PDF only; the recipient phones or replies to the coach; the coach flips status via staff Server Actions.** The dropped public surface (`/quote/[token]/route.ts` + `page.tsx`, rate-limit helper, `recordAudit` client-actor opt-in, `PUBLIC_PATHS` `/quote` entry) was removed in the same pass. `quotes.accept_token` stays on the schema for forward-compat — a future v2 may re-introduce a confirmation-page-button (POST-only) accept surface that scanners can't auto-actuate.
+
+- [x] React Email template at `src/lib/email/templates/quote.tsx` — first React Email template in the codebase. Branded `<Body>` + `<Container>` shell, `<Heading>` "Your Salesability Quote", greeting + one-paragraph summary (dealer name + total + Quote #N + issued-date), one paragraph asking the recipient to **reply to the email or call (902) 802-6215** to accept or request changes, Salesability sign-off. No in-email Accept/Decline buttons. Exports both the JSX component (for the React Email preview tooling) and a `quoteEmail(fields)` factory that calls `@react-email/render` to produce `{ subject, html, text }`. PDF attached via the extended `sendEmail` helper.
+- [x] `sendQuote` calls the existing `src/lib/email/send.ts` helper with the rendered PDF as attachment + the React Email template as the body. `sendEmail` extended with optional `html?: string` and `attachments?: SendAttachment[]`; pass-through to Resend's `attachments` shape with `filename` / `content` / `contentType`. `sendQuote`'s send flow: pre-load (with `updatedAt` snapshot) → resolve customer recipient (`resolveQuoteRecipient` in `src/features/quotes/recipient.ts`; fail-closed before any side effects when the dealer has no customer contact with a primary email) → archive-aware dealer lookup → render PDF → atomic guarded UPDATE → upload to GCS → render email → `sendEmail` with the buffered PDF attached + HTML body + plain-text fallback. Email-send failure after the transition surfaces a degraded-state error (`Quote sent but email delivery failed; admin repair required.`). Audit payload carries both `pdfStorageKey` and the Resend `emailId`. Codex Medium 1 from Phase 4 eval cleared inline (archive-aware dealer join).
+- [x] ~~Public route handler `src/app/quote/[token]/route.ts`~~ **Dropped 2026-05-12** — replaced with staff-side `acceptQuote` Server Action (mirror of `declineQuote`; `capability: quote:edit`; admin || coach). On a successful `sent → accepted` transition, `acceptQuote` also runs the same atomic prospect→active dealer UPDATE that `convertProspectToActive` uses (with a `dealer.activated` audit row + payload `{ from: 'prospect', via: 'quote.accepted' }`). Codex Medium 2 from Phase 4 eval cleared inline. UI affordance for staff accept/decline is a future chunk — the action surface exists for when UI lands.
+- [x] ~~Public confirmation page at `src/app/quote/[token]/page.tsx`~~ **Dropped 2026-05-12** — no public surface in v1.
+- [x] ~~Audit-log emit on accept/decline with `actorRole='client'`~~ **Dropped 2026-05-12** — both `acceptQuote` and `declineQuote` are staff Server Actions; `recordAudit` retains its strict "throw if no signed-in user" assertion. The `actor: 'client'` opt-in was implemented mid-phase and then reverted in the same pass when the public surface was dropped.
+- [x] ~~Rate-limit the public token route~~ **Dropped 2026-05-12** — no public route to rate-limit. `src/lib/rate-limit.ts` + tests deleted.
 
 #### Phase 5: Tests + smoke verification
 - [ ] `pnpm test` — quote action tests, GCS adapter tests (mocked), PDF render smoke tests, accept/decline route handler tests.
 - [ ] `pnpm tsc --noEmit` clean.
 - [ ] `pnpm lint` clean.
-- [ ] Dev smoke: create a real campaign → create quote → send → check inbox → click Accept link → verify status flip + audit row.
-- [ ] Codex Medium 4 from Phase 3 eval (2026-05-12): consider splitting `quote:send` from `quote:edit` so the send action requires an admin-only capability matching the irreversible nature of the document-emitting transition. Defer until Phase 4's UI + accept-route is wired so the gate can be decided in light of the full surface.
-- [ ] Phase 4 send-retry path must handle the degraded state where a guarded send transition succeeded but the canonical GCS PDF upload failed (`status='sent'` + `pdfStorageKey` set, object missing); retry/admin repair should re-render and upload the PDF.
+- [ ] Dev smoke: create a real campaign → create quote → send → check inbox for the PDF attachment → coach uses `acceptQuote` / `declineQuote` via the staff surface (CLI or future UI) → verify status flip + audit row + prospect→active promotion.
+- [ ] Codex Medium 4 from Phase 3 eval (2026-05-12): consider splitting `quote:send` from `quote:edit` so the send action requires an admin-only capability matching the irreversible nature of the document-emitting transition.
+- [ ] Phase 4 send-retry path must handle the degraded state where a guarded send transition succeeded but the canonical GCS PDF upload OR email delivery failed (`status='sent'` + `pdfStorageKey` set, object missing OR `emailedAt` absent). Retry/admin repair should re-render, re-upload, and re-email. Likely needs a small schema addition (`emailedAt` timestamp on `quotes`).
 - [ ] Carry-forward from pass-2 Low (2026-05-12): the concurrent-edit guard test's predicate pinning depends on the repo-wide predicate-aware DB mock follow-up already parked under 0033 in `docs/designs/CURRENT.md`.
 - [ ] Update `docs/wiki/architecture.md` "Future integrations" row to reflect `pdf-lib` + GCS decisions.
 - [ ] Update `docs/wiki/data-model.md` with the new `quotes` table.
