@@ -12,7 +12,7 @@
 | 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `9879c98` |
 | 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | Done | `d287c5f` |
 | 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Done | `2ef7f94` |
-| 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | In Progress | - |
+| 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | Done | `1d71b3f` |
 | 8: ESLint rule — `schema-as-contract/safeparse-required` locks in the convention | Pending | - |
 | 9: Smoke verification + eval | Pending | - |
 
@@ -37,7 +37,7 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 67% (6/9 phases complete)
+**Overall Progress:** 78% (7/9 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
@@ -89,10 +89,10 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [x] Verify both forms still pass their existing tests.
 
 #### Phase 7: Retire superseded `schedule/validators.ts` helpers
-- [ ] Audit `src/features/schedule/validators.ts`: list every exported helper, find each call site.
-- [ ] For each helper whose call sites are now in actions that `safeParse` a zod schema, delete the helper and remove the import.
-- [ ] Helpers still used by un-ported code (if any) stay.
-- [ ] `EMAIL_RE` likely stays as a re-usable constant unless every consumer is now schema-driven.
+- [x] Audit `src/features/schedule/validators.ts`: list every exported helper, find each call site.
+- [x] For each helper whose call sites are now in actions that `safeParse` a zod schema, delete the helper and remove the import. Deleted: `validateContactInputs` (replaced by `validateContactCross` in `schedule/actions.ts`), `parseDate` (no remaining callers — `parseCampaignInput` and the availability action both safeParse against shared zod schemas now), `parseOptionalInt` (only consumer was `parseCampaignInput`, which now uses zod).
+- [x] Helpers still used by un-ported code (if any) stay. Kept: `field`, `parseId`, `parseOptionalId`, `EMAIL_RE`, `parseCampaignInput`. See the file header for the rationale.
+- [x] ~~`EMAIL_RE` likely stays as a re-usable constant unless every consumer is now schema-driven.~~ Kept — `adoptOrphanAuthUser` in `people/actions.ts` still uses it. A future schema for that action would let it retire.
 
 #### Phase 8: ESLint rule — lock in the schema-as-contract convention
 - [ ] Create `eslint-plugins/schema-as-contract.mjs` mirroring the shape of `eslint-plugins/action-gate.mjs`. Export a single rule `safeparse-required` that walks each exported async function in matched files, inspects its body for a `FormData` parameter (or a top-level `formData` reference), and reports if no `<schema>.safeParse(Object.fromEntries(<formData>))` (or `<schema>.safeParse(<formData>)`) call appears in the first ~10 statements.
