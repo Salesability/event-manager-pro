@@ -83,15 +83,15 @@ Canonical kinds and the lucide icon for each:
 
 | Kind | Label | Icon | When to use |
 |------|-------|------|-------------|
-| `view` | View | `Eye` | Navigate to a detail page (`/quotes/[id]`, `/dealerships/[id]`). |
-| `edit` | Edit | `Pencil` | Open the canonical edit dialog when there's no detail page. |
+| `view` | View | `Eye` | Open a *reading* surface — a detail page (or dialog) that's primarily read-only. |
+| `edit` | Edit | `Pencil` | Open an *editing* surface — the canonical editor for the record, whether that lives on a page (e.g. `/quotes/[id]` is the composer) or in a dialog. |
 | `archive` | Archive | `Archive` | Soft-delete state flip. Pair with `tone: 'danger'`. |
 | `activate` | Activate | `CheckCircle` | Prospect → active state flip. Pair with `tone: 'success'`. |
 | `quote` | Quote | `FilePlus` | Workflow-launch verb on dealer rows ("create a new quote against this dealer"). |
 
-**View-xor-Edit.** A row exposes `View` *or* `Edit` for navigation, never both. The choice is decided by whether a detail page exists:
-- `/quotes` rows → `View` (detail page is `/quotes/[id]`).
-- `/dealerships` rows → `View` + (`Quote`/`Edit`/`Activate`/`Archive`) (detail page is `/dealerships/[id]`).
+**View-xor-Edit.** A row exposes `View` *or* `Edit` for navigation, never both. The label tracks **what the user is about to do**, not the surface type — a "detail page" that's actually an editor (like the quote composer) gets `Edit`, not `View`:
+- `/quotes` rows → `Edit` (destination `/quotes/[id]` IS the composer — fully editable post-0046; "view" would mischaracterize the operation).
+- `/dealerships` rows → `View` + `Quote`/`Edit`/`Activate`/`Archive` (destination `/dealerships/[id]` is a read-only management page — MSA + Quotes panels, no inline form).
 - `/production` rows → `Edit` only (no `/production/[id]` page — the dialog is the canonical editor; production is a working surface, not a reading one).
 
 **Drift guard.** [`eslint-plugins/no-inline-row-action-label.mjs`](../../eslint-plugins/no-inline-row-action-label.mjs) lints `src/app/**/row-actions.tsx` and `src/features/**/*-columns.tsx` for inline literals matching the canonical vocabulary (`View` / `Edit` / `Archive` / `Activate` / `Open` / `Details` / `Manage` / `Show`). The constant is the single source. Per-line opt-out via `// row-label: ok`.
