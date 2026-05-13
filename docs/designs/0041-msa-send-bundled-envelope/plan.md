@@ -10,7 +10,7 @@
 | 2: MSA template render (`renderMsaPdf`) + storage layout | Done | `f07a952` |
 | 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Done | `22c6a0f` |
 | 4: Webhook route handler at `/api/dropbox-sign/webhook` | Done | `81f18b1` |
-| 5: MSA panel on `/dealerships/[id]` + create-MSA dialog | Pending | - |
+| 5: MSA panel on `/dealerships/[id]` + create-MSA dialog | Done | `784a080` |
 | 6: Tests + smoke verification | Pending | - |
 
 This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-to-payment epic Phase 7.2 (Contract). The first half (`master_service_agreements` schema, RLS, status enum, `dropboxSignDocumentId` / `signedPdfStorageKey` / `templateVersion` columns) shipped via closed/0037-commercial-spine-msa Phase 2. Today there's **no Server Action that creates an MSA row, no Dropbox Sign client, no webhook handler, no UI surface** — the schema sits unused. "Done" means a coach can land on `/dealerships/[id]` for a Client without an active MSA, click "Create MSA + send for signature", and the bundled envelope (MSA template + the dealer's first draft Quote) is posted to Dropbox Sign; the Client signer URL surfaces back in the panel; on the `signed` callback the row flips to `active` with `signedAt` + the signed-PDF stashed at `msa/<id>/signed.pdf` in GCS; `msa.signed` audit row emitted. The Quote stays in `draft` and remains separately sendable via the existing `sendQuote` flow once the MSA is signed — i.e. **MSA-sign and Quote-send are independent transitions**; the bundled envelope only handles the signature side. v1 scope: one MSA per dealer, no re-sends, no renewal flow (deferred — see Open Questions).
@@ -39,7 +39,7 @@ This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 - Project memory `project_msa_structure` — 12-month MSA term per §2.i; accepted Quote IS the contract per §1.iii (no separate `orders`); 50% cancel fee within 21 days of Event start.
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 ## Open Questions
 
@@ -86,11 +86,11 @@ These are inherited from closed/0037-commercial-spine-msa (eight OQs there) plus
 
 ## Phase 5: MSA panel on `/dealerships/[id]` + create-MSA dialog
 
-- [ ] Add `loadMsasByDealer(dealerId)` + `loadActiveMsa(dealerId)` to `src/features/msa/queries.ts`
-- [ ] Insert MSA panel block on `/dealerships/[id]/page.tsx` — rendered above the existing quote-history block when an MSA row exists; status pill + signed date + signed-PDF download link (signed-URL action mirroring 0040's `signedQuotePdfUrl`)
-- [ ] "Create MSA" button → opens `MsaCreateDialog` (sibling pattern to existing dialogs in `quote-composer.tsx`); on submit calls `createMsaDraft(dealerId)` + immediately calls `sendMsaEnvelope(msaId, firstDraftQuoteId)` (single-click flow)
-- [ ] Disabled-state UX: if no draft Quote exists yet for this dealer, the dialog surfaces "Create a draft Quote first" and links to `/quotes/new?dealerId=<id>`
-- [ ] Status pill: `pending` (sent for signature) / `active` (signed) / `expired` / `terminated` — colour vocabulary matches `STATUS_PILL_CLS` in `/quotes/[id]/page.tsx`
+- [x] Add `loadMsasByDealer(dealerId)` + `loadActiveOrPendingMsa(dealerId)` (renamed from `loadActiveMsa` to capture both the panel's "show the row" state and the "show signed badge" state in one call — pending falls back when no active) + `firstDraftQuoteIdForDealer(dealerId)` to `src/features/msa/queries.ts` (server-only module)
+- [x] Insert MSA panel block on `/dealerships/[id]/page.tsx` — rendered **above** the existing quote-history block (placement intentional: the MSA is the umbrella contract; Quotes hang off it per `commercial-spine.md`); status pill + Created/Signed/Expires dates + Template version + signed-PDF download link (signed-URL resolved server-side via `signedUrl` direct call — the page is `admin:access` gated so no separate Server Action is needed today; sibling pattern to `/quotes/[id]/page.tsx:67-72`)
+- [x] "Create MSA" button → opens `MsaCreateDialog` (in `src/features/msa/msa-create-dialog.tsx`, wrapped by `MsaCreateTrigger` for `useState`-driven open); on submit calls `createMsaDraft(dealerId)` followed by `sendMsaEnvelope(msaId, firstDraftQuoteId)` (single-click two-step flow); failures surface via `sonner` toast + inline error
+- [x] Disabled-state UX: if no draft Quote exists yet for this dealer, the dialog surfaces "No draft Quote yet — create one first" and links to `/quotes/new?dealerId=<id>`; if no recipient (no customer contact with primary email) the dialog surfaces the error and disables Send. Send button disabled when either condition fails (`canSubmit = !noRecipient && !noDraftQuote`).
+- [x] Status pill: `pending` (amber) / `active` (emerald) / `expired` (stone) / `terminated` (red) — fresh `MSA_STATUS_PILL_CLS` map sibling to `STATUS_PILL_CLS` in the same file (the MSA statuses are different from quote statuses so a shared map would mismatch)
 
 ## Phase 6: Tests + smoke verification
 
