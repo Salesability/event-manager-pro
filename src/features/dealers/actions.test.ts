@@ -219,6 +219,16 @@ describe('updateDealer', () => {
     expect(mocks.updates).toHaveLength(0);
   });
 
+  it("treats status='' as absent (preserve existing status, omit from patch)", async () => {
+    // Regression guard for 0045 eval Codex Medium: empty-string status from a
+    // programmatic caller would otherwise fail `z.enum(...).optional()`. The
+    // action layer normalises `status='' → absent` before safeParse.
+    mocks.dbResults.push([{ id: 42 }]);
+    await call(updateDealer(fd({ id: '42', name: 'Acme', status: '' })));
+    const dealerUpdate = mocks.updates.find((u) => u.table === 'dealers');
+    expect(dealerUpdate!.patch as Record<string, unknown>).not.toHaveProperty('status');
+  });
+
   it('returns "Dealer not found" when the guarded UPDATE matches no row (archived or missing)', async () => {
     mocks.dbResults.push([]);
     const result = await call(updateDealer(fd({ id: '99', name: 'Acme' })));

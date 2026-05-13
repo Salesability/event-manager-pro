@@ -77,12 +77,26 @@ function validateContactCross(input: {
   return null;
 }
 
+/** Wire-format normalize before `safeParse`: `status=''` from a programmatic
+ *  caller (no submit-side select widget setting a definite value) is treated
+ *  as "absent" so the action's existing "omit status from patch / fall back to
+ *  default" semantics kick in. The schema's `z.enum([...]).optional()` would
+ *  otherwise reject the empty string. Kept out of the schema so the schema's
+ *  input/output types stay aligned for `zodResolver` (zod's `preprocess` makes
+ *  input `unknown` and clashes with RHF's type inference). */
+function normalizeDealerWire(raw: Record<string, FormDataEntryValue>) {
+  if (raw.status === '') delete raw.status;
+  return raw;
+}
+
 export const createDealer = capabilityClient('dealer:create')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const userId = ctx.user.id;
 
-    const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData));
+    const parsed = dealerFormSchema.safeParse(
+      normalizeDealerWire(Object.fromEntries(formData)),
+    );
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
       return { error: firstFieldError(fieldErrors) ?? 'Invalid dealer input.', fieldErrors };
@@ -177,7 +191,9 @@ export const updateDealer = capabilityClient('dealer:edit')
     const id = parseId(formData);
     if (id == null) return { error: 'Invalid dealer id.' };
 
-    const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData));
+    const parsed = dealerFormSchema.safeParse(
+      normalizeDealerWire(Object.fromEntries(formData)),
+    );
     if (!parsed.success) {
       const fieldErrors = parsed.error.flatten().fieldErrors;
       return { error: firstFieldError(fieldErrors) ?? 'Invalid dealer input.', fieldErrors };
