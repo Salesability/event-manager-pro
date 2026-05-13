@@ -2,6 +2,14 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  Controller,
+  useForm,
+  useWatch,
+  type UseFormRegisterReturn,
+} from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
@@ -18,7 +26,9 @@ import type { ServiceItem } from '@/features/services/queries';
 import {
   computeQuote,
   DEFAULT_QUOTE_INPUTS,
+  MAX_DOLLARS,
   QuoteInputsError,
+  quoteInputsSchema,
   type ComputedLine,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
@@ -69,6 +79,18 @@ const fieldClass = 'flex flex-col gap-1';
 
 const RETRIEVAL_BRACKETS = [0, 100, 200, 300, 400] as const;
 
+// Form-only schema: wraps the persisted `quoteInputsSchema` with the two
+// fields that exist only in the composer (`dealerId` for create-mode, plus
+// the tax override). Server-side `setQuoteInputs` / `createQuote` still
+// receive `inputs` as a JSON string and `tax` / `dealerId` as separate
+// FormData entries — the schema split here just keeps RHF honest about
+// what's a Quote field vs. what's composer chrome.
+const quoteFormSchema = quoteInputsSchema.extend({
+  dealerId: z.number().int().positive().nullable(),
+  taxOverride: z.number().min(0).max(MAX_DOLLARS),
+});
+type QuoteFormValues = z.infer<typeof quoteFormSchema>;
+
 const currency = new Intl.NumberFormat('en-CA', {
   style: 'currency',
   currency: 'CAD',
@@ -97,9 +119,22 @@ export function QuoteComposer({
   const isReadOnly = isEdit && initial.status !== 'draft';
   const canSend = isEdit && initial.status === 'draft';
 
-  const [dealerId, setDealerId] = useState<number | null>(initial?.dealerId ?? initialDealerId);
-  const [inputs, setInputs] = useState<QuoteInputs>(initial?.inputs ?? DEFAULT_QUOTE_INPUTS);
-  const [taxOverride, setTaxOverride] = useState<number>(initial?.tax ?? 0);
+  const defaultValues = useMemo<QuoteFormValues>(
+    () => ({
+      ...(initial?.inputs ?? DEFAULT_QUOTE_INPUTS),
+      dealerId: initial?.dealerId ?? initialDealerId,
+      taxOverride: initial?.tax ?? 0,
+    }),
+    [initial, initialDealerId],
+  );
+
+  const form = useForm<QuoteFormValues>({
+    resolver: zodResolver(quoteFormSchema),
+    defaultValues,
+    mode: 'onChange',
+  });
+  const { register, control, handleSubmit, formState, reset } = form;
+  const { errors, isDirty } = formState;
 
   // Preview state. `pdfUrl` cleared on every open so the user always sees the
   // latest persisted snapshot — stale state would be worse than a half-second
@@ -114,18 +149,33 @@ export function QuoteComposer({
     [dealers],
   );
 
+  // Subscribe to all form values so the computed table updates live as the
+  // coach edits. `useWatch` (not `watch()`) is the subscription-based variant
+  // — it plays well with the React Compiler and only re-renders this hook's
+  // scope, not the entire form tree.
+  const watched = useWatch({ control, defaultValue: defaultValues });
+
   // Live computation — uses the same pure function the server runs at
   // setQuoteInputs / createQuote time, so the UI never drifts from what
   // gets persisted. Catches validation errors so adversarial input doesn't
-  // crash the render.
+  // crash the render. `quoteFormSchema` already validates inputs at submit
+  // time; this catch handles the keystroke window where the form value is
+  // briefly out of range.
   const computed = useMemo(() => {
     try {
-      return { ok: true as const, out: computeQuote(inputs, catalog, taxOverride) };
+      return {
+        ok: true as const,
+        out: computeQuote(
+          extractInputs(watched),
+          catalog,
+          watched.taxOverride ?? 0,
+        ),
+      };
     } catch (err) {
       const msg = err instanceof QuoteInputsError ? err.message : 'Invalid inputs.';
       return { ok: false as const, error: msg };
     }
-  }, [inputs, catalog, taxOverride]);
+  }, [watched, catalog]);
   const display = isReadOnly && initial
     ? {
         ok: true as const,
@@ -144,55 +194,55 @@ export function QuoteComposer({
         }
       : computed;
 
-  // Local-state divergence from the persisted snapshot. Send must refuse to
-  // fire while dirty — the action renders from the saved jsonb, so the email
-  // would emit older numbers than the confirm dialog implied. Flat-object
-  // JSON-compare is sufficient given `QuoteInputs` has no nested shapes.
-  const isDirty = useMemo(() => {
-    if (!initial) return false;
-    if (taxOverride !== initial.tax) return true;
-    return JSON.stringify(inputs) !== JSON.stringify(initial.inputs);
-  }, [inputs, taxOverride, initial]);
-
-  function patch<K extends keyof QuoteInputs>(key: K, value: QuoteInputs[K]) {
-    setInputs((prev) => ({ ...prev, [key]: value }));
-  }
-
-  function onSaveDraft() {
-    if (isReadOnly) return;
-    if (!dealerId) {
-      toast.error('Pick a dealer first.');
-      return;
-    }
-    if (!computed.ok) {
-      toast.error(computed.error);
-      return;
-    }
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('inputs', JSON.stringify(inputs));
-      fd.set('tax', String(taxOverride));
-      if (initial?.quoteId) {
-        fd.set('quoteId', String(initial.quoteId));
-        const result = toLegacyResult(await setQuoteInputs(fd));
+  const onSaveDraft = handleSubmit(
+    (values) => {
+      if (isReadOnly) return;
+      if (!values.dealerId) {
+        toast.error('Pick a dealer first.');
+        return;
+      }
+      if (!computed.ok) {
+        toast.error(computed.error);
+        return;
+      }
+      startTransition(async () => {
+        const fd = new FormData();
+        fd.set('inputs', JSON.stringify(extractInputs(values)));
+        fd.set('tax', String(values.taxOverride));
+        if (initial?.quoteId) {
+          fd.set('quoteId', String(initial.quoteId));
+          const result = toLegacyResult(await setQuoteInputs(fd));
+          if ('ok' in result) {
+            toast.success('Quote saved');
+            // Reset defaultValues to the just-saved snapshot so RHF's
+            // `isDirty` flips back to false until the next edit. Send
+            // gating relies on this — otherwise the very next render
+            // would still see `isDirty=true` against the old defaults.
+            reset(values);
+            router.refresh();
+          } else {
+            toast.error(result.error);
+          }
+          return;
+        }
+        fd.set('dealerId', String(values.dealerId));
+        const result = toLegacyResult<{ ok: true; quoteId: number }>(await createQuote(fd));
         if ('ok' in result) {
-          toast.success('Quote saved');
-          router.refresh();
+          toast.success(`Draft saved (quote #${result.quoteId})`);
+          router.push(`/quotes/${result.quoteId}`);
         } else {
           toast.error(result.error);
         }
-        return;
-      }
-      fd.set('dealerId', String(dealerId));
-      const result = toLegacyResult<{ ok: true; quoteId: number }>(await createQuote(fd));
-      if ('ok' in result) {
-        toast.success(`Draft saved (quote #${result.quoteId})`);
-        router.push(`/quotes/${result.quoteId}`);
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
+      });
+    },
+    () => {
+      // Resolver-rejected submit — surface the first field error as a toast
+      // so a user who tabs past inline errors still sees feedback. Inline
+      // per-field messages stay visible alongside.
+      const firstError = Object.values(errors).find((e) => e?.message)?.message;
+      toast.error(typeof firstError === 'string' ? firstError : 'Fix the highlighted fields.');
+    },
+  );
 
   function onPreview() {
     if (!initial?.quoteId) return;
@@ -263,12 +313,18 @@ export function QuoteComposer({
                 {initial.dealerName}
               </div>
             ) : (
-              <Combobox
-                options={dealerOptions}
-                value={dealerId ? String(dealerId) : ''}
-                onChange={(v) => setDealerId(v ? Number(v) : null)}
-                placeholder="Pick a dealer…"
-                ariaLabel="Dealer"
+              <Controller
+                control={control}
+                name="dealerId"
+                render={({ field }) => (
+                  <Combobox
+                    options={dealerOptions}
+                    value={field.value ? String(field.value) : ''}
+                    onChange={(v) => field.onChange(v ? Number(v) : null)}
+                    placeholder="Pick a dealer…"
+                    ariaLabel="Dealer"
+                  />
+                )}
               />
             )}
           </div>
@@ -283,92 +339,90 @@ export function QuoteComposer({
           <h2 className="font-display text-xl text-navy">Inputs</h2>
 
           <NumberField
-            name="audienceSize"
             label="Audience size"
-            value={inputs.audienceSize}
             min={0}
-            onChange={(n) => patch('audienceSize', n)}
+            registration={register('audienceSize', { valueAsNumber: true })}
+            error={errors.audienceSize?.message}
             help="Default 500. Each record over 500 adds an additional-contact line."
           />
           <NumberField
-            name="eventDays"
             label="Event days"
-            value={inputs.eventDays}
             min={1}
-            onChange={(n) => patch('eventDays', Math.max(1, n))}
+            registration={register('eventDays', { valueAsNumber: true })}
+            error={errors.eventDays?.message}
             help="Each day beyond day one adds an additional-day line."
           />
 
           <div className="grid grid-cols-3 gap-2">
             <NumberField
-              name="bdcCallCount"
               label="BDC calls"
-              value={inputs.bdcCallCount}
               min={0}
-              onChange={(n) => patch('bdcCallCount', n)}
+              registration={register('bdcCallCount', { valueAsNumber: true })}
+              error={errors.bdcCallCount?.message}
             />
             <NumberField
-              name="letterCount"
               label="Letters"
-              value={inputs.letterCount}
               min={0}
-              onChange={(n) => patch('letterCount', n)}
+              registration={register('letterCount', { valueAsNumber: true })}
+              error={errors.letterCount?.message}
             />
             <NumberField
-              name="digitalCount"
               label="Digital"
-              value={inputs.digitalCount}
               min={0}
-              onChange={(n) => patch('digitalCount', n)}
+              registration={register('digitalCount', { valueAsNumber: true })}
+              error={errors.digitalCount?.message}
             />
           </div>
 
-          <fieldset className={fieldClass}>
-            <legend className={labelClass}>Record retrieval bracket</legend>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              {RETRIEVAL_BRACKETS.map((amount) => {
-                const active = inputs.recordRetrievalAmount === amount;
-                return (
-                  <button
-                    key={amount}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => patch('recordRetrievalAmount', amount)}
-                    className={
-                      active
-                        ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent'
-                        : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy'
-                    }
-                  >
-                    {amount === 0 ? 'None' : `$${amount}`}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
+          <Controller
+            control={control}
+            name="recordRetrievalAmount"
+            render={({ field }) => (
+              <fieldset className={fieldClass}>
+                <legend className={labelClass}>Record retrieval bracket</legend>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {RETRIEVAL_BRACKETS.map((amount) => {
+                    const active = field.value === amount;
+                    return (
+                      <button
+                        key={amount}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => field.onChange(amount)}
+                        className={
+                          active
+                            ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent'
+                            : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy'
+                        }
+                      >
+                        {amount === 0 ? 'None' : `$${amount}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+          />
 
           <NumberField
-            name="travelAmount"
             label="Travel ($)"
-            value={inputs.travelAmount}
             min={0}
             step="0.01"
-            onChange={(n) => patch('travelAmount', n)}
+            registration={register('travelAmount', { valueAsNumber: true })}
+            error={errors.travelAmount?.message}
             help="Hotel + mileage + air. Coach-typed dollar amount."
           />
           <TextAreaField
-            name="travelNotes"
             label="Travel notes"
-            value={inputs.travelNotes}
-            onChange={(v) => patch('travelNotes', v)}
+            registration={register('travelNotes')}
+            error={errors.travelNotes?.message}
             placeholder="Hotel 2 nights + flight + mileage"
           />
 
           <TextAreaField
-            name="quoteNotes"
             label="Quote notes (rendered on PDF)"
-            value={inputs.quoteNotes}
-            onChange={(v) => patch('quoteNotes', v)}
+            registration={register('quoteNotes')}
+            error={errors.quoteNotes?.message}
             placeholder="Anything the dealer should see in the quote PDF."
           />
         </div>
@@ -432,9 +486,8 @@ export function QuoteComposer({
                         type="number"
                         min={0}
                         step="0.01"
-                        value={taxOverride}
-                        onChange={(e) => setTaxOverride(Number(e.currentTarget.value) || 0)}
                         className="w-28 rounded border border-stone-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        {...register('taxOverride', { valueAsNumber: true })}
                       />
                     )}
                   </td>
@@ -638,64 +691,85 @@ function dealerLabel(d: Dealer): string {
   return d.name;
 }
 
+/** Project the form's `QuoteInputs` subset — drops the composer-only
+ *  `dealerId` and `taxOverride` fields so the result lines up with the
+ *  jsonb shape `setQuoteInputs` / `createQuote` persist. Tolerates the
+ *  `Partial` shape RHF's `useWatch` returns mid-reset by falling back to
+ *  `DEFAULT_QUOTE_INPUTS` per-field — the next render resolves. */
+function extractInputs(values: Partial<QuoteFormValues>): QuoteInputs {
+  return {
+    audienceSize: values.audienceSize ?? DEFAULT_QUOTE_INPUTS.audienceSize,
+    eventDays: values.eventDays ?? DEFAULT_QUOTE_INPUTS.eventDays,
+    bdcCallCount: values.bdcCallCount ?? DEFAULT_QUOTE_INPUTS.bdcCallCount,
+    letterCount: values.letterCount ?? DEFAULT_QUOTE_INPUTS.letterCount,
+    digitalCount: values.digitalCount ?? DEFAULT_QUOTE_INPUTS.digitalCount,
+    recordRetrievalAmount:
+      values.recordRetrievalAmount ?? DEFAULT_QUOTE_INPUTS.recordRetrievalAmount,
+    travelAmount: values.travelAmount ?? DEFAULT_QUOTE_INPUTS.travelAmount,
+    travelNotes: values.travelNotes ?? DEFAULT_QUOTE_INPUTS.travelNotes,
+    quoteNotes: values.quoteNotes ?? DEFAULT_QUOTE_INPUTS.quoteNotes,
+  };
+}
+
 function NumberField({
-  name,
   label,
-  value,
-  onChange,
+  registration,
   min,
   step,
   help,
+  error,
 }: {
-  name: string;
   label: string;
-  value: number;
-  onChange: (n: number) => void;
+  registration: UseFormRegisterReturn;
   min?: number;
   step?: string;
   help?: string;
+  error?: string;
 }) {
+  const id = `qf-${registration.name}`;
   return (
-    <label className={fieldClass} htmlFor={`qf-${name}`}>
+    <label className={fieldClass} htmlFor={id}>
       <span className={labelClass}>{label}</span>
       <input
-        id={`qf-${name}`}
+        id={id}
         type="number"
         min={min ?? 0}
         step={step ?? '1'}
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(Number(e.currentTarget.value) || 0)}
         className={inputClass}
+        {...registration}
       />
-      {help ? <span className="text-[11px] text-stone-500">{help}</span> : null}
+      {error ? (
+        <span className="text-[11px] text-status-red">{error}</span>
+      ) : help ? (
+        <span className="text-[11px] text-stone-500">{help}</span>
+      ) : null}
     </label>
   );
 }
 
 function TextAreaField({
-  name,
   label,
-  value,
-  onChange,
+  registration,
   placeholder,
+  error,
 }: {
-  name: string;
   label: string;
-  value: string;
-  onChange: (v: string) => void;
+  registration: UseFormRegisterReturn;
   placeholder?: string;
+  error?: string;
 }) {
+  const id = `qf-${registration.name}`;
   return (
-    <label className={fieldClass} htmlFor={`qf-${name}`}>
+    <label className={fieldClass} htmlFor={id}>
       <span className={labelClass}>{label}</span>
       <textarea
-        id={`qf-${name}`}
-        value={value}
-        onChange={(e) => onChange(e.currentTarget.value)}
+        id={id}
         placeholder={placeholder}
         rows={2}
         className={`${inputClass} resize-y`}
+        {...registration}
       />
+      {error ? <span className="text-[11px] text-status-red">{error}</span> : null}
     </label>
   );
 }

@@ -17,6 +17,8 @@
 // (≤ 8 rows in v1), so the IEEE-754 rounding risk is negligible for the
 // integer-multiplied lines; the round-to-cents helper guards anyway.
 
+import { z } from 'zod';
+
 import type { ServiceItem, ServiceItemUnit } from '@/features/services/queries';
 
 export type QuoteInputs = {
@@ -67,6 +69,22 @@ const MAX_TOUCHES = 1_000_000;
 export const MAX_DOLLARS = 9_999_999;
 
 const NOTES_MAX = 1_000;
+
+/** Zod mirror of `validateQuoteInputs`. Client-side form resolver consumes
+ *  this; server-side `parseQuoteInputs` still canonicalizes by hand because
+ *  it must tolerate FormData (string-typed) input and discard unknown keys.
+ *  Keep both in lockstep — bounds here must match the assertions below. */
+export const quoteInputsSchema = z.object({
+  audienceSize: z.number().int().min(0).max(MAX_AUDIENCE),
+  eventDays: z.number().int().min(1).max(MAX_DAYS),
+  bdcCallCount: z.number().int().min(0).max(MAX_TOUCHES),
+  letterCount: z.number().int().min(0).max(MAX_TOUCHES),
+  digitalCount: z.number().int().min(0).max(MAX_TOUCHES),
+  recordRetrievalAmount: z.number().min(0).max(MAX_DOLLARS),
+  travelAmount: z.number().min(0).max(MAX_DOLLARS),
+  travelNotes: z.string().max(NOTES_MAX),
+  quoteNotes: z.string().max(NOTES_MAX),
+}) satisfies z.ZodType<QuoteInputs>;
 
 export class QuoteInputsError extends Error {
   constructor(message: string) {
