@@ -442,7 +442,6 @@ export function QuoteComposer({
       {keyValueItems && keyValueItems.length > 0 ? (
         <KeyValueStrip items={keyValueItems} />
       ) : null}
-      {sendHistorySlot}
       {canSend && isDirty && (
         <p className="text-right text-[11px] text-stone-500">
           You have unsaved changes — save before sending.
@@ -705,6 +704,8 @@ export function QuoteComposer({
       </section>
       </div>
       </fieldset>
+
+      {sendHistorySlot}
 
       <PreviewDialog
         open={previewOpen}
