@@ -9,7 +9,7 @@
 | 1: Dropbox Sign client + env wiring (`src/lib/dropbox-sign/`) | Done | `3e1b6bd` |
 | 2: MSA template render (`renderMsaPdf`) + storage layout | Done | `f07a952` |
 | 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Done | `22c6a0f` |
-| 4: Webhook route handler at `/api/dropbox-sign/webhook` | Pending | - |
+| 4: Webhook route handler at `/api/dropbox-sign/webhook` | Done | `81f18b1` |
 | 5: MSA panel on `/dealerships/[id]` + create-MSA dialog | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -39,7 +39,7 @@ This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 - Project memory `project_msa_structure` — 12-month MSA term per §2.i; accepted Quote IS the contract per §1.iii (no separate `orders`); 50% cancel fee within 21 days of Event start.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 ## Open Questions
 
@@ -78,11 +78,11 @@ These are inherited from closed/0037-commercial-spine-msa (eight OQs there) plus
 
 ## Phase 4: Webhook route handler at `/api/dropbox-sign/webhook`
 
-- [ ] Create `src/app/api/dropbox-sign/webhook/route.ts` — `export async function POST(request: NextRequest)` (anchored on `src/app/auth/callback/route.ts:12`)
-- [ ] Verify HMAC signature (`X-Dropbox-Sign-Signature` header, HMAC-SHA256 with `DROPBOX_SIGN_WEBHOOK_SECRET`) — reject 401 on mismatch, **before** reading the body for mutations
-- [ ] Dispatch by event type: `signature_request_signed` (envelope signed by all parties) → call `markMsaSigned(dropboxSignDocumentId, signedPdfBytes)`; `signature_request_declined` → `markMsaDeclined(...)`; other events → 200 + log
-- [ ] `markMsaSigned` helper in `src/features/msa/lifecycle.ts` — atomic guarded UPDATE (`status='pending' AND dropbox_sign_document_id=$1 → status='active'`), download signed PDF from Dropbox Sign API + put to GCS at `msa/<id>/signed.pdf`, emit `msa.signed` audit
-- [ ] Test cases: valid signature → row flips, invalid signature → 401 no mutation, replay (`signed` event for an already-active MSA) → idempotent 200, unknown `dropboxSignDocumentId` → 404 no mutation
+- [x] Create `src/app/api/dropbox-sign/webhook/route.ts` — `export async function POST(request: NextRequest)` (anchored on `src/app/auth/callback/route.ts:12`); response body always uses the literal `Hello API Event Received` ack string Dropbox Sign expects (retries on anything else)
+- [x] Verify HMAC signature **before** any read or mutation — Dropbox Sign signs `event_time + event_type` with HMAC-SHA256 and `DROPBOX_SIGN_WEBHOOK_SECRET`; pulled into `src/lib/dropbox-sign/webhook-verify.ts` with `crypto.timingSafeEqual` for constant-time compare (NOT a header-based scheme like X-Hub — Dropbox Sign's `event_hash` rides inside the JSON payload's `event` object); rejects 401 on mismatch / 500 on missing-secret
+- [x] Dispatch by event type: `signature_request_all_signed` (the all-parties-complete event — note: Dropbox Sign emits `signature_request_signed` for each signer, but the v1 MSA flow has one signer so the `_all_signed` event is the canonical "envelope complete" signal) → lookup MSA, short-circuit if already-active, download signed PDF via `getSignedFileBytes`, upload to GCS at `msa/<id>/signed.pdf`, call `markMsaSigned`; `signature_request_declined` → call `markMsaDeclined`; other events → 200 ack + no-op
+- [x] `markMsaSigned` + `markMsaDeclined` helpers in `src/features/msa/lifecycle.ts` — atomic guarded UPDATE on `(status='pending' AND dropbox_sign_document_id=$1)`; signed flip stamps `signedAt`, `expiresAt` (signedAt + 12 months per §2.i), and `signedPdfStorageKey`; both helpers emit the audit row directly (no session/user available in webhook context — `actor_user_id` writes NULL with `actor_role='system'`)
+- [x] Test cases: 11 webhook-route cases (valid signature flow, invalid signature → 401, missing secret → 500, malformed JSON → 400, unknown doc id → 404, replay-on-active → idempotent 200, declined → 200, declined unknown → 404, unrelated events → 200 no-op, missing signature_request_id → 400, Dropbox-Sign fetch failure → 502 with no upload + no flip) + 7 lifecycle cases (signed happy path, signed replay-idempotent, signed unknown, signed-from-terminated, declined happy, declined idempotent, declined unknown) + 7 webhook-verify cases (happy + 5 tamper scenarios + length-mismatch short-circuit); 750/752 vitest
 
 ## Phase 5: MSA panel on `/dealerships/[id]` + create-MSA dialog
 
