@@ -32,7 +32,11 @@ export type AuditActionId =
   | 'quote.create'
   | 'quote.sent'
   | 'quote.accepted'
-  | 'quote.declined';
+  | 'quote.declined'
+  | 'msa.created'
+  | 'msa.sent'
+  | 'msa.signed'
+  | 'msa.declined';
 
 export type RecordAuditInput = {
   action: AuditActionId;

@@ -249,6 +249,54 @@ describe('can', () => {
     });
   });
 
+  describe('msa:edit (0041 — admin || coach)', () => {
+    it('grants admin', () => {
+      expect(can(adminProfile, 'msa:edit')).toBe(true);
+    });
+    it('grants coach', () => {
+      expect(can(coachProfile, 'msa:edit')).toBe(true);
+    });
+    it('denies staff', () => {
+      expect(can(staffProfile, 'msa:edit')).toBe(false);
+    });
+    it('denies viewer', () => {
+      expect(can(viewerProfile, 'msa:edit')).toBe(false);
+    });
+    it('denies dealer', () => {
+      expect(can(dealerProfile, 'msa:edit')).toBe(false);
+    });
+    it('denies orphan', () => {
+      expect(can(orphanProfile, 'msa:edit')).toBe(false);
+    });
+    it('denies unauth (null profile)', () => {
+      expect(can(null, 'msa:edit')).toBe(false);
+    });
+  });
+
+  describe('msa:read (0041 — admin || coach || viewer)', () => {
+    it('grants admin', () => {
+      expect(can(adminProfile, 'msa:read')).toBe(true);
+    });
+    it('grants coach', () => {
+      expect(can(coachProfile, 'msa:read')).toBe(true);
+    });
+    it('grants viewer', () => {
+      expect(can(viewerProfile, 'msa:read')).toBe(true);
+    });
+    it('denies staff', () => {
+      expect(can(staffProfile, 'msa:read')).toBe(false);
+    });
+    it('denies dealer', () => {
+      expect(can(dealerProfile, 'msa:read')).toBe(false);
+    });
+    it('denies orphan', () => {
+      expect(can(orphanProfile, 'msa:read')).toBe(false);
+    });
+    it('denies unauth (null profile)', () => {
+      expect(can(null, 'msa:read')).toBe(false);
+    });
+  });
+
   // Hybrid-role profiles. The team_member_roles schema only enforces
   // (contactId, role) uniqueness — nothing forbids a contact from holding
   // multiple roles. The Person dialog exposes Admin / Coach / Dealer as

@@ -27,6 +27,10 @@ export const auditAction = pgEnum('audit_action', [
   'quote.sent',
   'quote.accepted',
   'quote.declined',
+  'msa.created',
+  'msa.sent',
+  'msa.signed',
+  'msa.declined',
 ]);
 
 export const auditLog = pgTable(

@@ -35,6 +35,8 @@ export type Capability =
   | 'campaign:edit'
   | 'campaign:cancel'
   | 'quote:edit'
+  | 'msa:edit'
+  | 'msa:read'
   | 'email:send'
   | 'coach-availability:edit-own'
   | 'coach-availability:edit-any';
@@ -76,11 +78,23 @@ export function can(
     }
     case 'reports:view':
     case 'availability:edit':
-    case 'quote:edit': {
+    case 'quote:edit':
+    case 'msa:edit': {
       // Admin || coach. Admin already passed via the shortcut above; check
       // the membership roles for coach. Coaches own their own quotes per the
-      // multi-tenant-by-coach model; admins can edit any quote.
+      // multi-tenant-by-coach model; admins can edit any quote. `msa:edit`
+      // mirrors `quote:edit` — the coach who owns the Client is the one who
+      // creates / sends MSAs for that Client.
       return profile.roles.includes('coach');
+    }
+    case 'msa:read': {
+      // Read-side: admin || coach || viewer. The MSA panel on
+      // `/dealerships/[id]` is informational; viewer roles see status + signed
+      // date without being able to send. `app:access` already excludes
+      // `dealer`, so reaching here means a staff role.
+      return (
+        profile.roles.includes('coach') || profile.roles.includes('viewer')
+      );
     }
     case 'admin:access':
     case 'production:view':
