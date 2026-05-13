@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { loadQuotes, type Quote, type QuoteStatus } from '@/features/quotes/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { QuotesFilters } from './quotes-filters';
@@ -30,15 +31,11 @@ export default async function QuotesPage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl text-navy">Quotes</h1>
-          <p className="mt-1 text-sm text-stone-600">
-            Every quote in the pipeline — drafts, sent, accepted, declined.
-          </p>
-        </div>
-        <QuotesFilters counts={counts} />
-      </div>
+      <PageHeader
+        title="Quotes"
+        description="Every quote in the pipeline — drafts, sent, accepted, declined."
+        actions={<QuotesFilters counts={counts} />}
+      />
 
       <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="overflow-x-auto">

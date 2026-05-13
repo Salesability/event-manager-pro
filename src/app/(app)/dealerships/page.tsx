@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { loadDealersIncludingArchived } from '@/features/schedule/queries';
 import { DealersAdmin } from '@/features/dealers/dealers-admin';
 
@@ -11,7 +12,7 @@ export default async function DealershipsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-3xl text-navy">Dealers</h1>
+      <PageHeader title="Dealers" />
       <DealersAdmin dealers={dealers} />
     </div>
   );

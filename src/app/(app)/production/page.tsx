@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import {
   loadCampaignStyles,
   loadCampaigns,
@@ -34,15 +35,11 @@ export default async function ProductionPage({ searchParams }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl text-navy">Production List</h1>
-          <p className="mt-1 text-sm text-stone-600">
-            All campaigns imported from the legacy spreadsheet.
-          </p>
-        </div>
-        <ProductionFilters />
-      </div>
+      <PageHeader
+        title="Production List"
+        description="All campaigns imported from the legacy spreadsheet."
+        actions={<ProductionFilters />}
+      />
 
       <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="overflow-x-auto">

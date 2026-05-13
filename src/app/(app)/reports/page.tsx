@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import {
   loadCampaignsByCoach,
   loadCampaignsByDealer,
@@ -19,12 +20,10 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-3xl text-navy">Reports</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          Booking summary across dealers, coaches, and months — plus the full production list.
-        </p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Booking summary across dealers, coaches, and months — plus the full production list."
+      />
 
       <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <ReportsTabs byDealer={byDealer} byCoach={byCoach} byMonth={byMonth} full={full} />

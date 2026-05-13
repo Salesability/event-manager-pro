@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import { loadCampaignStyles, loadAudienceSources } from '@/features/schedule/queries';
 import { ServicesAdmin } from '@/features/services/services-admin';
@@ -14,12 +15,10 @@ export default async function LookupsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-3xl text-navy">Lookup Admin</h1>
-        <p className="mt-1 text-sm text-stone-600">
-          Manage booking form event styles, data sources, and the quote-composer service catalog.
-        </p>
-      </div>
+      <PageHeader
+        title="Lookup Admin"
+        description="Manage booking form event styles, data sources, and the quote-composer service catalog."
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <LookupAdmin kind="styles" items={styles} />

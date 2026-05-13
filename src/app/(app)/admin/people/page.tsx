@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { loadAdminPeople, loadOrphanAuthUsers } from '@/features/people/queries';
 import { loadDealers } from '@/features/schedule/queries';
 import { OrphanAuthUsers } from '@/features/people/orphan-auth-users';
@@ -14,7 +15,7 @@ export default async function PeopleAdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-3xl text-navy">People</h1>
+      <PageHeader title="People" />
 
       <PeopleAdmin people={people} dealers={dealers} />
 

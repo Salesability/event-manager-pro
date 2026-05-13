@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import { Can } from '@/components/auth/can';
+import { PageHeader } from '@/components/app/page-header';
 import {
   Dialog,
   DialogContent,
@@ -438,59 +439,57 @@ export function CalendarView({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl text-navy">
-            {mode === 'share' ? 'Schedule' : 'Master Schedule'}
-          </h1>
-          <p className="mt-1 text-sm text-stone-600">
-            {mode === 'share'
-              ? `${forcedCoachId ? coaches.find((c) => c.id === forcedCoachId)?.displayName ?? 'Coach' : 'Coach'} — booked sales events.`
-              : 'Click a date to book a campaign, or any ribbon for details.'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {mode === 'app' && (
-            <>
-              <Can capability="availability:edit">
-                <button
-                  type="button"
-                  onClick={() => setDialog({ kind: 'availability' })}
-                  className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
-                >
-                  Block Date
-                </button>
-              </Can>
-              <Can capability="campaign:create">
-                <button
-                  type="button"
-                  onClick={() => setDialog({ kind: 'create' })}
-                  className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-                >
-                  + Book Event
-                </button>
-              </Can>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => changeMonth(-1)}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
-          >
-            ‹
-          </button>
-          <span className="min-w-[180px] text-center font-display text-xl text-navy">
-            {MONTHS[month]} {year}
-          </span>
-          <button
-            type="button"
-            onClick={() => changeMonth(1)}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
-          >
-            ›
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={mode === 'share' ? 'Schedule' : 'Master Schedule'}
+        description={
+          mode === 'share'
+            ? `${forcedCoachId ? coaches.find((c) => c.id === forcedCoachId)?.displayName ?? 'Coach' : 'Coach'} — booked sales events.`
+            : 'Click a date to book a campaign, or any ribbon for details.'
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {mode === 'app' && (
+              <>
+                <Can capability="availability:edit">
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ kind: 'availability' })}
+                    className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
+                  >
+                    Block Date
+                  </button>
+                </Can>
+                <Can capability="campaign:create">
+                  <button
+                    type="button"
+                    onClick={() => setDialog({ kind: 'create' })}
+                    className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
+                  >
+                    + Book Event
+                  </button>
+                </Can>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => changeMonth(-1)}
+              className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
+            >
+              ‹
+            </button>
+            <span className="min-w-[180px] text-center font-display text-xl text-navy">
+              {MONTHS[month]} {year}
+            </span>
+            <button
+              type="button"
+              onClick={() => changeMonth(1)}
+              className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-navy transition hover:border-navy hover:bg-stone-100"
+            >
+              ›
+            </button>
+          </div>
+        }
+      />
 
       {mode === 'app' && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

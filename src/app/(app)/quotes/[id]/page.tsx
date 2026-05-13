@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
@@ -100,34 +101,27 @@ export default async function QuoteEditPage({
     }
   }
 
+  const pillKey = displayStatusKey(quote);
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/quotes"
-            className="text-xs font-medium text-stone-500 transition hover:text-navy"
+      <Link
+        href="/quotes"
+        className="text-xs font-medium text-stone-500 transition hover:text-foreground"
+      >
+        ← Quotes
+      </Link>
+      <PageHeader
+        title={`Quote #${quote.id}`}
+        description={`${quote.dealerName}${quote.dealerArchivedAt ? ' (dealer archived)' : ''}`}
+        actions={
+          <span
+            className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
           >
-            ← Quotes
-          </Link>
-          <span className="text-stone-300">/</span>
-          <h1 className="font-display text-3xl text-navy">Quote #{quote.id}</h1>
-          {(() => {
-            const pillKey = displayStatusKey(quote);
-            return (
-              <span
-                className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
-              >
-                {pillKey}
-              </span>
-            );
-          })()}
-        </div>
-        <p className="mt-1 text-sm text-stone-600">
-          {quote.dealerName}
-          {quote.dealerArchivedAt ? ' (dealer archived)' : ''}
-        </p>
-      </div>
+            {pillKey}
+          </span>
+        }
+        sticky
+      />
       {quote.status !== 'draft' && sendHistory.length > 0 && (
         <section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">

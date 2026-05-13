@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { PageHeader } from '@/components/app/page-header';
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
@@ -66,29 +67,28 @@ export default async function DealerDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/dealerships"
-            className="text-xs font-medium text-stone-500 transition hover:text-navy"
-          >
-            ← Dealers
-          </Link>
-          <span className="text-stone-300">/</span>
-          <h1 className="font-display text-3xl text-navy">{dealer.name}</h1>
-          <DealerStatusPill status={dealer.status} archivedAt={dealer.archivedAt} />
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-600">
-          {dealer.address && <span>{dealer.address}</span>}
-          {dealer.acquiredVia && (
-            <span>
-              <span className="text-stone-400">Acquired via:</span> {dealer.acquiredVia}
-            </span>
-          )}
-          {dealer.primaryEmail && <span>{dealer.primaryEmail}</span>}
-          {dealer.primaryPhone && <span>{dealer.primaryPhone}</span>}
-        </div>
-      </div>
+      <Link
+        href="/dealerships"
+        className="text-xs font-medium text-stone-500 transition hover:text-foreground"
+      >
+        ← Dealers
+      </Link>
+      <PageHeader
+        title={dealer.name}
+        description={
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            {dealer.address && <span>{dealer.address}</span>}
+            {dealer.acquiredVia && (
+              <span>
+                <span className="text-stone-400">Acquired via:</span> {dealer.acquiredVia}
+              </span>
+            )}
+            {dealer.primaryEmail && <span>{dealer.primaryEmail}</span>}
+            {dealer.primaryPhone && <span>{dealer.primaryPhone}</span>}
+          </span>
+        }
+        actions={<DealerStatusPill status={dealer.status} archivedAt={dealer.archivedAt} />}
+      />
 
       <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-wrap items-center gap-3">
