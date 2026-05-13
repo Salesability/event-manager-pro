@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: shadcn Sidebar install + portal shell swap | Skipped (pivot 2026-05-13 — keep top nav) | - |
-| 2: `<PageHeader>` wrapper (title + actions slot) | Pending | - |
+| 2: `<PageHeader>` wrapper (title + actions slot) | Done | d440fe9 |
 | 3: Sweep `<PageHeader>` across all `(app)/` routes | Pending | - |
 | 4: Detail-page convention (key-value strip + sections) | Pending | - |
 | 5: List-page filter-bar convention | Pending | - |
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 0% (0/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 14% (1/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -96,9 +96,9 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - See **Decisions locked** → "Keep the top nav". `AppHeader` is retained; no sidebar work in this chunk. If a sidebar shell is revisited, scaffold a new design folder rather than reopening this phase.
 
 #### Phase 2: `<PageHeader>` wrapper (title + actions slot)
-- [ ] Build `src/components/app/page-header.tsx`: props `{ title: ReactNode, actions?: ReactNode, sticky?: boolean, description?: ReactNode }`. Title uses bold Inter (`font-sans font-bold tracking-tight text-3xl text-foreground`) post-0042. Actions slot is a flex container right-aligned. When `sticky`, the header sits in a `sticky top-16 z-10 bg-background border-b` shell (parks below the 64px `AppHeader`, not at `top-0` — see Decisions).
-- [ ] Unit test: renders title + actions, sticky variant gets the sticky classes (incl. `top-16`)
-- [ ] `tsc + test` gate green
+- [x] Build `src/components/app/page-header.tsx`: props `{ title: ReactNode, actions?: ReactNode, sticky?: boolean, description?: ReactNode }`. Title uses bold Inter (`font-sans font-bold tracking-tight text-3xl text-foreground`) post-0042. Actions slot is a flex container right-aligned. When `sticky`, the header sits in a `sticky top-16 z-10 bg-background border-b` shell (parks below the 64px `AppHeader`, not at `top-0` — see Decisions).
+- [x] Unit test: renders title + actions, sticky variant gets the sticky classes (incl. `top-16`)
+- [x] `tsc + test` gate green
 
 #### Phase 3: Sweep `<PageHeader>` across all `(app)/` routes
 - [ ] Apply to: `/quotes` (page.tsx), `/quotes/new`, `/quotes/[id]`, `/dealerships`, `/dealerships/[id]`, `/calendar` (calendar-view top bar), `/reports`, `/production`, `/admin/people`, `/admin/lookups`, plus any other top-level `(app)/` routes
