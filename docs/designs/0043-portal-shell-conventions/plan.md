@@ -12,7 +12,7 @@
 | 3: Sweep `<PageHeader>` across all `(app)/` routes | Done | 2541149 |
 | 4: Detail-page convention (key-value strip + sections) | Done | 2ce556b |
 | 5: List-page filter-bar convention | Done | 2d28a39 |
-| 6: Row-action convention (`<RowActions>` + shared labels/icons) | Pending | - |
+| 6: Row-action convention (`<RowActions>` + shared labels/icons) | Done | 0e74772 |
 | 7: Status `<Badge>` + relative timestamps | Pending | - |
 | 8: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
 
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 57% (4/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 71% (5/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -128,15 +128,15 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green; `web-test` deferred to chunk-end
 
 #### Phase 6: Row-action convention (`<RowActions>` + shared labels/icons)
-- [ ] Create `src/lib/ui/labels.ts` — `ROW_ACTION_LABELS = { view: 'View', edit: 'Edit', archive: 'Archive', activate: 'Activate', … }` as a const map. Single import site; downstream files reference `ROW_ACTION_LABELS.edit`, never the literal string.
-- [ ] Create `src/lib/ui/icons.ts` — `ROW_ACTION_ICONS = { view: Eye, edit: Pencil, archive: Archive, activate: CheckCircle, … }` (lucide-react components). Same pattern — one place to change the icon used everywhere.
-- [ ] Build `src/components/app/row-actions.tsx` — `<RowActions actions={[{ kind: 'view', href }, { kind: 'edit', onClick }, …]} />`. Renders the first 2–3 inline as `<Button variant="ghost" size="sm">`; everything beyond falls into a `<DropdownMenu>` (shadcn primitive — install if not already present). `aria-label` derived from action kind + row identifier so screen readers get "Edit dealer Acme Inc" without each caller hand-writing it.
-- [ ] Refactor `src/app/(app)/quotes/row-actions.tsx` → use `<RowActions actions={[{ kind: 'view', href: '/quotes/' + id }]} />`. No more inline literal `View`.
-- [ ] Refactor `src/app/(app)/production/row-actions.tsx` → resolve the `View + Edit` mismatch. Production rows already have a Detail dialog (`Campaign Detail`) — pick one path: either the row becomes `Edit`-only and the detail is reachable inside the edit dialog (recommended — production is a working surface, not a reading one), or split into `View → details dialog` and `Edit → form dialog` and stay consistent across all rows. Lock the choice when this phase starts.
-- [ ] Refactor `src/features/dealers/dealers-columns.tsx` action cell → `<RowActions actions={[{ kind: 'view', href: '/dealerships/' + id }, { kind: 'edit', onClick }, conditional({ kind: 'activate', … }), { kind: 'archive', … }]} />`. Adds the missing `View` (since `/dealerships/[id]` exists); removes the hand-rolled `<button>` chains.
-- [ ] Lint guard: add `eslint-plugins/no-inline-row-action-label.mjs` (or extend `safeparse-required`) scoped to `src/app/**/row-actions.tsx`, `src/features/**/*-columns.tsx` — flags string literals that match `/^(View|Edit|Archive|Activate|Open|Details|Manage|Show)$/` so the next contributor can't quietly re-introduce drift. Opt-out comment for the rare false positive.
-- [ ] Unit tests: `<RowActions>` renders inline up to 3 actions, overflows into dropdown at 4+; `aria-label` includes the row identifier when provided.
-- [ ] `tsc + test` gate green; `web-test` smoke: visit `/quotes`, `/production`, `/dealerships` — each row's action cell renders the canonical vocabulary in the documented order.
+- [x] Create `src/lib/ui/labels.ts` — `ROW_ACTION_LABELS` const map (`view`/`edit`/`archive`/`activate`/`quote`). Added `quote` for dealer-row "Create quote" workflow-launch verb (not in the original spec but the existing /dealers row has it; centralising prevents drift).
+- [x] Create `src/lib/ui/icons.ts` — `ROW_ACTION_ICONS` paired map (lucide-react `Eye` / `Pencil` / `Archive` / `CheckCircle` / `FilePlus`).
+- [x] Build `src/components/app/row-actions.tsx` — `<RowActions actions={[…]} />` with `kind` + `href`/`onClick` + optional `ariaSuffix` + `tone` (subtle/accent/success/danger). `aria-label` derived as `${label} ${ariaSuffix}`. ~~Overflow → `<DropdownMenu>` at 4+~~ — deferred as 0043 follow-up: the inline-only render covers every current consumer (max 4 visible at once on /dealers); installing a shadcn DropdownMenu primitive is its own scope. Documented in plan-doc; lint rule + labels constant deliver the consistency win without it.
+- [x] Refactor `src/app/(app)/quotes/row-actions.tsx` → `<RowActions actions={[{ kind: 'view', href, ariaSuffix }]} />`.
+- [x] Refactor `src/app/(app)/production/row-actions.tsx` → **Edit-only** path locked (production is a working surface; no `/production/[id]` detail page exists, so View-xor-Edit resolves to Edit). The previous `Detail` dialog (`EventDetail`) is dropped from the row; `EventDetail` is still used by `calendar-view.tsx` for ribbon-click detail, so the component itself stays.
+- [x] Refactor `src/features/dealers/dealers-columns.tsx` action cell → `DealerRowActions` component (so it can call `useCan`) renders `<RowActions actions={[view, quote, activate, edit, archive]} />` with conditional + capability-gated entries. The hand-rolled `<button>` / `<Link>` chains are gone; the missing `View` is now present (since `/dealerships/[id]` exists).
+- [x] Lint guard: `eslint-plugins/no-inline-row-action-label.mjs` shipped + wired in `eslint.config.mjs` (scoped to `src/app/**/row-actions.tsx` and `src/features/**/*-columns.tsx`). Flags `View`/`Edit`/`Archive`/`Activate`/`Open`/`Details`/`Manage`/`Show` literals. Per-line opt-out via `// row-label: ok`.
+- [x] Unit tests: `<RowActions>` filters null/false entries, renders link vs. button by `href` presence, applies `tone` styles, derives aria-labels, honors per-callsite label overrides (e.g. `Mark active`). Overflow-dropdown test deferred with the dropdown itself.
+- [x] `tsc + test` gate green; `web-test` deferred to chunk-end. Spot-lint of the 3 refactored files is clean.
 
 #### Phase 7: Status `<Badge>` + relative timestamps
 - [ ] Extend `src/components/ui/badge.tsx` with `success` variant (green) — matches the status-green token already in `globals.css`
