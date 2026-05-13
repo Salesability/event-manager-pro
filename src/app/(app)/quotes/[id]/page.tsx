@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
-import { loadQuote, loadQuoteSendReceipt, type Quote } from '@/features/quotes/queries';
+import { loadQuote, loadQuoteSendReceipt } from '@/features/quotes/queries';
+import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
@@ -14,13 +15,6 @@ import { signedUrl } from '@/lib/storage/gcs';
 // atomic guarded UPDATE per `actions.ts:281-289`). Non-draft statuses
 // render read-only — server-side guard is the real defence; the UI is
 // just the courtesy.
-
-const STATUS_PILL_CLS: Record<Quote['status'], string> = {
-  draft: 'bg-stone-200 text-stone-600',
-  sent: 'bg-status-blue/15 text-status-blue',
-  accepted: 'bg-status-green/15 text-status-green',
-  declined: 'bg-status-red/15 text-status-red',
-};
 
 const SENT_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 
@@ -84,11 +78,16 @@ export default async function QuoteEditPage({
           </Link>
           <span className="text-stone-300">/</span>
           <h1 className="font-display text-3xl text-navy">Quote #{quote.id}</h1>
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[quote.status]}`}
-          >
-            {quote.status}
-          </span>
+          {(() => {
+            const pillKey = displayStatusKey(quote);
+            return (
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
+              >
+                {pillKey}
+              </span>
+            );
+          })()}
         </div>
         <p className="mt-1 text-sm text-stone-600">
           {quote.dealerName}

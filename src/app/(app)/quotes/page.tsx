@@ -1,5 +1,6 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadQuotes, type Quote, type QuoteStatus } from '@/features/quotes/queries';
+import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { QuotesFilters } from './quotes-filters';
 import { QuoteRowActions } from './row-actions';
 
@@ -97,14 +98,8 @@ function isQuoteStatus(v: string): v is QuoteStatus {
   return v === 'draft' || v === 'sent' || v === 'accepted' || v === 'declined';
 }
 
-const STATUS_PILL_CLS: Record<QuoteStatus, string> = {
-  draft: 'bg-stone-200 text-stone-600',
-  sent: 'bg-status-blue/15 text-status-blue',
-  accepted: 'bg-status-green/15 text-status-green',
-  declined: 'bg-status-red/15 text-status-red',
-};
-
 function QuoteRow({ quote }: { quote: Quote }) {
+  const pillKey = displayStatusKey(quote);
   return (
     <tr className="border-b border-stone-200 last:border-b-0 hover:bg-navy-pale/40">
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
@@ -115,9 +110,9 @@ function QuoteRow({ quote }: { quote: Quote }) {
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
         <span
-          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[quote.status]}`}
+          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
         >
-          {quote.status}
+          {pillKey}
         </span>
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">

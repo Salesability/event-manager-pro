@@ -55,6 +55,7 @@ const baseRow = {
   acceptedAt: null,
   declinedAt: null,
   pdfStorageKey: null,
+  quoteValidDays: 30,
   createdAt: new Date('2026-05-01T12:00:00Z'),
   createdById: 'user-1',
 };
@@ -93,6 +94,8 @@ describe('loadQuotes', () => {
       acceptedAt: null,
       declinedAt: null,
       pdfStorageKey: null,
+      quoteValidDays: 30,
+      isExpired: false,
       createdAt: baseRow.createdAt,
       createdById: 'user-1',
     });
@@ -154,6 +157,47 @@ describe('loadQuote', () => {
     expect(q?.dealerName).toBe('Capital Ford');
     expect(q?.inputs).toEqual({ audienceSize: 500, eventDays: 3 });
     expect(q?.lineItems).toEqual(lineItems);
+  });
+
+  // 0044 Phase 3 — derived isExpired projection (Option B: no enum extension,
+  // no migration; underlying row stays `status='sent'`).
+  it('projects isExpired=true on a sent quote past its validity window', async () => {
+    const sentAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    mocks.selectResults = [
+      [{ ...baseRow, status: 'sent' as const, sentAt, quoteValidDays: 30 }],
+    ];
+    const q = await loadQuote(7);
+    expect(q?.status).toBe('sent');
+    expect(q?.isExpired).toBe(true);
+  });
+
+  it('projects isExpired=false on a sent quote still within its window', async () => {
+    const sentAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    mocks.selectResults = [
+      [{ ...baseRow, status: 'sent' as const, sentAt, quoteValidDays: 30 }],
+    ];
+    const q = await loadQuote(7);
+    expect(q?.isExpired).toBe(false);
+  });
+
+  it('projects isExpired=false on an accepted quote even if past sentAt+quoteValidDays (status precedence)', async () => {
+    // Past the would-be expiry window, but the row is already `accepted` —
+    // the derived expiry only applies inside the `sent` branch (OQ #2).
+    const sentAt = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    mocks.selectResults = [
+      [{ ...baseRow, status: 'accepted' as const, sentAt, quoteValidDays: 30 }],
+    ];
+    const q = await loadQuote(7);
+    expect(q?.status).toBe('accepted');
+    expect(q?.isExpired).toBe(false);
+  });
+
+  it('projects isExpired=false on a draft quote (sentAt=null)', async () => {
+    mocks.selectResults = [
+      [{ ...baseRow, status: 'draft' as const, sentAt: null }],
+    ];
+    const q = await loadQuote(7);
+    expect(q?.isExpired).toBe(false);
   });
 });
 

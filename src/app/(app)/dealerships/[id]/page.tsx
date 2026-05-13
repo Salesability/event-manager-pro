@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadDealer } from '@/features/schedule/queries';
-import { loadQuotesByDealer, type Quote } from '@/features/quotes/queries';
+import { loadQuotesByDealer } from '@/features/quotes/queries';
+import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import {
   firstDraftQuoteIdForDealer,
@@ -16,13 +17,6 @@ import { signedUrl } from '@/lib/storage/gcs';
 // coaches currently can't browse dealerships, so admin-only here avoids the
 // asymmetry of a deep link reachable without the parent surface. If the
 // nav-tab gate ever opens for coaches, this gate flips with it.
-
-const STATUS_PILL_CLS: Record<Quote['status'], string> = {
-  draft: 'bg-stone-200 text-stone-600',
-  sent: 'bg-status-blue/15 text-status-blue',
-  accepted: 'bg-status-green/15 text-status-green',
-  declined: 'bg-status-red/15 text-status-red',
-};
 
 const MSA_STATUS_PILL_CLS: Record<Msa['status'], string> = {
   pending: 'bg-amber-100 text-amber-700',
@@ -206,35 +200,38 @@ export default async function DealerDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {quotes.map((quote) => (
-                  <tr key={quote.id} className="border-b border-stone-200 last:border-b-0">
-                    <td className="px-3 py-2.5 align-top">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[quote.status]}`}
-                      >
-                        {quote.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right align-top font-semibold tabular-nums">
-                      {fmtMoney(quote.total)}
-                    </td>
-                    <td className="px-3 py-2.5 align-top text-xs text-stone-600">
-                      {fmtDate(quote.sentAt)}
-                    </td>
-                    <td className="px-3 py-2.5 align-top text-xs text-stone-600">
-                      {fmtDate(quote.createdAt)}
-                    </td>
-                    <td className="px-3 py-2.5 align-top">
-                      <Link
-                        href={`/quotes/${quote.id}`}
-                        aria-label={`View quote #${quote.id}`}
-                        className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-                      >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {quotes.map((quote) => {
+                  const pillKey = displayStatusKey(quote);
+                  return (
+                    <tr key={quote.id} className="border-b border-stone-200 last:border-b-0">
+                      <td className="px-3 py-2.5 align-top">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
+                        >
+                          {pillKey}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right align-top font-semibold tabular-nums">
+                        {fmtMoney(quote.total)}
+                      </td>
+                      <td className="px-3 py-2.5 align-top text-xs text-stone-600">
+                        {fmtDate(quote.sentAt)}
+                      </td>
+                      <td className="px-3 py-2.5 align-top text-xs text-stone-600">
+                        {fmtDate(quote.createdAt)}
+                      </td>
+                      <td className="px-3 py-2.5 align-top">
+                        <Link
+                          href={`/quotes/${quote.id}`}
+                          aria-label={`View quote #${quote.id}`}
+                          className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+                        >
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

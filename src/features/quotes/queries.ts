@@ -32,6 +32,15 @@ export type Quote = {
   acceptedAt: Date | null;
   declinedAt: Date | null;
   pdfStorageKey: string | null;
+  /** Per-row validity window in days (default 30, schema NOT NULL). */
+  quoteValidDays: number;
+  /**
+   * Derived at read time: `status === 'sent' && sentAt + quoteValidDays < now()`.
+   * Underlying row stays `status='sent'` — this is a presentational projection
+   * (Option B from 0044 plan OQ #1). UI flips the status pill to "Expired"
+   * when true, but the row is still a sent quote.
+   */
+  isExpired: boolean;
   createdAt: Date;
   createdById: string | null;
 };
@@ -56,6 +65,7 @@ const projection = {
   acceptedAt: quotes.acceptedAt,
   declinedAt: quotes.declinedAt,
   pdfStorageKey: quotes.pdfStorageKey,
+  quoteValidDays: quotes.quoteValidDays,
   createdAt: quotes.createdAt,
   createdById: quotes.createdById,
 };
@@ -80,11 +90,18 @@ type QuoteRow = {
   acceptedAt: Date | null;
   declinedAt: Date | null;
   pdfStorageKey: string | null;
+  quoteValidDays: number;
   createdAt: Date;
   createdById: string | null;
 };
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 function mapRow(row: QuoteRow): Quote {
+  const isExpired =
+    row.status === 'sent' &&
+    row.sentAt != null &&
+    row.sentAt.getTime() + row.quoteValidDays * MS_PER_DAY < Date.now();
   return {
     id: row.id,
     dealerId: row.dealerId,
@@ -105,6 +122,8 @@ function mapRow(row: QuoteRow): Quote {
     acceptedAt: row.acceptedAt,
     declinedAt: row.declinedAt,
     pdfStorageKey: row.pdfStorageKey,
+    quoteValidDays: row.quoteValidDays,
+    isExpired,
     createdAt: row.createdAt,
     createdById: row.createdById,
   };
