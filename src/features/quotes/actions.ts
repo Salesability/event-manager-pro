@@ -1,5 +1,6 @@
 'use server';
 
+import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -155,6 +156,17 @@ function moneyString(n: number): string {
   return n.toFixed(2);
 }
 
+// Short stable digest used by the `quote.edited` audit payload to mark which
+// line-items snapshot a save came from without bloating the row with the full
+// array. 16 hex chars of SHA-256 — collision-resistant enough for forensic
+// "this edit changed lines vs. this one didn't" reads.
+function hashLineItems(lineItems: unknown): string {
+  return createHash('sha256')
+    .update(JSON.stringify(lineItems ?? null))
+    .digest('hex')
+    .slice(0, 16);
+}
+
 /** Apply a freshly-computed `QuoteComputation` + `inputs` snapshot to a row.
  *  Used by the create path (in-flight insert) and the setter actions. */
 function persistComputationPatch(
@@ -265,8 +277,18 @@ export const createQuote = capabilityClient('quote:edit')
   });
 
 /** Composer-side setter: replace the input snapshot, recompute lines + totals
- *  against the live catalog, persist atomically. Only allowed on `draft`
- *  rows — `sent` / `accepted` / `declined` quotes are immutable. */
+ *  against the live catalog, persist atomically. 0046 flipped the lifecycle
+ *  doctrine — `sent` (and derived `expired`) rows stay editable so coaches
+ *  can fix pricing typos and Re-send. Only the terminal contract artifacts
+ *  (`accepted` / `declined`) are immutable.
+ *
+ *  Optimistic-locking via `WHERE date_trunc('ms', updatedAt) = preloaded` —
+ *  same shape as `sendQuote`. A concurrent send / accept that bumped
+ *  updatedAt under us misses the UPDATE, and the re-select classifies the
+ *  miss (terminal status → friendly error; otherwise "edited concurrently;
+ *  please retry"). Emits `quote.edited` only when the priced output
+ *  (subtotal / tax / total / lineItems) actually changed — typo-style saves
+ *  on unchanged inputs are no-ops in the audit log. */
 export const setQuoteInputs = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -285,18 +307,33 @@ export const setQuoteInputs = capabilityClient('quote:edit')
     const taxRequested = formData.has('tax') ? parseTax(formData) : null;
     if (taxRequested && typeof taxRequested === 'object') return taxRequested;
 
-    // Load current tax (when not being changed) — we still need it to
-    // recompute the total. Doing this read + the guarded update inside a
-    // transaction keeps the snapshot consistent with the row state.
-    return db.transaction(async (tx) => {
+    type EditResult =
+      | { ok: true; auditPayload: Record<string, unknown> | null }
+      | { error: string; fieldErrors?: Record<string, string[] | undefined> };
+
+    // Load current tax + priced-output snapshot + updatedAt (when not being
+    // changed) — we still need them to recompute total, drive the
+    // optimistic-lock predicate, and decide whether to emit `quote.edited`.
+    // Doing this read + the guarded update inside a transaction keeps the
+    // snapshot consistent with the row state.
+    const txResult: EditResult = await db.transaction(async (tx): Promise<EditResult> => {
       const [row] = await tx
-        .select({ status: quotes.status, tax: quotes.tax })
+        .select({
+          status: quotes.status,
+          tax: quotes.tax,
+          subtotal: quotes.subtotal,
+          total: quotes.total,
+          lineItems: quotes.lineItems,
+          updatedAt: quotes.updatedAt,
+        })
         .from(quotes)
         .where(eq(quotes.id, quoteId))
         .limit(1);
       if (!row) return { error: 'Quote not found.' };
-      if (row.status !== 'draft') {
-        return { error: `Quote cannot be edited in status '${row.status}'.` };
+      if (row.status === 'accepted' || row.status === 'declined') {
+        return {
+          error: `This quote has been ${row.status} — make a new quote to revise it.`,
+        };
       }
 
       const taxNumber = taxRequested != null ? (taxRequested as number) : Number(row.tax) || 0;
@@ -320,24 +357,84 @@ export const setQuoteInputs = capabilityClient('quote:edit')
           total: patch.total,
           updatedById: userId,
         })
-        .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+        .where(
+          and(
+            eq(quotes.id, quoteId),
+            sql`${quotes.status} NOT IN ('accepted', 'declined')`,
+            // Same `date_trunc('milliseconds', …)` shape as `sendQuote` —
+            // postgres-js decodes timestamptz at ms precision, so the
+            // truncation keeps both sides comparable. ISO + ::timestamptz
+            // cast forces the bound parameter to a string Postgres parses
+            // back to a timestamp (raw Date binding throws).
+            sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${row.updatedAt.toISOString()}::timestamptz`,
+          ),
+        )
         .returning({ id: quotes.id });
       if (!updated.length) {
-        // Concurrent send/decline raced past the read-then-write window.
-        // Re-classify against the latest row state so the UI sees an
-        // accurate error rather than a stale "saved" toast.
+        // Optimistic-lock miss. Re-classify against the latest row state:
+        // a concurrent accept/decline gets the friendly terminal-status
+        // copy; otherwise the row was edited or sent under us and the UI
+        // should retry with a fresh snapshot.
         const [latest] = await tx
           .select({ status: quotes.status })
           .from(quotes)
           .where(eq(quotes.id, quoteId))
           .limit(1);
         if (!latest) return { error: 'Quote not found.' };
-        return { error: `Quote cannot be edited in status '${latest.status}'.` };
+        if (latest.status === 'accepted' || latest.status === 'declined') {
+          return {
+            error: `This quote has been ${latest.status} — make a new quote to revise it.`,
+          };
+        }
+        return { error: 'Quote was edited concurrently; please retry.' };
       }
 
-      revalidateQuoteViews();
-      return { ok: true };
+      // Decide whether this save changed the priced output. We compare on
+      // string-form money values (already canonicalized via moneyString) +
+      // a short SHA-256 digest over lineItems. A no-op save (e.g. the
+      // user toggled a UI field that doesn't affect pricing) skips the
+      // audit emit so the Send-history reads stay clean.
+      const beforePriced = {
+        subtotal: row.subtotal,
+        tax: row.tax,
+        total: row.total,
+      };
+      const afterPriced = {
+        subtotal: patch.subtotal,
+        tax: patch.tax,
+        total: patch.total,
+      };
+      const beforeLinesHash = hashLineItems(row.lineItems);
+      const afterLinesHash = hashLineItems(patch.lineItems);
+      const dirtyFields: string[] = [];
+      if (beforePriced.subtotal !== afterPriced.subtotal) dirtyFields.push('subtotal');
+      if (beforePriced.tax !== afterPriced.tax) dirtyFields.push('tax');
+      if (beforePriced.total !== afterPriced.total) dirtyFields.push('total');
+      if (beforeLinesHash !== afterLinesHash) dirtyFields.push('lineItems');
+      const auditPayload = dirtyFields.length
+        ? {
+            before: { ...beforePriced, lineItemsHash: beforeLinesHash },
+            after: { ...afterPriced, lineItemsHash: afterLinesHash },
+            dirtyFields,
+          }
+        : null;
+
+      return { ok: true, auditPayload };
     });
+
+    if ('error' in txResult) return txResult;
+
+    if (txResult.auditPayload) {
+      await recordAudit({
+        action: 'quote.edited',
+        targetTable: 'quotes',
+        targetId: quoteId,
+        payload: txResult.auditPayload,
+      });
+    }
+
+    revalidateQuoteViews();
+    return { ok: true };
   });
 
 /** Composer-side setter: override just the tax amount on a draft quote.

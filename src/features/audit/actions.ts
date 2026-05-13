@@ -31,6 +31,7 @@ export type AuditActionId =
   | 'campaign.cancelled'
   | 'quote.create'
   | 'quote.sent'
+  | 'quote.edited'
   | 'quote.accepted'
   | 'quote.declined'
   | 'msa.created'

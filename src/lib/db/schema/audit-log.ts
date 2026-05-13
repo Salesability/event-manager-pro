@@ -25,6 +25,7 @@ export const auditAction = pgEnum('audit_action', [
   'campaign.cancelled',
   'quote.create',
   'quote.sent',
+  'quote.edited',
   'quote.accepted',
   'quote.declined',
   'msa.created',

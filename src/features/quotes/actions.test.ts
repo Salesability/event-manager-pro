@@ -895,11 +895,35 @@ describe('createQuote (composer Save-Draft path)', () => {
   });
 });
 
+// Realistic setQuoteInputs pre-load row. 0046 added subtotal/total/lineItems
+// + updatedAt to the SELECT (optimistic-lock predicate + priced-output diff
+// for the `quote.edited` audit emit decision). Tests can spread + override.
+// The line-items shape mirrors what `computeQuote` produces for the
+// `audienceSize: 500, eventDays: 1` default; the no-op edit test relies on
+// that congruence so its hash compares equal end-to-end.
+const SET_INPUTS_PRELOAD = {
+  status: 'draft',
+  tax: '0.00',
+  subtotal: '6900.00',
+  total: '6900.00',
+  lineItems: [
+    {
+      code: 'base-event',
+      label: 'Base Event',
+      unit: 'flat',
+      unitPrice: 6900,
+      qty: 1,
+      lineTotal: 6900,
+    },
+  ],
+  updatedAt: new Date('2026-05-12T12:00:00.000Z'),
+};
+
 describe('setQuoteInputs', () => {
   it('updates inputs + recomputes lines/totals on a draft quote', async () => {
-    // status SELECT, catalog SELECT, then UPDATE.returning() returns one row.
+    // pre-load SELECT, catalog SELECT, then UPDATE.returning() returns one row.
     mocks.dbResults.push(
-      [{ status: 'draft', tax: '0' }],
+      [SET_INPUTS_PRELOAD],
       CATALOG_FIXTURE,
       [{ id: 42 }],
     );
@@ -919,12 +943,101 @@ describe('setQuoteInputs', () => {
     expect(patch.total).toBe('7200.00');
   });
 
-  it('rejects when concurrent send races past the read-then-write window', async () => {
-    // status SELECT returns draft, catalog SELECT, UPDATE.returning() returns
-    // [] (concurrent transition between our SELECT and UPDATE), then
-    // re-classify SELECT finds the row now in `sent`.
+  it('allows edit on a sent quote (0046: sent stays editable) and emits quote.edited', async () => {
     mocks.dbResults.push(
-      [{ status: 'draft', tax: '0' }],
+      [{ ...SET_INPUTS_PRELOAD, status: 'sent' }],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(patch.subtotal).toBe('7200.00');
+    // priced output changed → audit row emitted with before/after digest.
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'quote.edited',
+        targetTable: 'quotes',
+        targetId: 42,
+        payload: expect.objectContaining({
+          dirtyFields: expect.arrayContaining(['subtotal', 'total', 'lineItems']),
+        }),
+      }),
+    );
+  });
+
+  it('allows edit on an expired quote (status=sent + past validity is a presentation, not a guard)', async () => {
+    const sentLongAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push(
+      [{ ...SET_INPUTS_PRELOAD, status: 'sent', updatedAt: sentLongAgo }],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('does not emit quote.edited when the priced output is unchanged', async () => {
+    // Inputs that recompute back to the same subtotal/tax/total/lineItems
+    // shape — same audienceSize + eventDays as the seed default (500 / 1)
+    // means the priced output matches and no audit row should fire.
+    mocks.dbResults.push(
+      [SET_INPUTS_PRELOAD],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          inputs: JSON.stringify({ audienceSize: 500, eventDays: 1 }),
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects edit on an accepted quote with the friendly terminal-status message', async () => {
+    mocks.dbResults.push([{ ...SET_INPUTS_PRELOAD, status: 'accepted' }]);
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
+      ),
+    );
+    expect(result).toEqual({
+      error: 'This quote has been accepted — make a new quote to revise it.',
+    });
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects edit on a declined quote with the friendly terminal-status message', async () => {
+    mocks.dbResults.push([{ ...SET_INPUTS_PRELOAD, status: 'declined' }]);
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
+      ),
+    );
+    expect(result).toEqual({
+      error: 'This quote has been declined — make a new quote to revise it.',
+    });
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('returns a retry error when the optimistic-lock predicate misses (concurrent edit/send bumped updatedAt)', async () => {
+    // pre-load → catalog → UPDATE misses (updatedAt mismatch) → re-select
+    // finds the row still in a non-terminal status. Coach gets a retry.
+    mocks.dbResults.push(
+      [SET_INPUTS_PRELOAD],
       CATALOG_FIXTURE,
       [],
       [{ status: 'sent' }],
@@ -932,18 +1045,22 @@ describe('setQuoteInputs', () => {
     const result = await call(
       setQuoteInputs(fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 500 }) })),
     );
-    expect(result).toEqual({ error: "Quote cannot be edited in status 'sent'." });
+    expect(result).toEqual({ error: 'Quote was edited concurrently; please retry.' });
   });
 
-  it('rejects edit on a sent quote', async () => {
-    mocks.dbResults.push([{ status: 'sent', tax: '0' }]);
-    const result = await call(
-      setQuoteInputs(
-        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
-      ),
+  it('classifies an optimistic-lock miss as terminal when the row raced to accepted', async () => {
+    mocks.dbResults.push(
+      [SET_INPUTS_PRELOAD],
+      CATALOG_FIXTURE,
+      [],
+      [{ status: 'accepted' }],
     );
-    expect(result).toEqual({ error: "Quote cannot be edited in status 'sent'." });
-    expect(mocks.updates).toHaveLength(0);
+    const result = await call(
+      setQuoteInputs(fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 500 }) })),
+    );
+    expect(result).toEqual({
+      error: 'This quote has been accepted — make a new quote to revise it.',
+    });
   });
 
   it('rejects when the quote is gone', async () => {
