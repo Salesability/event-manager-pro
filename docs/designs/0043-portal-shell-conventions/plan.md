@@ -14,7 +14,7 @@
 | 5: List-page filter-bar convention | Done | 2d28a39 |
 | 6: Row-action convention (`<RowActions>` + shared labels/icons) | Done | 0e74772 |
 | 7: Status `<Badge>` + relative timestamps | Done | c5b2e65 |
-| 8: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
+| 8: Wiki (`layout.md`) + chunk-end smoke | Doc + tests done; /eval + browser smoke pending | 7c1f830 |
 
 **Spirit (locked 2026-05-13):** the same conceptual surface should look and operate the same way everywhere. Concrete evidence motivating the chunk — three list pages, three different operational vocabularies for "do something to this row":
 
@@ -148,8 +148,8 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green
 
 #### Phase 8: Wiki (`layout.md`) + chunk-end smoke
-- [ ] Write `docs/wiki/layout.md`: portal shell anatomy (`AppHeader` top nav, retained — see pivot decision), `<PageHeader>` API + when to set `sticky` (incl. the `top-16` parking rule), detail-page key-value strip pattern (when to use, label conventions), list-page filter-bar pattern, **row-action vocabulary** (canonical labels, when to use which, where the labels constant lives, the View-xor-Edit rule), status badge + relative time conventions, capability-gated nav (preserved from `app-nav.tsx`)
-- [ ] Cross-link `forms.md` ↔ `layout.md` ("page-level action slot vs. dialog footer" pointer in both directions); add `layout.md` to `docs/wiki/index.md`; append entry to `docs/wiki/log.md`
-- [ ] Full `pnpm test` run — all existing tests still pass (sidebar nav tests, page-level smoke tests)
-- [ ] `web-test` smoke battery: `/quotes`, `/quotes/<id>`, `/quotes/new`, `/dealerships`, `/dealerships/<id>`, `/calendar`, `/reports`, `/admin/people`. Each page renders: sidebar present, page header with title + actions visible above the fold, no remaining navy top-bar, no hand-rolled submit buttons.
-- [ ] Full `/eval` at chunk-end (single Codex pass per the post-0040 `/build` cadence — fast `tsc + test` per phase, Codex + web-test + lint at chunk-end only)
+- [x] Write `docs/wiki/layout.md` — captures the post-0043 page shape: shell (AppHeader retained, capability-gated nav), `<PageHeader>` API + sticky parking (`top-16`), `<KeyValueStrip>`, `<Section>` (plain/card variants), `<ListToolbar>` (URL-driven filters), **row-action vocabulary** + View-xor-Edit + lint guard, status `<Badge>` wrappers, `<RelativeTime>` vs absolute date rule.
+- [x] Cross-linked `forms.md` ↔ `layout.md` at the page-level-action-vs-dialog-footer seam; added `layout.md` to `docs/wiki/index.md`; appended chunk-close entry to `docs/wiki/log.md`.
+- [x] Full `pnpm test` run — 797 passed, 2 skipped (pre-existing). `tsc --noEmit` clean.
+- [ ] `web-test` smoke battery — deferred to chunk-end `/eval` ritual (per post-0040 `/build` cadence — single full pipeline runs the browser smoke).
+- [ ] Full `/eval` at chunk-end (single Codex pass)
