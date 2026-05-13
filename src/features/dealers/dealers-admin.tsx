@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useRef, useState, useTransition } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { FilterFn } from '@tanstack/react-table';
+import { ListToolbar } from '@/components/app/list-toolbar';
 import { Can } from '@/components/auth/can';
 import {
   Dialog,
@@ -19,6 +20,10 @@ import { buildDealersColumns } from '@/features/dealers/dealers-columns';
 import { DealerForm } from '@/features/dealers/dealer-form';
 
 type StatusPill = 'active' | 'prospect' | 'archived';
+
+function isStatusPill(v: string): v is StatusPill {
+  return v === 'active' || v === 'prospect' || v === 'archived';
+}
 
 function pillClass(active: boolean): string {
   return active
@@ -73,16 +78,56 @@ function buildArchiveConfirmMessage(dealer: Dealer): string {
 
 export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Dealer | null>(null);
-  const [globalFilter, setGlobalFilter] = useState('');
-  const [pill, setPill] = useState<StatusPill>('active');
+
+  // URL-driven filter state so back-nav from a dealer detail page restores
+  // the search term + status pill (per 0043 Phase 5). Local debounce mirrors
+  // QuotesFilters' shape; pill defaults to 'active' so the page lands on the
+  // same view it did when filters were component-state-only.
+  const qFromUrl = params.get('q') ?? '';
+  const rawStatus = params.get('status') ?? '';
+  const pill: StatusPill = isStatusPill(rawStatus) ? rawStatus : 'active';
+
+  const [globalFilter, setGlobalFilter] = useState(qFromUrl);
+  const [prevQFromUrl, setPrevQFromUrl] = useState(qFromUrl);
+  if (qFromUrl !== prevQFromUrl) {
+    setPrevQFromUrl(qFromUrl);
+    setGlobalFilter(qFromUrl);
+  }
+
   const [, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function pushParams(next: { q?: string; status?: StatusPill }) {
+    const sp = new URLSearchParams(window.location.search);
+    if (next.q !== undefined) {
+      next.q ? sp.set('q', next.q) : sp.delete('q');
+    }
+    if (next.status !== undefined) {
+      next.status && next.status !== 'active'
+        ? sp.set('status', next.status)
+        : sp.delete('status');
+    }
+    const qs = sp.toString();
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    });
+  }
+
+  function onSearchChange(value: string) {
+    setGlobalFilter(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => pushParams({ q: value }), 250);
+  }
 
   const isFiltered = globalFilter.trim().length > 0 || pill !== 'active';
   const clearFilters = () => {
     setGlobalFilter('');
-    setPill('active');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    pushParams({ q: '', status: 'active' });
   };
 
   function archive(dealer: Dealer) {
@@ -145,49 +190,54 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
 
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-stone-500">{filteredDealers.length} dealers</p>
-        <Can capability="dealer:create">
-          <button onClick={() => setAddOpen(true)} className={headerAddClass}>
-            + Add Dealer
-          </button>
-        </Can>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <input
-          type="search"
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          placeholder="Search by name, contact, or email…"
-          aria-label="Search dealers"
-          className="min-w-[16rem] flex-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
-        />
-        <button
-          type="button"
-          aria-pressed={pill === 'active'}
-          onClick={() => setPill('active')}
-          className={pillClass(pill === 'active')}
-        >
-          Active ({counts.active})
-        </button>
-        <button
-          type="button"
-          aria-pressed={pill === 'prospect'}
-          onClick={() => setPill('prospect')}
-          className={pillClass(pill === 'prospect')}
-        >
-          Prospect ({counts.prospect})
-        </button>
-        <button
-          type="button"
-          aria-pressed={pill === 'archived'}
-          onClick={() => setPill('archived')}
-          className={pillClass(pill === 'archived')}
-        >
-          Archived ({counts.archived})
-        </button>
-      </div>
+      <ListToolbar
+        search={
+          <input
+            type="search"
+            value={globalFilter}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search by name, contact, or email…"
+            aria-label="Search dealers"
+            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+          />
+        }
+        filters={
+          <>
+            <button
+              type="button"
+              aria-pressed={pill === 'active'}
+              onClick={() => pushParams({ status: 'active' })}
+              className={pillClass(pill === 'active')}
+            >
+              Active ({counts.active})
+            </button>
+            <button
+              type="button"
+              aria-pressed={pill === 'prospect'}
+              onClick={() => pushParams({ status: 'prospect' })}
+              className={pillClass(pill === 'prospect')}
+            >
+              Prospect ({counts.prospect})
+            </button>
+            <button
+              type="button"
+              aria-pressed={pill === 'archived'}
+              onClick={() => pushParams({ status: 'archived' })}
+              className={pillClass(pill === 'archived')}
+            >
+              Archived ({counts.archived})
+            </button>
+          </>
+        }
+        actions={
+          <Can capability="dealer:create">
+            <button onClick={() => setAddOpen(true)} className={headerAddClass}>
+              + Add Dealer
+            </button>
+          </Can>
+        }
+      />
+      <p className="mt-2 text-xs text-stone-500">{filteredDealers.length} dealers</p>
 
       <div className="mt-3">
         <DataTable

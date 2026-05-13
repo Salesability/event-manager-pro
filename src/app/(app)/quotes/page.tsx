@@ -34,8 +34,8 @@ export default async function QuotesPage({ searchParams }: Props) {
       <PageHeader
         title="Quotes"
         description="Every quote in the pipeline — drafts, sent, accepted, declined."
-        actions={<QuotesFilters counts={counts} />}
       />
+      <QuotesFilters counts={counts} />
 
       <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="overflow-x-auto">

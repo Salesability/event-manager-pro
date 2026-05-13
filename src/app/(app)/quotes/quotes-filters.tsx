@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
+import { ListToolbar } from '@/components/app/list-toolbar';
 import type { QuoteStatus } from '@/features/quotes/queries';
 
 type Pill = '' | QuoteStatus;
@@ -68,19 +69,21 @@ export function QuotesFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 print:hidden">
-      <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-1.5 transition focus-within:border-accent">
-        <span className="text-stone-400">🔍</span>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search by dealer…"
-          aria-label="Search quotes"
-          className="w-56 bg-transparent text-sm text-stone-800 outline-none placeholder:text-stone-400"
-        />
-      </div>
-      {PILLS.map((p) => {
+    <ListToolbar
+      search={
+        <div className="flex w-full items-center gap-2 rounded-lg border border-stone-200 bg-white px-3 py-1.5 transition focus-within:border-accent">
+          <span className="text-stone-400">🔍</span>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search by dealer…"
+            aria-label="Search quotes"
+            className="w-full bg-transparent text-sm text-stone-800 outline-none placeholder:text-stone-400"
+          />
+        </div>
+      }
+      filters={PILLS.map((p) => {
         const count = p.value === '' ? counts.all : counts[p.value];
         const active = status === p.value;
         return (
@@ -95,6 +98,6 @@ export function QuotesFilters({
           </button>
         );
       })}
-    </div>
+    />
   );
 }
