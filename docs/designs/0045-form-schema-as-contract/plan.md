@@ -9,8 +9,8 @@
 | 1: Doctrine — extend `forms.md` with schema-as-contract rule | Done | `25cc0f0` |
 | 2: Extract canonical schemas (dealer, quote) into shared modules + wire `safeParse` into existing actions | Done | `2e9853d` |
 | 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `80e082e` |
-| 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | In Progress | - |
-| 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | Pending | - |
+| 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `9879c98` |
+| 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | In Progress | - |
 | 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Pending | - |
 | 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | Pending | - |
 | 8: ESLint rule — `schema-as-contract/safeparse-required` locks in the convention | Pending | - |
@@ -37,7 +37,7 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 33% (3/9 phases complete)
+**Overall Progress:** 44% (4/9 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
@@ -71,10 +71,10 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [x] Side-effect: extended `toLegacyResult` to forward `fieldErrors` when the action returns them, so the form's `setError` per-field routing works through the legacy adapter.
 
 #### Phase 4: availability-admin — A-shape port
-- [ ] Create `src/features/schedule/availability-schema.ts` covering date + kind + coach + reason fields.
-- [ ] Rewrite `src/features/schedule/availability-admin.tsx` add-form (lines ~78–102) using `useForm({ resolver: zodResolver(availabilitySchema) })` + shadcn `<Field>`. Native `<select>` is acceptable per `forms.md` "Select (native fallback)" row.
-- [ ] In `src/features/schedule/actions.ts`, wire `safeParse` into the availability create action.
-- [ ] Test: new action-level test covering happy path + fieldErrors on bad input.
+- [x] Create `src/features/schedule/availability-schema.ts` covering date + kind + coach + reason fields.
+- [x] Rewrite `src/features/schedule/availability-admin.tsx` add-form (lines ~78–102) using `useForm({ resolver: zodResolver(availabilitySchema) })` + shadcn `<Field>`. Native `<select>` is acceptable per `forms.md` "Select (native fallback)" row. Factored into a single `<AvailabilityForm mode='create'|'edit'>` shared between the add-form at the top and the per-row edit pane.
+- [x] In `src/features/schedule/actions.ts`, wire `safeParse` into the availability create + update actions (`parseAvailabilityInput` now uses `availabilityFormSchema.safeParse`).
+- [x] Test: new schema-level test (`availability-schema.test.ts`) covers happy path + per-field error surfaces (missing startDate, malformed startDate, invalid kind, reason > 200).
 
 #### Phase 5: lookup-admin — schema + action safeParse, no RHF (carve-out)
 - [ ] Create `src/features/schedule/lookup-schema.ts` with `{ label: z.string().min(1) }`.
