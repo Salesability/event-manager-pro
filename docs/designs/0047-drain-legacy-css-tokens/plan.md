@@ -9,7 +9,7 @@
 | 1: Audit + classification table | Done | `f510218` |
 | 2: Class-swap codemod sweep (`stone-*`, `navy`, `cream`, `accent-*`) | Done | `1166391`, `eea89f2`, `8a22e72` |
 | 3: Component-swap sweep (hand-rolled buttons/badges → shadcn primitives) + `font-display` retirement | Done | `62dcbe4` |
-| 4: Delete legacy block from `globals.css` + assert no orphaned refs | Pending | - |
+| 4: Delete legacy block from `globals.css` + assert no orphaned refs | Done | `dbbce7e` |
 | 5: Smoke + Codex eval | Pending | - |
 
 This chunk finishes the migration that `0042 Phase 1` started. shadcn `init` (May 12) rewired `src/components/ui/` and `src/components/app/` onto semantic tokens (`--primary`, `--muted`, `--foreground`, `--border`), but the **feature pages and feature modules** — ported earlier in the April 30 – May 3 window — were left on the legacy brand-named tokens (`text-navy`, `bg-cream`, `text-stone-*`, `font-display`). The two layers coexist today only because `globals.css` keeps both blocks defined (the "strategy A" two-layer aliasing). "Done" is: every file under `src/features/*` and `src/app/(app)/*` reads from semantic tokens, the legacy brand block can be removed from `globals.css` without breaking anything, and `globals.css` is the single source of truth for color and typography decisions. This naturally unblocks the design-chroma north-star (`docs/wiki/index.md` → palette work) — once `text-primary` flows from `--primary`, retheming the app is one CSS edit instead of a thirty-file sweep.
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/layout.md` — post-0043 surface vocabulary (`PageHeader`, `KeyValueStrip`, `Section`, `RowActions`, `Badge`). Migrating to semantic tokens is the chroma layer below that vocabulary.
 - The "strategy A" doctrine in `src/app/globals.css:6–27` — once the sweep is done, the two-layer aliasing collapses to one layer (semantic tokens only).
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Phase 1 produces the classification artifact the rest of the chunk consumes.
@@ -61,10 +61,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Static gate green: `tsc --noEmit` clean, vitest 790/790 PASS (RLS + MSA pool-flakes excluded per Phase 2 caveat)
 
 #### Phase 4: Delete legacy block from `globals.css`
-- [ ] Re-run the ripgrep — confirm zero matches for `color-navy|color-cream|color-stone-|font-display|navy-pale|bg-cream|text-navy|bg-navy|accent-light` across the entire `src/` tree (`globals.css` aside)
-- [ ] Delete the brand named-tokens block at `src/app/globals.css:30–46` — keep `--color-status-*` (still wired to `--destructive` / state surfaces) and the `--color-brand-blue` definition (load-bearing — `--primary` resolves to it)
-- [ ] Simplify the file's top comment block — "strategy A" two-layer aliasing collapses to one layer; update the explanation to reflect the new single-layer reality
-- [ ] `pnpm build` to confirm Tailwind doesn't emit unresolvable-token warnings; `pnpm tsc --noEmit && pnpm test && pnpm lint` green
+- [x] Re-run the ripgrep — confirmed zero matches outside `globals.css` (all surviving hits are doc-comments inside the file itself, see Phase 1 anchor)
+- [x] Deleted `--color-navy`, `--color-navy-light`, `--color-navy-pale`, `--color-accent`, `--color-accent-light`, `--color-cream`, `--color-stone-{100,200,400,600,800}`, `--font-display` from `@theme inline`. Kept `--color-brand-blue`, `--color-brand-blue-fg`, `--color-status-{red,green,blue}` (load-bearing).
+- [x] Inlined the previously-aliased values into `:root` directly: `--foreground: #2c2a26`, `--secondary: #f4f2ee`, `--muted: #f4f2ee`, `--muted-foreground: #6b6760`, `--accent: #b88a3a`, `--border: #e8e4dd`, `--input: #e8e4dd`. `--primary` / `--ring` still resolve via `var(--color-brand-blue)`; `--destructive` resolves via `var(--color-status-red)`.
+- [x] Rewrote the top comment block to reflect single-layer reality + dropped the `font-display` "later cleanup" preamble (cleanup is now done).
+- [x] `pnpm build` clean (3.3s compile, 19/19 routes, zero warnings); `tsc --noEmit` clean; vitest 790/790 PASS; `pnpm lint` 0 errors / 10 pre-existing warnings.
 
 #### Phase 5: Smoke + Codex eval
 - [ ] `web-test` smoke against the high-touch routes: `goto /quotes` (expect "Quotes" heading + filter pills + table); `goto /quotes/new` (composer renders, action toolbar at `top-16`); `goto /quotes/<id>` for any seeded quote (KeyValueStrip + Sections render with semantic-token chrome); `goto /dealerships` (list); `goto /dealerships/<id>` (detail); `goto /calendar` (booking + event detail surfaces); `goto /admin/people` (table + lifecycle badges); `goto /login` (kept-brand surface if any decision was made in Phase 1)
