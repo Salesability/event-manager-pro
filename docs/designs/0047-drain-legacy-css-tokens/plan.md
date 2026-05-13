@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Audit + classification table | Done | `f510218` |
 | 2: Class-swap codemod sweep (`stone-*`, `navy`, `cream`, `accent-*`) | Done | `1166391`, `eea89f2`, `8a22e72` |
-| 3: Component-swap sweep (hand-rolled buttons/badges → shadcn primitives) + `font-display` retirement | Pending | - |
+| 3: Component-swap sweep (hand-rolled buttons/badges → shadcn primitives) + `font-display` retirement | Done | `62dcbe4` |
 | 4: Delete legacy block from `globals.css` + assert no orphaned refs | Pending | - |
 | 5: Smoke + Codex eval | Pending | - |
 
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/layout.md` — post-0043 surface vocabulary (`PageHeader`, `KeyValueStrip`, `Section`, `RowActions`, `Badge`). Migrating to semantic tokens is the chroma layer below that vocabulary.
 - The "strategy A" doctrine in `src/app/globals.css:6–27` — once the sweep is done, the two-layer aliasing collapses to one layer (semantic tokens only).
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Phase 1 produces the classification artifact the rest of the chunk consumes.
@@ -54,11 +54,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Verify no new uses of legacy tokens crept in — final ripgrep shows zero legacy class-swap tokens outside `globals.css`; only `font-display` callsites (8) remain for Phase 3
 
 #### Phase 3: Component-swap sweep + font-display retirement
-- [ ] Replace hand-rolled button clusters with `<Button>` from `src/components/ui/button.tsx` — known callsites: `quote-composer.tsx:379–399` (3 buttons), `people-admin.tsx:119–134` (3 buttons + 1 checkbox-styled span), and any others Phase 1 flagged
-- [ ] Replace hand-rolled badge/pill spans with `<Badge>` variants from `src/components/ui/badge.tsx` — known callsites: `people-admin.tsx:157`, plus any caught by 0043 follow-up (c) parking notes if not already addressed
-- [ ] Sweep all `font-display` callsites (~16) → `font-sans font-bold tracking-tight`; drop the `--font-display` alias from `globals.css:71` once no callsites remain
-- [ ] Drop the `font-display` comment block in `globals.css:22–26` (the "later cleanup" the file documents)
-- [ ] Static gate green after each logical commit
+- [x] Replace hand-rolled button clusters with `<Button>` — quote-composer.tsx: 3 buttons (Close/Preview/Save) at the composer-actions block (Send retains custom `bg-status-green`); people-admin.tsx: 5 sites (headerAddClass → outline+accent, rowEditClass → outline×2 incl. DialogClose via `buttonVariants()`, rowDeleteClass → destructive, submitClass → default). 4 class consts deleted.
+- [x] ~~Replace hand-rolled badge/pill spans with `<Badge>` variants~~ — pillClass in people-admin powers interactive role-filter chips (not status badges); Badge variants don't carry filter-chip semantics. Pill chrome is 100% semantic tokens post-Phase 2; leaving as-is. The badge-related work in 0043 follow-up (c) (CampaignStatusBadge/PersonLifecycleBadge) is a separate scope.
+- [x] Sweep all `font-display` callsites — 8 sites (quote-composer ×3, calendar-view ×2, orphan-auth-users ×1, services-admin ×1, lookup-admin ×1) → `font-sans font-bold tracking-tight`. `--font-display` alias drop happens in Phase 4 alongside the legacy `@theme inline` block.
+- [x] Also caught: `accent-navy` (production-filters), `focus-visible:ring-navy/30` (people-admin) — codemod extended to handle ring-/accent- forms.
+- [x] Static gate green: `tsc --noEmit` clean, vitest 790/790 PASS (RLS + MSA pool-flakes excluded per Phase 2 caveat)
 
 #### Phase 4: Delete legacy block from `globals.css`
 - [ ] Re-run the ripgrep — confirm zero matches for `color-navy|color-cream|color-stone-|font-display|navy-pale|bg-cream|text-navy|bg-navy|accent-light` across the entire `src/` tree (`globals.css` aside)
