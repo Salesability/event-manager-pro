@@ -70,10 +70,11 @@ export const MAX_DOLLARS = 9_999_999;
 
 const NOTES_MAX = 1_000;
 
-/** Zod mirror of `validateQuoteInputs`. Client-side form resolver consumes
- *  this; server-side `parseQuoteInputs` still canonicalizes by hand because
- *  it must tolerate FormData (string-typed) input and discard unknown keys.
- *  Keep both in lockstep — bounds here must match the assertions below. */
+/** Shared between client (`quote-composer.tsx` via `zodResolver`) and server
+ *  (`quotes/actions.ts` via `safeParse` on the JSON-decoded `inputs` payload).
+ *  Strict input shape — server callers that may omit fields merge over
+ *  `DEFAULT_QUOTE_INPUTS` before `safeParse` (see `parseQuoteInputs`). Keep
+ *  bounds in lockstep with `validateQuoteInputs` below. */
 export const quoteInputsSchema = z.object({
   audienceSize: z.number().int().min(0).max(MAX_AUDIENCE),
   eventDays: z.number().int().min(1).max(MAX_DAYS),

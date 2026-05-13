@@ -20,16 +20,26 @@ import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
+import { dealerFormSchema } from '@/features/dealers/dealer-schema';
 import {
   field,
   parseCampaignInput,
   parseDate,
   parseId,
   parseOptionalId,
-  validateContactInputs,
 } from './validators';
 
-type ActionResult = { ok: true } | { error: string };
+type FieldErrors = Record<string, string[] | undefined>;
+function firstFieldError(fieldErrors: FieldErrors): string | undefined {
+  for (const list of Object.values(fieldErrors)) {
+    if (list && list.length) return list[0];
+  }
+  return undefined;
+}
+
+type ActionResult =
+  | { ok: true }
+  | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 type ActionError = { error: string };
 type AvailabilityKind = 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
 
@@ -54,22 +64,22 @@ function toActionResult(err: unknown): ActionResult {
 }
 
 type DealerStatus = 'prospect' | 'active';
-const DEALER_STATUSES: readonly DealerStatus[] = ['prospect', 'active'];
 
-function parseDealerStatus(formData: FormData, fallback: DealerStatus): DealerStatus | ActionError {
-  const raw = field(formData, 'status');
-  if (!raw) return fallback;
-  if (!DEALER_STATUSES.includes(raw as DealerStatus)) {
-    return { error: 'Invalid dealer status.' };
+/** Cross-field "if any contact field is filled, first+last must both be filled".
+ *  Lives in the action (not the schema) because zod's per-field validation
+ *  can't model the "all-or-nothing contact block" rule cleanly. */
+function validateContactCross(input: {
+  contactFirst: string;
+  contactLast: string;
+  contactEmail: string;
+  contactPhone: string;
+}): string | null {
+  const hasAny =
+    input.contactFirst || input.contactLast || input.contactEmail || input.contactPhone;
+  if (hasAny && (!input.contactFirst || !input.contactLast)) {
+    return 'Contact first and last name are both required when adding a contact.';
   }
-  return raw as DealerStatus;
-}
-
-function parseAcquiredVia(formData: FormData): string | null | ActionError {
-  const raw = field(formData, 'acquiredVia');
-  if (!raw) return null;
-  if (raw.length > 200) return { error: 'Acquired-via must be 200 characters or fewer.' };
-  return raw;
+  return null;
 }
 
 export const createDealer = capabilityClient('dealer:create')
@@ -77,15 +87,20 @@ export const createDealer = capabilityClient('dealer:create')
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const userId = ctx.user.id;
 
-    const name = field(formData, 'name');
-    const address = field(formData, 'address');
-    const contactFirst = field(formData, 'contactFirst');
-    const contactLast = field(formData, 'contactLast');
-    const contactEmail = field(formData, 'contactEmail').toLowerCase();
-    const contactPhone = field(formData, 'contactPhone');
+    const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return { error: firstFieldError(fieldErrors) ?? 'Invalid dealer input.', fieldErrors };
+    }
+    const v = parsed.data;
+    const name = v.name;
+    const address = v.address ?? '';
+    const contactFirst = v.contactFirst ?? '';
+    const contactLast = v.contactLast ?? '';
+    const contactEmail = (v.contactEmail ?? '').toLowerCase();
+    const contactPhone = v.contactPhone ?? '';
 
-    if (!name) return { error: 'Dealership name is required.' };
-    const contactErr = validateContactInputs({
+    const contactErr = validateContactCross({
       contactFirst,
       contactLast,
       contactEmail,
@@ -97,10 +112,8 @@ export const createDealer = capabilityClient('dealer:create')
     // dealer who's already a customer). The composer's inline-create flow
     // submits an explicit `status=prospect` so a quote-driven add lands as a
     // prospect — see 0035 Phase 2/3.
-    const status = parseDealerStatus(formData, 'active');
-    if (typeof status === 'object' && 'error' in status) return status;
-    const acquiredVia = parseAcquiredVia(formData);
-    if (typeof acquiredVia === 'object' && acquiredVia && 'error' in acquiredVia) return acquiredVia;
+    const status: DealerStatus = v.status ?? 'active';
+    const acquiredVia: string | null = v.acquiredVia ? v.acquiredVia : null;
 
     try {
       await db.transaction(async (tx) => {
@@ -169,15 +182,20 @@ export const updateDealer = capabilityClient('dealer:edit')
     const id = parseId(formData);
     if (id == null) return { error: 'Invalid dealer id.' };
 
-    const name = field(formData, 'name');
-    const address = field(formData, 'address');
-    const contactFirst = field(formData, 'contactFirst');
-    const contactLast = field(formData, 'contactLast');
-    const contactEmail = field(formData, 'contactEmail').toLowerCase();
-    const contactPhone = field(formData, 'contactPhone');
+    const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return { error: firstFieldError(fieldErrors) ?? 'Invalid dealer input.', fieldErrors };
+    }
+    const v = parsed.data;
+    const name = v.name;
+    const address = v.address ?? '';
+    const contactFirst = v.contactFirst ?? '';
+    const contactLast = v.contactLast ?? '';
+    const contactEmail = (v.contactEmail ?? '').toLowerCase();
+    const contactPhone = v.contactPhone ?? '';
 
-    if (!name) return { error: 'Dealership name is required.' };
-    const contactErr = validateContactInputs({
+    const contactErr = validateContactCross({
       contactFirst,
       contactLast,
       contactEmail,
@@ -185,27 +203,16 @@ export const updateDealer = capabilityClient('dealer:edit')
     });
     if (contactErr) return { error: contactErr };
 
-    // Parse status / acquiredVia as "patches" — omit-when-absent so a
-    // caller that doesn't submit the field can't clobber a concurrent flip
-    // (e.g. `convertProspectToActive` racing with the form-save). Empty
-    // string is treated as "absent" since the existing field() helper trims.
-    const statusRaw = field(formData, 'status');
-    let statusPatch: DealerStatus | undefined;
-    if (statusRaw) {
-      if (!DEALER_STATUSES.includes(statusRaw as DealerStatus)) {
-        return { error: 'Invalid dealer status.' };
-      }
-      statusPatch = statusRaw as DealerStatus;
-    }
-
-    let acquiredViaPatch: string | null | undefined;
-    if (formData.has('acquiredVia')) {
-      const raw = field(formData, 'acquiredVia');
-      if (raw.length > 200) {
-        return { error: 'Acquired-via must be 200 characters or fewer.' };
-      }
-      acquiredViaPatch = raw || null;
-    }
+    // status / acquiredVia are "patches" — omit-when-absent so a caller that
+    // doesn't submit the field can't clobber a concurrent flip (e.g.
+    // `convertProspectToActive` racing with the form-save). The schema's
+    // `status` preprocesses `'' → undefined`, so an empty status string also
+    // counts as absent. `acquiredVia` is *not* preprocessed — `''` survives
+    // as "clear to null", absent stays undefined as "preserve".
+    const statusPatch: DealerStatus | undefined = v.status;
+    const acquiredViaPatch: string | null | undefined = formData.has('acquiredVia')
+      ? (v.acquiredVia ?? '') || null
+      : undefined;
 
     const dealerPatch: Record<string, unknown> = {
       name,

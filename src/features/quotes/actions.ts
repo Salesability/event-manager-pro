@@ -12,6 +12,7 @@ import {
   DEFAULT_QUOTE_INPUTS,
   MAX_DOLLARS,
   QuoteInputsError,
+  quoteInputsSchema,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
 import type { ServiceItem } from '@/features/services/queries';
@@ -46,8 +47,12 @@ import { resolveQuoteRecipient } from './recipient';
 // RETURNING id`. Returns-empty means the guard missed; re-select then
 // classifies the miss as row-gone / idempotent / illegal-status.
 
-type ActionResult = { ok: true } | { error: string };
-type CreateQuoteResult = { ok: true; quoteId: number } | { error: string };
+type ActionResult =
+  | { ok: true }
+  | { error: string; fieldErrors?: Record<string, string[] | undefined> };
+type CreateQuoteResult =
+  | { ok: true; quoteId: number }
+  | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 
 // 0035 P3: `DEFAULT_QUOTE_INPUTS` was inlined here in 0026 P2; moved to
 // src/lib/quotes/pricing.ts so the composer + action layer share the same
@@ -75,50 +80,50 @@ async function loadActiveCatalog(): Promise<ServiceItem[]> {
     .where(isNull(serviceItems.archivedAt));
 }
 
-function pickNumber(v: unknown, fallback: number): number {
-  return typeof v === 'number' ? v : fallback;
-}
-function pickString(v: unknown, fallback: string): string {
-  return typeof v === 'string' ? v : fallback;
-}
-
 /** Parse a `QuoteInputs` payload from FormData. The composer submits it as a
- *  single `inputs` JSON string; the action **canonicalizes** field-by-field
- *  to drop any unknown keys (prevents arbitrary JSON ending up in the
- *  `quotes.inputs` jsonb column). The pricing module's `validateQuoteInputs`
- *  then enforces per-field shape.
+ *  single `inputs` JSON string; the action JSON.parses it and `safeParse`s
+ *  against the shared `quoteInputsSchema` (defined in `@/lib/quotes/pricing`
+ *  and also consumed by the composer's `zodResolver`). Zod's default `.strip`
+ *  mode discards unknown keys, so an attacker-supplied `__proto__` / `blob`
+ *  field never reaches the `quotes.inputs` jsonb column. Per-field
+ *  `.default(...)` calls in the schema fill in missing fields with the
+ *  `DEFAULT_QUOTE_INPUTS` shape.
  */
-function parseQuoteInputs(formData: FormData): QuoteInputs | { error: string } {
+function parseQuoteInputs(
+  formData: FormData,
+): { ok: true; data: QuoteInputs; fieldErrors?: undefined }
+  | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> } {
   const raw = field(formData, 'inputs');
-  if (!raw) return { error: 'Quote inputs are required.' };
+  if (!raw) return { ok: false, error: 'Quote inputs are required.' };
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { error: 'Quote inputs payload is not valid JSON.' };
+    return { ok: false, error: 'Quote inputs payload is not valid JSON.' };
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { error: 'Quote inputs must be an object.' };
+    return { ok: false, error: 'Quote inputs must be an object.' };
   }
-  const p = parsed as Record<string, unknown>;
 
-  // Canonical extraction — only known fields survive. Unknown keys (incl.
-  // any `__proto__` / `constructor` JSON payloads) are silently discarded.
-  return {
-    audienceSize: pickNumber(p.audienceSize, DEFAULT_QUOTE_INPUTS.audienceSize),
-    eventDays: pickNumber(p.eventDays, DEFAULT_QUOTE_INPUTS.eventDays),
-    bdcCallCount: pickNumber(p.bdcCallCount, DEFAULT_QUOTE_INPUTS.bdcCallCount),
-    letterCount: pickNumber(p.letterCount, DEFAULT_QUOTE_INPUTS.letterCount),
-    digitalCount: pickNumber(p.digitalCount, DEFAULT_QUOTE_INPUTS.digitalCount),
-    recordRetrievalAmount: pickNumber(
-      p.recordRetrievalAmount,
-      DEFAULT_QUOTE_INPUTS.recordRetrievalAmount,
-    ),
-    travelAmount: pickNumber(p.travelAmount, DEFAULT_QUOTE_INPUTS.travelAmount),
-    travelNotes: pickString(p.travelNotes, DEFAULT_QUOTE_INPUTS.travelNotes),
-    quoteNotes: pickString(p.quoteNotes, DEFAULT_QUOTE_INPUTS.quoteNotes),
-  };
+  // Merge user-supplied keys over the canonical defaults before safeParse so
+  // missing fields are filled in (legacy `pickNumber(p.x, DEFAULT_QUOTE_INPUTS.x)`
+  // semantics). Zod's default `.strip` mode still drops unknown keys — an
+  // attacker-supplied `__proto__` / `blob` field never reaches the
+  // `quotes.inputs` jsonb column.
+  const merged = { ...DEFAULT_QUOTE_INPUTS, ...(parsed as Record<string, unknown>) };
+  const result = quoteInputsSchema.safeParse(merged);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue.path.join('.');
+    const message = path ? `${path}: ${issue.message}` : issue.message;
+    return {
+      ok: false,
+      error: message,
+      fieldErrors: result.error.flatten().fieldErrors,
+    };
+  }
+  return { ok: true, data: result.data };
 }
 
 // Reject more than 2 decimal places so the persisted tax value cannot diverge
@@ -186,19 +191,21 @@ export const createQuote = capabilityClient('quote:edit')
     let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
     let computed: ReturnType<typeof computeQuote> | null = null;
     if (formData.has('inputs')) {
-      const parsed = parseQuoteInputs(formData);
-      if ('error' in parsed) return parsed;
+      const inputResult = parseQuoteInputs(formData);
+      if (!inputResult.ok) {
+        return { error: inputResult.error, ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}) };
+      }
       const taxResult = parseTax(formData);
       if (typeof taxResult === 'object') return taxResult;
 
       const catalog = await loadActiveCatalog();
       try {
-        computed = computeQuote(parsed, catalog, taxResult);
+        computed = computeQuote(inputResult.data, catalog, taxResult);
       } catch (err) {
         if (err instanceof QuoteInputsError) return { error: err.message };
         throw err;
       }
-      inputsSnapshot = parsed;
+      inputsSnapshot = inputResult.data;
     }
 
     const baseInsert = {
@@ -268,8 +275,11 @@ export const setQuoteInputs = capabilityClient('quote:edit')
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
 
-    const parsed = parseQuoteInputs(formData);
-    if ('error' in parsed) return parsed;
+    const inputResult = parseQuoteInputs(formData);
+    if (!inputResult.ok) {
+      return { error: inputResult.error, ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}) };
+    }
+    const parsed = inputResult.data;
 
     // `tax` is optional — if absent, preserve whatever's on the row.
     const taxRequested = formData.has('tax') ? parseTax(formData) : null;

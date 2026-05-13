@@ -749,6 +749,23 @@ describe('createQuote (composer Save-Draft path)', () => {
     expect(persistedInputs.audienceSize).toBe(500);
     expect(persistedInputs.eventDays).toBe(1);
   });
+
+  // 0045 Phase 2 — schema-as-contract: action surfaces `fieldErrors` alongside
+  // `error` so a future composer caller can route per-field via `setError`.
+  it('surfaces per-field errors on safeParse failure', async () => {
+    mocks.dbResults.push(CATALOG_FIXTURE);
+    const result = (await call(
+      createQuote(
+        fd({
+          dealerId: '7',
+          inputs: JSON.stringify({ audienceSize: -1, eventDays: 0 }),
+        }),
+      ),
+    )) as { error: string; fieldErrors?: Record<string, string[]> };
+    expect(result.error).toContain('audienceSize');
+    expect(result.fieldErrors?.audienceSize?.length).toBeGreaterThan(0);
+    expect(mocks.inserts).toHaveLength(0);
+  });
 });
 
 describe('setQuoteInputs', () => {

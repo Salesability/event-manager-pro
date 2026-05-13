@@ -148,7 +148,7 @@ describe('createDealer', () => {
 
   it('rejects invalid status enum value', async () => {
     const result = await call(createDealer(fd({ name: 'Acme', status: 'bogus' })));
-    expect(result).toEqual({ error: 'Invalid dealer status.' });
+    expect(result).toMatchObject({ error: 'Invalid dealer status.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
@@ -156,14 +156,28 @@ describe('createDealer', () => {
     const result = await call(
       createDealer(fd({ name: 'Acme', acquiredVia: 'x'.repeat(201) })),
     );
-    expect(result).toEqual({ error: 'Acquired-via must be 200 characters or fewer.' });
+    expect(result).toMatchObject({
+      error: 'Acquired-via must be 200 characters or fewer.',
+    });
     expect(mocks.inserts).toHaveLength(0);
   });
 
   it('still rejects when name is missing', async () => {
     const result = await call(createDealer(fd({})));
-    expect(result).toEqual({ error: 'Dealership name is required.' });
+    expect(result).toMatchObject({ error: 'Dealership name is required.' });
     expect(mocks.inserts).toHaveLength(0);
+  });
+
+  // 0045 Phase 2 — schema-as-contract: action returns `fieldErrors` alongside
+  // `error` so a future form consumer can route per-field via `setError`.
+  it('surfaces per-field errors on safeParse failure', async () => {
+    const result = (await call(
+      createDealer(fd({ name: 'Acme', status: 'bogus', acquiredVia: 'x'.repeat(201) })),
+    )) as { error: string; fieldErrors: Record<string, string[]> };
+    expect(result.fieldErrors.status).toEqual(['Invalid dealer status.']);
+    expect(result.fieldErrors.acquiredVia).toEqual([
+      'Acquired-via must be 200 characters or fewer.',
+    ]);
   });
 });
 
@@ -201,7 +215,7 @@ describe('updateDealer', () => {
     const result = await call(
       updateDealer(fd({ id: '42', name: 'Acme', status: 'bogus' })),
     );
-    expect(result).toEqual({ error: 'Invalid dealer status.' });
+    expect(result).toMatchObject({ error: 'Invalid dealer status.' });
     expect(mocks.updates).toHaveLength(0);
   });
 

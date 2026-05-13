@@ -4,7 +4,6 @@ import { useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { DialogClose } from '@/components/ui/dialog';
 import {
   Field,
@@ -19,38 +18,18 @@ import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
+import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
 
-// 0042 Phase 4 — ported off Radix Form + useActionState onto RHF + shadcn
-// Field primitives. The hand-rolled `useTouched` hook is gone; RHF's
-// `mode: 'onTouched'` covers the blur-then-empty inline-error path. Email
-// shape validation moved off `<Form.Message match="typeMismatch">` to zod.
-// Server Action submission target unchanged (`createDealer` / `updateDealer`
-// via `toLegacyResult`); the form constructs FormData from RHF values at
-// submit time so the action layer stays stable.
+// 0045 Phase 2 — schema-as-contract: `dealerFormSchema` now lives in the
+// sibling `dealer-schema.ts` module and is imported by both this component
+// (via `zodResolver`) and the Server Action (`createDealer` / `updateDealer`
+// in `schedule/actions.ts`, via `safeParse(Object.fromEntries(formData))`).
+//
+// 0042 Phase 4 history — ported off Radix Form + useActionState onto RHF +
+// shadcn Field primitives. The hand-rolled `useTouched` hook is gone; RHF's
+// `mode: 'onTouched'` covers the blur-then-empty inline-error path.
 
 type Mode = 'create' | 'edit';
-
-const dealerFormSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, 'Dealership name is required.'),
-  contactFirst: z.string().trim().optional(),
-  contactLast: z.string().trim().optional(),
-  contactEmail: z
-    .string()
-    .trim()
-    .refine(
-      (v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      'Email looks invalid.',
-    )
-    .optional(),
-  contactPhone: z.string().trim().optional(),
-  address: z.string().trim().optional(),
-  status: z.enum(['active', 'prospect']),
-  acquiredVia: z.string().trim().max(200).optional(),
-});
-type DealerFormValues = z.infer<typeof dealerFormSchema>;
 
 const submitClass =
   'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
@@ -67,7 +46,10 @@ function valuesToFormData(values: DealerFormValues, id?: number): FormData {
   fd.set('contactEmail', values.contactEmail ?? '');
   fd.set('contactPhone', values.contactPhone ?? '');
   fd.set('address', values.address ?? '');
-  fd.set('status', values.status);
+  // status is `'active' | 'prospect' | undefined` per the schema, but the form's
+  // defaultValues always seed a definite value and the native <select> can't
+  // unset it — the `??` keeps TS happy without changing runtime behaviour.
+  fd.set('status', values.status ?? 'active');
   fd.set('acquiredVia', values.acquiredVia ?? '');
   return fd;
 }
