@@ -19,12 +19,30 @@ Adopt shadcn/ui as the project baseline for forms and common UI primitives so ev
 
 **Overall Progress:** 0% (0/7 phases complete)
 
+## Decisions locked (2026-05-12)
+
+- **Theme:** `modern-minimal` (tweakcn / shadcn theme directory). White/near-white surfaces, neutral grey scale, hairline borders, modest radius, Inter sans. Reason: brand logo (`public/saledayevents-logo.jpg`) is blue + warm-grey; the existing warm-gold accent in `globals.css` is a layer over a logo that doesn't contain gold. `modern-minimal` lets the logo be the chromatic anchor and matches the wordmark's geometric-sans character.
+- **Primary override:** logo blue (eyedropper the actual file at Phase 1 — approx `#1a5fa8` to `#1f6bc2`, oklch ~`(0.5 0.13 250)`). Do not adopt `modern-minimal`'s default primary.
+- **Warm-gold accent dropped from the semantic layer.** Keep `--color-accent` defined only if specific surfaces still consume it during transition; remove by chunk-end if no live consumers.
+- **Style axis:** `new-york` (tighter density, matches geometric-sans wordmark + modern-minimal aesthetic).
+- **Theme strategy:** A — alias shadcn semantic tokens (`--primary`, `--background`, `--foreground`, `--muted`, `--border`, `--ring`, `--destructive`, etc.) to existing or new named tokens in `@theme inline` so the rest of the codebase keeps reading named tokens directly.
+- **Display font:** drop DM Serif Display entirely (user does not like it). Default sans switches to Inter per `modern-minimal`. Page titles and section headers currently using the `font-display` class (~20 sites across `src/app/(app)/**` and `src/features/**` — see grep results captured during planning) move to bold Inter (`font-sans font-bold tracking-tight`, sized via `text-{xl,2xl,3xl}` as today). Remove the `DM_Serif_Display` import from `src/app/layout.tsx` and the `--font-dm-serif` / `--font-display` tokens from `globals.css` in Phase 1.
+
+Token mapping (strategy A):
+- `--background` ← white (replace current `--color-cream`)
+- `--foreground` ← `--color-stone-800`
+- `--primary` ← new `--color-brand-blue` (logo blue)
+- `--muted` / `--muted-foreground` ← `--color-stone-100` / `--color-stone-600`
+- `--border` / `--input` ← `--color-stone-200`
+- `--destructive` ← `--color-status-red`
+- `--ring` ← `--color-brand-blue`
+
 ## Open Questions
 
 The Phase 1 implementation needs answers to these before files start moving. Plan blocks here, not at Phase 3.
 
-1. **shadcn style choice** — `new-york` (tighter, denser, matches the current stone/navy stationary feel) vs `default` (rounder, more whitespace). Recommendation: `new-york`.
-2. **Theme reconciliation strategy** — current `src/app/globals.css` uses Tailwind v4 `@theme` with named tokens (`--color-navy`, `--color-accent`, `--color-stone-{100..800}`, `--color-status-red`). shadcn's component templates expect semantic HSL tokens (`--primary`, `--background`, `--foreground`, `--accent`, `--destructive`, `--ring`, etc.). Two paths: (A) add shadcn's semantic tokens as aliases of the existing named tokens (`--primary: var(--color-navy);` etc.) — keeps both vocabularies; (B) replace shadcn's defaults in every template at `add` time to read our tokens directly. (A) is lower-friction and what I recommend; (B) avoids a parallel vocabulary but means editing every component on install.
+1. ~~**shadcn style choice**~~ — Resolved (Decisions): `new-york`.
+2. ~~**Theme reconciliation strategy**~~ — Resolved (Decisions): strategy A. Token mapping recorded above.
 3. **`components.json` paths** — match existing convention: `components: "@/components/ui"`, `utils: "@/lib/utils"` (`utils.ts` doesn't exist yet; shadcn generates it on init — fine). CSS path: `src/app/globals.css`. Tailwind config: there is **no `tailwind.config.*`** in this repo (Tailwind v4 + the Next plugin); shadcn init must be pointed at the v4 setup or it will scaffold a stale config.
 4. **Server-Action ↔ RHF helper** — one shared helper (`src/lib/actions/form-bind.ts`) that takes a Server Action result `{ ok: true } | { error, fieldErrors? }` and either resolves cleanly or calls `setError` per field, OR inline the same five lines at each call site. Recommendation: one shared helper once two forms need it; inline at the first.
 5. **Radix Form removal** — once Phase 4 lands, are there any other Radix Form consumers? `grep -rl '@radix-ui/react-form' src/` says only `dealer-form.tsx` today, but verify mid-Phase 6. Removal goes in Phase 6 commit alongside the wiki page.
