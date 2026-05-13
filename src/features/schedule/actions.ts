@@ -21,12 +21,11 @@ import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
+import { availabilityFormSchema } from './availability-schema';
 import {
   field,
   parseCampaignInput,
-  parseDate,
   parseId,
-  parseOptionalId,
 } from './validators';
 
 type FieldErrors = Record<string, string[] | undefined>;
@@ -645,12 +644,6 @@ export const archiveAudienceSource = capabilityClient('lookup:edit')
 
 // ---------- Availability blocks (5.4) ----------
 
-const AVAILABILITY_KINDS: AvailabilityKind[] = [
-  'statutory_holiday',
-  'company_closure',
-  'coach_unavailable',
-];
-
 type AvailabilityInput = {
   startDate: string;
   endDate: string;
@@ -659,32 +652,42 @@ type AvailabilityInput = {
   reason: string | null;
 };
 
-function parseAvailabilityInput(formData: FormData): AvailabilityInput | ActionError {
-  const startDate = parseDate(formData, 'startDate');
-  const endDate = parseDate(formData, 'endDate') ?? startDate;
-  if (!startDate || !endDate) return { error: 'Start date is required.' };
-  if (endDate < startDate) return { error: 'End date must be on or after start date.' };
+function parseAvailabilityInput(
+  formData: FormData,
+):
+  | { ok: true; data: AvailabilityInput }
+  | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> } {
+  const parsed = availabilityFormSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    const message =
+      firstFieldError(fieldErrors) ?? 'Invalid availability-block input.';
+    return { ok: false, error: message, fieldErrors };
+  }
+  const v = parsed.data;
+  const startDate = v.startDate;
+  const endDate = v.endDate && v.endDate.length > 0 ? v.endDate : startDate;
+  if (endDate < startDate) {
+    return { ok: false, error: 'End date must be on or after start date.' };
+  }
 
-  const kind = field(formData, 'kind') as AvailabilityKind;
-  if (!AVAILABILITY_KINDS.includes(kind)) return { error: 'Invalid block type.' };
-
-  const coachId = parseOptionalId(formData, 'coachId');
+  const kind = v.kind;
+  const coachIdStr = v.coachId;
+  const coachId = coachIdStr && coachIdStr.length > 0 ? Number(coachIdStr) : null;
   if (kind === 'coach_unavailable' && coachId == null) {
-    return { error: 'Coach is required for coach unavailability.' };
+    return { ok: false, error: 'Coach is required for coach unavailability.' };
   }
   if (kind !== 'coach_unavailable' && coachId != null) {
-    return { error: 'Coach can only be set for coach unavailability.' };
+    return {
+      ok: false,
+      error: 'Coach can only be set for coach unavailability.',
+    };
   }
 
-  const reason = field(formData, 'reason');
-  if (reason.length > 200) return { error: 'Reason must be 200 characters or fewer.' };
-
+  const reason = v.reason ?? '';
   return {
-    startDate,
-    endDate,
-    kind,
-    coachId,
-    reason: reason || null,
+    ok: true,
+    data: { startDate, endDate, kind, coachId, reason: reason || null },
   };
 }
 
@@ -712,8 +715,14 @@ export const createAvailabilityBlock = capabilityClient('availability:edit')
     const user = ctx.user;
     const userId = user.id;
 
-    const input = parseAvailabilityInput(formData);
-    if ('error' in input) return input;
+    const inputResult = parseAvailabilityInput(formData);
+    if (!inputResult.ok) {
+      return {
+        error: inputResult.error,
+        ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}),
+      };
+    }
+    const input = inputResult.data;
     const coachError = await validateAvailabilityCoach(input);
     if (coachError) return coachError;
 
@@ -740,8 +749,14 @@ export const updateAvailabilityBlock = capabilityClient('availability:edit')
 
     const id = parseId(formData);
     if (id == null) return { error: 'Invalid availability block id.' };
-    const input = parseAvailabilityInput(formData);
-    if ('error' in input) return input;
+    const inputResult = parseAvailabilityInput(formData);
+    if (!inputResult.ok) {
+      return {
+        error: inputResult.error,
+        ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}),
+      };
+    }
+    const input = inputResult.data;
     const coachError = await validateAvailabilityCoach(input);
     if (coachError) return coachError;
 

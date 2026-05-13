@@ -1,8 +1,17 @@
 'use client';
 
-import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from '@/components/ui/toaster';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveAvailabilityBlock,
@@ -10,10 +19,12 @@ import {
   updateAvailabilityBlock,
 } from '@/features/schedule/actions';
 import type { AvailabilityBlock, Coach } from '@/features/schedule/queries';
-
-type CreateState = { ok: true } | { error: string } | null;
-
-type AvailabilityKind = AvailabilityBlock['kind'];
+import {
+  AVAILABILITY_KINDS,
+  availabilityFormSchema,
+  type AvailabilityFormValues,
+  type AvailabilityKind,
+} from './availability-schema';
 
 const KIND_LABELS: Record<AvailabilityKind, string> = {
   statutory_holiday: 'Statutory Holiday',
@@ -21,27 +32,14 @@ const KIND_LABELS: Record<AvailabilityKind, string> = {
   coach_unavailable: 'Coach Unavailable',
 };
 
-const inputClass =
-  'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20 disabled:bg-stone-100 disabled:text-stone-400';
+const selectClass =
+  'h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm disabled:bg-stone-100 disabled:text-stone-400';
 
 const buttonClass =
   'rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy disabled:cursor-not-allowed disabled:opacity-50';
 
-type Draft = {
-  startDate: string;
-  endDate: string;
-  kind: AvailabilityKind;
-  coachId: string;
-  reason: string;
-};
-
-const emptyDraft: Draft = {
-  startDate: '',
-  endDate: '',
-  kind: 'company_closure',
-  coachId: '',
-  reason: '',
-};
+const submitClass =
+  'h-10 rounded-lg bg-navy px-4 text-sm font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
 
 export function AvailabilityAdmin({
   blocks,
@@ -53,7 +51,6 @@ export function AvailabilityAdmin({
   defaultStartDate?: string;
 }) {
   const router = useRouter();
-  const [draft, setDraft] = useState<Draft>(() => ({ ...emptyDraft, startDate: defaultStartDate }));
   const [archivedIds, setArchivedIds] = useState<Set<number>>(() => new Set());
   const [overrides, setOverrides] = useState<Record<number, AvailabilityBlock>>({});
 
@@ -62,7 +59,11 @@ export function AvailabilityAdmin({
       blocks
         .filter((block) => !archivedIds.has(block.id))
         .map((block) => overrides[block.id] ?? block)
-        .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.endDate.localeCompare(b.endDate)),
+        .sort(
+          (a, b) =>
+            a.startDate.localeCompare(b.startDate) ||
+            a.endDate.localeCompare(b.endDate),
+        ),
     [archivedIds, blocks, overrides],
   );
 
@@ -72,105 +73,14 @@ export function AvailabilityAdmin({
     router.refresh();
   }
 
-  // The form's own FormData carries every field via `name=` props. Disabled
-  // `<select>` elements (CoachSelect when kind ≠ coach_unavailable) are not
-  // submitted, which is exactly what `parseAvailabilityInput` expects.
-  const [createState, createAction, pending] = useActionState<CreateState, FormData>(
-    async (_prev, fd) => {
-      const result = toLegacyResult(await createAvailabilityBlock(fd));
-      if ('ok' in result) {
-        setDraft({ ...emptyDraft, startDate: defaultStartDate });
-      }
-      return result;
-    },
-    null,
-  );
-
-  useEffect(() => {
-    if (!createState) return;
-    if ('ok' in createState) {
-      toast.success('Date block added');
-      refresh();
-    } else {
-      toast.error(createState.error);
-    }
-    // refresh is stable (router.refresh wrapper).
-  }, [createState]); // eslint-disable-line react-hooks/exhaustive-deps
-
   return (
     <div className="mt-4 flex flex-col gap-5">
-      <form action={createAction} className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Start Date" htmlFor="block-start" required>
-            <input
-              id="block-start"
-              name="startDate"
-              type="date"
-              value={draft.startDate}
-              onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
-              className={inputClass}
-              required
-            />
-          </Field>
-          <Field label="End Date" htmlFor="block-end">
-            <input
-              id="block-end"
-              name="endDate"
-              type="date"
-              value={draft.endDate}
-              onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Type" htmlFor="block-kind">
-            <KindSelect
-              id="block-kind"
-              name="kind"
-              value={draft.kind}
-              onChange={(kind) =>
-                setDraft((d) => ({
-                  ...d,
-                  kind,
-                  coachId: kind === 'coach_unavailable' ? d.coachId : '',
-                }))
-              }
-            />
-          </Field>
-          <Field label="Coach" htmlFor="block-coach">
-            <CoachSelect
-              id="block-coach"
-              name="coachId"
-              coaches={coaches}
-              value={draft.coachId}
-              disabled={draft.kind !== 'coach_unavailable'}
-              onChange={(coachId) => setDraft((d) => ({ ...d, coachId }))}
-            />
-          </Field>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
-          <Field label="Reason" htmlFor="block-reason">
-            <input
-              id="block-reason"
-              name="reason"
-              type="text"
-              value={draft.reason}
-              onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
-              className={inputClass}
-              maxLength={200}
-              placeholder="Holiday, closure, vacation"
-            />
-          </Field>
-          <div className="flex items-end">
-            <button
-              type="submit"
-              disabled={pending}
-              className="h-10 rounded-lg bg-navy px-4 text-sm font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Add Block
-            </button>
-          </div>
-        </div>
-      </form>
+      <AvailabilityForm
+        mode="create"
+        coaches={coaches}
+        defaultStartDate={defaultStartDate}
+        onSuccess={refresh}
+      />
 
       <div className="max-h-[440px] overflow-y-auto pr-1">
         {grouped.length === 0 ? (
@@ -223,29 +133,10 @@ function AvailabilityRow({
   onLocalArchive: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Draft>(() => blockToDraft(block));
   const [pending, startTransition] = useTransition();
   const coachName = block.coachId
     ? coaches.find((coach) => coach.id === block.coachId)?.displayName
     : null;
-
-  function save() {
-    startTransition(async () => {
-      const fd = draftToFormData(draft);
-      fd.set('id', String(block.id));
-      const result = toLegacyResult(await updateAvailabilityBlock(fd));
-      if ('ok' in result) {
-        toast.success('Date block saved');
-        const next = formDraftToBlock(block.id, draft);
-        onLocalUpdate(next);
-        setDraft(blockToDraft(next));
-        setEditing(false);
-        onChanged();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
 
   function archive() {
     if (!confirm(`Remove ${formatRange(block.startDate, block.endDate)}?`)) return;
@@ -265,60 +156,18 @@ function AvailabilityRow({
 
   if (editing) {
     return (
-      <div className="grid gap-2 p-3">
-        <div className="grid gap-2 md:grid-cols-2">
-          <input
-            type="date"
-            value={draft.startDate}
-            onChange={(e) => setDraft((d) => ({ ...d, startDate: e.target.value }))}
-            className={inputClass}
-          />
-          <input
-            type="date"
-            value={draft.endDate}
-            onChange={(e) => setDraft((d) => ({ ...d, endDate: e.target.value }))}
-            className={inputClass}
-          />
-          <KindSelect
-            value={draft.kind}
-            onChange={(kind) =>
-              setDraft((d) => ({
-                ...d,
-                kind,
-                coachId: kind === 'coach_unavailable' ? d.coachId : '',
-              }))
-            }
-          />
-          <CoachSelect
-            coaches={coaches}
-            value={draft.coachId}
-            disabled={draft.kind !== 'coach_unavailable'}
-            onChange={(coachId) => setDraft((d) => ({ ...d, coachId }))}
-          />
-        </div>
-        <input
-          type="text"
-          value={draft.reason}
-          onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
-          className={inputClass}
-          maxLength={200}
-          placeholder="Reason"
+      <div className="p-3">
+        <AvailabilityForm
+          mode="edit"
+          block={block}
+          coaches={coaches}
+          onSuccess={(updated) => {
+            onLocalUpdate(updated);
+            setEditing(false);
+            onChanged();
+          }}
+          onCancel={() => setEditing(false)}
         />
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={save} disabled={pending} className={buttonClass}>
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(blockToDraft(block));
-              setEditing(false);
-            }}
-            className={buttonClass}
-          >
-            Cancel
-          </button>
-        </div>
       </div>
     );
   }
@@ -357,122 +206,195 @@ function AvailabilityRow({
   );
 }
 
-function Field({
-  label,
-  htmlFor,
-  required,
-  children,
-}: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="text-xs font-semibold uppercase tracking-wide text-stone-600"
-      >
-        {label}
-        {required && <span className="ml-1 text-status-red">*</span>}
-      </label>
-      {children}
-    </div>
-  );
-}
+type AvailabilityFormProps =
+  | {
+      mode: 'create';
+      coaches: Coach[];
+      defaultStartDate: string;
+      onSuccess: (block: AvailabilityBlock) => void;
+      onCancel?: undefined;
+      block?: undefined;
+    }
+  | {
+      mode: 'edit';
+      coaches: Coach[];
+      block: AvailabilityBlock;
+      onSuccess: (block: AvailabilityBlock) => void;
+      onCancel: () => void;
+      defaultStartDate?: undefined;
+    };
 
-function KindSelect({
-  id,
-  name,
-  value,
-  onChange,
-}: {
-  id?: string;
-  name?: string;
-  value: AvailabilityKind;
-  onChange: (value: AvailabilityKind) => void;
-}) {
+function AvailabilityForm(props: AvailabilityFormProps) {
+  const isEdit = props.mode === 'edit';
+  const defaultValues: AvailabilityFormValues = useMemo(() => {
+    if (isEdit) {
+      return {
+        startDate: props.block.startDate,
+        endDate: props.block.endDate,
+        kind: props.block.kind,
+        coachId: props.block.coachId ? String(props.block.coachId) : '',
+        reason: props.block.reason ?? '',
+      };
+    }
+    return {
+      startDate: props.defaultStartDate,
+      endDate: '',
+      kind: 'company_closure' as AvailabilityKind,
+      coachId: '',
+      reason: '',
+    };
+  }, [isEdit, props]);
+
+  const form = useForm<AvailabilityFormValues>({
+    resolver: zodResolver(availabilityFormSchema),
+    defaultValues,
+    mode: 'onTouched',
+  });
+  const { register, handleSubmit, watch, setValue, reset, formState } = form;
+  const { errors, isSubmitting } = formState;
+  const kind = watch('kind');
+
+  // Clear coach when kind switches away from coach_unavailable, matching the
+  // legacy "disabled select gets cleared" behaviour.
+  useEffect(() => {
+    if (kind !== 'coach_unavailable') {
+      setValue('coachId', '');
+    }
+  }, [kind, setValue]);
+
+  const onSubmit = handleSubmit(async (values) => {
+    const fd = valuesToFormData(values, isEdit ? props.block.id : undefined);
+    const action = isEdit ? updateAvailabilityBlock : createAvailabilityBlock;
+    const result = toLegacyResult(await action(fd));
+    if ('ok' in result) {
+      toast.success(isEdit ? 'Date block saved' : 'Date block added');
+      const nextBlock: AvailabilityBlock = {
+        id: isEdit ? props.block.id : -1,
+        startDate: values.startDate,
+        endDate: values.endDate && values.endDate.length > 0 ? values.endDate : values.startDate,
+        kind: values.kind,
+        coachId:
+          values.kind === 'coach_unavailable' && values.coachId
+            ? Number(values.coachId)
+            : null,
+        reason: values.reason && values.reason.length > 0 ? values.reason : null,
+      };
+      props.onSuccess(nextBlock);
+      if (!isEdit) reset(defaultValues);
+    } else if (result.fieldErrors) {
+      for (const [name, messages] of Object.entries(result.fieldErrors)) {
+        const msg = messages?.[0];
+        if (msg) form.setError(name as keyof AvailabilityFormValues, { type: 'server', message: msg });
+      }
+    } else {
+      toast.error(result.error);
+    }
+  });
+
   return (
-    <select
-      id={id}
-      name={name}
-      value={value}
-      onChange={(e) => onChange(e.target.value as AvailabilityKind)}
-      className={inputClass}
+    <form
+      onSubmit={onSubmit}
+      className={
+        isEdit
+          ? 'flex flex-col gap-3'
+          : 'rounded-xl border border-stone-200 bg-stone-50 p-3'
+      }
     >
-      {Object.entries(KIND_LABELS).map(([value, label]) => (
-        <option key={value} value={value}>
-          {label}
-        </option>
-      ))}
-    </select>
+      <FieldGroup>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field data-invalid={!!errors.startDate || undefined}>
+            <FieldLabel htmlFor="avl-start">Start Date</FieldLabel>
+            <Input
+              id="avl-start"
+              type="date"
+              required
+              aria-invalid={!!errors.startDate || undefined}
+              {...register('startDate')}
+            />
+            {errors.startDate && <FieldError>{errors.startDate.message}</FieldError>}
+          </Field>
+          <Field data-invalid={!!errors.endDate || undefined}>
+            <FieldLabel htmlFor="avl-end">End Date</FieldLabel>
+            <Input
+              id="avl-end"
+              type="date"
+              aria-invalid={!!errors.endDate || undefined}
+              {...register('endDate')}
+            />
+            {errors.endDate && <FieldError>{errors.endDate.message}</FieldError>}
+          </Field>
+          <Field data-invalid={!!errors.kind || undefined}>
+            <FieldLabel htmlFor="avl-kind">Type</FieldLabel>
+            <select id="avl-kind" className={selectClass} {...register('kind')}>
+              {AVAILABILITY_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {KIND_LABELS[k]}
+                </option>
+              ))}
+            </select>
+            {errors.kind && <FieldError>{errors.kind.message}</FieldError>}
+          </Field>
+          <Field data-invalid={!!errors.coachId || undefined}>
+            <FieldLabel htmlFor="avl-coach">Coach</FieldLabel>
+            <select
+              id="avl-coach"
+              disabled={kind !== 'coach_unavailable'}
+              className={selectClass}
+              {...register('coachId')}
+            >
+              <option value="">
+                {kind === 'coach_unavailable' ? 'Select coach…' : 'Not applicable'}
+              </option>
+              {props.coaches.map((coach) => (
+                <option key={coach.id} value={coach.id}>
+                  {coach.displayName}
+                </option>
+              ))}
+            </select>
+            {errors.coachId && <FieldError>{errors.coachId.message}</FieldError>}
+          </Field>
+        </div>
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+          <Field data-invalid={!!errors.reason || undefined}>
+            <FieldLabel htmlFor="avl-reason">Reason</FieldLabel>
+            <Input
+              id="avl-reason"
+              type="text"
+              maxLength={200}
+              placeholder="Holiday, closure, vacation"
+              aria-invalid={!!errors.reason || undefined}
+              {...register('reason')}
+            />
+            {errors.reason && <FieldError>{errors.reason.message}</FieldError>}
+          </Field>
+          <div className="flex items-end gap-2">
+            {isEdit && (
+              <button type="button" onClick={props.onCancel} className={buttonClass}>
+                Cancel
+              </button>
+            )}
+            <button type="submit" disabled={isSubmitting} className={submitClass}>
+              {isEdit ? 'Save' : 'Add Block'}
+            </button>
+          </div>
+        </div>
+      </FieldGroup>
+    </form>
   );
 }
 
-function CoachSelect({
-  id,
-  name,
-  coaches,
-  value,
-  disabled,
-  onChange,
-}: {
-  id?: string;
-  name?: string;
-  coaches: Coach[];
-  value: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <select
-      id={id}
-      name={name}
-      value={value}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.value)}
-      className={inputClass}
-    >
-      <option value="">{disabled ? 'Not applicable' : 'Select coach...'}</option>
-      {coaches.map((coach) => (
-        <option key={coach.id} value={coach.id}>
-          {coach.displayName}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function draftToFormData(draft: Draft) {
+function valuesToFormData(values: AvailabilityFormValues, id?: number): FormData {
   const fd = new FormData();
-  fd.set('startDate', draft.startDate);
-  fd.set('endDate', draft.endDate || draft.startDate);
-  fd.set('kind', draft.kind);
-  fd.set('coachId', draft.kind === 'coach_unavailable' ? draft.coachId : '');
-  fd.set('reason', draft.reason);
+  if (id != null) fd.set('id', String(id));
+  fd.set('startDate', values.startDate);
+  fd.set('endDate', values.endDate ?? '');
+  fd.set('kind', values.kind);
+  fd.set(
+    'coachId',
+    values.kind === 'coach_unavailable' ? values.coachId ?? '' : '',
+  );
+  fd.set('reason', values.reason ?? '');
   return fd;
-}
-
-function blockToDraft(block: AvailabilityBlock): Draft {
-  return {
-    startDate: block.startDate,
-    endDate: block.endDate,
-    kind: block.kind,
-    coachId: block.coachId ? String(block.coachId) : '',
-    reason: block.reason ?? '',
-  };
-}
-
-function formDraftToBlock(id: number, draft: Draft): AvailabilityBlock {
-  return {
-    id,
-    startDate: draft.startDate,
-    endDate: draft.endDate || draft.startDate,
-    kind: draft.kind,
-    coachId: draft.kind === 'coach_unavailable' && draft.coachId ? Number(draft.coachId) : null,
-    reason: draft.reason || null,
-  };
 }
 
 function groupByMonth(blocks: AvailabilityBlock[]) {
