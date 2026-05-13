@@ -180,6 +180,7 @@ export default async function QuoteEditPage({
         pageTitle={`Quote #${quote.id}`}
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
         keyValueItems={[
+          { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },
           {
             label: 'Dealer',
             value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
