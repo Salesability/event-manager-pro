@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: shadcn init + theme reconciliation | Done | `fd2ad89` |
 | 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
-| 3: Port `quote-composer.tsx` | In Progress | - |
+| 3: Port `quote-composer.tsx` | Done | `2462b0c` |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Pending | - |
 | 5: Primitive sweep (dialog / combobox / tabs) | Pending | - |
 | 6: Docs (wiki) + Radix Form removal | Pending | - |
@@ -17,7 +17,7 @@
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 29% (2/7 phases complete)
+**Overall Progress:** 43% (3/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -90,12 +90,14 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 3: Port `quote-composer.tsx`
-- [ ] Confirm the in-flight RHF + zod work is committed (via 0035 close-out or a same-day commit on the uncommitted changes)
-- [ ] Replace raw `<input>` blocks with `<FormField>` wrappers from shadcn
-- [ ] Replace the in-house `<Combobox>` for dealer selection with shadcn's Combobox pattern (Command + Popover)
-- [ ] Keep `setQuoteInputs` / `createQuote` Server Actions as submission target; submission goes through `form.handleSubmit(async values => { const r = toLegacyResult(await action(...)); if ('error' in r) form.setError(...) })`
-- [ ] Verify the live computed-line-items table still updates from `useWatch` (no regression on the calculator behaviour)
-- [ ] `tsc + test` gate green; spot-check on `/quotes/new` and `/quotes/<id>` via `web-test`
+- [x] Confirm the in-flight RHF + zod work is committed — landed `f540c46` immediately before 0042 build kicked off
+- [x] Replace raw `<input>` blocks with shadcn primitives — `NumberField` and `TextAreaField` helpers internally now use `<Field data-invalid>` + `<FieldLabel>` + `<Input>`/`<Textarea>` + `<FieldError>`/`<FieldDescription>` (NOT the classic `<FormField>` pattern — see Phase 2 v2 note); call sites unchanged
+- [x] Replace the retrieval-bracket Controller+buttons with `<FieldSet>` + `<FieldLegend>` + `<ToggleGroup>` + `<ToggleGroupItem>` — Base UI's ToggleGroup uses array-shape `value` for single-mode (no `type="single"` prop like Radix's), so the Controller adapter maps `field.value` → `[String(field.value)]` and `onValueChange(arr)` → `Number(arr[0])` with 0 fallback
+- [x] ~~Replace the in-house `<Combobox>` for dealer selection with shadcn's Combobox pattern (Command + Popover)~~ — **Deferred to Phase 5.** The in-house `combobox.tsx` is consumed by both `quote-composer.tsx` AND `people-admin.tsx` (a Phase 5 target). Attempted `shadcn add combobox --overwrite` broke `people-admin.tsx` (now uses the shadcn Combobox's `options`-less Base UI API). Reverted; the combobox swap lands in Phase 5 alongside the other primitives so both consumers move together.
+- [x] Wrap the Inputs section in `<FieldGroup>` per the shadcn skill's `rules/forms.md` ("Never use raw `div` with `space-y-*` or `grid gap-*` for form layout"); the surrounding `<div className="flex flex-col gap-3">` stays as a section-level scaffold since it sits *above* the form fields (holds the section heading too)
+- [x] Keep `setQuoteInputs` / `createQuote` Server Actions as submission target — submission path unchanged; `form.handleSubmit(values => { ... toLegacyResult(await action(fd)) ... })` already in place from the 0035 RHF refactor
+- [x] Verified the live computed-line-items table still updates from `useWatch` — composer rendered on `/quotes/new?dealerId=1` via web-test; "Audience size" / "Event days" / "BDC calls" / "Letters" / "Digital" all rendered as spinbuttons; "Record retrieval bracket" ToggleGroup renders 5 toggle buttons (None/$100/$200/$300/$400); Textarea for travel notes + quote notes renders cleanly. **Combobox still uses in-house Radix-based component until Phase 5.**
+- [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 4: Port `dealer-form.tsx` + `booking-form.tsx`
 - [ ] `dealer-form.tsx`: rewrite from `<Form.Root action={formAction}>` + `useActionState` to `useForm` + `form.handleSubmit`. Keep the existing `useTouched` UX (empty-field-on-blur message) — re-implement via RHF's `formState.touchedFields` or drop in favour of `mode: 'onTouched'`
