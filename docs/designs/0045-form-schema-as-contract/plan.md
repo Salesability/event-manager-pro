@@ -14,7 +14,7 @@
 | 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Done | `2ef7f94` |
 | 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | Done | `1d71b3f` |
 | 8: ESLint rule — `schema-as-contract/safeparse-required` locks in the convention | Done | `ef0474c` |
-| 9: Smoke verification + eval | In Progress | - |
+| 9: Smoke verification + eval | Done | `7c535b4` (eval report `eval-2026-05-13-0937.md`) |
 
 The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **not** shared between the client form and the Server Action — every action today either hand-rolls validation (`schedule/validators.ts`) or has none at all (`services-admin`); (b) three forms (`services-admin`, `availability-admin`, `lookup-admin`) don't follow either of the two shapes documented in `docs/wiki/forms.md`. The doctrine in `forms.md` is already correct; this chunk **closes the schema-sharing loop and brings the stragglers onto a documented shape**. "Done" means every non-trivial form has a single zod schema imported by both client (`zodResolver`) and server (`safeParse`), every Server Action's first lines are `const parsed = schema.safeParse(...); if (!parsed.success) return …;`, and the hand-rolled `validators.ts` helpers it replaces are deleted.
 
@@ -37,7 +37,7 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 89% (8/9 phases complete)
+**Overall Progress:** 100% (9/9 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
