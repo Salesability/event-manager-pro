@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Server-side guard relaxation (`setQuoteInputs`) + audit `quote.edited` | Done | - |
 | 2: `sendQuote` re-send path + `sent_at` reset | Done | - |
-| 3: Composer always-editable + "Re-send Quote" button | Pending | - |
+| 3: Composer always-editable + "Re-send Quote" button | Done | - |
 | 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite | Pending | - |
 | 5: Accepted/declined immutability + MSA-bundle re-send gate | Pending | - |
 | 6: Wiki (`commercial-spine.md`) + chunk-end smoke + `/eval` | Pending | - |
@@ -59,7 +59,7 @@ The Phase 1 implementation needs answers before files start moving.
 - `docs/wiki/data-model.md` → `quotes` row + audit_log relationship. Phase 4 documents the multi-row send-history pattern.
 - `docs/wiki/layout.md` § Open conventions (post-0043) → the parked composer-actions-lift follow-up is a natural companion to this chunk; either tackle them together or leave the composer-actions-lift parked while this chunk lands first.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - Each phase includes implementation + the unit tests for that phase's changes.
@@ -91,13 +91,14 @@ The Phase 1 implementation needs answers before files start moving.
 - [x] `tsc + test` gate
 
 #### Phase 3: Composer always-editable + "Re-send Quote" button
-- [ ] Flip `isReadOnly = isEdit && initial.status !== 'draft'` → `isReadOnly = isEdit && (initial.status === 'accepted' || initial.status === 'declined')` (composer fields editable on `sent`/`expired`; only terminal statuses lock)
-- [ ] Flip `canSend = isEdit && initial.status === 'draft'` → `canSend = isEdit && initial.status !== 'accepted' && initial.status !== 'declined'`
-- [ ] Send-button label: "Save Draft" stays on `draft`; "Send Quote" on first-send (`initial.sentAt == null`); "Re-send Quote" on subsequent (`initial.sentAt != null`)
-- [ ] Replace existing "This quote has been sent and is locked" banner copy when `initial.status === 'sent'` with "Sent <relative time>. Editing here updates the staff record; clicking Re-send Quote replaces the recipient's copy and resets the validity window."
-- [ ] `ConfirmSendDialog` gains a re-send variant: copy "Re-send this quote? The recipient will receive a new PDF; the validity window resets to YYYY-MM-DD." (computed from now + `quoteValidDays`)
-- [ ] Drop the `<fieldset disabled>` wrapper for `sent`/`expired` status; keep it for `accepted`/`declined`
-- [ ] `tsc + test` gate (composer has no test file today — the composer's behavior is exercised via actions.test.ts + the chunk-end web-test smoke)
+- [x] Flip `isReadOnly = isEdit && initial.status !== 'draft'` → `isReadOnly = isEdit && (initial.status === 'accepted' || initial.status === 'declined')` (composer fields editable on `sent`/`expired`; only terminal statuses lock)
+- [x] Flip `canSend = isEdit && initial.status === 'draft'` → `canSend = isEdit && initial.status !== 'accepted' && initial.status !== 'declined'`
+- [x] Send-button label: "Save Draft" / "Save Quote" stays on draft/non-sent edits; "Send Quote" on first-send (`initial.sentAt == null`); "Re-send Quote" on subsequent (`initial.sentAt != null`)
+- [x] Replace "locked" banner with the new copy — absolute "Sent on YYYY-MM-DD" used instead of relative time so SSR/CSR hydration doesn't drift at bucket boundaries (notable departure from plan; documented in the inline comment on `formatSentRelative`)
+- [x] `ConfirmSendDialog` gains a re-send variant: title "Re-send this quote?" + body "The recipient will receive a new PDF; the validity window resets to YYYY-MM-DD." (computed from now + `quoteValidDays`)
+- [x] Drop the `<fieldset disabled>` wrapper for `sent`/`expired` status; keep it for `accepted`/`declined` — handled by the new `isReadOnly` derivation; the fieldset's `disabled={isReadOnly}` now naturally lets `sent` through
+- [x] Page-level prop wiring: `/quotes/[id]` page passes `sentAt` + `quoteValidDays` into the composer's `initial` prop
+- [x] `tsc + test` gate (composer has no test file today — the composer's behavior is exercised via actions.test.ts + the chunk-end web-test smoke)
 
 #### Phase 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite
 - [ ] Answer OQ #3 (rename to `loadQuoteSendHistory` returning `QuoteSendReceipt[]`)

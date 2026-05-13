@@ -154,6 +154,8 @@ export default async function QuoteEditPage({
           total: Number(quote.total) || 0,
           status: quote.status,
           isExpired: quote.isExpired,
+          sentAt: quote.sentAt,
+          quoteValidDays: quote.quoteValidDays,
         }}
         recipient={recipient}
       />

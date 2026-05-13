@@ -82,6 +82,13 @@ export type InitialQuote = {
    *  Underlying lifecycle gates still switch on `status`, but the read-only
    *  banner copy surfaces "Expired" when this is true (0044 Phase 3 Option B). */
   isExpired: boolean;
+  /** Most-recent `sentAt` for the underlying row. `null` on drafts. Drives
+   *  the 0046 "Send Quote" → "Re-send Quote" label flip + the validity-
+   *  reset banner copy on edit of an already-sent quote. */
+  sentAt: Date | null;
+  /** Per-row validity window (default 30). Used by the re-send confirm
+   *  dialog to show the post-send "new deadline" date. */
+  quoteValidDays: number;
 };
 
 /** Resolved Quote recipient for the Send confirm dialog (edit-mode only).
@@ -143,8 +150,16 @@ export function QuoteComposer({
   const [previewPending, startPreviewTransition] = useTransition();
 
   const isEdit = initial != null;
-  const isReadOnly = isEdit && initial.status !== 'draft';
-  const canSend = isEdit && initial.status === 'draft';
+  // 0046: only the terminal contract artifacts lock the composer. `sent`
+  // (and the derived `expired` presentation) stay editable so coaches can
+  // fix pricing typos + re-send.
+  const isReadOnly =
+    isEdit && (initial.status === 'accepted' || initial.status === 'declined');
+  // Send / Re-send is available on any non-terminal status. On `draft` it
+  // reads "Send Quote"; on `sent`/`expired` it reads "Re-send Quote".
+  const canSend =
+    isEdit && initial.status !== 'accepted' && initial.status !== 'declined';
+  const isResend = isEdit && initial.sentAt != null;
 
   const defaultValues = useMemo<QuoteFormValues>(
     () => ({
@@ -320,11 +335,18 @@ export function QuoteComposer({
     <>
       {isReadOnly && initial && (
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
-          This quote is{' '}
-          <span className="font-semibold capitalize">
-            {initial.isExpired ? 'expired' : initial.status}
-          </span>{' '}
-          and can no longer be edited.
+          This quote has been{' '}
+          <span className="font-semibold">{initial.status}</span> — make a new
+          quote to revise it.
+        </div>
+      )}
+      {!isReadOnly && initial && initial.sentAt && (
+        <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+          {initial.isExpired ? 'Expired — last sent ' : 'Sent '}
+          <span className="font-medium">{formatSentRelative(initial.sentAt)}</span>
+          {'. Editing here updates the staff record; clicking '}
+          <span className="font-semibold">Re-send Quote</span>
+          {' replaces the recipient’s copy and resets the validity window.'}
         </div>
       )}
       <fieldset disabled={isReadOnly} className="contents">
@@ -593,11 +615,13 @@ export function QuoteComposer({
               isDirty
                 ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
                 : recipientErrorMessage ??
-                  (recipientEmail ? `Send Quote to ${recipientEmail}` : undefined)
+                  (recipientEmail
+                    ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
+                    : undefined)
             }
             className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Send Quote
+            {isResend ? 'Re-send Quote' : 'Send Quote'}
           </button>
         )}
       </div>
@@ -627,6 +651,8 @@ export function QuoteComposer({
         recipientEmail={recipientEmail}
         lineCount={persistedLineCount}
         total={persistedTotal}
+        isResend={isResend}
+        quoteValidDays={initial?.quoteValidDays ?? 30}
         onConfirm={onSend}
       />
     </>
@@ -683,6 +709,8 @@ function ConfirmSendDialog({
   recipientEmail,
   lineCount,
   total,
+  isResend,
+  quoteValidDays,
   onConfirm,
 }: {
   open: boolean;
@@ -691,14 +719,23 @@ function ConfirmSendDialog({
   recipientEmail: string | null;
   lineCount: number;
   total: number;
+  isResend: boolean;
+  quoteValidDays: number;
   onConfirm: () => void;
 }) {
+  // Re-send variant surfaces the new validity deadline so the coach sees
+  // exactly what the dealer's "Valid until" line will say after re-send.
+  const newValidUntil = isResend ? formatValidUntil(quoteValidDays) : null;
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(false); }}>
       <DialogContent>
-        <DialogTitle>Send this quote?</DialogTitle>
+        <DialogTitle>
+          {isResend ? 'Re-send this quote?' : 'Send this quote?'}
+        </DialogTitle>
         <DialogDescription>
-          Once sent, the quote is locked and cannot be edited.
+          {isResend
+            ? `The recipient will receive a new PDF; the validity window resets to ${newValidUntil}.`
+            : 'The recipient will receive a PDF by email. Accepted/declined quotes are locked — edits up to that point are allowed.'}
         </DialogDescription>
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-stone-500">Recipient</dt>
@@ -722,12 +759,31 @@ function ConfirmSendDialog({
             disabled={pending || !recipientEmail}
             className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {pending ? 'Sending…' : 'Send'}
+            {pending ? 'Sending…' : isResend ? 'Re-send' : 'Send'}
           </button>
         </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function formatValidUntil(quoteValidDays: number): string {
+  const d = new Date(Date.now() + quoteValidDays * MS_PER_DAY);
+  return d.toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+// Absolute "Sent on …" date for the banner. Avoids relative-time SSR/CSR
+// hydration drift (server's `Date.now()` differs from client's by a few
+// hundred ms, which can cross a "1 minute ago / 2 minutes ago" boundary
+// at the worst moment). A formatted date renders identically on both.
+function formatSentRelative(sentAt: Date): string {
+  return `on ${sentAt.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}`;
 }
 
 function dealerLabel(d: Dealer): string {
