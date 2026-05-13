@@ -10,7 +10,7 @@
 | 1: shadcn Sidebar install + portal shell swap | Skipped (pivot 2026-05-13 — keep top nav) | - |
 | 2: `<PageHeader>` wrapper (title + actions slot) | Done | d440fe9 |
 | 3: Sweep `<PageHeader>` across all `(app)/` routes | Done | 2541149 |
-| 4: Detail-page convention (key-value strip + sections) | Pending | - |
+| 4: Detail-page convention (key-value strip + sections) | Done | 2ce556b |
 | 5: List-page filter-bar convention | Pending | - |
 | 6: Row-action convention (`<RowActions>` + shared labels/icons) | Pending | - |
 | 7: Status `<Badge>` + relative timestamps | Pending | - |
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 29% (2/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 43% (3/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -109,15 +109,16 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green; `web-test` deferred to chunk-end (per post-0040 `/build` cadence — full pipeline runs once at chunk close, not per phase)
 
 #### Phase 4: Detail-page convention (key-value strip + sections)
-- [ ] `/dealerships/[id]/page.tsx`: rebuild as
-  - PageHeader: `<icon-of-dealer> <name>` + actions (Edit, Send MSA, etc.)
-  - Key-value strip: `STATUS`/`MSA STATE`/`CONTACT`/`PHONE`/`EMAIL`/`ACQUIRED VIA` in a grid (uppercase muted `text-xs uppercase tracking-wider text-muted-foreground` labels)
-  - Sections: existing MSA card → `<Section title="Master Service Agreement">`; existing Quotes list → `<Section title="Quotes">`
-- [ ] `/quotes/[id]/page.tsx`: same pattern
-  - Key-value strip: `STATUS`/`DEALER`/`CAMPAIGN`/`EVENT START`/`EVENT END`/`TOTAL`
-  - Sections: Quote content, Send history (post-0040), Payment status (when 0025 lands)
-- [ ] Build `src/components/app/section.tsx` if a small wrapper feels worth it (`<section className="space-y-3"><h2 className="text-sm font-semibold tracking-tight">{title}</h2>{children}</section>`); otherwise inline
-- [ ] `tsc + test` gate green; `web-test`: visit one dealer detail + one quote detail
+- [x] `/dealerships/[id]/page.tsx`: rebuild as
+  - PageHeader: dealer name + status pill in actions
+  - Key-value strip: `STATUS`/`MSA STATE`/`CONTACT`/`PHONE`/`EMAIL`/`ACQUIRED VIA` via `<KeyValueStrip>`
+  - Sections: MSA → `<Section variant="card" title="Master Service Agreement">`; Quotes → `<Section variant="card" title="Quotes">`
+- [x] `/quotes/[id]/page.tsx`: same pattern
+  - Key-value strip: `STATUS`/`DEALER`/~~CAMPAIGN/EVENT START/EVENT END~~/`TOTAL` — quote rows don't carry campaign linkage or event-date fields today (no `campaignId` on the `Quote` projection; `quoteInputs` only has `audienceSize`/`eventDays` for sizing). Substituted with `AUDIENCE`/`EVENT DAYS`/`AUDIENCE SOURCE`/`TOTAL` so the strip stays useful. Campaign/event-date strip fields are a future addition gated on the Quote → Campaign FK landing (0035 Phase 7.2 / 0025 Contract phase).
+  - Sections: Send history → `<Section variant="card" title="Send history">`. Quote content stays inside `QuoteComposer`. Payment status section is post-0025.
+- [x] Build `src/components/app/section.tsx` (small wrapper paid off — same Section shape used on both detail pages)
+- [x] `src/components/app/key-value-strip.tsx` — added (not in original anchors; tracked here)
+- [x] `tsc + test` gate green; `web-test` deferred to chunk-end
 
 #### Phase 5: List-page filter-bar convention
 - [ ] Build `src/components/app/list-toolbar.tsx`: `<SearchInput>` (flex-1) + slotted filter `<Select>` dropdowns + right-anchored primary action
