@@ -1,8 +1,15 @@
 import 'server-only';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { quotes } from '@/lib/db/schema';
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function expiredErrorMessage(sentAt: Date, quoteValidDays: number): string {
+  const sentDate = sentAt.toISOString().slice(0, 10);
+  return `This Quote has expired (valid for ${quoteValidDays} days from send date — sent ${sentDate}). Re-issue a new Quote with current pricing.`;
+}
 
 // Internal lifecycle-transition helpers, not Server Actions. Called by both
 // the staff-side `declineQuote` Server Action (in ./actions.ts) and the
@@ -70,12 +77,17 @@ export async function markQuoteAccepted(
   quoteId: number,
   updatedById: string | null = null
 ): Promise<TransitionResult> {
-  // Time-based expiry guard, layered on top of the existing status='sent'
-  // atomic-UPDATE guard inside transition(). Pre-load `sentAt` +
-  // `quoteValidDays` to compute the expiry deadline; the underlying UPDATE
-  // can't enforce time semantics. If the row isn't sitting in 'sent' we
-  // skip the check — idempotent re-accept and illegal-source-status are
-  // still handled race-safely by transition().
+  // Two-layer expiry guard. (1) JS pre-load produces the friendly
+  // "expired on YYYY-MM-DD" message when we can see the row is stale up
+  // front. (2) The atomic UPDATE below also carries a Postgres-time
+  // predicate so even under clock skew or a TOCTOU race between the
+  // pre-load and the UPDATE the row can't flip to accepted past its
+  // deadline. The reselect path distinguishes "missed because not sent"
+  // from "missed because expired between load and UPDATE".
+  //
+  // Custom UPDATE/reselect rather than reusing transition() because the
+  // time predicate only applies to accept — a declined-but-expired quote
+  // should still be declinable.
   const [row] = await db
     .select({
       status: quotes.status,
@@ -86,16 +98,48 @@ export async function markQuoteAccepted(
     .where(eq(quotes.id, quoteId))
     .limit(1);
   if (row && row.status === 'sent' && row.sentAt) {
-    const expiresAt =
-      row.sentAt.getTime() + row.quoteValidDays * 24 * 60 * 60 * 1000;
+    const expiresAt = row.sentAt.getTime() + row.quoteValidDays * MS_PER_DAY;
     if (expiresAt < Date.now()) {
-      const sentDate = row.sentAt.toISOString().slice(0, 10);
-      return {
-        error: `This Quote has expired (valid for ${row.quoteValidDays} days from send date — sent ${sentDate}). Re-issue a new Quote with current pricing.`,
-      };
+      return { error: expiredErrorMessage(row.sentAt, row.quoteValidDays) };
     }
   }
-  return transition(quoteId, 'sent', 'accepted', updatedById);
+
+  const updated = await db
+    .update(quotes)
+    .set({
+      status: 'accepted',
+      acceptedAt: new Date(),
+      ...(updatedById ? { updatedById } : {}),
+    })
+    .where(
+      and(
+        eq(quotes.id, quoteId),
+        eq(quotes.status, 'sent'),
+        sql`${quotes.sentAt} + (${quotes.quoteValidDays} * interval '1 day') >= now()`,
+      ),
+    )
+    .returning({ id: quotes.id });
+  if (updated.length) return { ok: true, transitioned: true };
+
+  const [postRow] = await db
+    .select({
+      status: quotes.status,
+      sentAt: quotes.sentAt,
+      quoteValidDays: quotes.quoteValidDays,
+    })
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!postRow) return { error: 'Quote not found.' };
+  if (postRow.status === 'accepted') return { ok: true, transitioned: false };
+  if (postRow.status === 'sent' && postRow.sentAt) {
+    const expiresAt =
+      postRow.sentAt.getTime() + postRow.quoteValidDays * MS_PER_DAY;
+    if (expiresAt < Date.now()) {
+      return { error: expiredErrorMessage(postRow.sentAt, postRow.quoteValidDays) };
+    }
+  }
+  return { error: `Quote cannot be accepted from status '${postRow.status}'.` };
 }
 
 export function markQuoteDeclined(

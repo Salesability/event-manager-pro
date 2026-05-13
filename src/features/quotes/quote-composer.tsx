@@ -78,6 +78,10 @@ export type InitialQuote = {
   tax: number;
   total: number;
   status: QuoteStatus;
+  /** Derived at read time — `status='sent' && sentAt + quoteValidDays < now()`.
+   *  Underlying lifecycle gates still switch on `status`, but the read-only
+   *  banner copy surfaces "Expired" when this is true (0044 Phase 3 Option B). */
+  isExpired: boolean;
 };
 
 /** Resolved Quote recipient for the Send confirm dialog (edit-mode only).
@@ -316,8 +320,11 @@ export function QuoteComposer({
     <>
       {isReadOnly && initial && (
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
-          This quote is <span className="font-semibold capitalize">{initial.status}</span> and can
-          no longer be edited.
+          This quote is{' '}
+          <span className="font-semibold capitalize">
+            {initial.isExpired ? 'expired' : initial.status}
+          </span>{' '}
+          and can no longer be edited.
         </div>
       )}
       <fieldset disabled={isReadOnly} className="contents">

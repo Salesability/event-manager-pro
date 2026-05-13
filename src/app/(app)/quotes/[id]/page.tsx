@@ -153,6 +153,7 @@ export default async function QuoteEditPage({
           tax: Number(quote.tax) || 0,
           total: Number(quote.total) || 0,
           status: quote.status,
+          isExpired: quote.isExpired,
         }}
         recipient={recipient}
       />

@@ -620,7 +620,7 @@ describe('acceptQuote (staff-side)', () => {
     mocks.dbResults.push(
       [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
       [],
-      [{ id: 42, status: 'accepted' }],
+      [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
     );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
@@ -633,7 +633,7 @@ describe('acceptQuote (staff-side)', () => {
     mocks.dbResults.push(
       [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
       [],
-      [{ id: 42, status: 'draft' }],
+      [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
     );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ error: "Quote cannot be accepted from status 'draft'." });
@@ -687,6 +687,27 @@ describe('acceptQuote (staff-side)', () => {
     });
     expect(mocks.updates).toHaveLength(0);
   });
+
+  it('returns the expired error via the Postgres-time guard when JS pre-load thought the quote was fresh (TOCTOU)', async () => {
+    // Simulates the race: JS pre-load sees the row as "fresh" (e.g. clock
+    // skew or a sub-second crossing of the expiry boundary), but the
+    // Postgres-side time predicate in the UPDATE refuses. The reselect
+    // path re-reads the row, sees it's now past its deadline, and returns
+    // the friendly expired-error rather than a confused "cannot be
+    // accepted from status 'sent'" fallthrough.
+    const freshSentAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const expiredSentAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push(
+      [{ status: 'sent', sentAt: freshSentAt, quoteValidDays: 30 }], // JS pre-load: looks fresh
+      [], // UPDATE miss — simulating the SQL guard rejecting
+      [{ status: 'sent', sentAt: expiredSentAt, quoteValidDays: 30 }], // reselect: now-expired
+    );
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: `This Quote has expired (valid for 30 days from send date — sent ${expiredSentAt.toISOString().slice(0, 10)}). Re-issue a new Quote with current pricing.`,
+    });
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
 });
 
 describe('markQuoteAccepted (internal helper)', () => {
@@ -706,7 +727,7 @@ describe('markQuoteAccepted (internal helper)', () => {
     mocks.dbResults.push(
       [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
       [],
-      [{ id: 42, status: 'accepted' }],
+      [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
     );
     const result = await markQuoteAccepted(42);
     expect(result).toEqual({ ok: true, transitioned: false });
@@ -716,7 +737,7 @@ describe('markQuoteAccepted (internal helper)', () => {
     mocks.dbResults.push(
       [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
       [],
-      [{ id: 42, status: 'draft' }],
+      [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
     );
     const result = await markQuoteAccepted(42);
     expect(result).toEqual({ error: "Quote cannot be accepted from status 'draft'." });
