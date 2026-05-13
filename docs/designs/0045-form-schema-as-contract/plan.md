@@ -11,8 +11,8 @@
 | 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `80e082e` |
 | 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `9879c98` |
 | 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | Done | `d287c5f` |
-| 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Pending | - |
-| 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | Pending | - |
+| 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Done | `2ef7f94` |
+| 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | In Progress | - |
 | 8: ESLint rule — `schema-as-contract/safeparse-required` locks in the convention | Pending | - |
 | 9: Smoke verification + eval | Pending | - |
 
@@ -37,7 +37,7 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 56% (5/9 phases complete)
+**Overall Progress:** 67% (6/9 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
@@ -83,10 +83,10 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [x] ~~Update `forms.md` to add "single-field admin forms" as an explicit B-shape sub-case~~ — already documented as part of Phase 1's "B-shape variant" paragraph: *"Single-field admin forms (e.g. lookup-admin) are a sub-case — `<form action={action}>` + a one-field schema is fine, no `useActionState` wiring needed."*
 
 #### Phase 6: B-shape backfill — booking-form + PersonForm
-- [ ] Create a zod schema for the booking-form input shape; place at `src/app/(app)/calendar/booking-schema.ts` (next to the form — booking-form is not under `features/`).
-- [ ] Wire `safeParse` into the booking-form's Server Action target. Leave the UI as-is (per `forms.md`, this is an intentional B-shape carve-out for auto-fill UX).
-- [ ] Same for `PersonForm` in `src/features/people/people-admin.tsx`: create `src/features/people/person-schema.ts`; wire `safeParse` into `people/actions.ts`. UI stays B-shape with the `useTouched()` hook.
-- [ ] Verify both forms still pass their existing tests.
+- [x] Create a zod schema for the booking-form input shape; place at `src/app/(app)/calendar/booking-schema.ts` (next to the form — booking-form is not under `features/`).
+- [x] Wire `safeParse` into the booking-form's Server Action target. `parseCampaignInput` in `validators.ts` now does `bookingFormSchema.safeParse(Object.fromEntries(formData))` + cross-field rules (endDate ≥ startDate) + wire→DB normalization. The 14 existing `validators.test.ts` cases for `parseCampaignInput` pass unchanged.
+- [x] Same for `PersonForm` in `src/features/people/people-admin.tsx`: create `src/features/people/person-schema.ts`; wire `safeParse` into `people/actions.ts` (`createPerson` + `updatePerson` now safeParse the scalar fields; roles + dealerLinks remain in their `formData.getAll` helpers since `Object.fromEntries` would collapse repeated keys). UI stays B-shape with the `useTouched()` hook.
+- [x] Verify both forms still pass their existing tests.
 
 #### Phase 7: Retire superseded `schedule/validators.ts` helpers
 - [ ] Audit `src/features/schedule/validators.ts`: list every exported helper, find each call site.
