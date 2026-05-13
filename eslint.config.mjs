@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import actionGatePlugin from "./eslint-plugins/action-gate.mjs";
+import noInlineRowActionLabelPlugin from "./eslint-plugins/no-inline-row-action-label.mjs";
 import safeParseRequiredPlugin from "./eslint-plugins/safeparse-required.mjs";
 
 const eslintConfig = defineConfig([
@@ -60,6 +61,21 @@ const eslintConfig = defineConfig([
           wrapperNames: ["parseCampaignInput"],
         },
       ],
+    },
+  },
+  // 0043 Phase 6 — canonical row-action vocabulary. Row-action files (per-row
+  // table action buttons) must reference `ROW_ACTION_LABELS` from
+  // `src/lib/ui/labels.ts`, not inline string literals matching the canonical
+  // vocabulary (`View` / `Edit` / `Archive` / `Activate` / `Open` / `Details` /
+  // `Manage` / `Show`). Per-line opt-out via `// row-label: ok`.
+  {
+    files: [
+      "src/app/**/row-actions.tsx",
+      "src/features/**/*-columns.tsx",
+    ],
+    plugins: { "no-inline-row-action-label": noInlineRowActionLabelPlugin },
+    rules: {
+      "no-inline-row-action-label/no-inline-row-action-label": "error",
     },
   },
 ]);

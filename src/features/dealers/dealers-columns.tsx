@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
-import { Can } from '@/components/auth/can';
+import { RowActions } from '@/components/app/row-actions';
+import { useCan } from '@/components/auth/can';
 import type { Dealer } from '@/features/schedule/queries';
 
 function composedContact(d: Dealer): string {
@@ -121,56 +122,61 @@ export function buildDealersColumns(
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => {
-        const d = row.original;
-        const showActivate = !d.archivedAt && d.status === 'prospect' && actions.onActivate;
-        return (
-          <div className="flex shrink-0 items-center justify-end gap-1">
-            {showActivate && (
-              <Can capability="dealer:edit">
-                <button
-                  onClick={() => actions.onActivate!(d)}
-                  className="rounded border border-emerald-200 bg-white px-2 py-0.5 text-xs font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-50"
-                >
-                  Mark active
-                </button>
-              </Can>
-            )}
-            {!d.archivedAt && (
-              <Can capability="quote:edit">
-                <Link
-                  href={`/quotes/new?dealerId=${d.id}`}
-                  className="rounded border border-accent/40 bg-white px-2 py-0.5 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10"
-                >
-                  Quote
-                </Link>
-              </Can>
-            )}
-            {!d.archivedAt && (
-              <Can capability="dealer:edit">
-                <button
-                  onClick={() => actions.onEdit(d)}
-                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-                >
-                  Edit
-                </button>
-              </Can>
-            )}
-            {!d.archivedAt && (
-              <Can capability="dealer:archive">
-                <button
-                  onClick={() => actions.onArchive(d)}
-                  aria-label={`Remove ${d.name}`}
-                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ✕
-                </button>
-              </Can>
-            )}
-          </div>
-        );
-      },
+      cell: ({ row }) => <DealerRowActions dealer={row.original} actions={actions} />,
       enableSorting: false,
     },
   ];
+}
+
+function DealerRowActions({
+  dealer,
+  actions,
+}: {
+  dealer: Dealer;
+  actions: DealerColumnActions;
+}) {
+  const canEdit = useCan('dealer:edit');
+  const canArchive = useCan('dealer:archive');
+  const canQuote = useCan('quote:edit');
+  const showActivate =
+    !dealer.archivedAt && dealer.status === 'prospect' && actions.onActivate != null;
+  const archived = dealer.archivedAt != null;
+  return (
+    <RowActions
+      actions={[
+        !archived && {
+          kind: 'view',
+          href: `/dealerships/${dealer.id}`,
+          ariaSuffix: dealer.name,
+        },
+        !archived &&
+          canQuote && {
+            kind: 'quote',
+            href: `/quotes/new?dealerId=${dealer.id}`,
+            tone: 'accent',
+            ariaSuffix: `for ${dealer.name}`,
+          },
+        showActivate &&
+          canEdit && {
+            kind: 'activate',
+            onClick: () => actions.onActivate!(dealer),
+            tone: 'success',
+            ariaSuffix: dealer.name,
+          },
+        !archived &&
+          canEdit && {
+            kind: 'edit',
+            onClick: () => actions.onEdit(dealer),
+            ariaSuffix: dealer.name,
+          },
+        !archived &&
+          canArchive && {
+            kind: 'archive',
+            onClick: () => actions.onArchive(dealer),
+            tone: 'danger',
+            ariaSuffix: dealer.name,
+          },
+      ]}
+    />
+  );
 }

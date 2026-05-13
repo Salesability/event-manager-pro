@@ -6,14 +6,9 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { RowActions as RowActionGroup } from '@/components/app/row-actions';
 import { BookingForm } from '@/app/(app)/calendar/booking-form';
-import { EventDetail } from '@/app/(app)/calendar/event-detail';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
-
-type DialogState =
-  | { kind: 'closed' }
-  | { kind: 'detail' }
-  | { kind: 'edit' };
 
 type Props = {
   campaign: Campaign;
@@ -23,54 +18,41 @@ type Props = {
   sources: LookupOption[];
 };
 
+// 0043 Phase 6: production rows lock onto **Edit-only** per the canonical
+// row-action vocabulary. `/production` has no `/production/[id]` detail page,
+// so the View-xor-Edit rule resolves to Edit (the dialog form is the
+// canonical editor). The previous "View" button surfaced a read-only
+// `EventDetail` dialog that mostly re-stated what the row already shows —
+// dropped here so the action vocabulary matches the rest of the app.
 export function RowActions({ campaign, dealers, coaches, styles, sources }: Props) {
-  const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
-  const close = () => setDialog({ kind: 'closed' });
+  const [open, setOpen] = useState(false);
+  const close = () => setOpen(false);
 
   return (
-    <div className="flex shrink-0 items-center gap-1">
-      <button
-        type="button"
-        onClick={() => setDialog({ kind: 'detail' })}
-        className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-      >
-        View
-      </button>
-      <button
-        type="button"
-        onClick={() => setDialog({ kind: 'edit' })}
-        className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-      >
-        Edit
-      </button>
-      <Dialog open={dialog.kind !== 'closed'} onOpenChange={(o) => { if (!o) close(); }}>
+    <>
+      <RowActionGroup
+        actions={[
+          {
+            kind: 'edit',
+            onClick: () => setOpen(true),
+            ariaSuffix: `${campaign.dealerName} campaign`,
+          },
+        ]}
+      />
+      <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
         <DialogContent>
-          {dialog.kind === 'detail' && (
-            <>
-              <DialogTitle>Campaign Detail</DialogTitle>
-              <EventDetail
-                campaign={campaign}
-                onEdit={() => setDialog({ kind: 'edit' })}
-                onClose={close}
-              />
-            </>
-          )}
-          {dialog.kind === 'edit' && (
-            <>
-              <DialogTitle>Edit Campaign</DialogTitle>
-              <BookingForm
-                mode="edit"
-                campaign={campaign}
-                dealers={dealers}
-                coaches={coaches}
-                styles={styles}
-                sources={sources}
-                onSuccess={close}
-              />
-            </>
-          )}
+          <DialogTitle>Edit Campaign</DialogTitle>
+          <BookingForm
+            mode="edit"
+            campaign={campaign}
+            dealers={dealers}
+            coaches={coaches}
+            styles={styles}
+            sources={sources}
+            onSuccess={close}
+          />
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
