@@ -83,7 +83,7 @@ export function ProductionFilters() {
           type="checkbox"
           checked={showCancelled}
           onChange={(e) => onCancelledToggle(e.target.checked)}
-          className="h-3.5 w-3.5 accent-navy"
+          className="h-3.5 w-3.5 accent-primary"
         />
         Show cancelled
       </label>

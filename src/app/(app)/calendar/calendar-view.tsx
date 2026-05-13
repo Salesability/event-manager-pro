@@ -477,7 +477,7 @@ export function CalendarView({
             >
               ‹
             </button>
-            <span className="min-w-[180px] text-center font-display text-xl text-primary">
+            <span className="min-w-[180px] text-center font-sans font-bold tracking-tight text-xl text-primary">
               {MONTHS[month]} {year}
             </span>
             <button
@@ -652,7 +652,7 @@ function Stat({ label, value, sub }: { label: string; value: number; sub: string
       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
         {label}
       </div>
-      <div className="mt-1 font-display text-3xl text-primary">{value}</div>
+      <div className="mt-1 font-sans font-bold tracking-tight text-3xl text-primary">{value}</div>
       <div className="text-xs text-muted-foreground">{sub}</div>
     </div>
   );

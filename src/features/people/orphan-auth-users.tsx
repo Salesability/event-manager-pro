@@ -32,7 +32,7 @@ export function OrphanAuthUsers({ orphans }: { orphans: OrphanAuthUser[] }) {
   return (
     <section className="rounded-2xl border border-amber-300 bg-amber-50/60 p-5">
       <div>
-        <h2 className="font-display text-lg text-amber-900">Unprovisioned auth users</h2>
+        <h2 className="font-sans font-bold tracking-tight text-lg text-amber-900">Unprovisioned auth users</h2>
         <p className="text-xs text-amber-800/80">
           {orphans.length} sign-in account{orphans.length === 1 ? '' : 's'} with no matching person
           record. Adopt to create a contact and link them.

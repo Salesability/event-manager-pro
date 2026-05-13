@@ -21,6 +21,11 @@ const RULES = [
   [/hover:bg-stone-100\b/g, 'hover:bg-muted'],
   [/hover:bg-stone-200\b/g, 'hover:bg-muted'],
 
+  // ring-navy/{N} and accent-navy variants (utility-color leftovers)
+  [/focus-visible:ring-navy\/(\d+)\b/g, 'focus-visible:ring-primary/$1'],
+  [/ring-navy\/(\d+)\b/g, 'ring-primary/$1'],
+  [/accent-navy\b/g, 'accent-primary'],
+
   [/bg-navy-pale\b/g, 'bg-primary/10'],
   [/bg-navy-light\b/g, 'bg-primary/90'],
 
@@ -51,6 +56,9 @@ const RULES = [
   [/border-navy\b/g, 'border-primary'],
   [/text-navy\b/g, 'text-primary'],
   [/bg-navy\b/g, 'bg-primary'],
+
+  // font-display retirement — alias gets dropped from globals.css when callsites=0
+  [/\bfont-display\b/g, 'font-sans font-bold tracking-tight'],
 ];
 
 const files = process.argv.slice(2);

@@ -61,7 +61,7 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
     <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-2xl text-primary">Services</h2>
+          <h2 className="font-sans font-bold tracking-tight text-2xl text-primary">Services</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Catalog the quote composer reads. Codes are immutable; archive instead of renaming.
           </p>

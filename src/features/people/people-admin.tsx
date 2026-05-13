@@ -34,6 +34,7 @@ import {
   FieldError,
   FieldLabel,
 } from '@/components/ui/field';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -112,18 +113,6 @@ function useTouched() {
   return { touched, fieldHandlers };
 }
 
-const headerAddClass =
-  'rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10';
-
-const rowEditClass =
-  'rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
-
-const rowDeleteClass =
-  'rounded border border-border bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50';
-
-const submitClass =
-  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
-
 // Radix Checkbox doesn't render a tick visual itself — it ships an unstyled
 // button + Indicator slot. These classes turn the button into a checkbox-
 // shaped target and flip the navy-on-white look when `data-state="checked"`.
@@ -131,7 +120,7 @@ const submitClass =
 // fieldset stays visually uniform. `CheckIcon` is the indicator SVG (matches
 // the inline-SVG idiom used by the Dialog wrapper).
 const roleCheckboxClass =
-  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-input bg-white transition data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30';
+  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-input bg-white transition data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
 
 function CheckIcon() {
   return (
@@ -232,9 +221,14 @@ export function PeopleAdmin({
           <p className="text-xs text-muted-foreground">{people.length} people</p>
         </div>
         <Can capability="person:create">
-          <button onClick={() => setAddOpen(true)} className={headerAddClass}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+            className="border-accent/40 text-accent hover:border-accent hover:bg-accent/10"
+          >
             + Add Person
-          </button>
+          </Button>
         </Can>
       </div>
 
@@ -621,9 +615,9 @@ function PersonForm({
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Dealers</span>
-            <button type="button" onClick={addDealerLink} className={rowEditClass}>
+            <Button type="button" variant="outline" size="xs" onClick={addDealerLink}>
               + Link dealer
-            </button>
+            </Button>
           </div>
           {dealerLinks.length === 0 && (
             <p className="text-[11px] text-muted-foreground">No dealer relationships.</p>
@@ -701,26 +695,25 @@ function PersonForm({
                   </Select.Content>
                 </Select.Portal>
               </Select.Root>
-              <button
+              <Button
                 type="button"
+                variant="destructive"
+                size="xs"
                 onClick={() => removeDealerLink(i)}
                 aria-label="Remove dealer link"
-                className={rowDeleteClass}
               >
                 ✕
-              </button>
+              </Button>
             </div>
           ))}
         </div>
       )}
 
       <div className="mt-2 flex justify-end gap-2">
-        <DialogClose className={rowEditClass}>Cancel</DialogClose>
-        <button
-          type="submit"
-          disabled={pending || !hasAnyRole}
-          className={submitClass}
-        >
+        <DialogClose className={buttonVariants({ variant: 'outline', size: 'xs' })}>
+          Cancel
+        </DialogClose>
+        <Button type="submit" variant="default" size="sm" disabled={pending || !hasAnyRole}>
           {pending
             ? mode === 'create'
               ? 'Creating…'
@@ -728,7 +721,7 @@ function PersonForm({
             : mode === 'create'
               ? 'Add Person'
               : 'Save'}
-        </button>
+        </Button>
       </div>
     </form>
   );

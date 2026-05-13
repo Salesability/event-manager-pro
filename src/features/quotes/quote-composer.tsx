@@ -36,6 +36,7 @@ import {
   FieldLegend,
   FieldSet,
 } from '@/components/ui/field';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -373,33 +374,37 @@ export function QuoteComposer({
   const composerActions = (
     <>
       {isEdit && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => router.push('/quotes')}
-          className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
         >
           Close
-        </button>
+        </Button>
       )}
       {isEdit && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={onPreview}
           disabled={previewPending}
-          className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+          className="text-primary"
         >
           {previewPending ? 'Loading…' : 'Preview PDF'}
-        </button>
+        </Button>
       )}
       {!isReadOnly && (
-        <button
+        <Button
           type="button"
+          variant="default"
+          size="sm"
           onClick={onSaveDraft}
           disabled={pending || !computed.ok}
-          className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
-        </button>
+        </Button>
       )}
       {canSend && (
         <button
@@ -478,7 +483,7 @@ export function QuoteComposer({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-col gap-3">
-          <h2 className="font-display text-xl text-primary">Quote header</h2>
+          <h2 className="font-sans font-bold tracking-tight text-xl text-primary">Quote header</h2>
           <div className={fieldClass}>
             <span className={labelClass}>Dealer</span>
             {isEdit ? (
@@ -532,7 +537,7 @@ export function QuoteComposer({
         </div>
 
         <div className="flex flex-col gap-3">
-          <h2 className="font-display text-xl text-primary">Inputs</h2>
+          <h2 className="font-sans font-bold tracking-tight text-xl text-primary">Inputs</h2>
 
           <FieldGroup>
           <NumberField
@@ -622,7 +627,7 @@ export function QuoteComposer({
       </section>
 
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <h2 className="font-display text-xl text-primary">Line items (computed)</h2>
+        <h2 className="font-sans font-bold tracking-tight text-xl text-primary">Line items (computed)</h2>
         {display.ok ? (
           <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
