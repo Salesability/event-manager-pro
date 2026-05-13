@@ -1,5 +1,6 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
+import { CampaignStatusBadge } from '@/components/app/status-badge';
 import {
   loadCampaignStyles,
   loadCampaigns,
@@ -103,22 +104,15 @@ function CampaignRow({
   const today = todayIso();
   const isPast = campaign.endDate < today;
   const isLive = campaign.startDate <= today && campaign.endDate >= today;
-  const badge = isLive
-    ? { label: 'Live', cls: 'bg-status-green/15 text-status-green' }
-    : isPast
-      ? { label: 'Past', cls: 'bg-stone-200 text-stone-600' }
-      : { label: 'Upcoming', cls: 'bg-navy-pale text-navy' };
 
   return (
     <tr className="border-b border-stone-200 last:border-b-0 hover:bg-navy-pale/40">
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
         <div className="text-xs font-semibold text-navy">{fmtDate(campaign.startDate)}</div>
         <div className="text-[11px] text-stone-400">→ {fmtDate(campaign.endDate)}</div>
-        <span
-          className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`}
-        >
-          {badge.label}
-        </span>
+        <div className="mt-1">
+          <CampaignStatusBadge live={isLive} past={isPast} />
+        </div>
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
         <div className="font-semibold text-stone-800">{campaign.dealerName}</div>

@@ -4,14 +4,18 @@ import { assertCan } from '@/lib/auth/assert-can';
 import { KeyValueStrip } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
 import { Section } from '@/components/app/section';
+import {
+  DealerStatusBadge,
+  MsaStatusBadge,
+  QuoteStatusBadge,
+} from '@/components/app/status-badge';
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
-import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
+import { displayStatusKey } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import {
   firstDraftQuoteIdForDealer,
   loadActiveOrPendingMsa,
-  type Msa,
 } from '@/features/msa/queries';
 import { MsaCreateTrigger } from '@/features/msa/msa-panel';
 import { signedUrl } from '@/lib/storage/gcs';
@@ -20,13 +24,6 @@ import { signedUrl } from '@/lib/storage/gcs';
 // coaches currently can't browse dealerships, so admin-only here avoids the
 // asymmetry of a deep link reachable without the parent surface. If the
 // nav-tab gate ever opens for coaches, this gate flips with it.
-
-const MSA_STATUS_PILL_CLS: Record<Msa['status'], string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  active: 'bg-emerald-100 text-emerald-700',
-  expired: 'bg-stone-200 text-stone-600',
-  terminated: 'bg-status-red/15 text-status-red',
-};
 
 const MSA_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 
@@ -77,7 +74,7 @@ export default async function DealerDetailPage({
       </Link>
       <PageHeader
         title={dealer.name}
-        actions={<DealerStatusPill status={dealer.status} archivedAt={dealer.archivedAt} />}
+        actions={<DealerStatusBadge status={dealer.status} archivedAt={dealer.archivedAt} />}
       />
 
       <KeyValueStrip
@@ -105,15 +102,7 @@ export default async function DealerDetailPage({
 
       <Section
         title="Master Service Agreement"
-        actions={
-          msa ? (
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${MSA_STATUS_PILL_CLS[msa.status]}`}
-            >
-              {msa.status}
-            </span>
-          ) : null
-        }
+        actions={msa ? <MsaStatusBadge status={msa.status} /> : null}
         variant="card"
       >
         {msa ? (
@@ -221,11 +210,7 @@ export default async function DealerDetailPage({
                   return (
                     <tr key={quote.id} className="border-b border-stone-200 last:border-b-0">
                       <td className="px-3 py-2.5 align-top">
-                        <span
-                          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
-                        >
-                          {pillKey}
-                        </span>
+                        <QuoteStatusBadge status={pillKey} />
                       </td>
                       <td className="px-3 py-2.5 text-right align-top font-semibold tabular-nums">
                         {fmtMoney(quote.total)}
@@ -254,33 +239,6 @@ export default async function DealerDetailPage({
         )}
       </Section>
     </div>
-  );
-}
-
-function DealerStatusPill({
-  status,
-  archivedAt,
-}: {
-  status: 'prospect' | 'active';
-  archivedAt: Date | null;
-}) {
-  if (archivedAt) {
-    return (
-      <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600">
-        Archived
-      </span>
-    );
-  }
-  return (
-    <span
-      className={
-        status === 'active'
-          ? 'rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700'
-          : 'rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700'
-      }
-    >
-      {status}
-    </span>
   );
 }
 

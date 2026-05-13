@@ -3,10 +3,12 @@ import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
 import { KeyValueStrip } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
+import { RelativeTime } from '@/components/app/relative-time';
 import { Section } from '@/components/app/section';
+import { QuoteStatusBadge } from '@/components/app/status-badge';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
-import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
+import { displayStatusKey } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
@@ -49,16 +51,6 @@ function recipientLabel(firstName: string | null, email: string | null): string 
   const addr = email ? `<${email}>` : '';
   const space = name && email ? ' ' : '';
   return `Sent to ${name}${space}${addr}`.trim();
-}
-
-function formatSentAt(date: Date): string {
-  return date.toLocaleString('en-CA', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 export default async function QuoteEditPage({
@@ -115,18 +107,12 @@ export default async function QuoteEditPage({
       </Link>
       <PageHeader
         title={`Quote #${quote.id}`}
-        actions={
-          <span
-            className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
-          >
-            {pillKey}
-          </span>
-        }
+        actions={<QuoteStatusBadge status={pillKey} />}
         sticky
       />
       <KeyValueStrip
         items={[
-          { label: 'Status', value: pillKey },
+          { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },
           {
             label: 'Dealer',
             value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
@@ -156,7 +142,7 @@ export default async function QuoteEditPage({
                 >
                   <div className="flex flex-col gap-0.5">
                     <span className="text-stone-800">
-                      {formatSentAt(row.occurredAt)}
+                      <RelativeTime value={row.occurredAt} />
                       {isMostRecent ? (
                         <span className="ml-2 rounded-full bg-stone-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
                           Latest

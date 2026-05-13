@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ColumnDef } from '@tanstack/react-table';
 import { RowActions } from '@/components/app/row-actions';
+import { DealerStatusBadge } from '@/components/app/status-badge';
 import { useCan } from '@/components/auth/can';
 import type { Dealer } from '@/features/schedule/queries';
 
@@ -15,13 +16,6 @@ export type DealerColumnActions = {
   onArchive: (dealer: Dealer) => void;
   /** Optional — admin "Mark active" affordance shown on prospect rows. */
   onActivate?: (dealer: Dealer) => void;
-};
-
-const statusBadgeClass: Record<Dealer['status'], string> = {
-  active:
-    'rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700',
-  prospect:
-    'rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700',
 };
 
 export function buildDealersColumns(
@@ -106,17 +100,12 @@ export function buildDealersColumns(
       id: 'status',
       accessorKey: 'status',
       header: 'Status',
-      cell: ({ row }) => {
-        const d = row.original;
-        if (d.archivedAt) {
-          return (
-            <span className="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600">
-              Archived
-            </span>
-          );
-        }
-        return <span className={statusBadgeClass[d.status]}>{d.status}</span>;
-      },
+      cell: ({ row }) => (
+        <DealerStatusBadge
+          status={row.original.status}
+          archivedAt={row.original.archivedAt}
+        />
+      ),
       enableSorting: true,
     },
     {

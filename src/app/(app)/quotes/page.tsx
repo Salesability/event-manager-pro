@@ -1,7 +1,9 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
+import { QuoteStatusBadge } from '@/components/app/status-badge';
+import { RelativeTime } from '@/components/app/relative-time';
 import { loadQuotes, type Quote, type QuoteStatus } from '@/features/quotes/queries';
-import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
+import { displayStatusKey } from '@/features/quotes/status-display';
 import { QuotesFilters } from './quotes-filters';
 import { QuoteRowActions } from './row-actions';
 
@@ -106,20 +108,16 @@ function QuoteRow({ quote }: { quote: Quote }) {
         )}
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
-        <span
-          className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
-        >
-          {pillKey}
-        </span>
+        <QuoteStatusBadge status={pillKey} />
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
         {fmtMoney(quote.total)}
       </td>
       <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
-        {fmtDate(quote.sentAt)}
+        {quote.sentAt ? <RelativeTime value={quote.sentAt} /> : '—'}
       </td>
       <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
-        {fmtDate(quote.createdAt)}
+        <RelativeTime value={quote.createdAt} />
       </td>
       <td className="border-b border-stone-200 px-3 py-2.5 align-top">
         <QuoteRowActions quote={quote} />
@@ -132,9 +130,4 @@ function fmtMoney(amount: string): string {
   const n = Number(amount);
   if (!Number.isFinite(n)) return amount;
   return n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' });
-}
-
-function fmtDate(d: Date | null): string {
-  if (!d) return '—';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
