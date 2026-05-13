@@ -12,6 +12,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Combobox } from '@/components/ui/combobox';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -338,6 +350,7 @@ export function QuoteComposer({
         <div className="flex flex-col gap-3">
           <h2 className="font-display text-xl text-navy">Inputs</h2>
 
+          <FieldGroup>
           <NumberField
             label="Audience size"
             min={0}
@@ -378,29 +391,24 @@ export function QuoteComposer({
             control={control}
             name="recordRetrievalAmount"
             render={({ field }) => (
-              <fieldset className={fieldClass}>
-                <legend className={labelClass}>Record retrieval bracket</legend>
-                <div className="mt-1 flex flex-wrap items-center gap-1">
-                  {RETRIEVAL_BRACKETS.map((amount) => {
-                    const active = field.value === amount;
-                    return (
-                      <button
-                        key={amount}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => field.onChange(amount)}
-                        className={
-                          active
-                            ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent'
-                            : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy'
-                        }
-                      >
-                        {amount === 0 ? 'None' : `$${amount}`}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
+              <FieldSet>
+                <FieldLegend>Record retrieval bracket</FieldLegend>
+                <ToggleGroup
+                  value={[String(field.value)]}
+                  onValueChange={(arr) => {
+                    // Base UI's single-mode ToggleGroup still returns an array;
+                    // pick the single pressed value or fall back to 0 (None).
+                    field.onChange(arr.length ? Number(arr[0]) : 0);
+                  }}
+                  className="flex-wrap"
+                >
+                  {RETRIEVAL_BRACKETS.map((amount) => (
+                    <ToggleGroupItem key={amount} value={String(amount)}>
+                      {amount === 0 ? 'None' : `$${amount}`}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </FieldSet>
             )}
           />
 
@@ -425,6 +433,7 @@ export function QuoteComposer({
             error={errors.quoteNotes?.message}
             placeholder="Anything the dealer should see in the quote PDF."
           />
+          </FieldGroup>
         </div>
       </section>
 
@@ -728,22 +737,22 @@ function NumberField({
 }) {
   const id = `qf-${registration.name}`;
   return (
-    <label className={fieldClass} htmlFor={id}>
-      <span className={labelClass}>{label}</span>
-      <input
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Input
         id={id}
         type="number"
         min={min ?? 0}
         step={step ?? '1'}
-        className={inputClass}
+        aria-invalid={!!error || undefined}
         {...registration}
       />
       {error ? (
-        <span className="text-[11px] text-status-red">{error}</span>
+        <FieldError>{error}</FieldError>
       ) : help ? (
-        <span className="text-[11px] text-stone-500">{help}</span>
+        <FieldDescription>{help}</FieldDescription>
       ) : null}
-    </label>
+    </Field>
   );
 }
 
@@ -760,16 +769,17 @@ function TextAreaField({
 }) {
   const id = `qf-${registration.name}`;
   return (
-    <label className={fieldClass} htmlFor={id}>
-      <span className={labelClass}>{label}</span>
-      <textarea
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <Textarea
         id={id}
         placeholder={placeholder}
         rows={2}
-        className={`${inputClass} resize-y`}
+        className="resize-y"
+        aria-invalid={!!error || undefined}
         {...registration}
       />
-      {error ? <span className="text-[11px] text-status-red">{error}</span> : null}
-    </label>
+      {error ? <FieldError>{error}</FieldError> : null}
+    </Field>
   );
 }
