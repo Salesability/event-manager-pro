@@ -355,6 +355,87 @@ export function QuoteComposer({
           {' replaces the recipient’s copy and resets the validity window.'}
         </div>
       )}
+
+      {/* 0043 follow-up (a): composer actions parked at the top of the
+       *  scrollable surface, sticky under the 64px AppHeader. Sits OUTSIDE
+       *  the `<fieldset disabled>` below so Preview / Close stay clickable
+       *  on read-only quotes; Save / Send still self-gate via `!isReadOnly`
+       *  and `canSend`. */}
+      <div className="sticky top-16 z-10 -mx-1 flex flex-col gap-1 border-b border-stone-200 bg-background px-1 py-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {isEdit && (
+            <button
+              type="button"
+              onClick={() => router.push('/quotes')}
+              className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
+            >
+              Close
+            </button>
+          )}
+          {isEdit && (
+            <button
+              type="button"
+              onClick={onPreview}
+              disabled={previewPending}
+              className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {previewPending ? 'Loading…' : 'Preview PDF'}
+            </button>
+          )}
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={onSaveDraft}
+              disabled={pending || !computed.ok}
+              className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
+            </button>
+          )}
+          {canSend && (
+            <button
+              type="button"
+              onClick={() => setConfirmSendOpen(true)}
+              disabled={
+                !recipientEmail ||
+                isDirty ||
+                pending ||
+                sendPending ||
+                (isResend && msaEnvelopeInFlight)
+              }
+              title={
+                isResend && msaEnvelopeInFlight
+                  ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
+                  : isDirty
+                    ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
+                    : recipientErrorMessage ??
+                      (recipientEmail
+                        ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
+                        : undefined)
+              }
+              className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isResend ? 'Re-send Quote' : 'Send Quote'}
+            </button>
+          )}
+        </div>
+        {canSend && isDirty && (
+          <p className="text-right text-[11px] text-stone-500">
+            You have unsaved changes — save before sending.
+          </p>
+        )}
+        {canSend && !isDirty && recipientErrorMessage && (
+          <p className="text-right text-[11px] text-status-red">
+            Send disabled: {recipientErrorMessage}
+          </p>
+        )}
+        {canSend && isResend && msaEnvelopeInFlight && (
+          <p className="text-right text-[11px] text-amber-700">
+            Re-send disabled: MSA envelope awaiting signature.
+          </p>
+        )}
+      </div>
+
       <fieldset disabled={isReadOnly} className="contents">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
       <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
@@ -585,84 +666,6 @@ export function QuoteComposer({
       </section>
       </div>
       </fieldset>
-
-      {/* Buttons row lives OUTSIDE the disabled fieldset so Preview / Close
-       *  stay clickable on read-only quotes — `<fieldset disabled>` would
-       *  otherwise cascade through the browser and disable any descendant
-       *  <button>. Save / Send still gate themselves via `!isReadOnly` and
-       *  `canSend`, so they correctly hide when the quote is terminal. */}
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-        {isEdit && (
-          <button
-            type="button"
-            onClick={() => router.push('/quotes')}
-            className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
-          >
-            Close
-          </button>
-        )}
-        {isEdit && (
-          <button
-            type="button"
-            onClick={onPreview}
-            disabled={previewPending}
-            className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {previewPending ? 'Loading…' : 'Preview PDF'}
-          </button>
-        )}
-        {!isReadOnly && (
-          <button
-            type="button"
-            onClick={onSaveDraft}
-            disabled={pending || !computed.ok}
-            className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
-          </button>
-        )}
-        {canSend && (
-          <button
-            type="button"
-            onClick={() => setConfirmSendOpen(true)}
-            disabled={
-              !recipientEmail ||
-              isDirty ||
-              pending ||
-              sendPending ||
-              (isResend && msaEnvelopeInFlight)
-            }
-            title={
-              isResend && msaEnvelopeInFlight
-                ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
-                : isDirty
-                  ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
-                  : recipientErrorMessage ??
-                    (recipientEmail
-                      ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
-                      : undefined)
-            }
-            className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isResend ? 'Re-send Quote' : 'Send Quote'}
-          </button>
-        )}
-      </div>
-      {canSend && isDirty && (
-        <p className="mt-1 text-right text-[11px] text-stone-500">
-          You have unsaved changes — save before sending.
-        </p>
-      )}
-      {canSend && !isDirty && recipientErrorMessage && (
-        <p className="mt-1 text-right text-[11px] text-status-red">
-          Send disabled: {recipientErrorMessage}
-        </p>
-      )}
-      {canSend && isResend && msaEnvelopeInFlight && (
-        <p className="mt-1 text-right text-[11px] text-amber-700">
-          Re-send disabled: MSA envelope awaiting signature.
-        </p>
-      )}
 
       <PreviewDialog
         open={previewOpen}

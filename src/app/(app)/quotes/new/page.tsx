@@ -33,7 +33,6 @@ export default async function NewQuotePage({
       <PageHeader
         title="New Quote"
         description="Build a quote against the service catalog. Save Draft to persist; sending happens later."
-        sticky
       />
       <QuoteComposer
         dealers={dealers}

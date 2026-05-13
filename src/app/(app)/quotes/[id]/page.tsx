@@ -108,7 +108,6 @@ export default async function QuoteEditPage({
       <PageHeader
         title={`Quote #${quote.id}`}
         actions={<QuoteStatusBadge status={pillKey} />}
-        sticky
       />
       <KeyValueStrip
         items={[
