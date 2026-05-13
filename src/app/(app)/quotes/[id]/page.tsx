@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
+import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
@@ -48,12 +49,19 @@ export default async function QuoteEditPage({
   const quote = await loadQuote(id);
   if (!quote) notFound();
 
-  const [dealers, catalog, recipientResult, sendHistory] = await Promise.all([
+  const [dealers, catalog, recipientResult, sendHistory, msa] = await Promise.all([
     loadDealers(),
     loadServiceItems(),
     resolveQuoteRecipient(quote.dealerId),
     loadQuoteSendHistory(quote.id),
+    // 0046 Phase 5: when the dealer\'s MSA envelope is in Dropbox Sign awaiting
+    // signature, the server-side `sendQuote` action refuses re-send. The
+    // composer mirrors this state so the button reads as disabled rather
+    // than firing then surfacing the server-side error.
+    loadActiveOrPendingMsa(quote.dealerId),
   ]);
+  const msaEnvelopeInFlight =
+    msa != null && msa.status === 'pending' && msa.dropboxSignDocumentId != null;
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 
@@ -170,6 +178,7 @@ export default async function QuoteEditPage({
           quoteValidDays: quote.quoteValidDays,
         }}
         recipient={recipient}
+        msaEnvelopeInFlight={msaEnvelopeInFlight}
       />
     </div>
   );

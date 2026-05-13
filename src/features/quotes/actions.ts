@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealers, quotes, serviceItems } from '@/lib/db/schema';
+import { dealers, masterServiceAgreements, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
@@ -810,6 +810,35 @@ export const sendQuote = capabilityClient('quote:edit')
       .where(and(eq(dealers.id, draft.dealerId), isNull(dealers.archivedAt)))
       .limit(1);
     if (!dealer) return { error: 'Dealer not found or archived.' };
+
+    // MSA-pending in-flight gate (0046 Phase 5). On re-send only — first-send
+    // pre-dates the MSA bundle by definition, and the MSA-bundle envelope
+    // path lives in `sendMsaEnvelope` (it bundles the draft Quote alongside
+    // the MSA PDF). Re-sending a Quote *while the dealer's MSA envelope is
+    // sitting in Dropbox Sign awaiting signature* would confuse the signer:
+    // they'd see two different Quote PDFs. Block re-send until the envelope
+    // resolves (signed → MSA goes `active`; declined → manual cleanup).
+    if (draft.sentAt != null) {
+      const [pendingMsa] = await db
+        .select({
+          status: masterServiceAgreements.status,
+          dropboxSignDocumentId: masterServiceAgreements.dropboxSignDocumentId,
+        })
+        .from(masterServiceAgreements)
+        .where(
+          and(
+            eq(masterServiceAgreements.dealerId, draft.dealerId),
+            eq(masterServiceAgreements.status, 'pending'),
+          ),
+        )
+        .limit(1);
+      if (pendingMsa && pendingMsa.dropboxSignDocumentId != null) {
+        return {
+          error:
+            'MSA envelope is in flight — finish signing or terminate before re-sending this quote.',
+        };
+      }
+    }
 
     // Resolve recipient before any side effects. If the dealer doesn't have a
     // customer contact with a primary email, we fail closed — the row stays

@@ -106,6 +106,11 @@ type Props = {
   initial?: InitialQuote;
   /** Edit-mode only. Drives the Send confirm dialog. */
   recipient?: Recipient;
+  /** Re-send only. True when the dealer's MSA is `pending` with an envelope
+   *  posted to Dropbox Sign — `sendQuote` will refuse re-send until the
+   *  envelope resolves. The UI gates the button to match the server.
+   *  Always false on first-send (the MSA gate only fires on re-send). */
+  msaEnvelopeInFlight?: boolean;
 };
 
 const labelClass = 'text-xs font-medium text-stone-600';
@@ -143,6 +148,7 @@ export function QuoteComposer({
   initialCampaignId,
   initial,
   recipient,
+  msaEnvelopeInFlight = false,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -610,14 +616,22 @@ export function QuoteComposer({
           <button
             type="button"
             onClick={() => setConfirmSendOpen(true)}
-            disabled={!recipientEmail || isDirty || pending || sendPending}
+            disabled={
+              !recipientEmail ||
+              isDirty ||
+              pending ||
+              sendPending ||
+              (isResend && msaEnvelopeInFlight)
+            }
             title={
-              isDirty
-                ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
-                : recipientErrorMessage ??
-                  (recipientEmail
-                    ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
-                    : undefined)
+              isResend && msaEnvelopeInFlight
+                ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
+                : isDirty
+                  ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
+                  : recipientErrorMessage ??
+                    (recipientEmail
+                      ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
+                      : undefined)
             }
             className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -633,6 +647,11 @@ export function QuoteComposer({
       {canSend && !isDirty && recipientErrorMessage && (
         <p className="mt-1 text-right text-[11px] text-status-red">
           Send disabled: {recipientErrorMessage}
+        </p>
+      )}
+      {canSend && isResend && msaEnvelopeInFlight && (
+        <p className="mt-1 text-right text-[11px] text-amber-700">
+          Re-send disabled: MSA envelope awaiting signature.
         </p>
       )}
 

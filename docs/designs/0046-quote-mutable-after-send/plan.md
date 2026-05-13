@@ -11,7 +11,7 @@
 | 2: `sendQuote` re-send path + `sent_at` reset | Done | - |
 | 3: Composer always-editable + "Re-send Quote" button | Done | - |
 | 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite | Done | - |
-| 5: Accepted/declined immutability + MSA-bundle re-send gate | Pending | - |
+| 5: Accepted/declined immutability + MSA-bundle re-send gate | Done | - |
 | 6: Wiki (`commercial-spine.md`) + chunk-end smoke + `/eval` | Pending | - |
 
 Simplify the quote lifecycle. Today a quote becomes immutable when its status flips `draft → sent`: `setQuoteInputs` rejects updates via the atomic `WHERE status='draft'` guard, the composer renders a `<fieldset disabled>` with a "this quote is locked" banner, and the Send button only enables on draft. The mental model in the wiki today ("sent quote is the contract artifact") doesn't match user expectations — coaches need to fix pricing typos, swap line items, or re-send to a new contact without an admin DB poke. After this chunk: the *underlying row* stays mutable while `status='sent'`; the composer always shows editable inputs; "Send Quote" becomes "Re-send Quote" once `sentAt` is set, and each send emits a fresh `quote.sent` audit row + re-renders/re-uploads the PDF + re-emails the recipient. The `accepted`/`declined` terminal states stay immutable — those are the *contract* artifacts and should never silently mutate after the deal is locked. Done = (a) save survives any non-terminal status; (b) re-send works from `sent`/`expired`, blocked from `accepted`/`declined` with a clear error; (c) re-send resets `sent_at` to now (and therefore the expiry-window); (d) Send-history Section on `/quotes/[id]` lists every send event (timestamp + recipient + Resend ID + PDF link), most-recent first; (e) wiki updated to retire the "sent is locked" doctrine.
@@ -59,7 +59,7 @@ The Phase 1 implementation needs answers before files start moving.
 - `docs/wiki/data-model.md` → `quotes` row + audit_log relationship. Phase 4 documents the multi-row send-history pattern.
 - `docs/wiki/layout.md` § Open conventions (post-0043) → the parked composer-actions-lift follow-up is a natural companion to this chunk; either tackle them together or leave the composer-actions-lift parked while this chunk lands first.
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Each phase includes implementation + the unit tests for that phase's changes.
@@ -109,12 +109,13 @@ The Phase 1 implementation needs answers before files start moving.
 - [x] `tsc + test` gate
 
 #### Phase 5: Accepted/declined immutability + MSA-bundle re-send gate
-- [ ] Confirm Phase 1 + 2 terminal-status rejects fire correctly (cross-phase regression check)
-- [ ] Wire OQ #4: in `sendQuote`, before the MSA-bundle branch (closed/0041), gate `if (quote.sentAt != null) { /* skip MSA bundle, plain Resend send only */ }`
-- [ ] Plus the "MSA-pending in-flight" sanity: if MSA exists and `msa.status === 'pending'` and `msa.dropboxSignDocumentId != null` (envelope sent, not yet signed), refuse re-send with "MSA envelope is in flight — finish signing or terminate before re-sending this quote"
-- [ ] Composer: re-send button disabled with title-tooltip when the MSA-pending-in-flight condition holds (UI parity with server-side reject — same `closed/0044` pattern: server is the gate, UI is the courtesy)
-- [ ] New tests: first send still bundles MSA when no MSA exists; re-send of an already-sent quote against an MSA-pending dealer does NOT re-fire the envelope; re-send blocked when MSA envelope is in flight
-- [ ] `tsc + test` gate
+- [x] Confirm Phase 1 + 2 terminal-status rejects fire correctly (cross-phase regression check via the existing accepted/declined tests in `actions.test.ts` — both still pass)
+- [x] ~~Wire OQ #4: in `sendQuote`, before the MSA-bundle branch (closed/0041), gate `if (quote.sentAt != null) { /* skip MSA bundle, plain Resend send only */ }`~~ — **N/A:** `sendQuote` never fires an MSA bundle. The bundle lives in `sendMsaEnvelope` (msa/actions.ts), which packs the MSA PDF + the *draft* Quote PDF into a single Dropbox Sign envelope. `sendQuote` is downstream of that and only ever sends the Quote standalone. So there is no MSA-bundle branch in `sendQuote` to gate.
+- [x] Plus the "MSA-pending in-flight" sanity: implemented in `sendQuote` at the post-dealer-lookup point — re-send only (gated on `draft.sentAt != null`); SELECTs the dealer's MSA, refuses re-send when `status='pending' AND dropboxSignDocumentId != null`
+- [x] Composer: re-send button disabled with title-tooltip + an amber `Re-send disabled: MSA envelope awaiting signature.` hint when the page-level `msaEnvelopeInFlight` prop is true
+- [x] Page-level wiring: `/quotes/[id]` page calls `loadActiveOrPendingMsa(quote.dealerId)` in the Promise.all and derives the boolean — keeps the composer pure
+- [x] New tests: re-send blocked when MSA envelope is in flight (returns the same error string the composer surfaces); re-send proceeds when MSA is pending without an envelope; re-send proceeds when no MSA exists; first send (sentAt=null) skips the MSA gate entirely
+- [x] `tsc + test` gate
 
 #### Phase 6: Wiki (`commercial-spine.md`) + chunk-end smoke + `/eval`
 - [ ] Update `docs/wiki/commercial-spine.md` — the "sent quote = contract artifact" prose retires; replaces with "*accepted* quote is the contract; sent quotes stay editable to support late corrections + re-sends, with the recipient's copy resetting on each Re-send". Cross-link `docs/wiki/data-model.md` audit_log multi-row pattern.
