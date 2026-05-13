@@ -16,6 +16,7 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAudit } from '@/features/audit/actions';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
+import { personFormSchema } from './person-schema';
 
 // Three-state result so the UI can distinguish a clean success from a partial
 // success — e.g. the contact committed but the auth-side `auth.admin.createUser`
@@ -24,7 +25,15 @@ import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators
 // 0020 Phase 3 eval.
 type ActionResult =
   | { ok: true; contactId?: number; warning?: string }
-  | { error: string };
+  | { error: string; fieldErrors?: Record<string, string[] | undefined> };
+
+type FieldErrors = Record<string, string[] | undefined>;
+function firstFieldError(fieldErrors: FieldErrors): string | undefined {
+  for (const list of Object.values(fieldErrors)) {
+    if (list && list.length) return list[0];
+  }
+  return undefined;
+}
 
 // V1 us-side roles surfaced in the UI. `staff` and `viewer` stay reserved per
 // the 0018 plan decision (auth.md "v1 wired roles"). `dealer` was added by
@@ -335,18 +344,24 @@ async function syncAuthMetadata(authUserId: string, roles: V1TeamRole[]) {
 export const createPerson = capabilityClient('person:create')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
-  const firstName = field(formData, 'firstName');
-  const lastName = field(formData, 'lastName');
-  const email = field(formData, 'email').toLowerCase();
-  const phone = field(formData, 'phone');
-  const appAccess = field(formData, 'appAccess') === '1';
+  // 0045 Phase 6 — schema-as-contract for the scalar fields. Roles +
+  // dealerLinks remain hand-rolled (multi-value FormData keys that
+  // `Object.fromEntries` would collapse).
+  const parsed = personFormSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      error: firstFieldError(fieldErrors) ?? 'Invalid person input.',
+      fieldErrors,
+    };
+  }
+  const v = parsed.data;
+  const firstName = v.firstName;
+  const lastName = v.lastName;
+  const email = (v.email ?? '').toLowerCase();
+  const phone = v.phone ?? '';
+  const appAccess = v.appAccess === '1';
 
-  if (!firstName || !lastName) {
-    return { error: 'First and last name are both required.' };
-  }
-  if (email && !EMAIL_RE.test(email)) {
-    return { error: 'Email looks invalid.' };
-  }
   if (appAccess && !email) {
     return { error: 'Email is required when granting app access.' };
   }
@@ -488,18 +503,20 @@ export const updatePerson = capabilityClient('person:edit')
   const contactId = parseOptionalId(formData, 'contactId');
   if (contactId == null) return { error: 'Invalid contact id.' };
 
-  const firstName = field(formData, 'firstName');
-  const lastName = field(formData, 'lastName');
-  const email = field(formData, 'email').toLowerCase();
-  const phone = field(formData, 'phone');
-  const appAccess = field(formData, 'appAccess') === '1';
-
-  if (!firstName || !lastName) {
-    return { error: 'First and last name are both required.' };
+  const parsed = personFormSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      error: firstFieldError(fieldErrors) ?? 'Invalid person input.',
+      fieldErrors,
+    };
   }
-  if (email && !EMAIL_RE.test(email)) {
-    return { error: 'Email looks invalid.' };
-  }
+  const v = parsed.data;
+  const firstName = v.firstName;
+  const lastName = v.lastName;
+  const email = (v.email ?? '').toLowerCase();
+  const phone = v.phone ?? '';
+  const appAccess = v.appAccess === '1';
 
   const rolesParsed = parseRolesField(formData);
   if ('error' in rolesParsed) return rolesParsed;

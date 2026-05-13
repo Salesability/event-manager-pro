@@ -189,7 +189,7 @@ describe('createPerson', () => {
     const fd = new FormData();
     fd.set('firstName', '');
     fd.set('lastName', '');
-    expect(await call(createPerson(fd))).toEqual({
+    expect(await call(createPerson(fd))).toMatchObject({
       error: 'First and last name are both required.',
     });
   });
@@ -199,7 +199,7 @@ describe('createPerson', () => {
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.set('email', 'not-an-email');
-    expect(await call(createPerson(fd))).toEqual({ error: 'Email looks invalid.' });
+    expect(await call(createPerson(fd))).toMatchObject({ error: 'Email looks invalid.' });
   });
 
   it('rejects admin/coach roles without app access', async () => {

@@ -53,12 +53,6 @@ export function parseOptionalInt(formData: FormData, name: string): number | nul
   return Number.isInteger(n) ? n : null;
 }
 
-// Postgres `integer` is signed 32-bit. Volume fields can't be negative.
-const MAX_PG_INT = 2_147_483_647;
-function isValidVolume(n: number | null): boolean {
-  return n == null || (n >= 0 && n <= MAX_PG_INT);
-}
-
 export type CampaignInput = {
   startDate: string;
   endDate: string;
@@ -76,47 +70,46 @@ export type CampaignInput = {
   notes: string | null;
 };
 
+// 0045 Phase 6 — schema-as-contract: per-field validation lives in
+// `src/app/(app)/calendar/booking-schema.ts` (shared with the booking-form
+// B-shape client). Cross-field rules (endDate ≥ startDate) and the wire → DB
+// normalization (string → number, lowercased email) stay here.
+//
+// Eager import of the booking-schema is intentional even though that module
+// lives under `src/app/(app)/calendar/...` — the validator imports the schema,
+// not any client component code, so there's no client-server boundary issue.
+import { bookingFormSchema } from '@/app/(app)/calendar/booking-schema';
+
 export function parseCampaignInput(formData: FormData): CampaignInput | { error: string } {
-  const startDate = parseDate(formData, 'startDate');
-  const endDate = parseDate(formData, 'endDate');
-  if (!startDate || !endDate) return { error: 'Start and end date are required (YYYY-MM-DD).' };
-  if (endDate < startDate) return { error: 'End date must be on or after start date.' };
-
-  const dealerId = parseOptionalId(formData, 'dealerId');
-  if (dealerId == null) return { error: 'Dealer is required.' };
-
-  const email = field(formData, 'email').toLowerCase();
-  if (email && !EMAIL_RE.test(email)) {
-    return { error: 'Contact email looks invalid.' };
+  const parsed = bookingFormSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    for (const list of Object.values(fieldErrors)) {
+      if (list && list.length) return { error: list[0] };
+    }
+    return { error: 'Invalid campaign input.' };
   }
-
-  const qtyRecords = parseOptionalInt(formData, 'qtyRecords');
-  const smsEmail = parseOptionalInt(formData, 'smsEmail');
-  const letters = parseOptionalInt(formData, 'letters');
-  const bdc = parseOptionalInt(formData, 'bdc');
-  if (
-    !isValidVolume(qtyRecords) ||
-    !isValidVolume(smsEmail) ||
-    !isValidVolume(letters) ||
-    !isValidVolume(bdc)
-  ) {
-    return { error: 'Volume fields must be non-negative whole numbers.' };
+  const v = parsed.data;
+  if (v.endDate < v.startDate) {
+    return { error: 'End date must be on or after start date.' };
   }
-
+  const email = (v.email ?? '').toLowerCase();
+  const toNum = (s: string | undefined): number | null =>
+    s && s.length > 0 ? Number(s) : null;
   return {
-    startDate,
-    endDate,
-    dealerId,
-    coachId: parseOptionalId(formData, 'coachId'),
-    styleId: parseOptionalId(formData, 'styleId'),
-    audienceSourceId: parseOptionalId(formData, 'audienceSourceId'),
-    qtyRecords,
-    smsEmail,
-    letters,
-    bdc,
-    contact: field(formData, 'contact') || null,
-    phone: field(formData, 'phone') || null,
+    startDate: v.startDate,
+    endDate: v.endDate,
+    dealerId: Number(v.dealerId),
+    coachId: toNum(v.coachId),
+    styleId: toNum(v.styleId),
+    audienceSourceId: toNum(v.audienceSourceId),
+    qtyRecords: toNum(v.qtyRecords),
+    smsEmail: toNum(v.smsEmail),
+    letters: toNum(v.letters),
+    bdc: toNum(v.bdc),
+    contact: (v.contact || '') || null,
+    phone: (v.phone || '') || null,
     email: email || null,
-    notes: field(formData, 'notes') || null,
+    notes: (v.notes || '') || null,
   };
 }
