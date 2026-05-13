@@ -97,8 +97,6 @@ type Props = {
   recipient?: Recipient;
 };
 
-const inputClass =
-  'w-full min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
 const labelClass = 'text-xs font-medium text-stone-600';
 const fieldClass = 'flex flex-col gap-1';
 
