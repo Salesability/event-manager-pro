@@ -13,11 +13,11 @@
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
 | 5: Primitive sweep (dialog / combobox / tabs) | Done | `b4df471` |
 | 6: Docs (wiki) + Radix Form removal | Done | `de4da59` |
-| 7: Tests + smoke verification | Pending | - |
+| 7: Tests + smoke verification | Done | `3a1a16e` |
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 86% (6/7 phases complete)
+**Overall Progress:** 100% (7/7 phases complete) — chunk-end eval [`eval-2026-05-13-0701.md`](eval-2026-05-13-0701.md) PASS with warnings (1 Codex Medium addressed in-cycle).
 
 ## Decisions locked (2026-05-12)
 
@@ -124,8 +124,9 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS). Docs + dep-remove shipped together.
 
 #### Phase 7: Tests + smoke verification
-- [ ] Full `pnpm test` run — all existing form-touching tests still pass (dealer-form action tests, calendar booking-form tests, quote-composer tests if any)
-- [ ] Smoke (web-test): `goto /dealerships`; click `+ Add Dealer`; dialog "Add Dealer" with fields `Dealership name` / `Contact first` / `Contact last` / `Email` / `Phone` / `Address` / `Status` / `How did this dealer find us?` (the same shape Radix Form was rendering — shadcn port is visual parity)
-- [ ] Smoke (web-test): `goto /calendar`; click `+ Book Event`; dialog renders with the booking-form fields (dealer, campaign, date, etc. — match the current field list)
-- [ ] Smoke (web-test): `goto /quotes/new?dealerId=1`; left-pane input fields render via `<FormField>`; right-pane computed table still updates as inputs change
-- [ ] Full `/eval` at chunk-end (single pass per post-0040 `/build` cadence — fast `tsc + test` per phase, Codex + web-test + lint at chunk-end only)
+- [x] Full `pnpm test` — 757 PASS / 2 SKIPPED / 759 total. No form-touching test regressed.
+- [x] Smoke (web-test) `/dealerships` → click `+ Add Dealer` → dialog "Add Dealer" with all 8 expected fields (Dealership name / Contact first / Contact last / Email / Phone / Address / Status / How did this dealer find us?) — PASS.
+- [x] Smoke (web-test) `/calendar` → click `+ Book Event` → dialog renders booking-form's full field list (Start Date, Duration, End Date, Dealership, Contact, Phone, Email, Event Format, Data Source, Qty Records, SMS/Email, Letters, BDC, Sales Coach, Notes) — PASS.
+- [x] Smoke (web-test) `/quotes/new?dealerId=1` → left-pane Field primitives (Dealer combobox + 5 spinbuttons + retrieval-bracket ToggleGroup + Travel + 2 textareas), right-pane Line items table still updates — PASS.
+- [x] Also smoked `/reports` (Tabs orientation fix held; tab-switch works) and `/admin/people` (PersonForm post-Phase-6 port — First/Last/Email/Phone + role checkboxes render correctly).
+- [x] Full `/eval` ran at chunk-end — see [`eval-2026-05-13-0701.md`](eval-2026-05-13-0701.md). Verdict: **PASS with warnings**. Static all green; browser smoke 12/12 PASS; Codex returned 1 Medium (dialog default-width regression — old in-house default was 560px, shadcn ships `sm:max-w-sm` ~384px). Fix landed in this cycle at `3a1a16e` (`sm:max-w-sm` → `sm:max-w-[560px]` in `src/components/ui/dialog.tsx`; also dropped the orphaned `inputClass` in `quote-composer.tsx`). Concurrent first Codex pass orphaned mid-run (PID died); swept. No High, no Should-Fix backlog.
