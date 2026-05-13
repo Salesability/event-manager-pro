@@ -12,7 +12,7 @@
 | 3: Port `quote-composer.tsx` | Done | `2462b0c` |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
 | 5: Primitive sweep (dialog / combobox / tabs) | Done | `b4df471` |
-| 6: Docs (wiki) + Radix Form removal | Done | _commit pending_ |
+| 6: Docs (wiki) + Radix Form removal | Done | `de4da59` |
 | 7: Tests + smoke verification | Pending | - |
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
