@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { KeyValueStrip } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
+import { Section } from '@/components/app/section';
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
@@ -75,34 +77,47 @@ export default async function DealerDetailPage({
       </Link>
       <PageHeader
         title={dealer.name}
-        description={
-          <span className="flex flex-wrap gap-x-4 gap-y-1">
-            {dealer.address && <span>{dealer.address}</span>}
-            {dealer.acquiredVia && (
-              <span>
-                <span className="text-stone-400">Acquired via:</span> {dealer.acquiredVia}
-              </span>
-            )}
-            {dealer.primaryEmail && <span>{dealer.primaryEmail}</span>}
-            {dealer.primaryPhone && <span>{dealer.primaryPhone}</span>}
-          </span>
-        }
         actions={<DealerStatusPill status={dealer.status} archivedAt={dealer.archivedAt} />}
       />
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <div className="flex flex-wrap items-center gap-3">
-          <h2 className="font-display text-xl text-navy">Master Service Agreement</h2>
-          {msa && (
+      <KeyValueStrip
+        items={[
+          {
+            label: 'Status',
+            value: dealer.archivedAt ? 'Archived' : dealer.status,
+          },
+          {
+            label: 'MSA state',
+            value: msa ? msa.status : 'None on file',
+          },
+          {
+            label: 'Contact',
+            value:
+              [dealer.contactFirstName, dealer.contactLastName]
+                .filter(Boolean)
+                .join(' ') || '—',
+          },
+          { label: 'Phone', value: dealer.primaryPhone ?? '—' },
+          { label: 'Email', value: dealer.primaryEmail ?? '—' },
+          { label: 'Acquired via', value: dealer.acquiredVia ?? '—' },
+        ]}
+      />
+
+      <Section
+        title="Master Service Agreement"
+        actions={
+          msa ? (
             <span
               className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${MSA_STATUS_PILL_CLS[msa.status]}`}
             >
               {msa.status}
             </span>
-          )}
-        </div>
+          ) : null
+        }
+        variant="card"
+      >
         {msa ? (
-          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
             <dt className="font-medium text-stone-600">Created</dt>
             <dd className="text-stone-800">{fmtDate(msa.createdAt)}</dd>
             {msa.signedAt && (
@@ -142,7 +157,7 @@ export default async function DealerDetailPage({
             )}
           </dl>
         ) : (
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-stone-600">
               No MSA on file yet. The first envelope bundles the MSA with the
               dealer&apos;s first draft Quote.
@@ -157,23 +172,24 @@ export default async function DealerDetailPage({
             )}
           </div>
         )}
-      </section>
+      </Section>
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-xl text-navy">Quotes</h2>
-          {!dealer.archivedAt && (
+      <Section
+        title="Quotes"
+        actions={
+          !dealer.archivedAt ? (
             <Link
               href={`/quotes/new?dealerId=${dealer.id}`}
               className="rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10"
             >
               + New quote
             </Link>
-          )}
-        </div>
-
+          ) : null
+        }
+        variant="card"
+      >
         {quotes.length === 0 ? (
-          <div className="mt-4 flex flex-col items-center gap-2 py-12 text-stone-400">
+          <div className="flex flex-col items-center gap-2 py-12 text-stone-400">
             <span className="text-3xl">📋</span>
             <span className="text-sm font-semibold text-stone-600">No quotes yet</span>
             {!dealer.archivedAt && (
@@ -186,7 +202,7 @@ export default async function DealerDetailPage({
             )}
           </div>
         ) : (
-          <div className="mt-4 overflow-hidden rounded-xl border border-stone-200">
+          <div className="overflow-hidden rounded-xl border border-stone-200">
             <table className="w-full text-sm">
               <thead className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
                 <tr>
@@ -236,7 +252,7 @@ export default async function DealerDetailPage({
             </table>
           </div>
         )}
-      </section>
+      </Section>
     </div>
   );
 }

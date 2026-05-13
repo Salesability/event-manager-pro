@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { KeyValueStrip } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
+import { Section } from '@/components/app/section';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
@@ -102,6 +104,7 @@ export default async function QuoteEditPage({
   }
 
   const pillKey = displayStatusKey(quote);
+  const totalMoney = fmtMoney(quote.total);
   return (
     <div className="flex flex-col gap-6">
       <Link
@@ -112,7 +115,6 @@ export default async function QuoteEditPage({
       </Link>
       <PageHeader
         title={`Quote #${quote.id}`}
-        description={`${quote.dealerName}${quote.dealerArchivedAt ? ' (dealer archived)' : ''}`}
         actions={
           <span
             className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${STATUS_PILL_CLS[pillKey]}`}
@@ -122,12 +124,22 @@ export default async function QuoteEditPage({
         }
         sticky
       />
+      <KeyValueStrip
+        items={[
+          { label: 'Status', value: pillKey },
+          {
+            label: 'Dealer',
+            value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
+          },
+          { label: 'Audience', value: quote.inputs.audienceSize.toLocaleString() },
+          { label: 'Event days', value: quote.inputs.eventDays.toLocaleString() },
+          { label: 'Audience source', value: quote.audienceSourceLabel ?? '—' },
+          { label: 'Total', value: totalMoney },
+        ]}
+      />
       {quote.status !== 'draft' && sendHistory.length > 0 && (
-        <section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Send history
-          </h2>
-          <ul className="mt-3 flex flex-col gap-3">
+        <Section title="Send history" variant="card">
+          <ul className="flex flex-col gap-3">
             {sendHistory.map((row, idx) => {
               const emailId = readEmailId(row.payload);
               const isMostRecent = idx === 0;
@@ -174,7 +186,7 @@ export default async function QuoteEditPage({
               );
             })}
           </ul>
-        </section>
+        </Section>
       )}
       <QuoteComposer
         dealers={dealers}
@@ -211,4 +223,10 @@ function parsePositiveIntPathSegment(v: string): number | null {
   const n = Number(v);
   if (!Number.isInteger(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER) return null;
   return n;
+}
+
+function fmtMoney(amount: string): string {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return amount;
+  return n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' });
 }
