@@ -1,13 +1,13 @@
 # Quote expiry enforcement
 
 **Started:** 2026-05-13
-**Status:** Scaffolded — Parked (un-park trigger: 0043 ships, OR user explicitly switches focus). 0043 is currently in flight and touches every `(app)/` page header; running this chunk in parallel won't collide structurally but the chunk-end browser smoke for both would interleave awkwardly.
+**Status:** Active — un-parked 2026-05-13 via user `/build 0044` (explicit focus-switch from 0043, which had not started any phase). Recommended Phase 3 path = Option B (derived `isExpired` field, no migration, Phase 4 skipped).
 
 ## Progress Tracker
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: `acceptQuote` expiry guard (minimum behavior fix) | Pending | - |
+| 1: `acceptQuote` expiry guard (minimum behavior fix) | Done | `3b60c93` |
 | 2: Surface validity on PDF + email | Pending | - |
 | 3: Resolve OQ #1 → implement `expired` lifecycle (enum / timestamp / none) | Pending | - |
 | 4: (conditional on OQ #1 choice) Nightly sweep job | Pending | - |
@@ -15,7 +15,7 @@
 
 Honor the `quotes.quote_valid_days` column the schema has been carrying since 0037 Phase 4 (`drizzle/0017_tranquil_living_mummy.sql`). Today the default-30-days value lives on the row but **nothing reads it**: `acceptQuote` (`src/features/quotes/actions.ts:825`) doesn't refuse stale acceptances, the PDF renderer (`src/lib/pdf/render-quote.ts:129`) doesn't print a "Valid until" line, the send email (`src/lib/email/templates/quote.tsx`) doesn't either, and the `quote_status` enum has no `expired` value. Done = (a) staff `acceptQuote` refuses `sent → accepted` when `sentAt + quoteValidDays < now()` with a clear error message; (b) the dealer sees the deadline on both the PDF ("Valid until 2026-06-12") and the send email ("Please respond by 2026-06-12"); (c) the lifecycle decision (enum value vs timestamp vs nothing) is recorded in OQ #1 and the chosen path is implemented; (d) integration test + browser smoke + chunk-end `/eval` verify.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 ## Open Questions
 
@@ -72,14 +72,14 @@ For each new file or method below, the builder reads the anchor first and matche
 
 The minimum behavior fix. Refuses staff `acceptQuote` on stale Quotes, regardless of how OQ #1 resolves later.
 
-- [ ] Extend `markQuoteAccepted` in `src/features/quotes/lifecycle.ts` to compute `expiresAt = sentAt + quoteValidDays days` after the existing `status='sent'` load and before the atomic guarded UPDATE. Add a new failure branch returning `{ ok: false, error: '<message from OQ #3>' }` when `expiresAt < now()`.
-- [ ] Confirm the existing atomic UPDATE still gates on `status='sent'` — the time guard is layered, not a replacement (per OQ #2).
-- [ ] No changes to `acceptQuote` itself (`actions.ts:825`) — the new error propagates through the existing `{ error: '...' }` return.
-- [ ] Test case 1: send a Quote with `quoteValidDays = 30`, advance time 31 days (via mocked `now()`), call `acceptQuote`, expect `{ error: <expired message> }` + no row update + no audit emission.
-- [ ] Test case 2: same setup with 29 days, expect `{ ok: true }` + row flips + audit emission (regression coverage for the happy path).
-- [ ] Test case 3: per-row `quoteValidDays = 7` override on a Quote sent 8 days ago — refuses (regression for OQ #4's per-row source).
-- [ ] Test case 4: idempotent re-accept on an already-`accepted` Quote — unchanged (no time check fires inside the existing non-`sent` branch).
-- [ ] `tsc + test` gate green.
+- [x] Extend `markQuoteAccepted` in `src/features/quotes/lifecycle.ts` to compute `expiresAt = sentAt + quoteValidDays days` after the existing `status='sent'` load and before the atomic guarded UPDATE. Add a new failure branch returning `{ ok: false, error: '<message from OQ #3>' }` when `expiresAt < now()`. (Implementation note: introduced a fresh pre-load round-trip `SELECT status, sent_at, quote_valid_days` before delegating to `transition()`; guard skips when `status !== 'sent'` so idempotent/illegal-source paths stay race-handled by the existing UPDATE-then-reselect.)
+- [x] Confirm the existing atomic UPDATE still gates on `status='sent'` — the time guard is layered, not a replacement (per OQ #2).
+- [x] No changes to `acceptQuote` itself (`actions.ts:825`) — the new error propagates through the existing `{ error: '...' }` return.
+- [x] Test case 1: send a Quote with `quoteValidDays = 30`, advance time 31 days, call `acceptQuote`, expect `{ error: <expired message> }` + no row update + no audit emission. *(Used `sentAt = now() - 31d` rather than mocking `Date.now()` — same effect, cleaner test.)*
+- [x] Test case 2: same setup with 29 days, expect `{ ok: true }` + row flips + audit emission (regression coverage for the happy path).
+- [x] Test case 3: per-row `quoteValidDays = 7` override on a Quote sent 8 days ago — refuses (regression for OQ #4's per-row source).
+- [x] Test case 4: idempotent re-accept on an already-`accepted` Quote — covered by the existing "is idempotent on already-accepted" test (now extended with the pre-load row whose `status='accepted'` causes the expiry guard to be skipped).
+- [x] `tsc + test` gate green. (tsc clean, 760/762 tests pass — was 757; +3 new expiry-guard tests.)
 
 #### Phase 2: Surface validity on PDF + email
 
