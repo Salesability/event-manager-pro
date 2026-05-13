@@ -1,7 +1,8 @@
 'use client';
 
 import type { ColumnDef } from '@tanstack/react-table';
-import { Can } from '@/components/auth/can';
+import { RowActions } from '@/components/app/row-actions';
+import { useCan } from '@/components/auth/can';
 import type {
   AdminPersonRow,
   DealerLink,
@@ -181,35 +182,39 @@ export function buildPeopleColumns(
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => {
-        const p = row.original;
-        const status = lifecycle(p);
-        const isActive = status === 'active';
-        return (
-          <div className="flex shrink-0 items-center justify-end gap-1">
-            <Can capability="person:edit">
-              <button
-                onClick={() => actions.onEdit(p)}
-                className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
-              >
-                Edit
-              </button>
-            </Can>
-            {isActive && (
-              <Can capability="person:archive">
-                <button
-                  onClick={() => actions.onArchive(p)}
-                  aria-label={`Archive ${p.displayName}`}
-                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ✕
-                </button>
-              </Can>
-            )}
-          </div>
-        );
-      },
+      cell: ({ row }) => <PersonRowActions person={row.original} actions={actions} />,
       enableSorting: false,
     },
   ];
+}
+
+function PersonRowActions({
+  person,
+  actions,
+}: {
+  person: AdminPersonRow;
+  actions: PeopleColumnActions;
+}) {
+  const canEdit = useCan('person:edit');
+  const canArchive = useCan('person:archive');
+  const status = lifecycle(person);
+  const isActive = status === 'active';
+  return (
+    <RowActions
+      actions={[
+        canEdit && {
+          kind: 'edit',
+          onClick: () => actions.onEdit(person),
+          ariaSuffix: person.displayName,
+        },
+        isActive &&
+          canArchive && {
+            kind: 'archive',
+            onClick: () => actions.onArchive(person),
+            tone: 'danger',
+            ariaSuffix: person.displayName,
+          },
+      ]}
+    />
+  );
 }
