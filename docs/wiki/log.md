@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-13 — Sent quotes stay editable; Re-send replaces the recipient's copy (0046)
+
+- **Doctrine flip.** The "sent is locked" framing retired. `setQuoteInputs` accepts saves on any non-terminal status (`draft` / `sent` / `expired`); only the contract artifacts (`accepted` / `declined`) lock the composer. The Re-send button (button-label flip when `sentAt != null`) re-renders the PDF, overwrites the storage object, re-emails the recipient, advances `sent_at` to now (resetting the validity window via the derived `isExpired` projection), and emits a fresh `quote.sent` audit row that joins the Send-history Section.
+- [commercial-spine.md](commercial-spine.md) — Lifecycle diagram annotated to call out that `Quote.sent` stays editable + that Re-send replaces the recipient's copy. "Quote expired before acceptance" recovery path rewritten to surface Re-send as the primary recovery (alongside clone-from-scratch); a new "Coach needs to fix a typo / swap a line item / re-send to a different contact" bullet codifies the doctrine.
+- [data-model.md](data-model.md) — `quote.edited` value added to the audit-action enum reference (drizzle/0020_quote_edited_audit.sql); "quote.sent rows accumulate per quote" + "quote.edited emits on priced-output change only" paragraphs land. Send-flow walkthrough rewritten to cover both first-send and Re-send paths: the optimistic-lock `WHERE status NOT IN ('accepted','declined') AND date_trunc('ms', updatedAt)=preloaded` replaces the old `WHERE status='draft'`, and the new MSA-pending in-flight gate on re-send (refuses when the dealer's MSA has a `dropbox_sign_document_id` set but no signed timestamp) is documented inline.
+- New helper: `loadQuoteSendHistory` returning `QuoteSendReceipt[]` desc-ordered (renamed from the single-row `loadQuoteSendReceipt`).
+
 ## 2026-05-13 — Schema-as-contract doctrine added (0045 Phase 1)
 
 - [forms.md](forms.md) — new "Schema-as-contract" section codifies the rule: one zod schema per form lives in a sibling `*-schema.ts` module, imported by **both** the client form (`zodResolver`) and the Server Action (`safeParse(Object.fromEntries(formData))`). Schema is the single source of truth for both client validation and server-side rejection.

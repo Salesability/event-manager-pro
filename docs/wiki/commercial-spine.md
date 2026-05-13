@@ -38,10 +38,12 @@ The accepted Quote *is* the binding agreement. There's no business event between
    Lead (in-app entry today; web intake = v2 — see 0016)
      │
      ▼  composer (0035) — coach builds Quote with audience inputs + pricing
-   Quote.draft
+   Quote.draft  (composer fully editable; setQuoteInputs accepts saves)
      │
      ▼  Send (0035 Phase 4)
-   Quote.sent  ── PDF email to Client; Client phones/replies ──┐
+   Quote.sent  (composer still editable — 0046; Re-send Quote replaces
+                the recipient's copy + resets sent_at + emits a fresh
+                quote.sent audit row) ── PDF email to Client; Client phones/replies ──┐
                                                                 │
        ┌────────────────────────────────────────────────────────┘
        │
@@ -69,7 +71,8 @@ The accepted Quote *is* the binding agreement. There's no business event between
 ### Less-happy paths
 
 - **Cancellation within 21 days of Event start** — 50% × Quote total per §2.iii. Owned by `src/lib/quotes/cancellation.ts` eventually; invoiced as a separate Stripe line item. **Out of v1 scope** (see 0037 OQ #4).
-- **Quote expired before acceptance** — Quote's `quoteValidDays` window (default 30) closes; coach must clone-and-resend with refreshed pricing. The expiry guard belongs on the staff `acceptQuote` Server Action (planned — not yet wired): refuse `sent → accepted` when `sentAt + quoteValidDays < now()`.
+- **Quote expired before acceptance** — Quote's `quoteValidDays` window (default 30) elapses since the most-recent send. Two recoveries: (a) coach hits **Re-send Quote** on the same row to replace the recipient's copy with refreshed pricing — `sent_at` resets to now, the validity window resets, and a fresh `quote.sent` audit row joins the Send-history Section (0046); (b) build a new Quote from scratch if pricing has materially changed enough that the line-items diff would be confusing. The expiry guard on `acceptQuote` (0044) refuses `sent → accepted` when `sentAt + quoteValidDays < now()` regardless of recovery path.
+- **Coach needs to fix a typo / swap a line item / re-send to a different contact** — Quote stays editable through `sent` (0046 retired the draft-only edit guard). `setQuoteInputs` accepts saves on any non-terminal status; clicking **Re-send Quote** re-renders the PDF, overwrites the storage object, re-emails the recipient, advances `sent_at` to now, and emits a fresh `quote.sent` audit row. The *accepted* / *declined* terminal states stay immutable — those are the contract artifacts and the composer flips back to read-only.
 - **MSA terminated mid-term** — either party gives notice per §2.ii. Schema records `terminationNoticeDate` and `terminationEffectiveDate`; the gap must be ≥ 30 days (OQ #1 resolution). Quotes under the terminated MSA cannot be accepted after `terminationEffectiveDate`; existing accepted Quotes (already-running campaigns) honor their commitments.
 - **MSA expires (12 months elapse, no termination)** — daily sweep (deferred) flips `status='expired'`. Composer Send rejects until renewed. Renewal = coach clicks "Renew MSA" on the Client → new `master_service_agreements` row + fresh e-sig envelope (v1 manual flow per OQ #3).
 
