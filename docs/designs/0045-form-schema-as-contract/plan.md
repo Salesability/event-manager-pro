@@ -7,8 +7,8 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Doctrine — extend `forms.md` with schema-as-contract rule | Done | `25cc0f0` |
-| 2: Extract canonical schemas (dealer, quote) into shared modules + wire `safeParse` into existing actions | Pending | - |
-| 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | Pending | - |
+| 2: Extract canonical schemas (dealer, quote) into shared modules + wire `safeParse` into existing actions | Done | `2e9853d` |
+| 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | In Progress | - |
 | 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | Pending | - |
 | 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | Pending | - |
 | 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Pending | - |
@@ -36,7 +36,7 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 13% (1/8 phases complete)
+**Overall Progress:** 25% (2/8 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
@@ -53,12 +53,12 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [x] Append entry to `docs/wiki/log.md`.
 
 #### Phase 2: Extract canonical schemas + wire `safeParse` into existing actions
-- [ ] Create `src/features/dealers/dealer-schema.ts`; move `dealerFormSchema` from `dealer-form.tsx:33` into it; re-export from form file if needed for backward compat (probably not — internal-only).
-- [ ] Update `dealer-form.tsx` to import the schema.
-- [ ] In `schedule/actions.ts`, find `createDealer` and `updateDealer`; replace per-field `field(formData, ...)` extraction with `const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData))`; return `{ error, fieldErrors: parsed.error.flatten().fieldErrors }` on failure; pass `parsed.data` into the DB write.
-- [ ] Same for the quote schema: extract from `quote-composer.tsx`, place at `src/features/quotes/quote-schema.ts` (or co-locate with the existing `src/lib/quotes/pricing.ts:quoteInputsSchema` if the right home).
-- [ ] Update the quote create/update Server Actions in `src/features/quotes/actions.ts` to `safeParse` the same schema.
-- [ ] Test: existing `actions.test.ts` in dealers + quotes should still pass with the same assertions; add a new test case per file: malformed FormData → action returns `{ error, fieldErrors }` shape.
+- [x] Create `src/features/dealers/dealer-schema.ts`; move `dealerFormSchema` from `dealer-form.tsx:33` into it; re-export from form file if needed for backward compat (probably not — internal-only).
+- [x] Update `dealer-form.tsx` to import the schema.
+- [x] In `schedule/actions.ts`, find `createDealer` and `updateDealer`; replace per-field `field(formData, ...)` extraction with `const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData))`; return `{ error, fieldErrors: parsed.error.flatten().fieldErrors }` on failure; pass `parsed.data` into the DB write.
+- [x] ~~Same for the quote schema: extract from `quote-composer.tsx`, place at `src/features/quotes/quote-schema.ts`~~ — `quoteInputsSchema` already lives at `src/lib/quotes/pricing.ts` and is the right home (shared with the PDF renderer + pricing module); no move needed. Composer imports it via `quoteFormSchema = quoteInputsSchema.extend(...)`.
+- [x] Update the quote create/update Server Actions in `src/features/quotes/actions.ts` to `safeParse` the same schema. `parseQuoteInputs` now JSON-parses the wire `inputs` field, merges over `DEFAULT_QUOTE_INPUTS`, then `quoteInputsSchema.safeParse(merged)` — strict-strip keeps the unknown-key defense.
+- [x] Test: existing `actions.test.ts` in dealers + quotes should still pass with the same assertions; add a new test case per file: malformed FormData → action returns `{ error, fieldErrors }` shape.
 
 #### Phase 3: services-admin — A-shape port
 - [ ] Create `src/features/services/service-schema.ts` covering the service add + edit field set (name, category, default price, etc. — derive from current `services-admin.tsx` form).
