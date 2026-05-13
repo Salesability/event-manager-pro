@@ -8,6 +8,10 @@ Cross-cutting rules. The "what to do" reference; the "why" lives in [architectur
 
 **Mutations go through Server Actions, not route handlers.** Route handlers (`src/app/**/route.ts`) are for external callers only — webhooks, OAuth callbacks (`/auth/callback`), public APIs. Anything triggered by our own UI is a Server Action with `'use server'`.
 
+## Forms
+
+Domain forms run on **react-hook-form + zod + shadcn `<Field>` primitives**, with submission through a Server Action via `form.handleSubmit(...)` (full path) or `<form action={formAction}>` + `useActionState` (partial path, for forms with auto-fill UX that doesn't fit RHF). The in-house Radix Form wrapper was retired by 0042 Phase 6. See [forms.md](forms.md) for primitive picks, the in-house vs shadcn decision matrix, and the per-form-shape submission pattern.
+
 ## Database
 
 Stack is **Drizzle ORM + Supabase Postgres**. Schema is TypeScript in `src/lib/db/schema/`. Migrations are generated to `./drizzle/` via `pnpm db:generate` and applied via `pnpm db:migrate`.

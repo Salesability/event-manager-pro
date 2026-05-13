@@ -10,7 +10,6 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Checkbox from '@radix-ui/react-checkbox';
-import * as Form from '@radix-ui/react-form';
 import * as Select from '@radix-ui/react-select';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
@@ -30,6 +29,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
+import {
+  Field,
+  FieldError,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archivePerson, createPerson, updatePerson } from '@/features/people/actions';
@@ -77,13 +82,6 @@ function toggleCustomerFilter(
   if (enabled) return [...others, { id: 'dealerLinks', value: 'has-customer' }];
   return others;
 }
-
-const inputClass =
-  'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
-
-const fieldClass = 'flex flex-col gap-1';
-const labelClass = 'text-xs font-medium text-stone-600';
-const messageClass = 'text-[11px] font-medium text-status-red';
 
 // Per-field touched/invalid state for inline required-field messages. Radix
 // Form's `<Form.Message match="valueMissing">` only fires on `change` and
@@ -482,7 +480,7 @@ function PersonForm({
   }
 
   return (
-    <Form.Root action={formAction} className="mt-4 flex flex-col gap-3">
+    <form action={formAction} className="mt-4 flex flex-col gap-3">
       {mode === 'edit' && person && (
         <input type="hidden" name="contactId" value={person.contactId} />
       )}
@@ -507,63 +505,54 @@ function PersonForm({
         ))}
 
       <div className="grid grid-cols-2 gap-2">
-        <Form.Field name="firstName" className={fieldClass}>
-          <Form.Label className={labelClass}>First name</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="text"
-              defaultValue={person?.firstName ?? ''}
-              className={inputClass}
-              autoFocus
-              required
-              {...fieldHandlers('firstName')}
-            />
-          </Form.Control>
-          {touched.firstName && (
-            <span className={messageClass}>First name is required.</span>
-          )}
-        </Form.Field>
-        <Form.Field name="lastName" className={fieldClass}>
-          <Form.Label className={labelClass}>Last name</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="text"
-              defaultValue={person?.lastName ?? ''}
-              className={inputClass}
-              required
-              {...fieldHandlers('lastName')}
-            />
-          </Form.Control>
-          {touched.lastName && (
-            <span className={messageClass}>Last name is required.</span>
-          )}
-        </Form.Field>
+        <Field data-invalid={touched.firstName || undefined}>
+          <FieldLabel htmlFor="person-firstName">First name</FieldLabel>
+          <Input
+            id="person-firstName"
+            name="firstName"
+            type="text"
+            defaultValue={person?.firstName ?? ''}
+            autoFocus
+            required
+            aria-invalid={touched.firstName || undefined}
+            {...fieldHandlers('firstName')}
+          />
+          {touched.firstName && <FieldError>First name is required.</FieldError>}
+        </Field>
+        <Field data-invalid={touched.lastName || undefined}>
+          <FieldLabel htmlFor="person-lastName">Last name</FieldLabel>
+          <Input
+            id="person-lastName"
+            name="lastName"
+            type="text"
+            defaultValue={person?.lastName ?? ''}
+            required
+            aria-invalid={touched.lastName || undefined}
+            {...fieldHandlers('lastName')}
+          />
+          {touched.lastName && <FieldError>Last name is required.</FieldError>}
+        </Field>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <Form.Field name="email" className={fieldClass}>
-          <Form.Label className={labelClass}>Email</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="email"
-              defaultValue={person?.email ?? ''}
-              className={inputClass}
-            />
-          </Form.Control>
-          <Form.Message match="typeMismatch" className={messageClass}>
-            Email looks invalid.
-          </Form.Message>
-        </Form.Field>
-        <Form.Field name="phone" className={fieldClass}>
-          <Form.Label className={labelClass}>Phone</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="tel"
-              defaultValue={person?.phone ?? ''}
-              className={inputClass}
-            />
-          </Form.Control>
-        </Form.Field>
+        <Field>
+          <FieldLabel htmlFor="person-email">Email</FieldLabel>
+          <Input
+            id="person-email"
+            name="email"
+            type="email"
+            defaultValue={person?.email ?? ''}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="person-phone">Phone</FieldLabel>
+          <Input
+            id="person-phone"
+            name="phone"
+            type="tel"
+            defaultValue={person?.phone ?? ''}
+          />
+        </Field>
       </div>
 
       <div className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
@@ -727,22 +716,20 @@ function PersonForm({
 
       <div className="mt-2 flex justify-end gap-2">
         <DialogClose className={rowEditClass}>Cancel</DialogClose>
-        <Form.Submit asChild>
-          <button
-            type="submit"
-            disabled={pending || !hasAnyRole}
-            className={submitClass}
-          >
-            {pending
-              ? mode === 'create'
-                ? 'Creating…'
-                : 'Saving…'
-              : mode === 'create'
-                ? 'Add Person'
-                : 'Save'}
-          </button>
-        </Form.Submit>
+        <button
+          type="submit"
+          disabled={pending || !hasAnyRole}
+          className={submitClass}
+        >
+          {pending
+            ? mode === 'create'
+              ? 'Creating…'
+              : 'Saving…'
+            : mode === 'create'
+              ? 'Add Person'
+              : 'Save'}
+        </button>
       </div>
-    </Form.Root>
+    </form>
   );
 }

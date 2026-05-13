@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-12 — Form convention captured; Radix Form retired (0042 Phase 6)
+
+- New page [forms.md](forms.md) documents the project's form convention: react-hook-form + zod + shadcn `<Field>` primitives, schema-first with `z.infer`, Server Action submission via `form.handleSubmit` (full path) or `<form action={formAction}>` + `useActionState` (partial path for auto-fill-heavy forms like `booking-form.tsx` and the people-admin `PersonForm`).
+- In-house vs shadcn primitive decision matrix added — `data-table.tsx` (TanStack column conventions from 0023) and `toaster.tsx` (audit-log callbacks from closed/0030) keep their in-house implementations; everything else is shadcn Base UI as-shipped, with the 0042 Phase 5 Tabs orientation-selector rewrite (`data-horizontal:flex-col` → `data-[orientation=horizontal]:flex-col`) called out as the canonical "small targeted edit" pattern.
+- [conventions.md](conventions.md) — added a `## Forms` section pointing at the new page; no other edits.
+- [index.md](index.md) — `forms.md` added to the Reference pages list under conventions.md.
+- Phase 6 also removed the last `@radix-ui/react-form` consumer: `src/features/people/people-admin.tsx` PersonForm ported off `<Form.Root>` / `<Form.Field>` / `<Form.Control asChild>` to shadcn `<Field>` + `<FieldLabel>` + `<Input>` while keeping the existing `useActionState` + native `<form action={formAction}>` shape and the project's `useTouched()` blur-state hook for inline required-field messages. The Phase 4 carry-forward assumption that "dealer-form was the only Radix Form consumer" turned out to be wrong; PersonForm hadn't been audited in Phase 4's port list. `pnpm remove @radix-ui/react-form` ran clean after the port.
+
 ## 2026-05-12 — Commercial spine landed: `campaigns` shed legacy commercial columns (0037 Phase 4 + 5)
 
 - [data-model.md](data-model.md) — `campaigns` row in the tables-at-a-glance trimmed and the `### campaigns` walkthrough rewritten. Campaigns are now framed as operational delivery: the commercial terms (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) live on `quotes`; `campaigns.accepted_quote_id` is the FK back to the binding quote. `campaigns.audience_source_id` retained for now — see scope note below.

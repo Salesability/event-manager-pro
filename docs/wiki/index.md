@@ -12,6 +12,7 @@ Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf5
 - [data-model.md](data-model.md) — Postgres schema overview, ERD, table-by-table notes, mixin reference, open schema questions.
 - [auth.md](auth.md) — Supabase Auth setup, Google OAuth + magic link, signup-disabled invariant, route gating, staff vs portal-contact login routing, per-action `requireRole` matrix.
 - [conventions.md](conventions.md) — cross-cutting rules: Server Actions for mutations, mixin pattern, migration workflow, git/commit rules.
+- [forms.md](forms.md) — RHF + zod + shadcn `<Field>` primitives, Server Action submission, full-RHF vs partial-RHF shapes, in-house vs shadcn primitive decision matrix.
 - [security.md](security.md) — five-layer defence-in-depth map: edge / layout / action / RLS / forensic audit log. Threat models for staff app vs future portal. What to grep when investigating.
 
 ## Concept pages

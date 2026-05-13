@@ -12,12 +12,12 @@
 | 3: Port `quote-composer.tsx` | Done | `2462b0c` |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
 | 5: Primitive sweep (dialog / combobox / tabs) | Done | `b4df471` |
-| 6: Docs (wiki) + Radix Form removal | Pending | - |
+| 6: Docs (wiki) + Radix Form removal | Done | _commit pending_ |
 | 7: Tests + smoke verification | Pending | - |
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 71% (5/7 phases complete)
+**Overall Progress:** 86% (6/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -116,11 +116,12 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS). `web-test` smoke deferred to chunk-end `/eval` per the post-0040 cadence.
 
 #### Phase 6: Docs (wiki) + Radix Form removal
-- [ ] Write `docs/wiki/forms.md`: schema first + `z.infer`, Server Action submission via `form.handleSubmit`, `setError` mapping for server-side field errors, `<FormField>` wrapper API, in-house vs shadcn primitive decision matrix, when to extend a shadcn component vs build new
-- [ ] Cross-link from `docs/wiki/index.md` and `docs/wiki/conventions.md`; append entry to `docs/wiki/log.md`
-- [ ] Confirm `grep -rl '@radix-ui/react-form' src/` is empty
-- [ ] `pnpm remove @radix-ui/react-form`
-- [ ] Verify build still green; commit the docs + remove together
+- [x] Wrote `docs/wiki/forms.md` — schema-first with `z.infer`, full RHF + zod path (`form.handleSubmit` → Server Action → `setError` mapping) vs partial path (`<form action={formAction}>` + `useActionState` + `useTouched`), shadcn Field primitives, in-house vs shadcn decision matrix (data-table + toaster keep in-house; dialog/combobox/tabs ported; Tabs orientation-selector rewrite cited as the "small targeted edit" pattern). Phrasing pivoted from the plan-body's "`<FormField>` wrapper API" to the modern shadcn 4.x `<Field>` primitive per the Phase 2 v2 note.
+- [x] Cross-linked from `docs/wiki/index.md` (Reference pages list) and `docs/wiki/conventions.md` (new `## Forms` section pointing at forms.md); prepended a reverse-chronological entry to `docs/wiki/log.md` covering the Phase 6 work.
+- [x] **OQ#5 turned out to be wrong** — Phase 4 left `src/features/people/people-admin.tsx` PersonForm using `@radix-ui/react-form` (the plan-body grep claimed only `dealer-form.tsx`; that audit was stale). Ported PersonForm under Phase 6: `<Form.Root action>` → `<form action>`, `<Form.Field>/<Form.Label>/<Form.Control asChild>` → shadcn `<Field>` + `<FieldLabel>` + `<Input>`, `<Form.Message match="typeMismatch">` dropped (browser-native email validation tooltip suffices; server still validates), `<Form.Submit asChild>` → plain `<button type="submit">`. Kept `useActionState` + the existing `useTouched()` blur-state hook unchanged.
+- [x] `grep -rln "@radix-ui/react-form" src/` is empty.
+- [x] `pnpm remove @radix-ui/react-form` ran clean.
+- [x] `tsc + test` gate green (tsc clean, 757/759 PASS). Docs + dep-remove shipped together.
 
 #### Phase 7: Tests + smoke verification
 - [ ] Full `pnpm test` run — all existing form-touching tests still pass (dealer-form action tests, calendar booking-form tests, quote-composer tests if any)
