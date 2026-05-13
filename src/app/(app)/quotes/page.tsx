@@ -39,12 +39,12 @@ export default async function QuotesPage({ searchParams }: Props) {
       />
       <QuotesFilters counts={counts} />
 
-      <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      <section className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="overflow-x-auto">
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-20 text-stone-400">
+            <div className="flex flex-col items-center gap-2 py-20 text-muted-foreground/70">
               <span className="text-4xl">📋</span>
-              <span className="text-sm font-semibold text-stone-600">No quotes match</span>
+              <span className="text-sm font-semibold text-muted-foreground">No quotes match</span>
               <span className="text-xs">
                 {all.length === 0
                   ? 'Create the first quote from a dealer row on /dealerships.'
@@ -54,7 +54,7 @@ export default async function QuotesPage({ searchParams }: Props) {
           ) : (
             <table className="w-full min-w-[900px] table-auto border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                <tr className="bg-primary text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
                   <th className="w-full px-3 py-2.5">Dealer</th>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5 text-right">Total</th>
@@ -100,26 +100,26 @@ function isQuoteStatus(v: string): v is QuoteStatus {
 function QuoteRow({ quote }: { quote: Quote }) {
   const pillKey = displayStatusKey(quote);
   return (
-    <tr className="border-b border-stone-200 last:border-b-0 hover:bg-navy-pale/40">
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
-        <div className="font-semibold text-stone-800">{quote.dealerName}</div>
+    <tr className="border-b border-border last:border-b-0 hover:bg-primary/5">
+      <td className="border-b border-border px-3 py-2.5 align-top">
+        <div className="font-semibold text-foreground">{quote.dealerName}</div>
         {quote.dealerArchivedAt && (
-          <div className="text-[11px] text-stone-400">Dealer archived</div>
+          <div className="text-[11px] text-muted-foreground/70">Dealer archived</div>
         )}
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+      <td className="border-b border-border px-3 py-2.5 align-top">
         <QuoteStatusBadge status={pillKey} />
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 text-right align-top font-semibold">
+      <td className="border-b border-border px-3 py-2.5 text-right align-top font-semibold">
         {fmtMoney(quote.total)}
       </td>
-      <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+      <td className="whitespace-nowrap border-b border-border px-3 py-2.5 align-top text-xs text-muted-foreground">
         {quote.sentAt ? <RelativeTime value={quote.sentAt} /> : '—'}
       </td>
-      <td className="whitespace-nowrap border-b border-stone-200 px-3 py-2.5 align-top text-xs text-stone-600">
+      <td className="whitespace-nowrap border-b border-border px-3 py-2.5 align-top text-xs text-muted-foreground">
         <RelativeTime value={quote.createdAt} />
       </td>
-      <td className="border-b border-stone-200 px-3 py-2.5 align-top">
+      <td className="border-b border-border px-3 py-2.5 align-top">
         <QuoteRowActions quote={quote} />
       </td>
     </tr>

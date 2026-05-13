@@ -176,7 +176,7 @@ export function BookingForm({
             value={endDate}
             readOnly
             tabIndex={-1}
-            className="bg-stone-100 text-stone-600"
+            className="bg-muted text-muted-foreground"
           />
         </Field>
       </div>
@@ -246,7 +246,7 @@ export function BookingForm({
             <button
               type="button"
               onClick={() => setStylesOpen(true)}
-              className="text-xs font-semibold normal-case text-accent transition hover:text-navy"
+              className="text-xs font-semibold normal-case text-accent transition hover:text-primary"
             >
               Manage
             </button>
@@ -273,7 +273,7 @@ export function BookingForm({
             <button
               type="button"
               onClick={() => setSourcesOpen(true)}
-              className="text-xs font-semibold normal-case text-accent transition hover:text-navy"
+              className="text-xs font-semibold normal-case text-accent transition hover:text-primary"
             >
               Manage
             </button>
@@ -366,14 +366,14 @@ export function BookingForm({
         <button
           type="button"
           onClick={onSuccess}
-          className="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-600 transition hover:border-stone-400 hover:text-navy"
+          className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-input hover:text-primary"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? 'Saving…' : mode === 'create' ? 'Book Event' : 'Save'}
         </button>

@@ -68,7 +68,7 @@ export default async function DealerDetailPage({
     <div className="flex flex-col gap-6">
       <Link
         href="/dealerships"
-        className="text-xs font-medium text-stone-500 transition hover:text-foreground"
+        className="text-xs font-medium text-muted-foreground transition hover:text-foreground"
       >
         ← Dealers
       </Link>
@@ -107,31 +107,31 @@ export default async function DealerDetailPage({
       >
         {msa ? (
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
-            <dt className="font-medium text-stone-600">Created</dt>
-            <dd className="text-stone-800">{fmtDate(msa.createdAt)}</dd>
+            <dt className="font-medium text-muted-foreground">Created</dt>
+            <dd className="text-foreground">{fmtDate(msa.createdAt)}</dd>
             {msa.signedAt && (
               <>
-                <dt className="font-medium text-stone-600">Signed</dt>
-                <dd className="text-stone-800">{fmtDate(msa.signedAt)}</dd>
+                <dt className="font-medium text-muted-foreground">Signed</dt>
+                <dd className="text-foreground">{fmtDate(msa.signedAt)}</dd>
               </>
             )}
             {msa.expiresAt && (
               <>
-                <dt className="font-medium text-stone-600">Expires</dt>
-                <dd className="text-stone-800">{fmtDate(msa.expiresAt)}</dd>
+                <dt className="font-medium text-muted-foreground">Expires</dt>
+                <dd className="text-foreground">{fmtDate(msa.expiresAt)}</dd>
               </>
             )}
-            <dt className="font-medium text-stone-600">Template version</dt>
-            <dd className="font-mono text-xs text-stone-700">{msa.templateVersion}</dd>
+            <dt className="font-medium text-muted-foreground">Template version</dt>
+            <dd className="font-mono text-xs text-foreground">{msa.templateVersion}</dd>
             {signedMsaPdfUrl && (
               <>
-                <dt className="font-medium text-stone-600">Signed PDF</dt>
+                <dt className="font-medium text-muted-foreground">Signed PDF</dt>
                 <dd>
                   <a
                     href={signedMsaPdfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-medium text-navy underline hover:opacity-80"
+                    className="font-medium text-primary underline hover:opacity-80"
                   >
                     Download signed MSA
                   </a>
@@ -139,7 +139,7 @@ export default async function DealerDetailPage({
               </>
             )}
             {msa.status === 'pending' && msa.dropboxSignDocumentId && (
-              <dd className="col-span-full mt-1 text-xs text-stone-500">
+              <dd className="col-span-full mt-1 text-xs text-muted-foreground">
                 Envelope sent — awaiting signer. Sign event arrives via Dropbox
                 Sign webhook.
               </dd>
@@ -147,7 +147,7 @@ export default async function DealerDetailPage({
           </dl>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-muted-foreground">
               No MSA on file yet. The first envelope bundles the MSA with the
               dealer&apos;s first draft Quote.
             </p>
@@ -178,9 +178,9 @@ export default async function DealerDetailPage({
         variant="card"
       >
         {quotes.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-stone-400">
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground/70">
             <span className="text-3xl">📋</span>
-            <span className="text-sm font-semibold text-stone-600">No quotes yet</span>
+            <span className="text-sm font-semibold text-muted-foreground">No quotes yet</span>
             {!dealer.archivedAt && (
               <Link
                 href={`/quotes/new?dealerId=${dealer.id}`}
@@ -191,9 +191,9 @@ export default async function DealerDetailPage({
             )}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-stone-200">
+          <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-navy text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
+              <thead className="bg-primary text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
                 <tr>
                   <th className="px-3 py-2.5">Status</th>
                   <th className="px-3 py-2.5 text-right">Total</th>
@@ -208,24 +208,24 @@ export default async function DealerDetailPage({
                 {quotes.map((quote) => {
                   const pillKey = displayStatusKey(quote);
                   return (
-                    <tr key={quote.id} className="border-b border-stone-200 last:border-b-0">
+                    <tr key={quote.id} className="border-b border-border last:border-b-0">
                       <td className="px-3 py-2.5 align-top">
                         <QuoteStatusBadge status={pillKey} />
                       </td>
                       <td className="px-3 py-2.5 text-right align-top font-semibold tabular-nums">
                         {fmtMoney(quote.total)}
                       </td>
-                      <td className="px-3 py-2.5 align-top text-xs text-stone-600">
+                      <td className="px-3 py-2.5 align-top text-xs text-muted-foreground">
                         {fmtDate(quote.sentAt)}
                       </td>
-                      <td className="px-3 py-2.5 align-top text-xs text-stone-600">
+                      <td className="px-3 py-2.5 align-top text-xs text-muted-foreground">
                         {fmtDate(quote.createdAt)}
                       </td>
                       <td className="px-3 py-2.5 align-top">
                         <Link
                           href={`/quotes/${quote.id}`}
                           aria-label={`View quote #${quote.id}`}
-                          className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+                          className="rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
                         >
                           View
                         </Link>

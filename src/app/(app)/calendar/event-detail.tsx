@@ -88,7 +88,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
           <Row
             label="Format"
             value={
-              <span className="rounded-full bg-navy/10 px-2 py-0.5 text-xs font-semibold text-navy">
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                 {campaign.styleLabel}
               </span>
             }
@@ -115,14 +115,14 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
         />
       </dl>
 
-      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 pt-4">
+      <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
         <Can capability="email:send">
           <button
             type="button"
             onClick={onEmailClient}
             disabled={pending || !campaign.email}
             title={campaign.email ? 'Send the dealer contact a booking confirmation' : 'No client email on file'}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary transition hover:border-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Email Client
           </button>
@@ -131,7 +131,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
             onClick={onEmailCoach}
             disabled={pending || !campaign.coachId}
             title={campaign.coachId ? 'Send the assigned coach a booking confirmation' : 'No coach assigned'}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-navy transition hover:border-navy hover:bg-navy-pale disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-primary transition hover:border-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Email Coach
           </button>
@@ -163,7 +163,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90"
           >
             Edit
           </button>
@@ -184,8 +184,8 @@ function Row({
 }) {
   return (
     <div className={fullWidth ? 'col-span-2 flex flex-col gap-0.5' : 'flex flex-col gap-0.5'}>
-      <dt className="text-xs font-semibold uppercase tracking-wide text-stone-500">{label}</dt>
-      <dd className="text-sm text-stone-800">{value}</dd>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dd className="text-sm text-foreground">{value}</dd>
     </div>
   );
 }
@@ -206,7 +206,7 @@ function statusBadgeClass(status: Campaign['status']) {
     case 'booked':
       return 'bg-status-green/15 text-status-green';
     case 'completed':
-      return 'bg-stone-200 text-stone-600';
+      return 'bg-muted text-muted-foreground';
     case 'cancelled':
       return 'bg-status-red/15 text-status-red';
     case 'draft':
