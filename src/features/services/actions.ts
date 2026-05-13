@@ -5,27 +5,17 @@ import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
-import { field, parseId } from '@/features/schedule/validators';
+import { parseId } from '@/features/schedule/validators';
+import {
+  normalizeMoney,
+  serviceItemFormSchema,
+  type ServiceItemFormValues,
+} from './service-schema';
 import type { ServiceItemUnit } from './queries';
 
-type ActionResult = { ok: true } | { error: string };
-
-const UNITS: readonly ServiceItemUnit[] = [
-  'flat',
-  'per-record',
-  'per-touch',
-  'per-day',
-  'range',
-];
-
-// Lowercase letters, digits, hyphens; 2–60 chars; no leading/trailing hyphen.
-const CODE_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-
-// Match `numeric(10,2)` on the column: up to 8 whole digits, up to 2 decimal
-// digits. Validates server-side; `step="0.01"` in the form UI is advisory only.
-const MONEY_RE = /^(0|[1-9]\d{0,7})(\.\d{1,2})?$/;
-// Postgres `integer` (signed 32-bit) upper bound; we already reject negatives.
-const MAX_PG_INTEGER = 2_147_483_647;
+type ActionResult =
+  | { ok: true }
+  | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 
 type ServiceItemFields = {
   label: string;
@@ -37,45 +27,26 @@ type ServiceItemFields = {
   sortOrder: number;
 };
 
-function parseNumericMoney(raw: string, name: string): string | null | { error: string } {
-  if (!raw) return null;
-  if (!MONEY_RE.test(raw)) {
-    return {
-      error: `${name} must be a non-negative dollar amount with at most 8 whole digits and 2 decimal places.`,
-    };
+type FieldErrors = Record<string, string[] | undefined>;
+function firstFieldError(fieldErrors: FieldErrors): string | undefined {
+  for (const list of Object.values(fieldErrors)) {
+    if (list && list.length) return list[0];
   }
-  // Normalize via string manipulation — going through `Number` would IEEE-754-
-  // round inputs like "2.675" to "2.67" silently. Pad/truncate fractional part
-  // to exactly 2 digits.
-  const [whole, frac = ''] = raw.split('.');
-  return `${whole}.${(frac + '00').slice(0, 2)}`;
+  return undefined;
 }
 
-function parseServiceItemFields(formData: FormData): ServiceItemFields | { error: string } {
-  const label = field(formData, 'label');
-  if (!label) return { error: 'Label is required.' };
-  if (label.length > 120) return { error: 'Label must be 120 characters or fewer.' };
+/** Apply wire → DB normalization on a successfully-parsed form value. The
+ *  schema validates per-field format; this helper handles the cross-field
+ *  range rule and the string → number / string → padded-money transforms. */
+function toServiceItemFields(
+  v: ServiceItemFormValues,
+): ServiceItemFields | { error: string } {
+  const sortOrder = v.sortOrder ? Number(v.sortOrder) : 0;
+  const unitPrice = normalizeMoney(v.unitPrice);
+  const unitPriceMin = normalizeMoney(v.unitPriceMin);
+  const unitPriceMax = normalizeMoney(v.unitPriceMax);
 
-  const unit = field(formData, 'unit') as ServiceItemUnit;
-  if (!UNITS.includes(unit)) return { error: 'Invalid unit.' };
-
-  const description = field(formData, 'description');
-  if (description.length > 500) return { error: 'Description must be 500 characters or fewer.' };
-
-  const sortOrderRaw = field(formData, 'sortOrder');
-  const sortOrder = sortOrderRaw === '' ? 0 : Number(sortOrderRaw);
-  if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > MAX_PG_INTEGER) {
-    return { error: 'Sort order must be a non-negative integer.' };
-  }
-
-  const unitPrice = parseNumericMoney(field(formData, 'unitPrice'), 'Unit price');
-  if (typeof unitPrice === 'object' && unitPrice && 'error' in unitPrice) return unitPrice;
-  const unitPriceMin = parseNumericMoney(field(formData, 'unitPriceMin'), 'Min price');
-  if (typeof unitPriceMin === 'object' && unitPriceMin && 'error' in unitPriceMin) return unitPriceMin;
-  const unitPriceMax = parseNumericMoney(field(formData, 'unitPriceMax'), 'Max price');
-  if (typeof unitPriceMax === 'object' && unitPriceMax && 'error' in unitPriceMax) return unitPriceMax;
-
-  if (unit === 'range') {
+  if (v.unit === 'range') {
     if (unitPriceMin == null || unitPriceMax == null) {
       return { error: 'Range items need both min and max prices.' };
     }
@@ -85,23 +56,14 @@ function parseServiceItemFields(formData: FormData): ServiceItemFields | { error
   }
 
   return {
-    label,
-    unit,
-    unitPrice: unit === 'range' ? null : (unitPrice as string | null),
-    unitPriceMin: unit === 'range' ? (unitPriceMin as string | null) : null,
-    unitPriceMax: unit === 'range' ? (unitPriceMax as string | null) : null,
-    description: description || null,
+    label: v.label,
+    unit: v.unit,
+    unitPrice: v.unit === 'range' ? null : unitPrice,
+    unitPriceMin: v.unit === 'range' ? unitPriceMin : null,
+    unitPriceMax: v.unit === 'range' ? unitPriceMax : null,
+    description: v.description ? v.description : null,
     sortOrder,
   };
-}
-
-function parseCode(formData: FormData): string | { error: string } {
-  const code = field(formData, 'code').toLowerCase();
-  if (!code) return { error: 'Code is required.' };
-  if (!CODE_RE.test(code)) {
-    return { error: 'Code must be lowercase kebab-case (letters, digits, hyphens).' };
-  }
-  return code;
 }
 
 function isDuplicateCodeError(err: unknown): boolean {
@@ -117,10 +79,18 @@ function revalidateLookupAdmin() {
 export const createServiceItem = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
-    const code = parseCode(formData);
-    if (typeof code !== 'string') return code;
+    const parsed = serviceItemFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return {
+        error: firstFieldError(fieldErrors) ?? 'Invalid service-item input.',
+        fieldErrors,
+      };
+    }
+    if (!parsed.data.code) return { error: 'Code is required.' };
+    const code = parsed.data.code;
 
-    const fields = parseServiceItemFields(formData);
+    const fields = toServiceItemFields(parsed.data);
     if ('error' in fields) return fields;
 
     // Un-archive an existing archived row with this code (matches
@@ -153,7 +123,16 @@ export const updateServiceItem = capabilityClient('lookup:edit')
     const id = parseId(formData);
     if (id == null) return { error: 'Invalid service-item id.' };
 
-    const fields = parseServiceItemFields(formData);
+    const parsed = serviceItemFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return {
+        error: firstFieldError(fieldErrors) ?? 'Invalid service-item input.',
+        fieldErrors,
+      };
+    }
+
+    const fields = toServiceItemFields(parsed.data);
     if ('error' in fields) return fields;
 
     const result = await db

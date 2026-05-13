@@ -24,9 +24,11 @@ type AnySafeActionResult = {
   validationErrors?: unknown;
 };
 
+export type LegacyFieldErrors = Record<string, string[] | undefined>;
+
 export type LegacyActionResult<TOk extends { ok: true } = { ok: true }> =
   | TOk
-  | { error: string };
+  | { error: string; fieldErrors?: LegacyFieldErrors };
 
 export function toLegacyResult<TOk extends { ok: true } = { ok: true }>(
   result: AnySafeActionResult | undefined | null,
@@ -40,11 +42,20 @@ export function toLegacyResult<TOk extends { ok: true } = { ok: true }>(
   }
   if ('data' in result && result.data) {
     const data = result.data as
-      | { ok?: boolean; error?: string }
+      | { ok?: boolean; error?: string; fieldErrors?: LegacyFieldErrors }
       | (TOk & { error?: undefined })
       | undefined;
     if (data && 'error' in data && typeof data.error === 'string') {
-      return { error: data.error };
+      // 0045 Phase 2: schema-as-contract actions return `fieldErrors` alongside
+      // `error` so A-shape forms can route per-field via `setError`. Pass
+      // through when present; legacy single-string actions still work fine.
+      const out: { error: string; fieldErrors?: LegacyFieldErrors } = {
+        error: data.error,
+      };
+      if (data.fieldErrors && typeof data.fieldErrors === 'object') {
+        out.fieldErrors = data.fieldErrors;
+      }
+      return out;
     }
     if (data && 'ok' in data && data.ok === true) {
       // Pass the action's full success payload (e.g. `{ok, contactId, warning}`)

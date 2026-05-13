@@ -1,9 +1,18 @@
 'use client';
 
-import { useMemo, useRef, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveServiceItem,
@@ -11,8 +20,11 @@ import {
   updateServiceItem,
 } from '@/features/services/actions';
 import type { ServiceItem, ServiceItemUnit } from '@/features/services/queries';
-
-const UNITS: ServiceItemUnit[] = ['flat', 'per-record', 'per-touch', 'per-day', 'range'];
+import {
+  SERVICE_UNITS,
+  serviceItemFormSchema,
+  type ServiceItemFormValues,
+} from './service-schema';
 
 const UNIT_LABEL: Record<ServiceItemUnit, string> = {
   flat: 'Flat',
@@ -22,11 +34,14 @@ const UNIT_LABEL: Record<ServiceItemUnit, string> = {
   range: 'Range',
 };
 
-const inputClass =
-  'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
+const selectClass =
+  'h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm';
 
 const buttonClass =
   'rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy disabled:cursor-not-allowed disabled:opacity-50';
+
+const submitClass =
+  'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
 
 function formatPrice(item: ServiceItem): string {
   if (item.unit === 'range') {
@@ -40,27 +55,7 @@ function formatPrice(item: ServiceItem): string {
 
 export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
   const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
-  const [unit, setUnit] = useState<ServiceItemUnit>('flat');
-  const [pending, startTransition] = useTransition();
-
   const rows = useMemo(() => items, [items]);
-
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    startTransition(async () => {
-      const result = toLegacyResult(await createServiceItem(fd));
-      if ('ok' in result) {
-        toast.success('Service item added');
-        formRef.current?.reset();
-        setUnit('flat');
-        router.refresh();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
 
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
@@ -77,88 +72,13 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
       </div>
 
       <Can capability="lookup:edit">
-        <form
-          ref={formRef}
-          onSubmit={handleAdd}
-          className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-stone-100 bg-stone-50 p-4 md:grid-cols-6"
-        >
-          <input
-            name="code"
-            placeholder="code (kebab-case)"
-            className={`${inputClass} md:col-span-2`}
-            maxLength={60}
-            required
+        <div className="mt-4 rounded-xl border border-stone-100 bg-stone-50 p-4">
+          <ServiceForm
+            mode="create"
+            defaultSortOrder={rows.length}
+            onSuccess={() => router.refresh()}
           />
-          <input
-            name="label"
-            placeholder="Label"
-            className={`${inputClass} md:col-span-2`}
-            maxLength={120}
-            required
-          />
-          <select
-            name="unit"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value as ServiceItemUnit)}
-            className={inputClass}
-          >
-            {UNITS.map((u) => (
-              <option key={u} value={u}>
-                {UNIT_LABEL[u]}
-              </option>
-            ))}
-          </select>
-          <input
-            name="sortOrder"
-            type="number"
-            min={0}
-            placeholder="Sort"
-            defaultValue={rows.length}
-            className={inputClass}
-          />
-          {unit === 'range' ? (
-            <>
-              <input
-                name="unitPriceMin"
-                type="number"
-                step="0.01"
-                min={0}
-                placeholder="Min $"
-                className={inputClass}
-              />
-              <input
-                name="unitPriceMax"
-                type="number"
-                step="0.01"
-                min={0}
-                placeholder="Max $"
-                className={inputClass}
-              />
-            </>
-          ) : (
-            <input
-              name="unitPrice"
-              type="number"
-              step="0.01"
-              min={0}
-              placeholder="Unit $ (blank = variable)"
-              className={`${inputClass} md:col-span-2`}
-            />
-          )}
-          <input
-            name="description"
-            placeholder="Description (optional)"
-            className={`${inputClass} md:col-span-3`}
-            maxLength={500}
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Add
-          </button>
-        </form>
+        </div>
       </Can>
 
       <div className="mt-4 flex flex-col divide-y divide-stone-100">
@@ -167,7 +87,9 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
             No service items yet.
           </div>
         ) : (
-          rows.map((item) => <ServiceRow key={item.id} item={item} onChanged={() => router.refresh()} />)
+          rows.map((item) => (
+            <ServiceRow key={item.id} item={item} onChanged={() => router.refresh()} />
+          ))
         )}
       </div>
     </section>
@@ -178,171 +100,291 @@ function ServiceRow({ item, onChanged }: { item: ServiceItem; onChanged: () => v
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  if (!editing) {
+  if (editing) {
     return (
-      <div className="flex min-h-14 items-center gap-3 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-mono text-xs text-stone-500">{item.code}</span>
-            <span className="text-sm font-medium text-stone-800">{item.label}</span>
-            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600">
-              {UNIT_LABEL[item.unit]}
-            </span>
-            <span className="text-sm tabular-nums text-stone-700">{formatPrice(item)}</span>
-          </div>
-          {item.description ? (
-            <p className="mt-0.5 text-xs text-stone-500">{item.description}</p>
-          ) : null}
-        </div>
-        <Can capability="lookup:edit">
-          <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
-            Edit
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            aria-label={`Archive ${item.label}`}
-            onClick={() => {
-              if (!confirm(`Archive ${item.label}? Active quotes already referencing this catalog row are unaffected.`)) return;
-              startTransition(async () => {
-                const fd = new FormData();
-                fd.set('id', String(item.id));
-                const result = toLegacyResult(await archiveServiceItem(fd));
-                if ('ok' in result) {
-                  toast.success('Service item archived');
-                  onChanged();
-                } else {
-                  toast.error(result.error);
-                }
-              });
-            }}
-            className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            x
-          </button>
-        </Can>
-      </div>
+      <ServiceForm
+        mode="edit"
+        item={item}
+        onSuccess={() => {
+          setEditing(false);
+          onChanged();
+        }}
+        onCancel={() => setEditing(false)}
+      />
     );
   }
 
   return (
-    <ServiceEditForm
-      item={item}
-      pending={pending}
-      onCancel={() => setEditing(false)}
-      onSubmit={(fd) =>
-        startTransition(async () => {
-          const result = toLegacyResult(await updateServiceItem(fd));
-          if ('ok' in result) {
-            toast.success('Service item updated');
-            setEditing(false);
-            onChanged();
-          } else {
-            toast.error(result.error);
-          }
-        })
-      }
-    />
+    <div className="flex min-h-14 items-center gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="font-mono text-xs text-stone-500">{item.code}</span>
+          <span className="text-sm font-medium text-stone-800">{item.label}</span>
+          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-600">
+            {UNIT_LABEL[item.unit]}
+          </span>
+          <span className="text-sm tabular-nums text-stone-700">{formatPrice(item)}</span>
+        </div>
+        {item.description ? (
+          <p className="mt-0.5 text-xs text-stone-500">{item.description}</p>
+        ) : null}
+      </div>
+      <Can capability="lookup:edit">
+        <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+          Edit
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          aria-label={`Archive ${item.label}`}
+          onClick={() => {
+            if (
+              !confirm(
+                `Archive ${item.label}? Active quotes already referencing this catalog row are unaffected.`,
+              )
+            )
+              return;
+            startTransition(async () => {
+              const fd = new FormData();
+              fd.set('id', String(item.id));
+              const result = toLegacyResult(await archiveServiceItem(fd));
+              if ('ok' in result) {
+                toast.success('Service item archived');
+                onChanged();
+              } else {
+                toast.error(result.error);
+              }
+            });
+          }}
+          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          x
+        </button>
+      </Can>
+    </div>
   );
 }
 
-function ServiceEditForm({
-  item,
-  pending,
-  onCancel,
-  onSubmit,
-}: {
-  item: ServiceItem;
-  pending: boolean;
-  onCancel: () => void;
-  onSubmit: (fd: FormData) => void;
-}) {
-  const [unit, setUnit] = useState<ServiceItemUnit>(item.unit);
+type ServiceFormProps =
+  | {
+      mode: 'create';
+      defaultSortOrder: number;
+      onSuccess: () => void;
+      onCancel?: undefined;
+      item?: undefined;
+    }
+  | {
+      mode: 'edit';
+      item: ServiceItem;
+      onSuccess: () => void;
+      onCancel: () => void;
+      defaultSortOrder?: undefined;
+    };
+
+function ServiceForm(props: ServiceFormProps) {
+  const isEdit = props.mode === 'edit';
+  const defaultValues: ServiceItemFormValues = useMemo(() => {
+    if (isEdit) {
+      return {
+        code: props.item.code,
+        label: props.item.label,
+        unit: props.item.unit,
+        description: props.item.description ?? '',
+        sortOrder: String(props.item.sortOrder),
+        unitPrice: props.item.unitPrice ?? '',
+        unitPriceMin: props.item.unitPriceMin ?? '',
+        unitPriceMax: props.item.unitPriceMax ?? '',
+      };
+    }
+    return {
+      code: '',
+      label: '',
+      unit: 'flat',
+      description: '',
+      sortOrder: String(props.defaultSortOrder),
+      unitPrice: '',
+      unitPriceMin: '',
+      unitPriceMax: '',
+    };
+  }, [isEdit, props]);
+
+  const form = useForm<ServiceItemFormValues>({
+    resolver: zodResolver(serviceItemFormSchema),
+    defaultValues,
+    mode: 'onTouched',
+  });
+  const { register, handleSubmit, watch, reset, formState } = form;
+  const { errors, isSubmitting } = formState;
+  const unit = watch('unit');
+
+  const onSubmit = handleSubmit(async (values) => {
+    const fd = valuesToFormData(values, isEdit ? props.item.id : undefined);
+    const action = isEdit ? updateServiceItem : createServiceItem;
+    const result = toLegacyResult(await action(fd));
+    if ('ok' in result) {
+      toast.success(isEdit ? 'Service item updated' : 'Service item added');
+      if (!isEdit) reset(defaultValues);
+      props.onSuccess();
+    } else if (result.fieldErrors) {
+      for (const [name, messages] of Object.entries(result.fieldErrors)) {
+        const msg = messages?.[0];
+        if (msg) form.setError(name as keyof ServiceItemFormValues, { type: 'server', message: msg });
+      }
+    } else {
+      toast.error(result.error);
+    }
+  });
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const fd = new FormData(e.currentTarget);
-        fd.set('id', String(item.id));
-        onSubmit(fd);
-      }}
-      className="grid grid-cols-1 gap-2 py-3 md:grid-cols-6"
-    >
-      <div className={`${inputClass} flex items-center bg-stone-50 font-mono text-xs text-stone-600 md:col-span-2`}>
-        {item.code}
+    <form onSubmit={onSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-6">
+      <FieldGroup className="md:col-span-6 md:grid md:grid-cols-6 md:gap-3 md:space-y-0">
+        {isEdit ? (
+          <Field className="md:col-span-2">
+            <FieldLabel>Code</FieldLabel>
+            <div className="flex h-9 items-center rounded-lg border border-stone-200 bg-stone-50 px-3 font-mono text-xs text-stone-600">
+              {props.item.code}
+            </div>
+          </Field>
+        ) : (
+          <Field data-invalid={!!errors.code || undefined} className="md:col-span-2">
+            <FieldLabel htmlFor="svc-code">Code</FieldLabel>
+            <Input
+              id="svc-code"
+              type="text"
+              placeholder="code (kebab-case)"
+              maxLength={60}
+              aria-invalid={!!errors.code || undefined}
+              {...register('code')}
+            />
+            {errors.code && <FieldError>{errors.code.message}</FieldError>}
+          </Field>
+        )}
+
+        <Field data-invalid={!!errors.label || undefined} className="md:col-span-2">
+          <FieldLabel htmlFor="svc-label">Label</FieldLabel>
+          <Input
+            id="svc-label"
+            type="text"
+            maxLength={120}
+            aria-invalid={!!errors.label || undefined}
+            {...register('label')}
+          />
+          {errors.label && <FieldError>{errors.label.message}</FieldError>}
+        </Field>
+
+        <Field data-invalid={!!errors.unit || undefined}>
+          <FieldLabel htmlFor="svc-unit">Unit</FieldLabel>
+          <select id="svc-unit" className={selectClass} {...register('unit')}>
+            {SERVICE_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABEL[u]}
+              </option>
+            ))}
+          </select>
+          {errors.unit && <FieldError>{errors.unit.message}</FieldError>}
+        </Field>
+
+        <Field data-invalid={!!errors.sortOrder || undefined}>
+          <FieldLabel htmlFor="svc-sort">Sort</FieldLabel>
+          <Input
+            id="svc-sort"
+            type="number"
+            min={0}
+            aria-invalid={!!errors.sortOrder || undefined}
+            {...register('sortOrder')}
+          />
+          {errors.sortOrder && <FieldError>{errors.sortOrder.message}</FieldError>}
+        </Field>
+
+        {unit === 'range' ? (
+          <>
+            <Field data-invalid={!!errors.unitPriceMin || undefined}>
+              <FieldLabel htmlFor="svc-min">Min $</FieldLabel>
+              <Input
+                id="svc-min"
+                type="number"
+                step="0.01"
+                min={0}
+                aria-invalid={!!errors.unitPriceMin || undefined}
+                {...register('unitPriceMin')}
+              />
+              {errors.unitPriceMin && (
+                <FieldError>{errors.unitPriceMin.message}</FieldError>
+              )}
+            </Field>
+            <Field data-invalid={!!errors.unitPriceMax || undefined}>
+              <FieldLabel htmlFor="svc-max">Max $</FieldLabel>
+              <Input
+                id="svc-max"
+                type="number"
+                step="0.01"
+                min={0}
+                aria-invalid={!!errors.unitPriceMax || undefined}
+                {...register('unitPriceMax')}
+              />
+              {errors.unitPriceMax && (
+                <FieldError>{errors.unitPriceMax.message}</FieldError>
+              )}
+            </Field>
+          </>
+        ) : (
+          <Field data-invalid={!!errors.unitPrice || undefined} className="md:col-span-2">
+            <FieldLabel htmlFor="svc-price">Unit $ (blank = variable)</FieldLabel>
+            <Input
+              id="svc-price"
+              type="number"
+              step="0.01"
+              min={0}
+              aria-invalid={!!errors.unitPrice || undefined}
+              {...register('unitPrice')}
+            />
+            {errors.unitPrice && <FieldError>{errors.unitPrice.message}</FieldError>}
+          </Field>
+        )}
+
+        <Field
+          data-invalid={!!errors.description || undefined}
+          className="md:col-span-4"
+        >
+          <FieldLabel htmlFor="svc-desc">Description (optional)</FieldLabel>
+          <Input
+            id="svc-desc"
+            type="text"
+            maxLength={500}
+            aria-invalid={!!errors.description || undefined}
+            {...register('description')}
+          />
+          {errors.description && <FieldError>{errors.description.message}</FieldError>}
+        </Field>
+      </FieldGroup>
+
+      <div className="flex items-end justify-end gap-2 md:col-span-2">
+        {isEdit && (
+          <button type="button" onClick={props.onCancel} className={buttonClass}>
+            Cancel
+          </button>
+        )}
+        <button type="submit" disabled={isSubmitting} className={submitClass}>
+          {isEdit ? 'Save' : 'Add Service'}
+        </button>
       </div>
-      <input
-        name="label"
-        defaultValue={item.label}
-        className={`${inputClass} md:col-span-2`}
-        maxLength={120}
-        required
-      />
-      <select
-        name="unit"
-        value={unit}
-        onChange={(e) => setUnit(e.target.value as ServiceItemUnit)}
-        className={inputClass}
-      >
-        {UNITS.map((u) => (
-          <option key={u} value={u}>
-            {UNIT_LABEL[u]}
-          </option>
-        ))}
-      </select>
-      <input
-        name="sortOrder"
-        type="number"
-        min={0}
-        defaultValue={item.sortOrder}
-        className={inputClass}
-      />
-      {unit === 'range' ? (
-        <>
-          <input
-            name="unitPriceMin"
-            type="number"
-            step="0.01"
-            min={0}
-            defaultValue={item.unitPriceMin ?? ''}
-            placeholder="Min $"
-            className={inputClass}
-          />
-          <input
-            name="unitPriceMax"
-            type="number"
-            step="0.01"
-            min={0}
-            defaultValue={item.unitPriceMax ?? ''}
-            placeholder="Max $"
-            className={inputClass}
-          />
-        </>
-      ) : (
-        <input
-          name="unitPrice"
-          type="number"
-          step="0.01"
-          min={0}
-          defaultValue={item.unitPrice ?? ''}
-          placeholder="Unit $ (blank = variable)"
-          className={`${inputClass} md:col-span-2`}
-        />
-      )}
-      <input
-        name="description"
-        defaultValue={item.description ?? ''}
-        placeholder="Description (optional)"
-        className={`${inputClass} md:col-span-4`}
-        maxLength={500}
-      />
-      <button type="submit" disabled={pending} className={buttonClass}>
-        Save
-      </button>
-      <button type="button" onClick={onCancel} className={buttonClass}>
-        Cancel
-      </button>
     </form>
   );
+}
+
+function valuesToFormData(values: ServiceItemFormValues, id?: number): FormData {
+  const fd = new FormData();
+  if (id != null) fd.set('id', String(id));
+  if (values.code) fd.set('code', values.code);
+  fd.set('label', values.label);
+  fd.set('unit', values.unit);
+  fd.set('description', values.description ?? '');
+  fd.set('sortOrder', values.sortOrder ?? '');
+  if (values.unit === 'range') {
+    fd.set('unitPriceMin', values.unitPriceMin ?? '');
+    fd.set('unitPriceMax', values.unitPriceMax ?? '');
+  } else {
+    fd.set('unitPrice', values.unitPrice ?? '');
+  }
+  return fd;
 }

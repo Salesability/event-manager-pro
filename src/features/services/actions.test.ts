@@ -172,13 +172,13 @@ describe('createServiceItem', () => {
 
   it('rejects when label is missing', async () => {
     const result = await call(createServiceItem(fd({ code: 'x', unit: 'flat' })));
-    expect(result).toEqual({ error: 'Label is required.' });
+    expect(result).toMatchObject({ error: 'Label is required.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
   it('rejects when code is missing', async () => {
     const result = await call(createServiceItem(fd({ label: 'L', unit: 'flat' })));
-    expect(result).toEqual({ error: 'Code is required.' });
+    expect(result).toMatchObject({ error: 'Code is required.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
@@ -186,7 +186,7 @@ describe('createServiceItem', () => {
     const result = await call(
       createServiceItem(fd({ code: 'bad_code!', label: 'L', unit: 'flat' })),
     );
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       error: 'Code must be lowercase kebab-case (letters, digits, hyphens).',
     });
     expect(mocks.inserts).toHaveLength(0);
@@ -196,7 +196,7 @@ describe('createServiceItem', () => {
     const result = await call(
       createServiceItem(fd({ code: 'x', label: 'L', unit: 'bogus' })),
     );
-    expect(result).toEqual({ error: 'Invalid unit.' });
+    expect(result).toMatchObject({ error: 'Invalid unit.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
@@ -206,7 +206,7 @@ describe('createServiceItem', () => {
         fd({ code: 'x', label: 'L', unit: 'range', unitPriceMin: '100' }),
       ),
     );
-    expect(result).toEqual({ error: 'Range items need both min and max prices.' });
+    expect(result).toMatchObject({ error: 'Range items need both min and max prices.' });
   });
 
   it('rejects range item where min > max', async () => {
@@ -221,7 +221,7 @@ describe('createServiceItem', () => {
         }),
       ),
     );
-    expect(result).toEqual({ error: 'Min price must be ≤ max price.' });
+    expect(result).toMatchObject({ error: 'Min price must be ≤ max price.' });
   });
 
   it('rejects negative price', async () => {
@@ -230,7 +230,7 @@ describe('createServiceItem', () => {
         fd({ code: 'x', label: 'L', unit: 'flat', unitPrice: '-1' }),
       ),
     );
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       error: 'Unit price must be a non-negative dollar amount with at most 8 whole digits and 2 decimal places.',
     });
   });
@@ -264,7 +264,7 @@ describe('createServiceItem', () => {
     const result = await call(
       createServiceItem(fd({ code: 'x', label: 'L', unit: 'flat', sortOrder: '-3' })),
     );
-    expect(result).toEqual({ error: 'Sort order must be a non-negative integer.' });
+    expect(result).toMatchObject({ error: 'Sort order must be a non-negative integer.' });
   });
 
   it('rejects sortOrder over PG integer max', async () => {
@@ -273,7 +273,7 @@ describe('createServiceItem', () => {
         fd({ code: 'x', label: 'L', unit: 'flat', sortOrder: '2147483648' }),
       ),
     );
-    expect(result).toEqual({ error: 'Sort order must be a non-negative integer.' });
+    expect(result).toMatchObject({ error: 'Sort order must be a non-negative integer.' });
   });
 
   it('un-archives an existing archived row with the same code (no fresh insert)', async () => {
@@ -300,7 +300,7 @@ describe('createServiceItem', () => {
     const result = await call(
       createServiceItem(fd({ code: 'base-event', label: 'L', unit: 'flat' })),
     );
-    expect(result).toEqual({ error: 'That code is already in use.' });
+    expect(result).toMatchObject({ error: 'That code is already in use.' });
   });
 
   it('rethrows non-duplicate db errors', async () => {
@@ -309,6 +309,19 @@ describe('createServiceItem', () => {
       fd({ code: 'x', label: 'L', unit: 'flat' }),
     );
     expect(r?.serverError).toBeTruthy();
+  });
+
+  // 0045 Phase 3 — schema-as-contract: action surfaces `fieldErrors` alongside
+  // `error` so the A-shape `ServiceForm` can route per-field via `setError`.
+  it('surfaces per-field errors on safeParse failure', async () => {
+    const result = (await call(
+      createServiceItem(
+        fd({ code: 'bad_code!', label: '', unit: 'flat' }),
+      ),
+    )) as { error: string; fieldErrors: Record<string, string[]> };
+    expect(result.fieldErrors.code?.[0]).toMatch(/kebab/i);
+    expect(result.fieldErrors.label?.[0]).toBe('Label is required.');
+    expect(mocks.inserts).toHaveLength(0);
   });
 });
 
@@ -343,7 +356,7 @@ describe('updateServiceItem', () => {
     const result = await call(
       updateServiceItem(fd({ label: 'L', unit: 'flat' })),
     );
-    expect(result).toEqual({ error: 'Invalid service-item id.' });
+    expect(result).toMatchObject({ error: 'Invalid service-item id.' });
     expect(mocks.updates).toHaveLength(0);
   });
 
@@ -352,7 +365,7 @@ describe('updateServiceItem', () => {
     const result = await call(
       updateServiceItem(fd({ id: '99', label: 'L', unit: 'flat' })),
     );
-    expect(result).toEqual({ error: 'Service item not found.' });
+    expect(result).toMatchObject({ error: 'Service item not found.' });
   });
 });
 
@@ -368,7 +381,7 @@ describe('archiveServiceItem', () => {
 
   it('rejects invalid id', async () => {
     const result = await call(archiveServiceItem(fd({})));
-    expect(result).toEqual({ error: 'Invalid service-item id.' });
+    expect(result).toMatchObject({ error: 'Invalid service-item id.' });
     expect(mocks.updates).toHaveLength(0);
   });
 });
