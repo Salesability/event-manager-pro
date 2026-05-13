@@ -11,7 +11,7 @@
 | 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
 | 3: Port `quote-composer.tsx` | Done | `2462b0c` |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
-| 5: Primitive sweep (dialog / combobox / tabs) | Done | _commit pending_ |
+| 5: Primitive sweep (dialog / combobox / tabs) | Done | `b4df471` |
 | 6: Docs (wiki) + Radix Form removal | Pending | - |
 | 7: Tests + smoke verification | Pending | - |
 
