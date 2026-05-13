@@ -910,7 +910,12 @@ export const sendQuote = capabilityClient('quote:edit')
 
     if (!updated.length) {
       const [row] = await db
-        .select({ id: quotes.id, status: quotes.status, updatedAt: quotes.updatedAt })
+        .select({
+          id: quotes.id,
+          status: quotes.status,
+          updatedAt: quotes.updatedAt,
+          sentAt: quotes.sentAt,
+        })
         .from(quotes)
         .where(eq(quotes.id, quoteId))
         .limit(1);
@@ -920,17 +925,28 @@ export const sendQuote = capabilityClient('quote:edit')
           error: `This quote has been ${row.status} — make a new quote to revise it.`,
         };
       }
-      // Concurrent send wins the race: the row is in 'sent' but our
-      // `updatedAt` predicate missed because another caller bumped it.
-      // Per OQ #6, the second clicker sees `ok: true` (their UI may be
-      // briefly stale, but the row IS now freshly sent — the first send
-      // wins, the second is a no-op).
-      if (row.status === 'sent' && !sameTimestamp(row.updatedAt, draft.updatedAt)) {
+      // Distinguish "concurrent SEND won" from "concurrent EDIT bumped
+      // updatedAt." Both leave `status='sent'` with a different `updatedAt`,
+      // but a real concurrent send also *advances* `sentAt`. If sentAt
+      // moved past our preload, treat as race-won-by-other and return ok
+      // (per OQ #6 — the row is now freshly sent, our snapshot just wasn't
+      // the one used). If sentAt is unchanged, it was a concurrent edit
+      // (or the second send hasn't actually happened) — force the coach
+      // to re-pre-load before claiming success on an undelivered send.
+      const preloadedSentAtMs = draft.sentAt?.getTime() ?? 0;
+      const rowSentAtMs = row.sentAt?.getTime() ?? 0;
+      if (
+        row.status === 'sent' &&
+        rowSentAtMs > preloadedSentAtMs &&
+        !sameTimestamp(row.updatedAt, draft.updatedAt)
+      ) {
         revalidateQuoteViews();
         return { ok: true };
       }
-      // Status `draft` with different `updatedAt`: a concurrent edit
-      // mutated the snapshot under us. Force the coach to re-pre-load.
+      // Status `draft`/`sent` with different `updatedAt` and unchanged
+      // `sentAt`: a concurrent edit mutated the snapshot under us. The
+      // delivery path has NOT advanced — force the coach to re-pre-load
+      // rather than claim a phantom success.
       return { error: 'Quote was edited concurrently; please retry.' };
     }
 
@@ -977,7 +993,17 @@ export const sendQuote = capabilityClient('quote:edit')
       action: 'quote.sent',
       targetTable: 'quotes',
       targetId: quoteId,
-      payload: { pdfStorageKey: storageKey, emailId: emailResult.id },
+      // Recipient is included so multi-row Send history can show the
+      // person each send actually went to, even after the row-level
+      // denorm (`sentToEmail`/`sentToFirstName`) rotates to a different
+      // contact between sends. Older rows that pre-date this addition
+      // fall back to the row-level denorm at render time.
+      payload: {
+        pdfStorageKey: storageKey,
+        emailId: emailResult.id,
+        sentToEmail: recipient.email,
+        sentToFirstName: recipient.firstName,
+      },
     });
 
     revalidateQuoteViews();

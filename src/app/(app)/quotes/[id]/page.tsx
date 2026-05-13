@@ -26,6 +26,28 @@ function readEmailId(payload: unknown): string | null {
   return typeof e === 'string' ? e : null;
 }
 
+// Send-history rows carry recipient denorm in payload as of 0046 so multi-row
+// reads show the recipient *at the time of each send*, not the current denorm.
+// Pre-0046 rows fall back to the row-level denorm via the callsite.
+function readRecipient(payload: unknown): { email: string | null; firstName: string | null } {
+  if (!payload || typeof payload !== 'object') return { email: null, firstName: null };
+  const p = payload as { sentToEmail?: unknown; sentToFirstName?: unknown };
+  return {
+    email: typeof p.sentToEmail === 'string' ? p.sentToEmail : null,
+    firstName: typeof p.sentToFirstName === 'string' ? p.sentToFirstName : null,
+  };
+}
+
+function recipientLabel(firstName: string | null, email: string | null): string {
+  if (!email && !firstName) {
+    return 'Sent to (recipient unknown — sent before recipient denorm shipped)';
+  }
+  const name = firstName ?? '';
+  const addr = email ? `<${email}>` : '';
+  const space = name && email ? ' ' : '';
+  return `Sent to ${name}${space}${addr}`.trim();
+}
+
 function formatSentAt(date: Date): string {
   return date.toLocaleString('en-CA', {
     year: 'numeric',
@@ -115,6 +137,12 @@ export default async function QuoteEditPage({
             {sendHistory.map((row, idx) => {
               const emailId = readEmailId(row.payload);
               const isMostRecent = idx === 0;
+              // Prefer the per-send recipient denorm from the audit payload
+              // (added 0046); fall back to the row-level denorm for pre-0046
+              // sends that don't carry the field.
+              const perRow = readRecipient(row.payload);
+              const recipientFirstName = perRow.firstName ?? quote.sentToFirstName;
+              const recipientEmail = perRow.email ?? quote.sentToEmail;
               return (
                 <li
                   key={`${row.occurredAt.toISOString()}-${idx}`}
@@ -130,11 +158,7 @@ export default async function QuoteEditPage({
                       ) : null}
                     </span>
                     <span className="text-xs text-stone-600">
-                      {quote.sentToEmail || quote.sentToFirstName
-                        ? `Sent to ${quote.sentToFirstName ?? ''}${
-                            quote.sentToFirstName && quote.sentToEmail ? ' ' : ''
-                          }${quote.sentToEmail ? `<${quote.sentToEmail}>` : ''}`.trim()
-                        : 'Sent to (recipient unknown — sent before recipient denorm shipped)'}
+                      {recipientLabel(recipientFirstName, recipientEmail)}
                     </span>
                     {emailId && (
                       <span className="font-mono text-[11px] text-stone-500">

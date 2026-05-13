@@ -319,7 +319,12 @@ describe('sendQuote', () => {
       action: 'quote.sent',
       targetTable: 'quotes',
       targetId: 42,
-      payload: { pdfStorageKey: 'quotes/42/1.pdf', emailId: 'resend-msg-id' },
+      payload: {
+        pdfStorageKey: 'quotes/42/1.pdf',
+        emailId: 'resend-msg-id',
+        sentToEmail: 'buyer@dealer.test',
+        sentToFirstName: 'Pat',
+      },
     });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
     const sendArg = mocks.sendEmail.mock.calls[0][0] as Record<string, unknown>;
@@ -511,19 +516,51 @@ describe('sendQuote', () => {
 
   it('falls back to idempotent on a UPDATE race (already sent by a concurrent caller)', async () => {
     // Pre-load + dealer succeed; render succeeds; UPDATE misses before upload;
-    // re-select finds the row in 'sent' with a different updatedAt (the
-    // concurrent caller's UPDATE bumped it). Mimics a concurrent send
-    // winning the race — OQ #6 says the second clicker sees ok:true (the
-    // row IS now freshly sent, their snapshot just wasn't the one used).
+    // re-select finds the row in 'sent' with a different updatedAt AND an
+    // advanced sentAt (the concurrent caller's UPDATE wrote both). Mimics a
+    // concurrent send winning the race — OQ #6 says the second clicker sees
+    // ok:true (the row IS now freshly sent, their snapshot just wasn't the
+    // one used). The advanced `sentAt` is the load-bearing signal that
+    // distinguishes "concurrent send won" from "concurrent edit bumped
+    // updatedAt" (eval Codex High #1).
     mocks.dbResults.push(
       [DRAFT_ROW],
       [DEALER_ROW],
       [],
-      [{ id: 42, status: 'sent', updatedAt: new Date('2026-05-12T12:00:05.000Z') }],
+      [{
+        id: 42,
+        status: 'sent',
+        updatedAt: new Date('2026-05-12T12:00:05.000Z'),
+        sentAt: new Date('2026-05-12T12:00:05.000Z'),
+      }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
     expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects rather than claims success when a concurrent EDIT (not a send) bumped updatedAt under a re-send (eval Codex High #1)', async () => {
+    // Pre-load row=sent at T1; dealer; MSA empty; UPDATE misses; re-select
+    // finds the row still in `sent` with a DIFFERENT updatedAt but the SAME
+    // (unchanged) sentAt — a concurrent `setQuoteInputs` ran. The pre-fix
+    // path would have returned ok:true (claiming the re-send succeeded);
+    // the fixed path classifies as concurrent edit and returns the retry
+    // error so the coach re-pre-loads before re-sending stale data.
+    mocks.dbResults.push(
+      [SENT_ROW],
+      [DEALER_ROW],
+      [],
+      [],
+      [{
+        id: 42,
+        status: 'sent',
+        updatedAt: new Date('2026-05-12T13:30:00.000Z'),
+        sentAt: SENT_ROW.sentAt, // unchanged
+      }],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ error: 'Quote was edited concurrently; please retry.' });
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
@@ -587,7 +624,12 @@ describe('sendQuote', () => {
       [DEALER_ROW],
       [], // MSA-pending lookup empty
       [], // UPDATE misses
-      [{ id: 42, status: 'sent', updatedAt: new Date('2026-05-12T13:00:05.000Z') }],
+      [{
+        id: 42,
+        status: 'sent',
+        updatedAt: new Date('2026-05-12T13:00:05.000Z'),
+        sentAt: new Date('2026-05-12T13:00:05.000Z'), // advanced past SENT_ROW.sentAt
+      }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });

@@ -17,21 +17,25 @@ import { bigIdentity } from './_columns';
 // `actorRole` is denormalised at write time so the row stays interpretable
 // even if the actor's role changes later. No `actors`/`archivable` mixin —
 // audit rows have a single `occurredAt` and never archive.
+// Order matches the live Postgres enum (snapshot at drizzle/meta/0020_snapshot.json).
+// The 0019 migration inserted `msa.*` BEFORE `campaign.cancelled` (ALTER TYPE ADD VALUE BEFORE),
+// and 0020 inserted `quote.edited` AFTER `quote.sent`. Keeping the TS array in lock-step
+// with the database order keeps drizzle-kit diffs quiet around this enum.
 export const auditAction = pgEnum('audit_action', [
   'user.role_changed',
   'user.deactivated',
   'dealer.archived',
   'dealer.activated',
+  'msa.created',
+  'msa.sent',
+  'msa.signed',
+  'msa.declined',
   'campaign.cancelled',
   'quote.create',
   'quote.sent',
   'quote.edited',
   'quote.accepted',
   'quote.declined',
-  'msa.created',
-  'msa.sent',
-  'msa.signed',
-  'msa.declined',
 ]);
 
 export const auditLog = pgTable(

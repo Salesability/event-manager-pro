@@ -586,12 +586,21 @@ export function QuoteComposer({
       </div>
       </fieldset>
 
-      {/* Buttons row lives OUTSIDE the disabled fieldset so Preview stays
-       *  clickable on sent (read-only) quotes — `<fieldset disabled>` would
+      {/* Buttons row lives OUTSIDE the disabled fieldset so Preview / Close
+       *  stay clickable on read-only quotes — `<fieldset disabled>` would
        *  otherwise cascade through the browser and disable any descendant
        *  <button>. Save / Send still gate themselves via `!isReadOnly` and
-       *  `canSend`, so they correctly hide when the quote isn't a draft. */}
+       *  `canSend`, so they correctly hide when the quote is terminal. */}
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+        {isEdit && (
+          <button
+            type="button"
+            onClick={() => router.push('/quotes')}
+            className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
+          >
+            Close
+          </button>
+        )}
         {isEdit && (
           <button
             type="button"
