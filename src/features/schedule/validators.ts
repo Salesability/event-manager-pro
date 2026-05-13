@@ -1,3 +1,20 @@
+// Surviving primitives after the 0045 Phase 7 retirement. The hand-rolled
+// helpers superseded by zod schemas (`validateContactInputs`, `parseDate`,
+// `parseOptionalInt`) were deleted in this phase along with their tests.
+//
+// What stays and why:
+// - `EMAIL_RE` — `adoptOrphanAuthUser` in `people/actions.ts` still uses it.
+//   Once that action gets its own schema (out of scope here), this can move
+//   into the relevant `*-schema.ts` or be retired entirely.
+// - `field()` / `parseId()` / `parseOptionalId()` — utility readers for
+//   FormData entries that aren't covered by a single per-form schema (the
+//   composer's JSON `inputs` blob, custom `id` / `quoteId` / `dealerId`
+//   wrapper fields, multi-action contact-id paths). They're tiny and
+//   schema-agnostic; no harm in keeping them.
+// - `parseCampaignInput` — kept as the action-side wrapper around
+//   `bookingFormSchema` since it folds cross-field rules (endDate ≥ startDate)
+//   and the wire → DB normalization that the schema doesn't model.
+
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function field(formData: FormData, name: string): string {
@@ -11,46 +28,11 @@ export function parseId(formData: FormData, name = 'id'): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-export type ContactInputs = {
-  contactFirst: string;
-  contactLast: string;
-  contactEmail: string;
-  contactPhone: string;
-};
-
-export function validateContactInputs(input: ContactInputs): string | null {
-  const hasAnyContactField =
-    input.contactFirst || input.contactLast || input.contactEmail || input.contactPhone;
-  if (hasAnyContactField) {
-    if (!input.contactFirst || !input.contactLast) {
-      return 'Contact first and last name are both required when adding a contact.';
-    }
-  }
-  if (input.contactEmail && !EMAIL_RE.test(input.contactEmail)) {
-    return 'Contact email looks invalid.';
-  }
-  return null;
-}
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-export function parseDate(formData: FormData, name: string): string | null {
-  const v = field(formData, name);
-  return ISO_DATE_RE.test(v) ? v : null;
-}
-
 export function parseOptionalId(formData: FormData, name: string): number | null {
   const raw = formData.get(name);
   if (raw == null || raw === '') return null;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-export function parseOptionalInt(formData: FormData, name: string): number | null {
-  const raw = formData.get(name);
-  if (raw == null || raw === '') return null;
-  const n = Number(raw);
-  return Number.isInteger(n) ? n : null;
 }
 
 export type CampaignInput = {
@@ -70,14 +52,9 @@ export type CampaignInput = {
   notes: string | null;
 };
 
-// 0045 Phase 6 — schema-as-contract: per-field validation lives in
-// `src/app/(app)/calendar/booking-schema.ts` (shared with the booking-form
-// B-shape client). Cross-field rules (endDate ≥ startDate) and the wire → DB
-// normalization (string → number, lowercased email) stay here.
-//
-// Eager import of the booking-schema is intentional even though that module
-// lives under `src/app/(app)/calendar/...` — the validator imports the schema,
-// not any client component code, so there's no client-server boundary issue.
+// Action-side wrapper around `bookingFormSchema` — folds in cross-field rules
+// (endDate ≥ startDate) and the wire → DB normalization (string → number,
+// lowercased email) the schema doesn't model.
 import { bookingFormSchema } from '@/app/(app)/calendar/booking-schema';
 
 export function parseCampaignInput(formData: FormData): CampaignInput | { error: string } {

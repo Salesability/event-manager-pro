@@ -3,12 +3,14 @@ import {
   EMAIL_RE,
   field,
   parseCampaignInput,
-  parseDate,
   parseId,
   parseOptionalId,
-  parseOptionalInt,
-  validateContactInputs,
 } from './validators';
+
+// 0045 Phase 7 — `validateContactInputs`, `parseDate`, `parseOptionalInt` and
+// their test blocks were deleted along with the helpers themselves; their
+// duties moved to per-form zod schemas + the action-layer cross-field check
+// (`validateContactCross` in `schedule/actions.ts`).
 
 describe('EMAIL_RE', () => {
   it('accepts plausible addresses', () => {
@@ -71,89 +73,6 @@ describe('parseId', () => {
   });
 });
 
-describe('validateContactInputs', () => {
-  const empty = {
-    contactFirst: '',
-    contactLast: '',
-    contactEmail: '',
-    contactPhone: '',
-  };
-
-  it('passes when all fields empty (no contact being created)', () => {
-    expect(validateContactInputs(empty)).toBe(null);
-  });
-
-  it('passes when first + last + optional fields all valid', () => {
-    expect(
-      validateContactInputs({
-        contactFirst: 'Alex',
-        contactLast: 'Kim',
-        contactEmail: 'alex@example.com',
-        contactPhone: '555-1234',
-      })
-    ).toBe(null);
-  });
-
-  it('requires both names if any contact field is present', () => {
-    expect(
-      validateContactInputs({ ...empty, contactFirst: 'Alex' })
-    ).toMatch(/first and last name/i);
-    expect(
-      validateContactInputs({ ...empty, contactLast: 'Kim' })
-    ).toMatch(/first and last name/i);
-    expect(
-      validateContactInputs({ ...empty, contactEmail: 'a@b.co' })
-    ).toMatch(/first and last name/i);
-    expect(
-      validateContactInputs({ ...empty, contactPhone: '555-1234' })
-    ).toMatch(/first and last name/i);
-  });
-
-  it('flags an invalid email even when names are provided', () => {
-    expect(
-      validateContactInputs({
-        contactFirst: 'Alex',
-        contactLast: 'Kim',
-        contactEmail: 'not-an-email',
-        contactPhone: '',
-      })
-    ).toMatch(/email looks invalid/i);
-  });
-
-  it('allows empty email when names are provided', () => {
-    expect(
-      validateContactInputs({
-        contactFirst: 'Alex',
-        contactLast: 'Kim',
-        contactEmail: '',
-        contactPhone: '555-1234',
-      })
-    ).toBe(null);
-  });
-});
-
-describe('parseDate', () => {
-  const make = (v: string | null) => {
-    const fd = new FormData();
-    if (v != null) fd.set('d', v);
-    return parseDate(fd, 'd');
-  };
-
-  it('accepts YYYY-MM-DD strings (HTML input[type=date] format)', () => {
-    expect(make('2026-04-30')).toBe('2026-04-30');
-    expect(make('2024-01-01')).toBe('2024-01-01');
-  });
-
-  it('rejects empty / missing / non-iso input', () => {
-    expect(make(null)).toBe(null);
-    expect(make('')).toBe(null);
-    expect(make('2026/04/30')).toBe(null);
-    expect(make('30-04-2026')).toBe(null);
-    expect(make('2026-4-1')).toBe(null);
-    expect(make('not-a-date')).toBe(null);
-  });
-});
-
 describe('parseOptionalId', () => {
   const make = (v: string | null) => {
     const fd = new FormData();
@@ -174,30 +93,6 @@ describe('parseOptionalId', () => {
   it('returns null for zero, negatives, decimals, garbage', () => {
     expect(make('0')).toBe(null);
     expect(make('-3')).toBe(null);
-    expect(make('1.5')).toBe(null);
-    expect(make('abc')).toBe(null);
-  });
-});
-
-describe('parseOptionalInt', () => {
-  const make = (v: string | null) => {
-    const fd = new FormData();
-    if (v != null) fd.set('x', v);
-    return parseOptionalInt(fd, 'x');
-  };
-
-  it('accepts any integer (including 0 and negatives)', () => {
-    expect(make('0')).toBe(0);
-    expect(make('42')).toBe(42);
-    expect(make('-5')).toBe(-5);
-  });
-
-  it('returns null for empty / missing', () => {
-    expect(make(null)).toBe(null);
-    expect(make('')).toBe(null);
-  });
-
-  it('rejects decimals and non-numeric input', () => {
     expect(make('1.5')).toBe(null);
     expect(make('abc')).toBe(null);
   });
