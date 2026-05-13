@@ -50,6 +50,7 @@ function parseId(formData: FormData, key: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// validation: skip — id-only action (campaignId); local `parseId` covers it.
 export const sendClientCampaignConfirmation = capabilityClient('email:send')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -96,6 +97,7 @@ export const sendClientCampaignConfirmation = capabilityClient('email:send')
     return 'ok' in result ? { ok: true } : { error: result.error };
   });
 
+// validation: skip — id-only action (campaignId); local `parseId` covers it.
 export const sendCoachCampaignConfirmation = capabilityClient('email:send')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -139,6 +141,7 @@ export const sendCoachCampaignConfirmation = capabilityClient('email:send')
     return 'ok' in result ? { ok: true } : { error: result.error };
   });
 
+// validation: skip — id-only action (coachId); local `parseId` covers it.
 export const sendCoachShareLinkEmail = capabilityClient('email:send')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {

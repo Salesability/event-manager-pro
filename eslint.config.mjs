@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import actionGatePlugin from "./eslint-plugins/action-gate.mjs";
+import safeParseRequiredPlugin from "./eslint-plugins/safeparse-required.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -37,6 +38,28 @@ const eslintConfig = defineConfig([
     plugins: { "action-gate": actionGatePlugin },
     rules: {
       "action-gate/no-ungated-action": ["error", { routeHandler: true }],
+    },
+  },
+  // 0045 Phase 8 — schema-as-contract: every Server Action in
+  // `src/features/**/actions.ts` must run `safeParse` against a shared zod
+  // schema, either directly or via a same-file wrapper that does. Per-export
+  // opt-out via `// validation: skip` on the line before the `export`. See
+  // `eslint-plugins/safeparse-required.mjs` and
+  // `docs/designs/0045-form-schema-as-contract/plan.md` → Phase 8.
+  {
+    files: ["src/features/**/actions.ts"],
+    plugins: { "safeparse-required": safeParseRequiredPlugin },
+    rules: {
+      "safeparse-required/safeparse-required": [
+        "error",
+        {
+          // Cross-file wrapper helpers that internally `safeParse` a shared
+          // schema. Listing them here lets the rule accept calls to them as
+          // valid delegation — keeps `// validation: skip` honest (only used
+          // when validation really is being skipped, not just delegated).
+          wrapperNames: ["parseCampaignInput"],
+        },
+      ],
     },
   },
 ]);

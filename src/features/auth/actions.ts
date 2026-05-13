@@ -22,6 +22,9 @@ async function siteUrl() {
 }
 
 // authz: public
+// validation: skip — input is email + `next` redirect; Supabase Auth validates
+// the email shape downstream and the function redirect-on-error. Adding a
+// schema here is mostly ceremony given the single-string input.
 export async function signInWithMagicLink(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim();
   const next = safeNextPath(formData.get('next'));
@@ -52,6 +55,7 @@ export async function signInWithMagicLink(formData: FormData) {
 }
 
 // authz: public
+// validation: skip — OAuth redirect, only reads `next` via `safeNextPath`.
 export async function signInWithGoogle(formData: FormData) {
   const next = safeNextPath(formData.get('next'));
 
@@ -74,6 +78,7 @@ export async function signInWithGoogle(formData: FormData) {
 }
 
 // authz: public
+// validation: skip — no FormData input.
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();

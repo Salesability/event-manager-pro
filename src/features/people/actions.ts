@@ -721,6 +721,7 @@ export const updatePerson = capabilityClient('person:edit')
   return { ok: true, contactId };
 });
 
+// validation: skip — id-only action; `parseOptionalId` is the only input check.
 export const archivePerson = capabilityClient('person:archive')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -805,6 +806,9 @@ export const archivePerson = capabilityClient('person:archive')
 // links via `contacts.user_id`. Exception path for the Tilley-style legacy
 // state and for any future Supabase-dashboard fallback path. The People
 // page surfaces orphans in a small bottom panel; this action takes a row.
+// validation: skip — legacy-recovery action with a bespoke input contract;
+// hand-rolled checks live in the body. Could be moved onto a schema if a
+// second caller appears.
 export const adoptOrphanAuthUser = capabilityClient('person:adopt-orphan')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {

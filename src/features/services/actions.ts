@@ -146,6 +146,7 @@ export const updateServiceItem = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const archiveServiceItem = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {

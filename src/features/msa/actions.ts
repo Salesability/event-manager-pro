@@ -107,6 +107,8 @@ function validatePersistedLines(raw: unknown): ValidatedLines {
 // this dealer. Expired/terminated rows allow renewal-style fresh drafts.
 const BLOCKING_STATUSES = ['pending', 'active'] as const;
 
+// validation: skip — id-only action (dealerId + firstQuoteId); `parseId`
+// covers both. Could be moved onto a schema if more fields surface.
 export const createMsaDraft = capabilityClient('msa:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<CreateMsaResult> => {
@@ -174,6 +176,8 @@ export const createMsaDraft = capabilityClient('msa:edit')
     return { ok: true, msaId: result.msaId };
   });
 
+// validation: skip — id-only action (msaId + free-text message); `parseId`
+// covers msaId.
 export const sendMsaEnvelope = capabilityClient('msa:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<SendMsaResult> => {

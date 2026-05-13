@@ -342,6 +342,8 @@ export const setQuoteInputs = capabilityClient('quote:edit')
 
 /** Composer-side setter: override just the tax amount on a draft quote.
  *  Recomputes total = subtotal + tax (lines untouched). */
+// validation: skip — single-value action (quoteId + tax); `parseTax` and
+// `parseId` cover both inputs.
 export const setQuoteTax = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -395,6 +397,7 @@ export const setQuoteTax = capabilityClient('quote:edit')
 
 /** Composer-side setter: swap the dealer on a draft quote (e.g. coach picks a
  *  different dealer from the picker). Verifies the new dealer is active. */
+// validation: skip — id-only action (quoteId + dealerId); `parseId` covers both.
 export const setQuoteDealer = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -526,6 +529,7 @@ const QUOTE_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 // reached `sent` (a draft has no `pdfStorageKey`); draft requests reject with
 // `error`. TTL is 5 minutes — much tighter than the 7-day cap; the panel
 // re-resolves on each render.
+// validation: skip — id-only action; `parseId` covers the lone input.
 export const signedQuotePdfUrl = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<SignedQuotePdfUrlResult> => {
@@ -563,6 +567,7 @@ export const signedQuotePdfUrl = capabilityClient('quote:edit')
 // snapshot that `sendQuote` uses, so a draft preview matches exactly what
 // will be emailed on Send (modulo `issuedDate`, which is today for drafts
 // and the `sentAt` date for sent rows).
+// validation: skip — id-only action; `parseId` covers the lone input.
 export const previewQuotePdf = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<PreviewResult> => {
@@ -624,6 +629,8 @@ export const previewQuotePdf = capabilityClient('quote:edit')
     };
   });
 
+// validation: skip — id-only action; `parseId` covers the lone input. Lifecycle
+// guards run inside the transaction against the row's current status.
 export const sendQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -832,6 +839,8 @@ export const sendQuote = capabilityClient('quote:edit')
 // successful sent→accepted transition. Mirrors the atomic guarded UPDATE
 // shape of `convertProspectToActive` in src/features/schedule/actions.ts so
 // a concurrent archive/already-active race is a no-op rather than an error.
+// validation: skip — id-only action (quoteId + optional reason string);
+// `parseId` covers the id. Lifecycle guards run against the row's status.
 export const acceptQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -891,6 +900,8 @@ export const acceptQuote = capabilityClient('quote:edit')
 
 // Staff-side decline. v1 has no client-self-serve decline either — the
 // customer phones or emails the coach, and the coach flips the row here.
+// validation: skip — id-only action (quoteId + optional reason string);
+// `parseId` covers the id. Lifecycle guards run against the row's status.
 export const declineQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {

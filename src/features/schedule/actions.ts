@@ -23,11 +23,7 @@ import { ensureAvailabilityOwnership } from './availability-authz';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
 import { availabilityFormSchema } from './availability-schema';
 import { lookupFormSchema } from './lookup-schema';
-import {
-  field,
-  parseCampaignInput,
-  parseId,
-} from './validators';
+import { parseCampaignInput, parseId } from './validators';
 
 type FieldErrors = Record<string, string[] | undefined>;
 function firstFieldError(fieldErrors: FieldErrors): string | undefined {
@@ -40,7 +36,6 @@ function firstFieldError(fieldErrors: FieldErrors): string | undefined {
 type ActionResult =
   | { ok: true }
   | { error: string; fieldErrors?: Record<string, string[] | undefined> };
-type ActionError = { error: string };
 type AvailabilityKind = 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
 
 const generatePublicId = () => randomBytes(9).toString('base64url');
@@ -334,6 +329,7 @@ export const updateDealer = capabilityClient('dealer:edit')
 // read path (`loadCoaches` in `queries.ts`) stays — it's used by `/calendar`,
 // `/production`, `/share/coach/[id]`, and the booking-form coach picker.
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const archiveDealer = capabilityClient('dealer:archive')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -367,6 +363,7 @@ export const archiveDealer = capabilityClient('dealer:archive')
 // to a prospect dealer (the implicit "first signed deal" promotion). Idempotent
 // — re-running on an already-active or archived row is a no-op that emits no
 // audit row, matching the cancelCampaign atomic-transition pattern.
+// validation: skip — id-only action; `parseId` is the only input check.
 export const convertProspectToActive = capabilityClient('dealer:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -476,6 +473,7 @@ export const updateCampaign = capabilityClient('campaign:edit')
     return { ok: true };
   });
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const cancelCampaign = capabilityClient('campaign:cancel')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -572,6 +570,7 @@ export const updateCampaignStyle = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const archiveCampaignStyle = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
@@ -633,6 +632,7 @@ export const updateAudienceSource = capabilityClient('lookup:edit')
     return { ok: true };
   });
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const archiveAudienceSource = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData }): Promise<ActionResult> => {
@@ -804,6 +804,7 @@ export const updateAvailabilityBlock = capabilityClient('availability:edit')
     return { ok: true };
   });
 
+// validation: skip — id-only action; `parseId` is the only input check.
 export const archiveAvailabilityBlock = capabilityClient('availability:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
