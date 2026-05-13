@@ -22,6 +22,7 @@ import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
 import { availabilityFormSchema } from './availability-schema';
+import { lookupFormSchema } from './lookup-schema';
 import {
   field,
   parseCampaignInput,
@@ -507,10 +508,15 @@ export const cancelCampaign = capabilityClient('campaign:cancel')
 // ---------- Lookups (5.3) ----------
 
 function parseLookupLabel(formData: FormData): string | ActionResult {
-  const label = field(formData, 'label');
-  if (!label) return { error: 'Label is required.' };
-  if (label.length > 120) return { error: 'Label must be 120 characters or fewer.' };
-  return label;
+  const parsed = lookupFormSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    const fieldErrors = parsed.error.flatten().fieldErrors;
+    return {
+      error: firstFieldError(fieldErrors) ?? 'Invalid lookup input.',
+      fieldErrors,
+    };
+  }
+  return parsed.data.label;
 }
 
 function lookupActionResult(err: unknown): ActionResult {
