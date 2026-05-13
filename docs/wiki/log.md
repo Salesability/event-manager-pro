@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-13 — Schema-as-contract doctrine added (0045 Phase 1)
+
+- [forms.md](forms.md) — new "Schema-as-contract" section codifies the rule: one zod schema per form lives in a sibling `*-schema.ts` module, imported by **both** the client form (`zodResolver`) and the Server Action (`safeParse(Object.fromEntries(formData))`). Schema is the single source of truth for both client validation and server-side rejection.
+- B-shape variant documented explicitly: partial-RHF forms (booking-form, PersonForm) and single-field admin forms (lookup-admin) do not call `zodResolver` — they keep browser-native validation + `useTouched()` for visuals — but the action **still** `safeParse`s the same schema. Same contract, simpler UI shape.
+- "Schema-first with zod + `z.infer`" section rewritten to anchor on a module example (`src/features/dealers/dealer-schema.ts` imported by form + action), replacing the previous in-form-only example.
+- "Conventions checklist" picked up a new top item (schema lives in a sibling `*-schema.ts` module imported by both sides) and an action-validation row (first lines of the action `safeParse` the same schema, return `{ error, fieldErrors }`).
+- Subsequent phases (0045 P2–P7) implement the doctrine: extract canonical dealer + quote schemas, wire `safeParse` into the existing actions, port the three straggler admin forms (`services-admin`, `availability-admin`, `lookup-admin`) onto the documented shape, and retire the hand-rolled `schedule/validators.ts` helpers.
+
 ## 2026-05-12 — Form convention captured; Radix Form retired (0042 Phase 6)
 
 - New page [forms.md](forms.md) documents the project's form convention: react-hook-form + zod + shadcn `<Field>` primitives, schema-first with `z.infer`, Server Action submission via `form.handleSubmit` (full path) or `<form action={formAction}>` + `useActionState` (partial path for auto-fill-heavy forms like `booking-form.tsx` and the people-admin `PersonForm`).

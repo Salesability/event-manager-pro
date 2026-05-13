@@ -21,25 +21,63 @@ Both shapes use the same shadcn Field primitives for layout + validation visuals
 | Dialog wrapper | `<Dialog>` + `<DialogContent>` + `<DialogTitle>` + `<DialogDescription>` + `<DialogClose>` | From `@/components/ui/dialog`. `open` + `onOpenChange`, **not** `open` + `onClose`. The overlay/portal is rendered inside `<DialogContent>` — don't add a separate backdrop. |
 | Validation state | `data-invalid` on `<Field>`, `aria-invalid` on the control | Both must be set so the shadcn focus-ring + label color flip correctly. Use `data-invalid={touched.x || undefined}` so `false` collapses out of the attribute. |
 
+## Schema-as-contract
+
+The same zod schema is the single source of truth for **both** sides of the wire — the client form (via `zodResolver`) and the Server Action (via `safeParse`). Client validation rejects bad input before it ships; server validation rejects it again because the action layer is the security boundary and can't trust the client. Drift between the two is the bug class this rule prevents.
+
+**Where the schema lives.** One zod schema per form, in a sibling `*-schema.ts` module next to the form component. The form imports it, the Server Action imports it. Examples:
+
+```
+src/features/dealers/dealer-schema.ts     ← imported by both
+src/features/dealers/dealer-form.tsx       ← uses zodResolver(dealerFormSchema)
+src/features/schedule/actions.ts           ← uses dealerFormSchema.safeParse(...)
+```
+
+Colocated-inside-component (`const schema = z.object({...})` declared in the same file as `useForm`) is **not** allowed for forms whose Server Action target also wants to validate. The schema must live in a module both sides can import.
+
+**The wire format and the round-trip.** Server Actions take `FormData` (a string-keyed multimap). The form's `valuesToFormData(values, id?)` adapter (per the "Server Action submission" section below) converts RHF's typed values back into that wire format on submit. The Server Action reverses it:
+
+```ts
+const parsed = dealerFormSchema.safeParse(Object.fromEntries(formData));
+if (!parsed.success) {
+  return { error: 'Invalid input.', fieldErrors: parsed.error.flatten().fieldErrors };
+}
+const values = parsed.data;
+```
+
+The schema's job is to accept that wire-format input cleanly. Practical implications:
+
+- Optional fields should accept `''` from the FormData wire (not just `undefined`). Use `.optional()` on top of `z.string()` — empty strings round-trip through `Object.fromEntries` as `''`, not absent. Trim with `.trim()` inside `z.string()` so the action gets a normalized value.
+- Numeric IDs arrive as strings — coerce explicitly with `z.coerce.number().int().positive()` (or a custom `z.preprocess` for nullable ids).
+- Enum fields use `z.enum(['active', 'prospect'])` — the string set matches the wire shape directly.
+
+**B-shape variant.** Forms that stay on the partial-RHF path (native `<form action={formAction}>` + `useActionState`, e.g. booking-form, PersonForm) do **not** call `zodResolver` — they get browser-native `required` + `useTouched()` for inline visuals. **The action still imports and `safeParse`s the same schema.** The client gets simpler validation visuals; the server gets the same zod contract either way. Single-field admin forms (e.g. lookup-admin) are a sub-case — `<form action={action}>` + a one-field schema is fine, no `useActionState` wiring needed.
+
 ## Schema-first with zod + `z.infer`
 
-Every RHF form starts with a zod schema. Derive the values type with `z.infer` so the resolver and the form state line up exactly.
+Every RHF form starts with a zod schema in a sibling `*-schema.ts` module. Derive the values type with `z.infer` so the resolver and the form state line up exactly.
+
+```ts
+// src/features/dealers/dealer-schema.ts — imported by form + action
+export const dealerFormSchema = z.object({
+  name: z.string().trim().min(1, 'Dealership name is required.'),
+  contactFirst: z.string().trim().optional(),
+  contactLast: z.string().trim().optional(),
+  contactEmail: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), 'Email looks invalid.')
+    .optional(),
+  contactPhone: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  status: z.enum(['active', 'prospect']),
+  acquiredVia: z.string().trim().max(200).optional(),
+});
+export type DealerFormValues = z.infer<typeof dealerFormSchema>;
+```
 
 ```ts
 // src/features/dealers/dealer-form.tsx
-const dealerFormSchema = z.object({
-  name: z.string().min(1, 'Required'),
-  contactFirstName: z.string().optional(),
-  contactLastName: z.string().optional(),
-  email: z.string().email('Invalid email').or(z.literal('')).optional(),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  status: z.enum(['prospect', 'active']),
-  acquiredVia: z.string().optional(),
-});
-
-type DealerFormValues = z.infer<typeof dealerFormSchema>;
-
 const form = useForm<DealerFormValues>({
   resolver: zodResolver(dealerFormSchema),
   defaultValues: { /* … */ },
@@ -149,8 +187,10 @@ Adding a thin variant (a CVA `variant: "compact"`) directly in the shadcn file i
 
 ## Conventions checklist
 
-- [ ] Schema: zod, with `z.infer<typeof schema>` for the values type.
-- [ ] Resolver: `zodResolver(schema)`. Mode: `'onTouched'` unless there's a specific reason to use `'onChange'`/`'onBlur'`.
+- [ ] Schema: zod, in a sibling `<feature>/<thing>-schema.ts` module, imported by **both** the form and the Server Action.
+- [ ] Values type: `export type X = z.infer<typeof xSchema>` from the schema module.
+- [ ] Resolver (A-shape): `zodResolver(schema)`. Mode: `'onTouched'` unless there's a specific reason to use `'onChange'`/`'onBlur'`.
+- [ ] Action validation: first lines of the Server Action are `const parsed = schema.safeParse(Object.fromEntries(formData)); if (!parsed.success) return { error: '…', fieldErrors: parsed.error.flatten().fieldErrors };`. Use `parsed.data` for the DB write.
 - [ ] Layout: `<Field>` + `<FieldLabel htmlFor>` + control + optional `<FieldError>`. Never raw `<div className="flex flex-col gap-1">`.
 - [ ] Validation visuals: `data-invalid` on `<Field>`, `aria-invalid` on the control. Use `{cond || undefined}` so `false` collapses.
 - [ ] Submission: `form.handleSubmit(async values => …)` calls a Server Action. No `fetch` to a route handler.
