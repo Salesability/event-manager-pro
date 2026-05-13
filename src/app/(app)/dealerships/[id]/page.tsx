@@ -3,6 +3,14 @@ import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer, type Quote } from '@/features/quotes/queries';
+import { resolveQuoteRecipient } from '@/features/quotes/recipient';
+import {
+  firstDraftQuoteIdForDealer,
+  loadActiveOrPendingMsa,
+  type Msa,
+} from '@/features/msa/queries';
+import { MsaCreateTrigger } from '@/features/msa/msa-panel';
+import { signedUrl } from '@/lib/storage/gcs';
 
 // Per-dealer detail. Gated `admin:access` to match the `/dealerships` index;
 // coaches currently can't browse dealerships, so admin-only here avoids the
@@ -15,6 +23,15 @@ const STATUS_PILL_CLS: Record<Quote['status'], string> = {
   accepted: 'bg-status-green/15 text-status-green',
   declined: 'bg-status-red/15 text-status-red',
 };
+
+const MSA_STATUS_PILL_CLS: Record<Msa['status'], string> = {
+  pending: 'bg-amber-100 text-amber-700',
+  active: 'bg-emerald-100 text-emerald-700',
+  expired: 'bg-stone-200 text-stone-600',
+  terminated: 'bg-status-red/15 text-status-red',
+};
+
+const MSA_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 
 export default async function DealerDetailPage({
   params,
@@ -29,7 +46,29 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const quotes = await loadQuotesByDealer(id);
+  const [quotes, msa, firstDraftQuoteId, recipientResult] = await Promise.all([
+    loadQuotesByDealer(id),
+    loadActiveOrPendingMsa(id),
+    firstDraftQuoteIdForDealer(id),
+    resolveQuoteRecipient(id),
+  ]);
+  const recipient =
+    'ok' in recipientResult
+      ? recipientResult.recipient
+      : { error: recipientResult.error };
+
+  let signedMsaPdfUrl: string | null = null;
+  if (msa?.status === 'active' && msa.signedPdfStorageKey) {
+    const bucket = process.env.GCS_BUCKET;
+    if (bucket) {
+      const signed = await signedUrl(
+        bucket,
+        msa.signedPdfStorageKey,
+        MSA_PDF_SIGNED_URL_TTL_SECONDS,
+      );
+      if ('ok' in signed) signedMsaPdfUrl = signed.url;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,6 +95,75 @@ export default async function DealerDetailPage({
           {dealer.primaryPhone && <span>{dealer.primaryPhone}</span>}
         </div>
       </div>
+
+      <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-display text-xl text-navy">Master Service Agreement</h2>
+          {msa && (
+            <span
+              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${MSA_STATUS_PILL_CLS[msa.status]}`}
+            >
+              {msa.status}
+            </span>
+          )}
+        </div>
+        {msa ? (
+          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
+            <dt className="font-medium text-stone-600">Created</dt>
+            <dd className="text-stone-800">{fmtDate(msa.createdAt)}</dd>
+            {msa.signedAt && (
+              <>
+                <dt className="font-medium text-stone-600">Signed</dt>
+                <dd className="text-stone-800">{fmtDate(msa.signedAt)}</dd>
+              </>
+            )}
+            {msa.expiresAt && (
+              <>
+                <dt className="font-medium text-stone-600">Expires</dt>
+                <dd className="text-stone-800">{fmtDate(msa.expiresAt)}</dd>
+              </>
+            )}
+            <dt className="font-medium text-stone-600">Template version</dt>
+            <dd className="font-mono text-xs text-stone-700">{msa.templateVersion}</dd>
+            {signedMsaPdfUrl && (
+              <>
+                <dt className="font-medium text-stone-600">Signed PDF</dt>
+                <dd>
+                  <a
+                    href={signedMsaPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-navy underline hover:opacity-80"
+                  >
+                    Download signed MSA
+                  </a>
+                </dd>
+              </>
+            )}
+            {msa.status === 'pending' && msa.dropboxSignDocumentId && (
+              <dd className="col-span-full mt-1 text-xs text-stone-500">
+                Envelope sent — awaiting signer. Sign event arrives via Dropbox
+                Sign webhook.
+              </dd>
+            )}
+          </dl>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-stone-600">
+              No MSA on file yet. The first envelope bundles the MSA with the
+              dealer&apos;s first draft Quote.
+            </p>
+            {!dealer.archivedAt && (
+              <MsaCreateTrigger
+                dealerId={dealer.id}
+                dealerName={dealer.name}
+                recipient={recipient}
+                firstDraftQuoteId={firstDraftQuoteId}
+              />
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex items-center justify-between">
