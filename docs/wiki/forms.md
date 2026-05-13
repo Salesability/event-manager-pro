@@ -163,4 +163,4 @@ Adding a thin variant (a CVA `variant: "compact"`) directly in the shadcn file i
 - `docs/wiki/conventions.md` → cross-cutting rules (Server Actions, Drizzle, audit columns).
 - `docs/wiki/security.md` → action-layer authorization (`requireRole`) sits between the form submission and the database write.
 - `docs/designs/closed/0024-people-admin/plan.md` → original Radix Form adoption decision (Phase 4 was deferred, then revisited and reversed by 0042 Phase 6).
-- `docs/designs/0042-shadcn-ui-sweep/plan.md` → primitive-by-primitive port log, including the Tabs orientation-selector regression.
+- `docs/designs/closed/0042-shadcn-ui-sweep/plan.md` → primitive-by-primitive port log, including the Tabs orientation-selector regression.
