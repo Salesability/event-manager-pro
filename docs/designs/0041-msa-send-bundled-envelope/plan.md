@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Dropbox Sign client + env wiring (`src/lib/dropbox-sign/`) | Done | `3e1b6bd` |
 | 2: MSA template render (`renderMsaPdf`) + storage layout | Done | `f07a952` |
-| 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Pending | - |
+| 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions | Done | `22c6a0f` |
 | 4: Webhook route handler at `/api/dropbox-sign/webhook` | Pending | - |
 | 5: MSA panel on `/dealerships/[id]` + create-MSA dialog | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -39,7 +39,7 @@ This chunk surfaces the **MSA send flow** — the second half of the 0025-quote-
 - `CLAUDE.md` → "Database, schema, migrations, Drizzle, Supabase auth wiring — invoke the `db-conventions` skill before writing or modifying."
 - Project memory `project_msa_structure` — 12-month MSA term per §2.i; accepted Quote IS the contract per §1.iii (no separate `orders`); 50% cancel fee within 21 days of Event start.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 ## Open Questions
 
@@ -70,11 +70,11 @@ These are inherited from closed/0037-commercial-spine-msa (eight OQs there) plus
 
 ## Phase 3: `createMsaDraft` + `sendMsaEnvelope` Server Actions
 
-- [ ] Add `msa:edit` + `msa:read` to `src/lib/auth/capabilities.ts`; admin + coach for edit, admin + coach + viewer for read
-- [ ] Add `msa.created` + `msa.sent` + `msa.signed` + `msa.declined` to the `auditAction` pgEnum (Drizzle `ALTER TYPE` migration — see closed/0035 Phase 2 + `0016_flat_typhoid_mary.sql` for the existing `dealer.activated` precedent)
-- [ ] `createMsaDraft(dealerId)` — capability-gated, inserts `master_service_agreements` row with status `pending`, `templateVersion` from env, returns `{ ok, msaId }`
-- [ ] `sendMsaEnvelope(msaId, firstQuoteId)` — capability-gated, atomic guarded transition (`pending → ?` no flip yet; `dropboxSignDocumentId` populated via the API call), bundles MSA draft PDF + Quote PDF in one envelope, persists the `dropboxSignDocumentId` returned by the API, emits `msa.sent` audit
-- [ ] Test cases: happy path, missing first-Quote, archived dealer, Dropbox Sign API failure (no state mutation), idempotent re-send (already has `dropboxSignDocumentId`)
+- [x] Add `msa:edit` + `msa:read` to `src/lib/auth/capabilities.ts`; admin + coach for edit, admin + coach + viewer for read (capabilities.test.ts gained 14 admit-set cases mirroring the `reports:view` / `availability:edit` pattern)
+- [x] Add `msa.created` + `msa.sent` + `msa.signed` + `msa.declined` to the `auditAction` pgEnum via `drizzle/0019_msa_audit_actions.sql` (`ALTER TYPE … ADD VALUE` mirroring `0016_flat_typhoid_mary.sql`); journal `when` hand-bumped to `1779724800000` (monotonic) and snapshot `0019_snapshot.json` patched to include the four new values + `prevId` chain. `AuditActionId` string-literal union in `src/features/audit/actions.ts` extended to match.
+- [x] `createMsaDraft(dealerId)` — capability `msa:edit`; FOR UPDATE dealer lock + same-tx existing-MSA check refuses when dealer already has `pending`/`active` row (one-MSA-per-dealer v1 — expired/terminated rows allow renewal-style fresh drafts); stamps `templateVersion` from env via `currentMsaTemplateVersion()`; emits `msa.created` audit; returns `{ ok, msaId }`
+- [x] `sendMsaEnvelope(msaId, firstQuoteId)` — capability `msa:edit`; pre-loads MSA + dealer + first draft Quote; idempotent early-return when `dropboxSignDocumentId` is already set; renders MSA PDF (`renderMsaPdf` from Phase 2) + Quote PDF (`renderQuotePdf` from persisted snapshot); uploads MSA draft to `msa/<id>/draft.pdf` in GCS; posts a single envelope with both PDFs to Dropbox Sign via `sendSignatureRequest` (added to `dropbox-sign/client.ts` — inline-upload `signatureRequestSend` wrapper); persists `dropboxSignDocumentId` via atomic guarded UPDATE (`status='pending' AND dropbox_sign_document_id IS NULL`); emits `msa.sent` audit with `signatureRequestId` + `draftPdfStorageKey` payload. The `getSignedFileBytes` helper also landed in `client.ts` for Phase 4's webhook to fetch the signed PDF.
+- [x] Test cases: happy path, missing first-Quote, archived dealer, Dropbox Sign API failure (no state mutation), idempotent re-send (already has `dropboxSignDocumentId`) — plus 4 additional negative cases: cross-dealer Quote rejection, sent-Quote rejection, missing-dealerId on create, existing-MSA refusal on create (14 cases total in `actions.test.ts`; 725/727 vitest)
 
 ## Phase 4: Webhook route handler at `/api/dropbox-sign/webhook`
 
