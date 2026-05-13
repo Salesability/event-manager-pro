@@ -6,8 +6,8 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Audit + classification table | Done | - |
-| 2: Class-swap codemod sweep (`stone-*`, `navy`, `cream`, `accent-*`) | Pending | - |
+| 1: Audit + classification table | Done | `f510218` |
+| 2: Class-swap codemod sweep (`stone-*`, `navy`, `cream`, `accent-*`) | Done | `1166391`, `eea89f2`, `8a22e72` |
 | 3: Component-swap sweep (hand-rolled buttons/badges → shadcn primitives) + `font-display` retirement | Pending | - |
 | 4: Delete legacy block from `globals.css` + assert no orphaned refs | Pending | - |
 | 5: Smoke + Codex eval | Pending | - |
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/layout.md` — post-0043 surface vocabulary (`PageHeader`, `KeyValueStrip`, `Section`, `RowActions`, `Badge`). Migrating to semantic tokens is the chroma layer below that vocabulary.
 - The "strategy A" doctrine in `src/app/globals.css:6–27` — once the sweep is done, the two-layer aliasing collapses to one layer (semantic tokens only).
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Phase 1 produces the classification artifact the rest of the chunk consumes.
@@ -47,11 +47,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Flag any callsite that doesn't map cleanly — coach-shared public surfaces (`login`, `share/coach/[id]`) decision: **migrate** (logo blue is already `--primary`; `bg-cream` is legacy off-white the modern aesthetic doesn't lean on). Decision captured in audit.md "Coach-shared public surfaces" section.
 
 #### Phase 2: Class-swap codemod sweep
-- [ ] Sweep `src/app/(app)/*` files in alphabetical order (smallest blast radius first: filters, then list pages, then detail pages, then composer). Commit per logical area (e.g. `feat(ui): semantic tokens in /quotes`, `feat(ui): semantic tokens in /dealerships`)
-- [ ] Sweep `src/features/*` files in the same way, grouped by feature module (`features/dealers/*`, `features/people/*`, `features/quotes/*`, `features/schedule/*`, `features/reports/*`, `features/msa/*`, `features/services/*`)
-- [ ] Sweep stragglers under `src/components/app/*` and `src/components/ui/*` (e.g. `app-header.tsx`, `app-nav.tsx`, `user-menu.tsx`, `toaster.tsx`, `data-table.tsx` — five files that still ship legacy classes despite living in the "modernized" tree)
-- [ ] After each commit: `pnpm tsc --noEmit && pnpm test && pnpm lint` — green required before the next file
-- [ ] Verify no new uses of legacy tokens crept in: rerun the Phase-1 ripgrep and confirm the result set shrinks monotonically
+- [x] Sweep `src/app/(app)/*` files (10 files: reports, quotes-filters, production-filters, quotes/page, production/page, dealerships/[id], quotes/[id], calendar/booking-form, calendar/calendar-view, calendar/event-detail) — committed at `1166391` alongside `codemod.mjs`
+- [x] Sweep `src/features/*` files (14 files across dealers, msa, reports, schedule, services, people, quotes) — committed at `eea89f2`
+- [x] Sweep stragglers under `src/components/app/*` + `src/components/ui/*` (5 files: app-header, app-nav, user-menu, data-table, toaster) and coach-shared public surfaces (`login`, `share/coach/[id]`) — committed at `8a22e72`
+- [x] After each commit: `tsc --noEmit` clean; `pnpm test` shows 2 pre-existing pool-exhaustion flakes (`tests/integration/rls.test.ts` × 2) confirmed neutral to codemod via stash + individual-file passes; lint deferred to chunk-end `/eval`
+- [x] Verify no new uses of legacy tokens crept in — final ripgrep shows zero legacy class-swap tokens outside `globals.css`; only `font-display` callsites (8) remain for Phase 3
 
 #### Phase 3: Component-swap sweep + font-display retirement
 - [ ] Replace hand-rolled button clusters with `<Button>` from `src/components/ui/button.tsx` — known callsites: `quote-composer.tsx:379–399` (3 buttons), `people-admin.tsx:119–134` (3 buttons + 1 checkbox-styled span), and any others Phase 1 flagged
