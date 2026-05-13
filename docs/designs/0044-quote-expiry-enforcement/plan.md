@@ -11,11 +11,11 @@
 | 2: Surface validity on PDF + email | Done | `b99d381` |
 | 3: Resolve OQ #1 → implement `expired` lifecycle (enum / timestamp / none) | Done | `4e0d31c` |
 | 4: (conditional on OQ #1 choice) Nightly sweep job | Skipped (Option B chosen) | - |
-| 5: Tests + smoke verification | Pending | - |
+| 5: Tests + smoke verification | Done | - |
 
 Honor the `quotes.quote_valid_days` column the schema has been carrying since 0037 Phase 4 (`drizzle/0017_tranquil_living_mummy.sql`). Today the default-30-days value lives on the row but **nothing reads it**: `acceptQuote` (`src/features/quotes/actions.ts:825`) doesn't refuse stale acceptances, the PDF renderer (`src/lib/pdf/render-quote.ts:129`) doesn't print a "Valid until" line, the send email (`src/lib/email/templates/quote.tsx`) doesn't either, and the `quote_status` enum has no `expired` value. Done = (a) staff `acceptQuote` refuses `sent → accepted` when `sentAt + quoteValidDays < now()` with a clear error message; (b) the dealer sees the deadline on both the PDF ("Valid until 2026-06-12") and the send email ("Please respond by 2026-06-12"); (c) the lifecycle decision (enum value vs timestamp vs nothing) is recorded in OQ #1 and the chosen path is implemented; (d) integration test + browser smoke + chunk-end `/eval` verify.
 
-**Overall Progress:** 80% (3/5 + 1 skipped of 5 phases — Phase 4 skipped because OQ #1 chose Option B)
+**Overall Progress:** 100% (4/5 done + 1 skipped — Phase 4 skipped because OQ #1 chose Option B)
 
 ## Open Questions
 
@@ -138,9 +138,9 @@ The minimum behavior fix. Refuses staff `acceptQuote` on stale Quotes, regardles
 
 #### Phase 5: Tests + smoke verification
 
-- [ ] Full `pnpm test` — all existing Quote tests still pass (`acceptQuote` happy path, `sendQuote` round-trip, `loadQuote` projection).
-- [ ] Smoke (web-test) `/quotes/new?dealerId=1` → fill in inputs, save draft — composer behavior unchanged.
-- [ ] Smoke (web-test) `/quotes/[id]` on a stale fixture (insert via `scripts/0044-quote-expiry-fixture.ts insert` if a fixture is needed) → verify the derived "Expired" pill renders (Option B) OR the status badge reads "Expired" (Option A); the PDF preview iframe shows the "Valid until: YYYY-MM-DD" line.
-- [ ] If Option (A) or (C) shipped: run `pnpm dlx tsx scripts/0044-quote-expiry-sweep.ts run` against the fixture to confirm the flip happens end-to-end.
-- [ ] Cleanup: `scripts/0044-quote-expiry-fixture.ts cleanup` removes the fixture rows (sibling to `scripts/0040-cleanup-quote-1.ts` and `scripts/0041-msa-smoke.ts cleanup`).
-- [ ] Full `/eval` at chunk-end (single pass per post-0040 `/build` cadence — fast `tsc + test` per phase, Codex + web-test + lint at chunk-end only).
+- [x] Full `pnpm test` — all 770 tests still pass (was 757 before 0044; +13 new tests across phases).
+- [x] Smoke (web-test) `/quotes/new?dealerId=1` → composer behavior unchanged. PASS.
+- [x] Smoke (web-test) `/quotes/[id]` — Preview PDF dialog opens, iframe present. PDF visual content not OCR-verifiable from accessibility snapshot; the "Valid until" line is unit-test-asserted in `render-quote.test.ts`. ~~stale-fixture verification~~ — no `scripts/0044-quote-expiry-fixture.ts` authored; the projection is fully unit-tested. Caveat noted in eval report.
+- [x] Phase 4 skipped (Option B chosen) — no sweep script, no fixture script needed.
+- [x] ~~Cleanup~~ — no fixture authored, so no cleanup.
+- [x] Full `/eval` at chunk-end — verdict **PASS with warnings**. Report: `eval-2026-05-13-1116.md`. Codex returned 1 High (TOCTOU) + 1 Medium (MSA bundled quote) + 3 Lows. The High and 2 Lows fixed in-cycle at `29a39b4` (Postgres-time predicate added to the UPDATE WHERE, expired-error message unified into helper, composer banner reads "expired" when `initial.isExpired`, wiki doc MAX_LINE_ITEMS=12 update). The Medium and 1 Low parked as 0044 follow-ups (a + b).
