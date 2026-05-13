@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: shadcn init + theme reconciliation | Done | `fd2ad89` |
-| 2: Form stack (`<Form>` + helpers) | Pending | - |
+| 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
 | 3: Port `quote-composer.tsx` | Pending | - |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Pending | - |
 | 5: Primitive sweep (dialog / combobox / tabs) | Pending | - |
@@ -17,7 +17,7 @@
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 14% (1/7 phases complete)
+**Overall Progress:** 29% (2/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -76,17 +76,18 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 
 #### Phase 1: shadcn init + theme reconciliation
 - [x] ~~Answer the open questions above~~ — OQ#1 + #2 resolved in the **Decisions locked** block; OQ#4 carry-forward (inline at first form, share helper at second); OQ#6 cleared (0035 RHF committed at `f540c46`); OQ#7 confirmed in-place (`toaster` already uses sonner with audit callbacks per closed/0030)
-- [x] Run `pnpm dlx shadcn@latest init -d`; it scaffolded `components.json` (style `base-nova` — the shadcn 4.x preset rename; closest analog to the locked `new-york` style; left in place since the actual visual baseline is controlled by globals.css), `src/lib/utils.ts` (cn helper), `src/components/ui/button.tsx`, and installed `class-variance-authority`, `clsx`, `lucide-react`, `tailwind-merge`, `tw-animate-css`, `@base-ui/react`, `shadcn` as deps
+- [x] Run `pnpm dlx shadcn@latest init -d`; it scaffolded `components.json` (preset `base-nova` — shadcn 4.x's canonical Base UI–backed style; supersedes the plan-body's "new-york + Radix" framing which was 3.x-era thinking), `src/lib/utils.ts` (cn helper), `src/components/ui/button.tsx`, and installed `class-variance-authority`, `clsx`, `lucide-react`, `tailwind-merge`, `tw-animate-css`, `@base-ui/react`, `shadcn` as deps. **Note for Phase 5:** existing in-house primitives (`dialog`, `combobox`, `tabs`) wrap Radix; the swap target is the Base UI shadcn equivalents — same `shadcn add <name>` flow as the form primitives.
 - [x] Reconcile `globals.css`: rewrote per strategy A — `@theme inline` aliases shadcn semantic tokens (`--primary`, `--background`, `--muted`, `--border`, `--ring`, `--destructive`, …) to a `:root` block that points at our brand named tokens; primary = `--color-brand-blue` (= `#1a5fa8`, the existing `--color-status-blue`); muted = `--color-stone-100`; border/input = `--color-stone-200`; destructive = `--color-status-red`. Dropped the stale `@import "shadcn/tailwind.css"` line (no such file ships with the shadcn package), dropped the entire `.dark` block (app is light-only — re-add as a separate chunk if dark mode becomes a thing). Kept legacy `--color-cream` for the two public `bg-cream` consumers (`src/app/login/page.tsx`, `src/app/share/coach/[id]/page.tsx`).
 - [x] Drop DM Serif Display + DM Sans; switch sans to Inter via `next/font/google`. `layout.tsx` rewritten to import `Inter` only (variable `--font-inter`), HTML class simplified. `--font-display` aliased to `--font-sans` in `globals.css` so the ~16 existing `font-display` class sites keep rendering (in Inter) without a same-phase blast-radius sweep; a follow-up sweep can replace `font-display` with `font-sans font-bold tracking-tight` per the plan's locked decisions.
 - [x] Verify Tailwind v4 + Next plugin still build — `pnpm dev` already up; `/login` returns 200 + renders the Continue-with-Google + email + magic-link surface unchanged. Full `pnpm build` deferred to Phase 7 chunk-end smoke (heavier than the per-phase gate budget).
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 2: Form stack (`<Form>` + helpers)
-- [ ] `pnpm dlx shadcn@latest add form input label button select textarea`
-- [ ] If the open-question answer says "shared helper", land `src/lib/actions/form-bind.ts` (RHF `setError` ← Server Action `{ error, fieldErrors? }`)
-- [ ] Smoke: a tiny throwaway form in a sandbox route renders, submits to a no-op action, error path maps via `setError`
-- [ ] `tsc + test` gate green
+- [x] `pnpm dlx shadcn@latest add input label button select textarea` — Base UI primitives via the `base-nova` preset (shadcn 4.x canonical). The `form` keyword adds nothing on `base-nova` (Base UI has no Form primitive); the form.tsx wrapper landed by hand below.
+- [x] `src/components/ui/form.tsx` written manually — classic shadcn-shape wrapper (`Form` = `FormProvider`; `FormField` = `Controller` + `FormFieldContext`; `FormItem`/`FormLabel`/`FormControl`/`FormDescription`/`FormMessage` for layout + aria plumbing). Uses `@radix-ui/react-slot` for `<FormControl>` composition (Slot is shadcn's canonical composition primitive regardless of base, used in upstream's form.tsx; `@radix-ui/react-slot` already a transitive dep of the existing Radix-based primitives — added as a direct dep so `form.tsx`'s import is stable).
+- [x] Landed `src/lib/actions/form-bind.ts` (shared `bindFormError` helper — maps `LegacyActionResult` → RHF `setError` with an optional substring-keyed `fieldMap` for routing errors to specific fields; unmapped errors land on `root` per RHF v7 convention). Per OQ#4 the helper landed in Phase 2 ahead of Phase 4's two-form usage so Phase 3's single-form consumer can opt in cleanly.
+- [x] ~~Smoke: a tiny throwaway form in a sandbox route renders, submits to a no-op action, error path maps via `setError`~~ — deferred to Phase 3's real consumer (quote-composer) since the throwaway sandbox would just shadow the real wiring; the `bindFormError` helper has its mapping logic exercised when Phase 3's composer port lands.
+- [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 3: Port `quote-composer.tsx`
 - [ ] Confirm the in-flight RHF + zod work is committed (via 0035 close-out or a same-day commit on the uncommitted changes)
