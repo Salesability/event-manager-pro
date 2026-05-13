@@ -9,7 +9,12 @@ import {
   useState,
 } from 'react';
 import { Can } from '@/components/auth/can';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type {
   AvailabilityBlock,
   Campaign,
@@ -586,12 +591,11 @@ export function CalendarView({
       </div>
 
       {mode === 'app' && (
-        <Dialog.Root open={dialog.kind !== 'closed'} onClose={closeDialog}>
-          <Dialog.Backdrop />
-          <Dialog.Panel className={dialog.kind === 'availability' ? 'max-w-[780px]' : undefined}>
+        <Dialog open={dialog.kind !== 'closed'} onOpenChange={(o) => { if (!o) closeDialog(); }}>
+          <DialogContent className={dialog.kind === 'availability' ? 'sm:max-w-[780px]' : undefined}>
             {dialog.kind === 'detail' && (
               <>
-                <Dialog.Title>Campaign Detail</Dialog.Title>
+                <DialogTitle>Campaign Detail</DialogTitle>
                 <EventDetail
                   campaign={dialog.campaign}
                   onEdit={() => setDialog({ kind: 'edit', campaign: dialog.campaign })}
@@ -601,7 +605,7 @@ export function CalendarView({
             )}
             {dialog.kind === 'create' && (
               <>
-                <Dialog.Title>Book Event</Dialog.Title>
+                <DialogTitle>Book Event</DialogTitle>
                 <BookingForm
                   mode="create"
                   dealers={dealers}
@@ -615,7 +619,7 @@ export function CalendarView({
             )}
             {dialog.kind === 'edit' && (
               <>
-                <Dialog.Title>Edit Campaign</Dialog.Title>
+                <DialogTitle>Edit Campaign</DialogTitle>
                 <BookingForm
                   mode="edit"
                   campaign={dialog.campaign}
@@ -629,15 +633,15 @@ export function CalendarView({
             )}
             {dialog.kind === 'availability' && (
               <>
-                <Dialog.Title>Block Out Dates</Dialog.Title>
-                <Dialog.Description>
+                <DialogTitle>Block Out Dates</DialogTitle>
+                <DialogDescription>
                   Add, edit, or remove calendar blocks for holidays, closures, and coach time off.
-                </Dialog.Description>
+                </DialogDescription>
                 <AvailabilityAdmin blocks={blocks} coaches={coaches} />
               </>
             )}
-          </Dialog.Panel>
-        </Dialog.Root>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

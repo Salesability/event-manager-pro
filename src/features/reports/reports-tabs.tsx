@@ -8,7 +8,7 @@ import type {
   SortingState,
 } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
-import { Tabs } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   buildClientColumns,
   buildCoachColumns,
@@ -123,15 +123,15 @@ export function ReportsTabs({
   }
 
   return (
-    <Tabs.Root value={tab} onValueChange={(v) => setTab(v as ReportTabKey)}>
+    <Tabs value={tab} onValueChange={(v) => setTab(v as ReportTabKey)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs.List aria-label="Report views" className="print:hidden">
+        <TabsList aria-label="Report views" className="print:hidden">
           {(Object.keys(TAB_LABELS) as ReportTabKey[]).map((key) => (
-            <Tabs.Trigger key={key} value={key}>
+            <TabsTrigger key={key} value={key}>
               {TAB_LABELS[key]}
-            </Tabs.Trigger>
+            </TabsTrigger>
           ))}
-        </Tabs.List>
+        </TabsList>
         <div className="flex items-center gap-2 print:hidden">
           <a
             href={`/reports/export?tab=${tab}`}
@@ -149,7 +149,7 @@ export function ReportsTabs({
         </div>
       </div>
 
-      <Tabs.Content value="dealer">
+      <TabsContent value="dealer">
         <DataTable
           columns={dealerColumns}
           data={byDealer}
@@ -159,9 +159,9 @@ export function ReportsTabs({
           onPaginationChange={setDealerPage}
           emptyState="No campaigns to summarise yet."
         />
-      </Tabs.Content>
+      </TabsContent>
 
-      <Tabs.Content value="coach">
+      <TabsContent value="coach">
         <DataTable
           columns={coachColumns}
           data={byCoach}
@@ -171,9 +171,9 @@ export function ReportsTabs({
           onPaginationChange={setCoachPage}
           emptyState="No campaigns to summarise yet."
         />
-      </Tabs.Content>
+      </TabsContent>
 
-      <Tabs.Content value="month">
+      <TabsContent value="month">
         <DataTable
           columns={monthColumns}
           data={byMonth}
@@ -183,9 +183,9 @@ export function ReportsTabs({
           onPaginationChange={setMonthPage}
           emptyState="No campaigns to summarise yet."
         />
-      </Tabs.Content>
+      </TabsContent>
 
-      <Tabs.Content value="full">
+      <TabsContent value="full">
         <div className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
           <input
             type="search"
@@ -225,8 +225,8 @@ export function ReportsTabs({
           globalFilterFn={fullGlobalFilterFn}
           emptyState="No campaigns match."
         />
-      </Tabs.Content>
-    </Tabs.Root>
+      </TabsContent>
+    </Tabs>
   );
 }
 

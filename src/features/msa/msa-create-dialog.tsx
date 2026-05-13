@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createMsaDraft, sendMsaEnvelope } from './actions';
 
@@ -75,14 +81,13 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
   }
 
   return (
-    <Dialog.Root open={props.open} onClose={props.onClose}>
-      <Dialog.Backdrop />
-      <Dialog.Panel className="w-full max-w-lg">
-        <Dialog.Title>Send MSA + first Quote for signature</Dialog.Title>
-        <Dialog.Description>
+    <Dialog open={props.open} onOpenChange={(o) => { if (!o) props.onClose(false); }}>
+      <DialogContent className="w-full sm:max-w-lg">
+        <DialogTitle>Send MSA + first Quote for signature</DialogTitle>
+        <DialogDescription>
           A bundled envelope is sent to the Client via Dropbox Sign. The Client
           signs once and both documents take effect.
-        </Dialog.Description>
+        </DialogDescription>
 
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-stone-500">Dealer</dt>
@@ -126,9 +131,9 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         )}
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <Dialog.Close className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
+          <DialogClose className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
             Cancel
-          </Dialog.Close>
+          </DialogClose>
           <button
             type="button"
             onClick={onSubmit}
@@ -138,7 +143,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
             {pending ? 'Sending…' : 'Send for signature'}
           </button>
         </div>
-      </Dialog.Panel>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Dialog } from '@/components/ui/dialog';
+import { DialogClose } from '@/components/ui/dialog';
 import {
   Field,
   FieldDescription,
@@ -215,7 +215,7 @@ export function DealerForm({
       </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
-        <Dialog.Close className={cancelClass}>Cancel</Dialog.Close>
+        <DialogClose className={cancelClass}>Cancel</DialogClose>
         <button type="submit" disabled={pending} className={submitClass}>
           {pending
             ? mode === 'create'

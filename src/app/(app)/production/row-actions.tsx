@@ -1,7 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { BookingForm } from '@/app/(app)/calendar/booking-form';
 import { EventDetail } from '@/app/(app)/calendar/event-detail';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
@@ -39,12 +43,11 @@ export function RowActions({ campaign, dealers, coaches, styles, sources }: Prop
       >
         Edit
       </button>
-      <Dialog.Root open={dialog.kind !== 'closed'} onClose={close}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
+      <Dialog open={dialog.kind !== 'closed'} onOpenChange={(o) => { if (!o) close(); }}>
+        <DialogContent>
           {dialog.kind === 'detail' && (
             <>
-              <Dialog.Title>Campaign Detail</Dialog.Title>
+              <DialogTitle>Campaign Detail</DialogTitle>
               <EventDetail
                 campaign={campaign}
                 onEdit={() => setDialog({ kind: 'edit' })}
@@ -54,7 +57,7 @@ export function RowActions({ campaign, dealers, coaches, styles, sources }: Prop
           )}
           {dialog.kind === 'edit' && (
             <>
-              <Dialog.Title>Edit Campaign</Dialog.Title>
+              <DialogTitle>Edit Campaign</DialogTitle>
               <BookingForm
                 mode="edit"
                 campaign={campaign}
@@ -66,8 +69,8 @@ export function RowActions({ campaign, dealers, coaches, styles, sources }: Prop
               />
             </>
           )}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

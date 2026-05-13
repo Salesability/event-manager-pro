@@ -1,7 +1,12 @@
 'use client';
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Field as ShadField,
   FieldGroup,
@@ -374,26 +379,24 @@ export function BookingForm({
         </button>
       </div>
     </form>
-      <Dialog.Root open={stylesOpen} onClose={setStylesOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Manage Event Styles</Dialog.Title>
-          <Dialog.Description>
+      <Dialog open={stylesOpen} onOpenChange={setStylesOpen}>
+        <DialogContent>
+          <DialogTitle>Manage Event Styles</DialogTitle>
+          <DialogDescription>
             Add, rename, or archive event formats used by bookings.
-          </Dialog.Description>
+          </DialogDescription>
           {stylesOpen && <LookupAdmin kind="styles" items={styles} compact />}
-        </Dialog.Panel>
-      </Dialog.Root>
-      <Dialog.Root open={sourcesOpen} onClose={setSourcesOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Manage Data Sources</Dialog.Title>
-          <Dialog.Description>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={sourcesOpen} onOpenChange={setSourcesOpen}>
+        <DialogContent>
+          <DialogTitle>Manage Data Sources</DialogTitle>
+          <DialogDescription>
             Add, rename, or archive campaign data-source labels.
-          </Dialog.Description>
+          </DialogDescription>
           {sourcesOpen && <LookupAdmin kind="sources" items={sources} compact />}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

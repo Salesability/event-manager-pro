@@ -4,7 +4,12 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FilterFn } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -212,19 +217,17 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
         />
       </div>
 
-      <Dialog.Root open={addOpen} onClose={setAddOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Add Dealer</Dialog.Title>
-          <Dialog.Description>Create a new dealership.</Dialog.Description>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogTitle>Add Dealer</DialogTitle>
+          <DialogDescription>Create a new dealership.</DialogDescription>
           {addOpen && <DealerForm mode="create" onSuccess={() => setAddOpen(false)} />}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
 
-      <Dialog.Root open={editing != null} onClose={() => setEditing(null)}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Edit Dealer — {editing?.name}</Dialog.Title>
+      <Dialog open={editing != null} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent>
+          <DialogTitle>Edit Dealer — {editing?.name}</DialogTitle>
           {editing && (
             <DealerForm
               mode="edit"
@@ -232,8 +235,8 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
               onSuccess={() => setEditing(null)}
             />
           )}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

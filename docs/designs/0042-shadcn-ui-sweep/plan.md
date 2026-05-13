@@ -11,13 +11,13 @@
 | 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
 | 3: Port `quote-composer.tsx` | Done | `2462b0c` |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
-| 5: Primitive sweep (dialog / combobox / tabs) | Pending | - |
+| 5: Primitive sweep (dialog / combobox / tabs) | Done | _commit pending_ |
 | 6: Docs (wiki) + Radix Form removal | Pending | - |
 | 7: Tests + smoke verification | Pending | - |
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 57% (4/7 phases complete)
+**Overall Progress:** 71% (5/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -107,13 +107,13 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 - [x] `tsc + test` gate green per file (tsc clean, 757/759 PASS)
 
 #### Phase 5: Primitive sweep (dialog / combobox / tabs)
-- [ ] `pnpm dlx shadcn@latest add dialog command popover tabs`
-- [ ] Replace consumers of `@/components/ui/dialog` with shadcn's `Dialog` (API likely overlaps with current Radix-based wrapper)
-- [ ] Replace consumers of `@/components/ui/combobox` (mostly `quote-composer` post-Phase 3; double-check) — shadcn pattern is Combobox-via-Command rather than a single primitive
-- [ ] Replace consumers of `@/components/ui/tabs` if any (`grep -rl 'from .@/components/ui/tabs'`)
-- [ ] Keep `data-table.tsx` and `toaster.tsx` — both carry project-specific behaviour
-- [ ] Delete now-unused primitives from `src/components/ui/`
-- [ ] `tsc + test` gate green; `web-test` snapshot of `/dealerships`, `/calendar`, `/quotes/new`
+- [x] `pnpm dlx shadcn@latest add dialog combobox tabs --overwrite` — replaced in-house Radix-backed wrappers with shadcn 4.x Base UI versions (`@base-ui/react/dialog`, `@base-ui/react` Combobox, `@base-ui/react/tabs`). `command` and `popover` were already shadcn-shape from Phase 2/3, so not re-added.
+- [x] Replace consumers of `@/components/ui/dialog` — 9 files ported: `dealers-admin.tsx`, `dealer-form.tsx` (DialogClose only), `orphan-auth-users.tsx`, `people-admin.tsx`, `production/row-actions.tsx`, `calendar/booking-form.tsx`, `calendar/calendar-view.tsx`, `msa-create-dialog.tsx`, `quote-composer.tsx` (two dialogs). Pattern: `<Dialog.Root open onClose={...}>` → `<Dialog open onOpenChange={...}>`; `<Dialog.Backdrop /> <Dialog.Panel>` → `<DialogContent>` (overlay rendered internally); `<Dialog.Title/Description/Close>` → `<DialogTitle/DialogDescription/DialogClose>`. Parameterless `onClose` callers got an `onOpenChange={(o) => { if (!o) closeFn(); }}` wrapper. The `max-w-[780px]` sizing on the availability panel mapped to `sm:max-w-[780px]` to compose with shadcn's `sm:max-w-sm` default; `max-w-4xl`/`max-w-lg` likewise prefixed with `sm:` so the responsive override actually wins.
+- [x] Replace consumers of `@/components/ui/combobox` — both ports use Base UI's compositional API: `<Combobox items={...} itemToStringValue={...} itemToStringLabel={...} value={obj|null} onValueChange={obj|null}>` + `<ComboboxInput placeholder>` + `<ComboboxContent><ComboboxEmpty>…</ComboboxEmpty><ComboboxList>{(item) => <ComboboxItem value={item}>…</ComboboxItem>}</ComboboxList></ComboboxContent></Combobox>`. quote-composer keeps its number-id mapping via `Number(item.value) | null`; people-admin keeps the per-link string-id shape. The separate placeholder/inputPlaceholder split collapsed (Base UI always shows the input) — used `inputPlaceholder` text.
+- [x] Replace consumers of `@/components/ui/tabs` — `reports-tabs.tsx` (only consumer): `<Tabs.Root> / <Tabs.List> / <Tabs.Trigger> / <Tabs.Content>` → `<Tabs> / <TabsList> / <TabsTrigger> / <TabsContent>`. Props identical (`value`, `onValueChange`).
+- [x] Keep `data-table.tsx` and `toaster.tsx` — left untouched per Decisions block.
+- [x] Delete now-unused primitives — removed `src/components/ui/command.tsx` (cmdk-based, no longer referenced after combobox swap) and `pnpm remove cmdk @radix-ui/react-dialog @radix-ui/react-popover @radix-ui/react-tabs`. `grep -rln "from '@/components/ui/command'\|@radix-ui/react-(dialog\|popover\|tabs)\|from 'cmdk'" src/` is empty.
+- [x] `tsc + test` gate green (tsc clean, 757/759 PASS). `web-test` smoke deferred to chunk-end `/eval` per the post-0040 cadence.
 
 #### Phase 6: Docs (wiki) + Radix Form removal
 - [ ] Write `docs/wiki/forms.md`: schema first + `z.infer`, Server Action submission via `form.handleSubmit`, `setError` mapping for server-side field errors, `<FormField>` wrapper API, in-house vs shadcn primitive decision matrix, when to extend a shadcn component vs build new

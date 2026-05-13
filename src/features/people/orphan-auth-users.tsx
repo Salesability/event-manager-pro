@@ -3,7 +3,13 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { adoptOrphanAuthUser } from '@/features/people/actions';
@@ -57,16 +63,15 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
           Adopt
         </button>
       </Can>
-      <Dialog.Root open={open} onClose={setOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Adopt {orphan.email ?? orphan.userId}</Dialog.Title>
-          <Dialog.Description>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogTitle>Adopt {orphan.email ?? orphan.userId}</DialogTitle>
+          <DialogDescription>
             Create a contacts row for this auth user and link it.
-          </Dialog.Description>
+          </DialogDescription>
           {open && <AdoptForm orphan={orphan} onSuccess={() => setOpen(false)} />}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
     </li>
   );
 }
@@ -129,7 +134,7 @@ function AdoptForm({
         </p>
       )}
       <div className="mt-2 flex justify-end gap-2">
-        <Dialog.Close className={rowEditClass}>Cancel</Dialog.Close>
+        <DialogClose className={rowEditClass}>Cancel</DialogClose>
         <button type="submit" disabled={pending} className={submitClass}>
           {pending ? 'Adopting…' : 'Adopt'}
         </button>

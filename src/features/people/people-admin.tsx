@@ -14,8 +14,21 @@ import * as Form from '@radix-ui/react-form';
 import * as Select from '@radix-ui/react-select';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
-import { Combobox } from '@/components/ui/combobox';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -298,21 +311,19 @@ export function PeopleAdmin({
         />
       </div>
 
-      <Dialog.Root open={addOpen} onClose={setAddOpen}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Add Person</Dialog.Title>
-          <Dialog.Description>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogTitle>Add Person</DialogTitle>
+          <DialogDescription>
             Adds a contact. Picking Admin or Coach also creates a sign-in at this email.
-          </Dialog.Description>
+          </DialogDescription>
           {addOpen && <PersonForm mode="create" dealers={dealers} onSuccess={() => setAddOpen(false)} />}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
 
-      <Dialog.Root open={editing != null} onClose={() => setEditing(null)}>
-        <Dialog.Backdrop />
-        <Dialog.Panel>
-          <Dialog.Title>Edit Person — {editing?.displayName}</Dialog.Title>
+      <Dialog open={editing != null} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent>
+          <DialogTitle>Edit Person — {editing?.displayName}</DialogTitle>
           {editing && (
             <PersonForm
               mode="edit"
@@ -321,8 +332,8 @@ export function PeopleAdmin({
               onSuccess={() => setEditing(null)}
             />
           )}
-        </Dialog.Panel>
-      </Dialog.Root>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -631,14 +642,29 @@ function PersonForm({
           {dealerLinks.map((link, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
               <Combobox
-                options={dealerOptions}
-                value={String(link.dealerId)}
-                onChange={(v) => setDealerLink(i, { dealerId: v })}
-                placeholder="Pick a dealer…"
-                inputPlaceholder="Type a dealership name…"
-                emptyMessage="No matching dealers."
-                ariaLabel="Dealer"
-              />
+                items={dealerOptions}
+                itemToStringValue={(item) => item.value}
+                itemToStringLabel={(item) => item.label}
+                value={dealerOptions.find((o) => o.value === String(link.dealerId)) ?? null}
+                onValueChange={(item) =>
+                  setDealerLink(i, { dealerId: item?.value ?? '' })
+                }
+              >
+                <ComboboxInput
+                  placeholder="Type a dealership name…"
+                  aria-label="Dealer"
+                />
+                <ComboboxContent>
+                  <ComboboxEmpty>No matching dealers.</ComboboxEmpty>
+                  <ComboboxList>
+                    {(item) => (
+                      <ComboboxItem key={item.value} value={item}>
+                        {item.label}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
               <Select.Root
                 value={link.role}
                 onValueChange={(v) =>
@@ -700,7 +726,7 @@ function PersonForm({
       )}
 
       <div className="mt-2 flex justify-end gap-2">
-        <Dialog.Close className={rowEditClass}>Cancel</Dialog.Close>
+        <DialogClose className={rowEditClass}>Cancel</DialogClose>
         <Form.Submit asChild>
           <button
             type="submit"

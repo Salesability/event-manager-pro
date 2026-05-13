@@ -10,8 +10,21 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Combobox } from '@/components/ui/combobox';
-import { Dialog } from '@/components/ui/dialog';
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Field,
   FieldDescription,
@@ -328,15 +341,34 @@ export function QuoteComposer({
               <Controller
                 control={control}
                 name="dealerId"
-                render={({ field }) => (
-                  <Combobox
-                    options={dealerOptions}
-                    value={field.value ? String(field.value) : ''}
-                    onChange={(v) => field.onChange(v ? Number(v) : null)}
-                    placeholder="Pick a dealer…"
-                    ariaLabel="Dealer"
-                  />
-                )}
+                render={({ field }) => {
+                  const selected = field.value
+                    ? dealerOptions.find((o) => o.value === String(field.value)) ?? null
+                    : null;
+                  return (
+                    <Combobox
+                      items={dealerOptions}
+                      itemToStringValue={(item) => item.value}
+                      itemToStringLabel={(item) => item.label}
+                      value={selected}
+                      onValueChange={(item) =>
+                        field.onChange(item ? Number(item.value) : null)
+                      }
+                    >
+                      <ComboboxInput placeholder="Pick a dealer…" aria-label="Dealer" />
+                      <ComboboxContent>
+                        <ComboboxEmpty>No matches.</ComboboxEmpty>
+                        <ComboboxList>
+                          {(item) => (
+                            <ComboboxItem key={item.value} value={item}>
+                              {item.label}
+                            </ComboboxItem>
+                          )}
+                        </ComboboxList>
+                      </ComboboxContent>
+                    </Combobox>
+                  );
+                }}
               />
             )}
           </div>
@@ -610,14 +642,13 @@ function PreviewDialog({
   error: string | null;
 }) {
   return (
-    <Dialog.Root open={open} onClose={onClose}>
-      <Dialog.Backdrop />
-      <Dialog.Panel className="w-full max-w-4xl">
-        <Dialog.Title>Quote preview</Dialog.Title>
-        <Dialog.Description>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(false); }}>
+      <DialogContent className="w-full sm:max-w-4xl">
+        <DialogTitle>Quote preview</DialogTitle>
+        <DialogDescription>
           PDF rendered from the saved snapshot. Matches what gets emailed on
           Send.
-        </Dialog.Description>
+        </DialogDescription>
         <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
           {error ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
@@ -635,8 +666,8 @@ function PreviewDialog({
             />
           )}
         </div>
-      </Dialog.Panel>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -658,13 +689,12 @@ function ConfirmSendDialog({
   onConfirm: () => void;
 }) {
   return (
-    <Dialog.Root open={open} onClose={onClose}>
-      <Dialog.Backdrop />
-      <Dialog.Panel>
-        <Dialog.Title>Send this quote?</Dialog.Title>
-        <Dialog.Description>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(false); }}>
+      <DialogContent>
+        <DialogTitle>Send this quote?</DialogTitle>
+        <DialogDescription>
           Once sent, the quote is locked and cannot be edited.
-        </Dialog.Description>
+        </DialogDescription>
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
           <dt className="text-stone-500">Recipient</dt>
           <dd className="font-medium text-stone-800">
@@ -678,9 +708,9 @@ function ConfirmSendDialog({
           </dd>
         </dl>
         <div className="mt-6 flex items-center justify-end gap-2">
-          <Dialog.Close className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
+          <DialogClose className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
             Cancel
-          </Dialog.Close>
+          </DialogClose>
           <button
             type="button"
             onClick={onConfirm}
@@ -690,8 +720,8 @@ function ConfirmSendDialog({
             {pending ? 'Sending…' : 'Send'}
           </button>
         </div>
-      </Dialog.Panel>
-    </Dialog.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
