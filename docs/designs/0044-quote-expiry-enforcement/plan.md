@@ -8,14 +8,14 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: `acceptQuote` expiry guard (minimum behavior fix) | Done | `3b60c93` |
-| 2: Surface validity on PDF + email | Pending | - |
+| 2: Surface validity on PDF + email | Done | `b99d381` |
 | 3: Resolve OQ #1 → implement `expired` lifecycle (enum / timestamp / none) | Pending | - |
 | 4: (conditional on OQ #1 choice) Nightly sweep job | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
 Honor the `quotes.quote_valid_days` column the schema has been carrying since 0037 Phase 4 (`drizzle/0017_tranquil_living_mummy.sql`). Today the default-30-days value lives on the row but **nothing reads it**: `acceptQuote` (`src/features/quotes/actions.ts:825`) doesn't refuse stale acceptances, the PDF renderer (`src/lib/pdf/render-quote.ts:129`) doesn't print a "Valid until" line, the send email (`src/lib/email/templates/quote.tsx`) doesn't either, and the `quote_status` enum has no `expired` value. Done = (a) staff `acceptQuote` refuses `sent → accepted` when `sentAt + quoteValidDays < now()` with a clear error message; (b) the dealer sees the deadline on both the PDF ("Valid until 2026-06-12") and the send email ("Please respond by 2026-06-12"); (c) the lifecycle decision (enum value vs timestamp vs nothing) is recorded in OQ #1 and the chosen path is implemented; (d) integration test + browser smoke + chunk-end `/eval` verify.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ## Open Questions
 
@@ -83,15 +83,16 @@ The minimum behavior fix. Refuses staff `acceptQuote` on stale Quotes, regardles
 
 #### Phase 2: Surface validity on PDF + email
 
-- [ ] Extend `QuoteData` type in `src/lib/pdf/render-quote.ts:13-25` with `validUntilDate: string` (ISO `YYYY-MM-DD`).
-- [ ] Compute `validUntilDate` at the PDF render call site (`actions.ts:596` + `:714`) from `sentAt + quoteValidDays`. **Don't hardcode 30** — use the row's value (OQ #4).
-- [ ] Add a "Valid until: YYYY-MM-DD" line in the renderer sibling to "Issued: ..." (`render-quote.ts:192`).
-- [ ] Extend `QuoteEmailFields` type in `src/lib/email/templates/quote.tsx` with `validUntilDate: string`. Update `sendQuote` (`actions.ts:714`) to pass it.
-- [ ] Add "Please respond by YYYY-MM-DD to lock in this pricing." line in the email body (OQ #5 wording).
-- [ ] Test case 1: `renderQuotePdf` snapshot extends to assert the new "Valid until" line is rendered.
-- [ ] Test case 2: send-flow test (`actions.test.ts`) asserts the email template receives the computed `validUntilDate`.
-- [ ] Test case 3: per-row `quoteValidDays = 14` override flows through — PDF + email both reflect 14, not 30.
-- [ ] `tsc + test` gate green.
+- [x] Extend `QuoteData` type in `src/lib/pdf/render-quote.ts:13-25` with `validUntilDate: string` (ISO `YYYY-MM-DD`).
+- [x] Compute `validUntilDate` at the PDF render call site (`previewQuotePdf` + `sendQuote`) from `sentAt + quoteValidDays`. Anchor both `sentAt` and the rendered strings on the same `new Date()` in `sendQuote` so the row's stored `sentAt` matches the printed dates to the millisecond. `previewQuotePdf` anchors on `quote.sentAt ?? new Date()` so drafts preview as "if sent today."
+- [x] Add a "Valid until: YYYY-MM-DD" line in the renderer sibling to "Issued: ..." (the new line consumed ~14pt of vertical space; `MAX_LINE_ITEMS` dropped from 13 to 12 — see render-quote.ts comment).
+- [x] Extend `QuoteEmailFields` type in `src/lib/email/templates/quote.tsx` with `validUntilDate: string`. Update `sendQuote` to pass it.
+- [x] Add "Please respond by YYYY-MM-DD to lock in this pricing." line in the email body (OQ #5 wording).
+- [x] Test case 1: `renderQuotePdf` test asserts both "Issued: …" and "Valid until: …" lines are drawn via `drawText` spy.
+- [x] Test case 2: send-flow happy-path test extended to assert the renderer + email template both receive `validUntilDate` derived from `sentAt + quoteValidDays` (30 days).
+- [x] Test case 3: new "honors a per-row quoteValidDays override" test confirms a 14-day window flows through to both renderer and email template.
+- [x] Sibling: `sendMsaEnvelope` builds a `QuoteData` for the bundled first-draft quote — also extended with `validUntilDate` (anchored on today since the row is still `draft`; date will continue to render this way once `sendQuote` eventually flips the row).
+- [x] `tsc + test` gate green. (tsc clean, 762/764 pass — was 760; +2 new tests.)
 
 #### Phase 3: Resolve OQ #1 → implement chosen lifecycle path
 
