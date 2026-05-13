@@ -48,6 +48,12 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function isoDateOffset(base: Date, days: number): string {
+  return new Date(base.getTime() + days * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
 function plus12Months(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCFullYear(d.getUTCFullYear() + 1);
@@ -232,6 +238,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
         id: quotes.id,
         dealerId: quotes.dealerId,
         status: quotes.status,
+        quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
@@ -275,9 +282,14 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     // Render the Quote PDF from the persisted snapshot.
     const linesResult = validatePersistedLines(quote.lineItems);
     if ('error' in linesResult) return linesResult;
+    // Quote is still a draft here (MSA bundles include the first draft quote
+    // alongside the agreement). Anchor "Valid until" on today since the row
+    // isn't sent yet — the date will continue to render this way when
+    // sendQuote eventually flips the row.
     const quoteData: QuoteData = {
       quoteNumber: String(quote.id),
       issuedDate,
+      validUntilDate: isoDateOffset(new Date(), quote.quoteValidDays),
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       eventName: 'Sales Event',

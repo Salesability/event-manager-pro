@@ -9,6 +9,7 @@ import { MAX_LINE_ITEMS, renderQuotePdf, type QuoteData, type QuoteLineItem } fr
 const fixture: QuoteData = {
   quoteNumber: 'Q-2026-0001',
   issuedDate: '2026-05-08',
+  validUntilDate: '2026-06-07',
   clientName: 'Acme Auto Group',
   clientAddress: ['456 Dealership Boulevard', 'Mississauga, ON  L5B 3C2'],
   eventName: 'Spring Tent Sale 2026',
@@ -80,6 +81,25 @@ describe('renderQuotePdf', () => {
     const reloaded = await PDFDocument.load(result.body);
     expect(reloaded.getPageCount()).toBe(1);
     expect(Math.min(...drawnY)).toBeGreaterThanOrEqual(50);
+  });
+
+  it('draws the "Valid until: YYYY-MM-DD" line as a sibling to the Issued line', async () => {
+    const drawn: string[] = [];
+    const originalDrawText = PDFPage.prototype.drawText;
+    const drawTextSpy = vi
+      .spyOn(PDFPage.prototype, 'drawText')
+      .mockImplementation(function (
+        this: PDFPage,
+        text: string,
+        options?: Parameters<PDFPage['drawText']>[1],
+      ) {
+        drawn.push(text);
+        return originalDrawText.call(this, text, options);
+      });
+    await renderQuotePdf(fixture);
+    drawTextSpy.mockRestore();
+    expect(drawn).toContain(`Issued: ${fixture.issuedDate}`);
+    expect(drawn).toContain(`Valid until: ${fixture.validUntilDate}`);
   });
 
   it('refuses to render more than MAX_LINE_ITEMS line items', async () => {

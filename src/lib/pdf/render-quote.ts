@@ -13,6 +13,8 @@ export type QuoteLineItem = {
 export type QuoteData = {
   quoteNumber: string;
   issuedDate: string;
+  /** ISO `YYYY-MM-DD` derived from `sentAt + quoteValidDays` (or today + quoteValidDays for unsent drafts). */
+  validUntilDate: string;
   clientName: string;
   clientAddress?: string[]; // multi-line; e.g. ["123 Main St", "Anywhere, ON  A1A 1A1"]
   eventName: string;
@@ -25,9 +27,11 @@ export type QuoteData = {
 export type RenderResult = { ok: true; body: Buffer } | { error: string };
 
 // Hard cap on line-item count for the single-page layout. The current y-axis
-// math leaves the lowest text above the 50pt bottom margin at 13 items for
-// the fixture-size Bill To block used by the composer.
-export const MAX_LINE_ITEMS = 13;
+// math leaves the lowest text above the 50pt bottom margin at 12 items for
+// the fixture-size Bill To block used by the composer. The "Valid until"
+// line added in 0044 consumed ~14pt of vertical space in the header band,
+// dropping the cap from 13 to 12.
+export const MAX_LINE_ITEMS = 12;
 
 // Quote document is built programmatically with pdf-lib — code is the source
 // of truth for layout (logo, fonts, margins, text). Rendered output persists
@@ -190,6 +194,13 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
     drawRight(
       { page, font, size: 11, color: grey },
       `Issued: ${quote.issuedDate}`,
+      rightEdge,
+      yRight,
+    );
+    yRight -= 14;
+    drawRight(
+      { page, font, size: 11, color: grey },
+      `Valid until: ${quote.validUntilDate}`,
       rightEdge,
       yRight,
     );

@@ -152,6 +152,7 @@ const DRAFT_QUOTE_ROW = {
   id: 42,
   dealerId: 7,
   status: 'draft' as const,
+  quoteValidDays: 30,
   lineItems: [
     {
       code: 'base-event',

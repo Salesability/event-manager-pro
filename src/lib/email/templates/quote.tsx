@@ -34,6 +34,8 @@ export type QuoteEmailFields = {
   clientName: string;
   /** Issued date as `YYYY-MM-DD` (rendered ISO). */
   issuedDate: string;
+  /** ISO `YYYY-MM-DD` deadline for response — `sentAt + quoteValidDays`. */
+  validUntilDate: string;
   /** Final quote total in CAD dollars. */
   total: number;
 };
@@ -80,6 +82,11 @@ export function QuoteEmail(f: QuoteEmailFields) {
             Please find your quote for {f.clientName} attached as a PDF. Total:{' '}
             <strong style={{ color: '#111111' }}>{totalStr}</strong> (Quote #
             {f.quoteNumber}, issued {f.issuedDate}).
+          </Text>
+          <Text style={{ color: '#444444', fontSize: '14px', margin: '0 0 16px 0' }}>
+            Please respond by{' '}
+            <strong style={{ color: '#111111' }}>{f.validUntilDate}</strong> to
+            lock in this pricing.
           </Text>
           <Text style={{ color: '#444444', fontSize: '14px', margin: '0 0 16px 0' }}>
             To accept this quote or request changes, reply to this email or call

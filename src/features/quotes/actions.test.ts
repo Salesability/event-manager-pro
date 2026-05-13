@@ -234,6 +234,7 @@ const DRAFT_ROW = {
   dealerId: 7,
   updatedAt: new Date('2026-05-12T12:00:00.000Z'),
   acceptToken: '11111111-2222-3333-4444-555555555555',
+  quoteValidDays: 30,
   lineItems: [
     {
       code: 'base-event',
@@ -326,6 +327,31 @@ describe('sendQuote', () => {
     expect(tplArg.quoteNumber).toBe('42');
     expect(tplArg).not.toHaveProperty('acceptUrl');
     expect(tplArg).not.toHaveProperty('declineUrl');
+
+    // 0044: PDF + email both receive validUntilDate derived from sentAt +
+    // quoteValidDays (default 30). The same anchor `sentAt` lands on the row
+    // and the rendered strings, so issued/valid lines stay in sync.
+    expect(quoteData.issuedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(quoteData.validUntilDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const issuedMs = new Date(`${quoteData.issuedDate}T00:00:00.000Z`).getTime();
+    const validMs = new Date(`${quoteData.validUntilDate}T00:00:00.000Z`).getTime();
+    expect(validMs - issuedMs).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(tplArg.validUntilDate).toBe(quoteData.validUntilDate);
+  });
+
+  it('honors a per-row quoteValidDays override on the PDF + email (14 days, not the 30-day default)', async () => {
+    mocks.dbResults.push(
+      [{ ...DRAFT_ROW, quoteValidDays: 14 }],
+      [DEALER_ROW],
+      [{ id: 42 }],
+    );
+    await call(sendQuote(fd({ quoteId: '42' })));
+    const quoteData = mocks.renderQuotePdf.mock.calls[0][0] as Record<string, unknown>;
+    const tplArg = mocks.quoteEmail.mock.calls[0][0] as Record<string, unknown>;
+    const issuedMs = new Date(`${quoteData.issuedDate}T00:00:00.000Z`).getTime();
+    const validMs = new Date(`${quoteData.validUntilDate}T00:00:00.000Z`).getTime();
+    expect(validMs - issuedMs).toBe(14 * 24 * 60 * 60 * 1000);
+    expect(tplArg.validUntilDate).toBe(quoteData.validUntilDate);
   });
 
   it('fails closed when the dealer has no customer-contact primary email (no render, no transition)', async () => {

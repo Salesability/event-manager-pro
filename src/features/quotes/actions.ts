@@ -493,8 +493,10 @@ function validatePersistedLines(raw: unknown): ValidatedLines {
   return { ok: true, lines };
 }
 
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function isoDateOffset(base: Date, days: number): string {
+  return new Date(base.getTime() + days * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
 /** Split a free-form multi-line address into the renderer's array shape.
@@ -580,6 +582,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
         status: quotes.status,
         dealerId: quotes.dealerId,
         sentAt: quotes.sentAt,
+        quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
@@ -604,13 +607,17 @@ export const previewQuotePdf = capabilityClient('quote:edit')
     const lineResult = validatePersistedLines(quote.lineItems);
     if ('error' in lineResult) return lineResult;
 
-    const issuedDate = quote.sentAt
-      ? quote.sentAt.toISOString().slice(0, 10)
-      : todayIsoDate();
+    // For sent quotes the issued/validity dates anchor on `sentAt`. For
+    // drafts (preview-only) we fall back to today so the preview shows what
+    // the rendered PDF will look like once sent.
+    const anchorDate = quote.sentAt ?? new Date();
+    const issuedDate = anchorDate.toISOString().slice(0, 10);
+    const validUntilDate = isoDateOffset(anchorDate, quote.quoteValidDays);
 
     const rendered = await renderQuotePdf({
       quoteNumber: String(quoteId),
       issuedDate,
+      validUntilDate,
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       eventName: 'Sales Event',
@@ -670,6 +677,7 @@ export const sendQuote = capabilityClient('quote:edit')
         status: quotes.status,
         dealerId: quotes.dealerId,
         updatedAt: quotes.updatedAt,
+        quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
@@ -711,10 +719,15 @@ export const sendQuote = capabilityClient('quote:edit')
     const lineResult = validatePersistedLines(draft.lineItems);
     if ('error' in lineResult) return lineResult;
 
-    const issuedDate = todayIsoDate();
+    // Anchor both timestamps to the same `now` so the row's `sentAt` and the
+    // rendered "Issued"/"Valid until" strings line up to the millisecond.
+    const sentAt = new Date();
+    const issuedDate = sentAt.toISOString().slice(0, 10);
+    const validUntilDate = isoDateOffset(sentAt, draft.quoteValidDays);
     const quoteData: QuoteData = {
       quoteNumber: String(quoteId),
       issuedDate,
+      validUntilDate,
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       // v1 placeholder: quotes don't yet carry an event-name column. The
@@ -742,7 +755,7 @@ export const sendQuote = capabilityClient('quote:edit')
       .update(quotes)
       .set({
         status: 'sent',
-        sentAt: new Date(),
+        sentAt,
         pdfStorageKey: storageKey,
         sentToEmail: recipient.email,
         sentToFirstName: recipient.firstName,
@@ -799,6 +812,7 @@ export const sendQuote = capabilityClient('quote:edit')
       quoteNumber: String(quoteId),
       clientName: dealer.name,
       issuedDate,
+      validUntilDate,
       total: Number(draft.total),
     });
     const emailResult = await sendEmail({
