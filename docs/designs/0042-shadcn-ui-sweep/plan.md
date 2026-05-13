@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: shadcn init + theme reconciliation | Done | `fd2ad89` |
 | 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
-| 3: Port `quote-composer.tsx` | Pending | - |
+| 3: Port `quote-composer.tsx` | In Progress | - |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Pending | - |
 | 5: Primitive sweep (dialog / combobox / tabs) | Pending | - |
 | 6: Docs (wiki) + Radix Form removal | Pending | - |
@@ -84,8 +84,8 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 
 #### Phase 2: Form stack (`<Form>` + helpers)
 - [x] `pnpm dlx shadcn@latest add input label button select textarea` — Base UI primitives via the `base-nova` preset (shadcn 4.x canonical). The `form` keyword adds nothing on `base-nova` (Base UI has no Form primitive); the form.tsx wrapper landed by hand below.
-- [x] `src/components/ui/form.tsx` written manually — classic shadcn-shape wrapper (`Form` = `FormProvider`; `FormField` = `Controller` + `FormFieldContext`; `FormItem`/`FormLabel`/`FormControl`/`FormDescription`/`FormMessage` for layout + aria plumbing). Uses `@radix-ui/react-slot` for `<FormControl>` composition (Slot is shadcn's canonical composition primitive regardless of base, used in upstream's form.tsx; `@radix-ui/react-slot` already a transitive dep of the existing Radix-based primitives — added as a direct dep so `form.tsx`'s import is stable).
-- [x] Landed `src/lib/actions/form-bind.ts` (shared `bindFormError` helper — maps `LegacyActionResult` → RHF `setError` with an optional substring-keyed `fieldMap` for routing errors to specific fields; unmapped errors land on `root` per RHF v7 convention). Per OQ#4 the helper landed in Phase 2 ahead of Phase 4's two-form usage so Phase 3's single-form consumer can opt in cleanly.
+- [x] ~~`src/components/ui/form.tsx` written manually — classic shadcn-shape wrapper (`Form` = `FormProvider`; `FormField` = `Controller` + `FormFieldContext`; etc.)~~ — **Deleted mid-phase.** The shadcn skill's authoritative rules surfaced that shadcn 4.x ships `Field`/`FieldGroup` primitives (`@shadcn/field`), NOT the classic `FormField`/`FormItem`/`useFormField` pattern from pre-4.x. Pivot: dropped the hand-written `form.tsx` + the `form-bind.ts` helper; added `@shadcn/field` + `@shadcn/toggle-group` (which transitively brought `toggle` + `separator`). The modern Field pattern integrates with RHF via plain `register()` + `aria-invalid` on the control + `data-invalid` on `<Field>` — no FormProvider context, no shared error helper. Per the shadcn skill's `rules/forms.md`: **"Forms use `FieldGroup` + `Field`. Never use raw `div` with `space-y-*` or `grid gap-*` for form layout."**
+- [x] ~~Landed `src/lib/actions/form-bind.ts`~~ — Deleted alongside `form.tsx`. The modern Field pattern doesn't need a setError-routing helper; RHF's `setError(fieldName, ...)` is called inline from the form's submit handler and `<FieldError>` reads `formState.errors[fieldName]` directly.
 - [x] ~~Smoke: a tiny throwaway form in a sandbox route renders, submits to a no-op action, error path maps via `setError`~~ — deferred to Phase 3's real consumer (quote-composer) since the throwaway sandbox would just shadow the real wiring; the `bindFormError` helper has its mapping logic exercised when Phase 3's composer port lands.
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
