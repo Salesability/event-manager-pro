@@ -1,39 +1,58 @@
 # Portal shell + master/detail conventions
 
 **Started:** 2026-05-13
-**Status:** Scaffolded — Parked (un-park trigger: 0042 ships, i.e. Phase 7 Done + chunk closed). Builds directly on 0042's shadcn baseline; running both in parallel collides on `src/app/(app)/layout.tsx` and on every page header.
+**Status:** Active — pivoted 2026-05-13 to **keep the top nav** (`AppHeader`) and drop the shadcn Sidebar shell swap. Reframed same day around **app-wide consistency in operation and look-and-feel** rather than page conventions alone (user reframe + bcgov/biohubbc-platform structural reference). Phase 1 stays `Skipped`; new Phase 6 (row-action convention) inserted; old Phases 6–7 renumber to 7–8.
 
 ## Progress Tracker
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: shadcn Sidebar install + portal shell swap | Pending | - |
+| 1: shadcn Sidebar install + portal shell swap | Skipped (pivot 2026-05-13 — keep top nav) | - |
 | 2: `<PageHeader>` wrapper (title + actions slot) | Pending | - |
 | 3: Sweep `<PageHeader>` across all `(app)/` routes | Pending | - |
 | 4: Detail-page convention (key-value strip + sections) | Pending | - |
 | 5: List-page filter-bar convention | Pending | - |
-| 6: Status `<Badge>` + relative timestamps | Pending | - |
-| 7: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
+| 6: Row-action convention (`<RowActions>` + shared labels/icons) | Pending | - |
+| 7: Status `<Badge>` + relative timestamps | Pending | - |
+| 8: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
 
-Shift the portal shell from a top-header layout to a shadcn-Sidebar-based layout, and establish three reusable conventions (page header with top-right action slot, detail-page key-value strip + sections, list-page filter-bar shape) so every screen in the staff app has the same structure. Specific user pain points this addresses: (1) primary actions hidden below the fold on long pages — they move to a persistent top-right slot in `<PageHeader>`; (2) hand-rolled submit buttons with copy-pasted Tailwind chains across `lookup-admin.tsx`, `availability-admin.tsx`, `services-admin.tsx`, `booking-form.tsx`, `dealer-form.tsx`, `people-admin.tsx`, `orphan-auth-users.tsx` — all migrate to shadcn `<Button>` (already installed via 0042 Phase 2). Done = (a) `AppHeader` replaced by `<SidebarProvider>` + `<AppSidebar>` with identical nav items + capability gates preserved; (b) `<PageHeader title actions sticky?>` wrapper applied to every `(app)/` route; (c) `/quotes/[id]` and `/dealerships/[id]` adopt the icon → object → identifier → key-value strip → sections pattern; (d) `/quotes` and `/dealerships` adopt the standardized filter bar (search-flex → fixed dropdowns → action-right); (e) `<Badge>` variants map to every status enum currently rendered as colored text; (f) `docs/wiki/layout.md` captures the convention and is cross-linked from `index.md` + `forms.md`.
+**Spirit (locked 2026-05-13):** the same conceptual surface should look and operate the same way everywhere. Concrete evidence motivating the chunk — three list pages, three different operational vocabularies for "do something to this row":
 
-**Overall Progress:** 0% (0/7 phases complete)
+| List | Labels on row | File |
+|------|---------------|------|
+| `/quotes` | `View` only | `src/app/(app)/quotes/row-actions.tsx:16` |
+| `/production` | `View` + `Edit` | `src/app/(app)/production/row-actions.tsx:37,44` |
+| `/dealers` | `Activate` + `Edit` + `Archive` (no `View`) | `src/features/dealers/dealers-columns.tsx:113-162` |
+
+That mismatch is a vocabulary problem, not a styling problem — fixing it requires one shared row-action component fed by a shared labels/icons map, not just nicer buttons. Structural reference: [bcgov/biohubbc-platform `app/src`](https://github.com/bcgov/biohubbc-platform/tree/dev/app/src) — note `components/data-grid/`, `components/button/`, `components/header/`, `components/section/`, `layouts/BaseLayout.tsx` + `SearchLayout.tsx`, `constants/i18n.ts` + `icon.ts`. We don't need their MUI theme or their full i18n harness; we do need their *organizational shape* — one folder per pattern, labels/icons centralized.
+
+Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
+
+**Overall Progress:** 0% (0/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
+- **Spirit: consistency, not aesthetic refresh.** Every change in this chunk must justify itself by making one of: row actions, page headers, detail-page anatomy, list filter-bars, status display, timestamps — *operate and look the same everywhere they appear*. Nicer-looking-but-still-inconsistent is a fail. Pretty-but-localized changes belong in their own chunks.
+- **Canonical row-action vocabulary** (Phase 6 — locks the labels before any sweep):
+  - `View` — navigate to the record's detail page. Used when there *is* a detail page.
+  - `Edit` — open an inline edit dialog. Used when the record has no detail page (or the dialog is the canonical editor).
+  - `Archive` / `Activate` / state-flip verbs — terminal column, after `View`/`Edit`.
+  - Overflow (4+ actions, or rarely-used) → kebab menu (`<DropdownMenu>`).
+  - **Either `View` xor `Edit` for navigation, never both.** `/production`'s current `View + Edit` pair is the lint: pick one based on whether the row has a detail page.
+  - Labels live in `src/lib/ui/labels.ts` (string constants), not as inline literals — so the choice can't drift back.
 - **Action-slot placement.** Page-level primary actions live in **`<PageHeader actions>`** (top-right of content area), never at the bottom of a scrolling page. Dialog actions stay in `DialogFooter` (bottom) — that's canonical dialog UX and not in scope here.
 - **Sticky page header on long pages only.** `<PageHeader sticky>` opts in; default is non-sticky. Quote composer is the clearest candidate (line-items table can scroll past the fold). Most pages don't need sticky and the gain isn't worth the visual weight.
-- **No top header.** The portal becomes sidebar-only, matching the modern-minimal aesthetic 0042 locked in. The existing `AppHeader` (`bg-navy`, sticky, 64px) is fully removed in Phase 1.
-- **Capability-gated nav preserved verbatim.** Whatever `app-nav.tsx` currently shows/hides based on roles + capabilities continues to do so inside `<AppSidebar>`. This chunk does not change *who sees what*, only *what the shell looks like*.
+- **Keep the top nav** (pivot 2026-05-13). `AppHeader` stays as the portal shell; we are not migrating to a shadcn Sidebar in this chunk. The existing capability-gated `app-nav.tsx` continues to drive nav items inside `AppHeader`. Rationale: shell swap is a high-blast-radius change for a payoff that's primarily aesthetic; the real user pain (hidden actions, hand-rolled buttons, inconsistent detail/list pages) is fully addressed by Phases 2–6 without touching the shell.
+- **Sticky `<PageHeader>` sits below the sticky `AppHeader`.** AppHeader is sticky-top, 64px tall. `<PageHeader sticky>` uses `sticky top-16` (not `top-0`) so it parks just under the AppHeader rather than colliding with it. Z-index: page header `z-10`, AppHeader stays at whatever it already has (higher).
+- **Capability-gated nav preserved verbatim.** No change to *who sees what*; this chunk only touches the content-area shell (page header + detail/list conventions + status badges).
 
 ## Open Questions
 
-The Phase 1 implementation needs answers before files start moving.
+~~1. **Sidebar collapse mode.**~~ N/A — pivoted 2026-05-13, no sidebar.
+~~2. **Sidebar header content.**~~ N/A — pivoted, no sidebar.
+~~3. **Sidebar footer content.**~~ N/A — pivoted, no sidebar.
+~~4. **Mobile breakpoint.**~~ N/A — pivoted; existing `AppHeader` mobile behavior is the baseline and untouched by this chunk.
 
-1. **Sidebar collapse mode.** Three shadcn options: `offcanvas` (sheet-style, fully hidden when collapsed), `icon` (icon-only rail, expand on hover/click), `none` (always full width). Recommendation: `icon` — preserves nav affordance on narrow widescreens, matches Resend/Vercel/Linear pattern.
-2. **Sidebar header content.** Resend uses a workspace switcher; Vercel uses the team picker. This app is **single-tenant** — coaches conceptually run their own business inside the shared system but don't switch tenants/workspaces (per memory: `project_coach_owned_business.md`). Options: (A) static SaleDay logo (no switcher — there's nothing to switch); (B) coach-name chip showing "Viewing: <coach>" for admin/staff who can scope across coaches' work; (C) workspace switcher placeholder for v2 multi-org. Recommendation: (A) for v1 — simplest, no new auth logic, accurate to the single-tenant model.
-3. **Sidebar footer content.** Currently the top-header carries `user.email` + admin badge. Move to sidebar footer? Or sidebar-header upper-left + footer reserved for collapse trigger? Recommendation: footer with avatar + email + `DropdownMenu` for sign-out, matching shadcn's standard sidebar pattern.
-4. **Mobile breakpoint.** shadcn sidebar auto-switches to `Sheet` on mobile (`<md` by default). Confirm `md` (768px) is the right breakpoint for this app — staff use laptops mostly; the calendar view is the only mobile-likely surface. Probably fine as default.
 5. **`<PageHeader>` API.** Two-prop minimum (`title`, `actions`) vs. richer (`title`, `description`, `actions`, `breadcrumb`, `sticky`). Recommendation: ship `title` + `actions` + `sticky` first; add `description` / `breadcrumb` only when a page actually needs them. Single level of nav depth today (no nested routes), so `breadcrumb` is YAGNI.
 6. **Detail-page strip scope.** Confirm only `/quotes/[id]` and `/dealerships/[id]` get the key-value strip in this chunk. `/calendar` doesn't have an event-detail page today (events are dialog-edited inline). Admin pages (`/admin/people`, `/admin/lookups`) are list-only — no detail.
 7. **Filter-bar scope.** Apply to `/quotes` and `/dealerships` (the two that have multi-field filtering). `/production`, `/reports`, `/admin/*` either don't filter or have simple filtering — skip unless trivially needed. Confirm.
@@ -50,9 +69,9 @@ The Phase 1 implementation needs answers before files start moving.
 
 | New code | Anchor (`path:line`) | Why this anchor |
 |----------|---------------------|-----------------|
-| `src/components/ui/sidebar.tsx` (shadcn install) | `src/components/ui/dialog.tsx` (existing shadcn primitive) | Same file location, same export pattern post-0042 |
-| `src/components/app/app-sidebar.tsx` (composed sidebar) | `src/components/app/app-header.tsx:11` (current shell) | Same layer (`components/app/*`) — composed app-shell parts |
-| `src/app/(app)/layout.tsx` (shell swap) | itself (current `<AppHeader>` wrapper) | Same file, replace the wrapper |
+| ~~`src/components/ui/sidebar.tsx`~~ | — | Dropped — pivot 2026-05-13, no sidebar swap |
+| ~~`src/components/app/app-sidebar.tsx`~~ | — | Dropped — pivot 2026-05-13, no sidebar swap |
+| ~~`src/app/(app)/layout.tsx` (shell swap)~~ | — | Dropped — `AppHeader` stays as-is |
 | `src/components/app/page-header.tsx` (`<PageHeader>`) | `src/components/app/app-header.tsx` (sibling) | Same layer; new shared shell component |
 | `src/app/(app)/dealerships/[id]/page.tsx` (detail convention) | itself, post-Phase 4 | First detail-page convert; pattern source for `/quotes/[id]` |
 | `src/app/(app)/quotes/[id]/page.tsx` (detail convention) | `src/app/(app)/dealerships/[id]/page.tsx` (post-Phase 4) | Second detail-page convert; same pattern |
@@ -69,22 +88,16 @@ The Phase 1 implementation needs answers before files start moving.
 **Note:**
 - Each phase includes both implementation and tests (vitest for unit-level + `web-test` for shell + page smoke).
 - Phase 7 is the chunk-end full `/eval` (single Codex pass per the post-0040 `/build` cadence).
-- 0042 must be fully closed before this chunk un-parks. Specifically Phase 7 of 0042 (smoke) must be Done and the chunk moved to `closed/` — otherwise Phase 1 of this chunk fights `globals.css`/layout edits with 0042's tail.
+- Pivot 2026-05-13: Phase 1 (sidebar shell swap) is `Skipped`. `AppHeader` stays. Tooltip (used in Phase 6) is still needed — install with `pnpm dlx shadcn@latest add tooltip` at the start of Phase 6, or piggyback onto Phase 2 if convenient.
 
 ### Phase Checklist
 
-#### Phase 1: shadcn Sidebar install + portal shell swap
-- [ ] Answer the open questions (lock collapse mode, sidebar header/footer content, mobile breakpoint, page-header API shape)
-- [ ] `pnpm dlx shadcn@latest add sidebar sheet tooltip` (Sidebar uses Sheet on mobile; Tooltip used in Phase 6 — install together)
-- [ ] Build `src/components/app/app-sidebar.tsx`: composed `<Sidebar>` with `<SidebarHeader>` (logo), `<SidebarContent>` (nav items via the existing `app-nav.tsx` source-of-truth), `<SidebarFooter>` (user dropdown)
-- [ ] Preserve capability-gated nav items 1:1 — same items, same gates, same hrefs
-- [ ] Replace `src/app/(app)/layout.tsx`: wrap children in `<SidebarProvider>` + `<AppSidebar>` + `<SidebarInset>` containing the main content area
-- [ ] Delete `src/components/app/app-header.tsx` only after Phase 3 confirms no remaining imports
-- [ ] `tsc + test` gate green; `web-test` smoke: sidebar renders + collapses + nav items visible at expected breakpoints
+#### Phase 1: shadcn Sidebar install + portal shell swap — SKIPPED (pivot 2026-05-13)
+- See **Decisions locked** → "Keep the top nav". `AppHeader` is retained; no sidebar work in this chunk. If a sidebar shell is revisited, scaffold a new design folder rather than reopening this phase.
 
 #### Phase 2: `<PageHeader>` wrapper (title + actions slot)
-- [ ] Build `src/components/app/page-header.tsx`: props `{ title: ReactNode, actions?: ReactNode, sticky?: boolean, description?: ReactNode }`. Title uses bold Inter (`font-sans font-bold tracking-tight text-3xl text-foreground`) post-0042. Actions slot is a flex container right-aligned. When `sticky`, the header sits in a `sticky top-0 z-10 bg-background border-b -mx-8 px-8` shell so it spans the inset's gutter.
-- [ ] Unit test: renders title + actions, sticky variant gets the sticky classes
+- [ ] Build `src/components/app/page-header.tsx`: props `{ title: ReactNode, actions?: ReactNode, sticky?: boolean, description?: ReactNode }`. Title uses bold Inter (`font-sans font-bold tracking-tight text-3xl text-foreground`) post-0042. Actions slot is a flex container right-aligned. When `sticky`, the header sits in a `sticky top-16 z-10 bg-background border-b` shell (parks below the 64px `AppHeader`, not at `top-0` — see Decisions).
+- [ ] Unit test: renders title + actions, sticky variant gets the sticky classes (incl. `top-16`)
 - [ ] `tsc + test` gate green
 
 #### Phase 3: Sweep `<PageHeader>` across all `(app)/` routes
@@ -92,7 +105,7 @@ The Phase 1 implementation needs answers before files start moving.
 - [ ] Each page loses its hand-rolled `<h1>`/action-button pair; both flow through `<PageHeader>`
 - [ ] Migrate every page's primary action (Save / Send / Export / Create / etc.) into the `actions` slot. Replace any remaining hand-rolled `<button className="rounded-lg bg-navy …">` with shadcn `<Button>` while at it.
 - [ ] Quote composer page (`/quotes/new`, `/quotes/[id]`): set `sticky` so Save/Send stays visible past the line-items table
-- [ ] Delete `app-header.tsx` once `git grep` confirms no consumers
+- [ ] `AppHeader` stays (pivot 2026-05-13) — do **not** delete `app-header.tsx`. Just confirm no page is double-rendering an `<h1>` that the new `<PageHeader>` already provides.
 - [ ] `tsc + test` gate green; `web-test`: spot-check 4-5 pages to confirm consistent header layout
 
 #### Phase 4: Detail-page convention (key-value strip + sections)
@@ -113,7 +126,18 @@ The Phase 1 implementation needs answers before files start moving.
 - [ ] Confirm filter state is in URL search params so back-nav from a detail restores it (Resend pattern from the conversation). If filters are component-state-only today, lift to `useSearchParams` / `router.replace`
 - [ ] `tsc + test` gate green; `web-test`: filter a list, click into detail, browser-back — filters intact
 
-#### Phase 6: Status `<Badge>` + relative timestamps
+#### Phase 6: Row-action convention (`<RowActions>` + shared labels/icons)
+- [ ] Create `src/lib/ui/labels.ts` — `ROW_ACTION_LABELS = { view: 'View', edit: 'Edit', archive: 'Archive', activate: 'Activate', … }` as a const map. Single import site; downstream files reference `ROW_ACTION_LABELS.edit`, never the literal string.
+- [ ] Create `src/lib/ui/icons.ts` — `ROW_ACTION_ICONS = { view: Eye, edit: Pencil, archive: Archive, activate: CheckCircle, … }` (lucide-react components). Same pattern — one place to change the icon used everywhere.
+- [ ] Build `src/components/app/row-actions.tsx` — `<RowActions actions={[{ kind: 'view', href }, { kind: 'edit', onClick }, …]} />`. Renders the first 2–3 inline as `<Button variant="ghost" size="sm">`; everything beyond falls into a `<DropdownMenu>` (shadcn primitive — install if not already present). `aria-label` derived from action kind + row identifier so screen readers get "Edit dealer Acme Inc" without each caller hand-writing it.
+- [ ] Refactor `src/app/(app)/quotes/row-actions.tsx` → use `<RowActions actions={[{ kind: 'view', href: '/quotes/' + id }]} />`. No more inline literal `View`.
+- [ ] Refactor `src/app/(app)/production/row-actions.tsx` → resolve the `View + Edit` mismatch. Production rows already have a Detail dialog (`Campaign Detail`) — pick one path: either the row becomes `Edit`-only and the detail is reachable inside the edit dialog (recommended — production is a working surface, not a reading one), or split into `View → details dialog` and `Edit → form dialog` and stay consistent across all rows. Lock the choice when this phase starts.
+- [ ] Refactor `src/features/dealers/dealers-columns.tsx` action cell → `<RowActions actions={[{ kind: 'view', href: '/dealerships/' + id }, { kind: 'edit', onClick }, conditional({ kind: 'activate', … }), { kind: 'archive', … }]} />`. Adds the missing `View` (since `/dealerships/[id]` exists); removes the hand-rolled `<button>` chains.
+- [ ] Lint guard: add `eslint-plugins/no-inline-row-action-label.mjs` (or extend `safeparse-required`) scoped to `src/app/**/row-actions.tsx`, `src/features/**/*-columns.tsx` — flags string literals that match `/^(View|Edit|Archive|Activate|Open|Details|Manage|Show)$/` so the next contributor can't quietly re-introduce drift. Opt-out comment for the rare false positive.
+- [ ] Unit tests: `<RowActions>` renders inline up to 3 actions, overflows into dropdown at 4+; `aria-label` includes the row identifier when provided.
+- [ ] `tsc + test` gate green; `web-test` smoke: visit `/quotes`, `/production`, `/dealerships` — each row's action cell renders the canonical vocabulary in the documented order.
+
+#### Phase 7: Status `<Badge>` + relative timestamps
 - [ ] Extend `src/components/ui/badge.tsx` with `success` variant (green) — matches the status-green token already in `globals.css`
 - [ ] Build `src/components/app/status-badge.tsx`: enum-aware wrappers `<QuoteStatusBadge>`, `<DealerStatusBadge>`, `<MsaStatusBadge>`, `<BookingStatusBadge>` so callers pass the status value and get the right variant + label
 - [ ] Replace every status-as-colored-text site (`grep` `text-status-red`/`text-status-green`/`text-status-blue` plus any inline status class chains) with the appropriate badge
@@ -122,8 +146,8 @@ The Phase 1 implementation needs answers before files start moving.
 - [ ] Detail pages keep absolute timestamps for hard facts (event start/end, contract dates) — relative is for *recent activity*, not *scheduled events*. Confirm during sweep.
 - [ ] `tsc + test` gate green
 
-#### Phase 7: Wiki (`layout.md`) + chunk-end smoke
-- [ ] Write `docs/wiki/layout.md`: portal shell anatomy (Sidebar + Inset), `<PageHeader>` API + when to set `sticky`, detail-page key-value strip pattern (when to use, label conventions), list-page filter-bar pattern, status badge + relative time conventions, capability-gated nav (preserved from app-nav)
+#### Phase 8: Wiki (`layout.md`) + chunk-end smoke
+- [ ] Write `docs/wiki/layout.md`: portal shell anatomy (`AppHeader` top nav, retained — see pivot decision), `<PageHeader>` API + when to set `sticky` (incl. the `top-16` parking rule), detail-page key-value strip pattern (when to use, label conventions), list-page filter-bar pattern, **row-action vocabulary** (canonical labels, when to use which, where the labels constant lives, the View-xor-Edit rule), status badge + relative time conventions, capability-gated nav (preserved from `app-nav.tsx`)
 - [ ] Cross-link `forms.md` ↔ `layout.md` ("page-level action slot vs. dialog footer" pointer in both directions); add `layout.md` to `docs/wiki/index.md`; append entry to `docs/wiki/log.md`
 - [ ] Full `pnpm test` run — all existing tests still pass (sidebar nav tests, page-level smoke tests)
 - [ ] `web-test` smoke battery: `/quotes`, `/quotes/<id>`, `/quotes/new`, `/dealerships`, `/dealerships/<id>`, `/calendar`, `/reports`, `/admin/people`. Each page renders: sidebar present, page header with title + actions visible above the fold, no remaining navy top-bar, no hand-rolled submit buttons.
