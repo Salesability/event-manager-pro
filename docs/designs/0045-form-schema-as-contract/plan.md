@@ -8,12 +8,13 @@
 |-------|--------|--------|
 | 1: Doctrine — extend `forms.md` with schema-as-contract rule | Done | `25cc0f0` |
 | 2: Extract canonical schemas (dealer, quote) into shared modules + wire `safeParse` into existing actions | Done | `2e9853d` |
-| 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | In Progress | - |
-| 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | Pending | - |
+| 3: services-admin — port to A-shape RHF + shared schema + action `safeParse` | Done | `80e082e` |
+| 4: availability-admin — port to A-shape RHF + shared schema + action `safeParse` | In Progress | - |
 | 5: lookup-admin — minimal shared schema + action `safeParse` (carve-out from RHF) | Pending | - |
 | 6: B-shape backfill — booking-form + PersonForm: share the same zod schema into the action `safeParse`, keep `useActionState` UI | Pending | - |
 | 7: Retire `schedule/validators.ts` hand-rolled helpers superseded by shared zod schemas | Pending | - |
-| 8: Smoke verification + eval | Pending | - |
+| 8: ESLint rule — `schema-as-contract/safeparse-required` locks in the convention | Pending | - |
+| 9: Smoke verification + eval | Pending | - |
 
 The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **not** shared between the client form and the Server Action — every action today either hand-rolls validation (`schedule/validators.ts`) or has none at all (`services-admin`); (b) three forms (`services-admin`, `availability-admin`, `lookup-admin`) don't follow either of the two shapes documented in `docs/wiki/forms.md`. The doctrine in `forms.md` is already correct; this chunk **closes the schema-sharing loop and brings the stragglers onto a documented shape**. "Done" means every non-trivial form has a single zod schema imported by both client (`zodResolver`) and server (`safeParse`), every Server Action's first lines are `const parsed = schema.safeParse(...); if (!parsed.success) return …;`, and the hand-rolled `validators.ts` helpers it replaces are deleted.
 
@@ -36,12 +37,13 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - `docs/wiki/conventions.md` — Server Actions for mutations.
 - `CLAUDE.md` → "Mutations go through Server Actions, not route handlers."
 
-**Overall Progress:** 25% (2/8 phases complete)
+**Overall Progress:** 33% (3/9 phases complete)
 
 **Note:**
 - Schema sharing requires the schema to live in a module that **both** client component and Server Action can import. Colocated-inside-component is therefore insufficient — Phase 2 extracts the two canonical examples first to establish the pattern.
 - The form's `valuesToFormData` adapter (per `forms.md` line 85) bridges the RHF-typed values back into the FormData wire format. The Server Action's `safeParse(Object.fromEntries(formData))` reverses the adapter — schema is the contract, FormData is the wire format, RHF values is the typed-client shape.
 - Phase 7 is a cleanup gate — only delete `validators.ts` helpers that have a zod-schema replacement covering the same input. Helpers used only by un-ported B-shape forms stay.
+- Phase 8 lands an ESLint rule modeled on the existing `eslint-plugins/action-gate.mjs` — runs as `error` from day one because every prior phase has converted its actions. Opt-out comment mirrors `// authz: public`: `// validation: skip` on the function. Lands after Phase 7's cleanup so the rule sees a uniform surface.
 
 ### Phase Checklist
 
@@ -61,11 +63,12 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [x] Test: existing `actions.test.ts` in dealers + quotes should still pass with the same assertions; add a new test case per file: malformed FormData → action returns `{ error, fieldErrors }` shape.
 
 #### Phase 3: services-admin — A-shape port
-- [ ] Create `src/features/services/service-schema.ts` covering the service add + edit field set (name, category, default price, etc. — derive from current `services-admin.tsx` form).
-- [ ] Rewrite `src/features/services/services-admin.tsx` add-form (lines ~80–161) using `useForm({ resolver: zodResolver(serviceSchema) })` + shadcn `<Field>` primitives + `form.handleSubmit`. Mirror `dealer-form.tsx` structure.
-- [ ] Rewrite the edit-form (lines ~263–346) same way; if shape is identical to add-form, factor a shared `<ServiceForm>` component.
-- [ ] In `src/features/services/actions.ts`, add `safeParse(Object.fromEntries(formData))` to each mutation; return field-shaped errors.
-- [ ] Test: `actions.test.ts` for services — add fieldError-shape assertion.
+- [x] Create `src/features/services/service-schema.ts` covering the service add + edit field set (name, category, default price, etc. — derive from current `services-admin.tsx` form).
+- [x] Rewrite `src/features/services/services-admin.tsx` add-form (lines ~80–161) using `useForm({ resolver: zodResolver(serviceSchema) })` + shadcn `<Field>` primitives + `form.handleSubmit`. Mirror `dealer-form.tsx` structure.
+- [x] Rewrite the edit-form (lines ~263–346) same way; if shape is identical to add-form, factor a shared `<ServiceForm>` component. Factored into one `<ServiceForm mode='create'|'edit'>` — code is read-only in edit mode, otherwise the field set is identical.
+- [x] In `src/features/services/actions.ts`, add `safeParse(Object.fromEntries(formData))` to each mutation; return field-shaped errors.
+- [x] Test: `actions.test.ts` for services — add fieldError-shape assertion.
+- [x] Side-effect: extended `toLegacyResult` to forward `fieldErrors` when the action returns them, so the form's `setError` per-field routing works through the legacy adapter.
 
 #### Phase 4: availability-admin — A-shape port
 - [ ] Create `src/features/schedule/availability-schema.ts` covering date + kind + coach + reason fields.
@@ -91,11 +94,20 @@ The forms audit on 2026-05-13 surfaced two gaps: (a) the same zod schema is **no
 - [ ] Helpers still used by un-ported code (if any) stay.
 - [ ] `EMAIL_RE` likely stays as a re-usable constant unless every consumer is now schema-driven.
 
-#### Phase 8: Smoke verification + eval
+#### Phase 8: ESLint rule — lock in the schema-as-contract convention
+- [ ] Create `eslint-plugins/schema-as-contract.mjs` mirroring the shape of `eslint-plugins/action-gate.mjs`. Export a single rule `safeparse-required` that walks each exported async function in matched files, inspects its body for a `FormData` parameter (or a top-level `formData` reference), and reports if no `<schema>.safeParse(Object.fromEntries(<formData>))` (or `<schema>.safeParse(<formData>)`) call appears in the first ~10 statements.
+- [ ] Opt-out: a `// validation: skip` comment immediately above the function declaration suppresses the rule for that function (mirrors `// authz: public` in action-gate).
+- [ ] Add `eslint-plugins/schema-as-contract.test.ts` with cases covering: (a) action with `safeParse` → pass; (b) action without `safeParse` → error; (c) action with `// validation: skip` → pass; (d) non-FormData action (no `FormData` parameter) → pass (rule doesn't apply); (e) action that destructures FormData but doesn't call `safeParse` → error.
+- [ ] Wire into `eslint.config.mjs`: add a new config block scoped to `src/features/**/actions.ts` registering the plugin with `"schema-as-contract/safeparse-required": "error"`. Do **not** scope to `src/app/**/route.ts` — route handlers accept external callers and their validation contract is different.
+- [ ] Run `pnpm lint` from a clean working tree — must pass with zero errors. If any action lights up, it's a Phase 3–7 conversion miss, not a rule bug; fix the action.
+- [ ] Update `docs/wiki/forms.md` "Schema-as-contract" section: add a sentence noting the lint rule enforces this in `src/features/**/actions.ts` and reference the opt-out comment.
+
+#### Phase 9: Smoke verification + eval
 - [ ] Smoke (web-test): `goto /admin/services`; section "Services" with add-form fields `Name` / `Category` / `Price` / `Add Service` button.
 - [ ] Smoke (web-test): `goto /admin/availability`; add-form with `Start Date` / `End Date` / `Type` / `Coach` / `Reason` / `Add Block`.
 - [ ] Smoke (web-test): `goto /admin/lookups`; section "Event Styles" lists existing rows + has an `Add` input.
 - [ ] Smoke (web-test): `goto /dealerships`; click into a dealer detail → "Edit" → dialog opens with the dealer form A-shape unchanged.
 - [ ] Smoke (web-test): `goto /quotes/new`; quote composer dialog renders with the same field set as before.
 - [ ] Run `pnpm test` — all action-level tests pass, including new fieldError assertions.
+- [ ] Run `pnpm lint` — Phase 8 rule must report zero errors.
 - [ ] Run `/eval` — gate must pass before commit.
