@@ -134,7 +134,7 @@ type Props = {
   sendHistorySlot?: ReactNode;
 };
 
-const labelClass = 'text-xs font-medium text-stone-600';
+const labelClass = 'text-xs font-medium text-muted-foreground';
 const fieldClass = 'flex flex-col gap-1';
 
 const RETRIEVAL_BRACKETS = [0, 100, 200, 300, 400] as const;
@@ -376,7 +376,7 @@ export function QuoteComposer({
         <button
           type="button"
           onClick={() => router.push('/quotes')}
-          className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
+          className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
         >
           Close
         </button>
@@ -386,7 +386,7 @@ export function QuoteComposer({
           type="button"
           onClick={onPreview}
           disabled={previewPending}
-          className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-primary transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {previewPending ? 'Loading…' : 'Preview PDF'}
         </button>
@@ -396,7 +396,7 @@ export function QuoteComposer({
           type="button"
           onClick={onSaveDraft}
           disabled={pending || !computed.ok}
-          className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
         </button>
@@ -443,7 +443,7 @@ export function QuoteComposer({
         <KeyValueStrip items={keyValueItems} />
       ) : null}
       {canSend && isDirty && (
-        <p className="text-right text-[11px] text-stone-500">
+        <p className="text-right text-[11px] text-muted-foreground">
           You have unsaved changes — save before sending.
         </p>
       )}
@@ -458,14 +458,14 @@ export function QuoteComposer({
         </p>
       )}
       {isReadOnly && initial && (
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+        <div className="rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground">
           This quote has been{' '}
           <span className="font-semibold">{initial.status}</span> — make a new
           quote to revise it.
         </div>
       )}
       {!isReadOnly && initial && initial.sentAt && (
-        <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+        <div className="rounded-xl border border-border bg-muted px-4 py-3 text-sm text-foreground">
           {initial.isExpired ? 'Expired — last sent ' : 'Sent '}
           <span className="font-medium">{formatSentRelative(initial.sentAt)}</span>
           {'. Editing here updates the staff record; clicking '}
@@ -476,9 +476,9 @@ export function QuoteComposer({
 
       <fieldset disabled={isReadOnly} className="contents">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-      <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-col gap-3">
-          <h2 className="font-display text-xl text-navy">Quote header</h2>
+          <h2 className="font-display text-xl text-primary">Quote header</h2>
           <div className={fieldClass}>
             <span className={labelClass}>Dealer</span>
             {isEdit ? (
@@ -486,7 +486,7 @@ export function QuoteComposer({
               // existing quote routes through `setQuoteDealer` (separate
               // setter, not surfaced in this phase). Render a static label
               // so a user can't think they're editing the dealer mid-save.
-              <div className="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-800">
+              <div className="rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground">
                 {initial.dealerName}
               </div>
             ) : (
@@ -525,14 +525,14 @@ export function QuoteComposer({
             )}
           </div>
           {initialCampaignId ? (
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-muted-foreground">
               Tied to campaign #{initialCampaignId}. Full campaign-linkage wiring lands later.
             </p>
           ) : null}
         </div>
 
         <div className="flex flex-col gap-3">
-          <h2 className="font-display text-xl text-navy">Inputs</h2>
+          <h2 className="font-display text-xl text-primary">Inputs</h2>
 
           <FieldGroup>
           <NumberField
@@ -621,12 +621,12 @@ export function QuoteComposer({
         </div>
       </section>
 
-      <section className="flex flex-col gap-4 rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <h2 className="font-display text-xl text-navy">Line items (computed)</h2>
+      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+        <h2 className="font-display text-xl text-primary">Line items (computed)</h2>
         {display.ok ? (
-          <div className="overflow-hidden rounded-xl border border-stone-200">
+          <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full text-sm">
-              <thead className="bg-stone-50 text-xs text-stone-500">
+              <thead className="bg-muted text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left">Item</th>
                   <th className="px-3 py-2 text-right">Qty</th>
@@ -637,16 +637,16 @@ export function QuoteComposer({
               <tbody className="divide-y divide-stone-100">
                 {display.lines.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-xs text-stone-500">
+                    <td colSpan={4} className="px-3 py-6 text-center text-xs text-muted-foreground">
                       No lines yet. Set inputs on the left.
                     </td>
                   </tr>
                 ) : (
                   display.lines.map((l) => (
                     <tr key={l.code}>
-                      <td className="px-3 py-2 align-top text-stone-800">
+                      <td className="px-3 py-2 align-top text-foreground">
                         <div className="font-medium">{l.label}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-stone-400">
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
                           {l.code} <span className="ml-2">ⓘ auto</span>
                         </div>
                       </td>
@@ -660,8 +660,8 @@ export function QuoteComposer({
                 )}
               </tbody>
               <tfoot>
-                <tr className="border-t border-stone-200 bg-stone-50/60 text-sm">
-                  <td colSpan={3} className="px-3 py-2 text-right text-stone-500">
+                <tr className="border-t border-border bg-muted/60 text-sm">
+                  <td colSpan={3} className="px-3 py-2 text-right text-muted-foreground">
                     Subtotal
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
@@ -670,7 +670,7 @@ export function QuoteComposer({
                 </tr>
                 <tr className="text-sm">
                   <td colSpan={2} />
-                  <td className="px-3 py-2 text-right text-stone-500">Tax override</td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">Tax override</td>
                   <td className="px-3 py-2 text-right">
                     {isReadOnly && initial ? (
                       <span className="tabular-nums">{fmtMoney(initial.tax)}</span>
@@ -679,13 +679,13 @@ export function QuoteComposer({
                         type="number"
                         min={0}
                         step="0.01"
-                        className="w-28 rounded border border-stone-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        className="w-28 rounded border border-border bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
                         {...register('taxOverride', { valueAsNumber: true })}
                       />
                     )}
                   </td>
                 </tr>
-                <tr className="border-t border-stone-200 bg-navy text-sm text-white">
+                <tr className="border-t border-border bg-primary text-sm text-white">
                   <td colSpan={3} className="px-3 py-2 text-right">
                     Total
                   </td>
@@ -751,13 +751,13 @@ function PreviewDialog({
           PDF rendered from the saved snapshot. Matches what gets emailed on
           Send.
         </DialogDescription>
-        <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-stone-200 bg-stone-50">
+        <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-border bg-muted">
           {error ? (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
               {error}
             </div>
           ) : loading || !pdfUrl ? (
-            <div className="flex h-full items-center justify-center text-sm text-stone-500">
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
               Rendering PDF…
             </div>
           ) : (
@@ -809,19 +809,19 @@ function ConfirmSendDialog({
             : 'The recipient will receive a PDF by email. Accepted/declined quotes are locked — edits up to that point are allowed.'}
         </DialogDescription>
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-stone-500">Recipient</dt>
-          <dd className="font-medium text-stone-800">
+          <dt className="text-muted-foreground">Recipient</dt>
+          <dd className="font-medium text-foreground">
             {recipientEmail ?? <span className="text-status-red">none</span>}
           </dd>
-          <dt className="text-stone-500">Line items</dt>
-          <dd className="tabular-nums text-stone-800">{lineCount}</dd>
-          <dt className="text-stone-500">Total</dt>
-          <dd className="font-semibold tabular-nums text-stone-800">
+          <dt className="text-muted-foreground">Line items</dt>
+          <dd className="tabular-nums text-foreground">{lineCount}</dd>
+          <dt className="text-muted-foreground">Total</dt>
+          <dd className="font-semibold tabular-nums text-foreground">
             {fmtMoney(total)}
           </dd>
         </dl>
         <div className="mt-6 flex items-center justify-end gap-2">
-          <DialogClose className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
+          <DialogClose className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
             Cancel
           </DialogClose>
           <button

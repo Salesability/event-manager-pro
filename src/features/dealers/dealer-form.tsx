@@ -32,10 +32,10 @@ import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
 type Mode = 'create' | 'edit';
 
 const submitClass =
-  'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
 
 const cancelClass =
-  'rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+  'rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
 
 function valuesToFormData(values: DealerFormValues, id?: number): FormData {
   const fd = new FormData();

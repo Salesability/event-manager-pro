@@ -28,7 +28,7 @@ function isStatusPill(v: string): v is StatusPill {
 function pillClass(active: boolean): string {
   return active
     ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
-    : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+    : 'rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
 }
 
 function matchesPill(dealer: Dealer, pill: StatusPill): boolean {
@@ -189,7 +189,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   );
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <ListToolbar
         search={
           <input
@@ -198,7 +198,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search by name, contact, or email…"
             aria-label="Search dealers"
-            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+            className="w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
           />
         }
         filters={
@@ -237,7 +237,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
           </Can>
         }
       />
-      <p className="mt-2 text-xs text-stone-500">{filteredDealers.length} dealers</p>
+      <p className="mt-2 text-xs text-muted-foreground">{filteredDealers.length} dealers</p>
 
       <div className="mt-3">
         <DataTable
@@ -255,7 +255,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+                  className="rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
                 >
                   Clear filters
                 </button>

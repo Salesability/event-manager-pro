@@ -116,13 +116,13 @@ const headerAddClass =
   'rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10';
 
 const rowEditClass =
-  'rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+  'rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
 
 const rowDeleteClass =
-  'rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded border border-border bg-white px-2 py-0.5 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50';
 
 const submitClass =
-  'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
 
 // Radix Checkbox doesn't render a tick visual itself — it ships an unstyled
 // button + Indicator slot. These classes turn the button into a checkbox-
@@ -131,7 +131,7 @@ const submitClass =
 // fieldset stays visually uniform. `CheckIcon` is the indicator SVG (matches
 // the inline-SVG idiom used by the Dialog wrapper).
 const roleCheckboxClass =
-  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-stone-300 bg-white transition data-[state=checked]:border-navy data-[state=checked]:bg-navy data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30';
+  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-input bg-white transition data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy/30';
 
 function CheckIcon() {
   return (
@@ -154,7 +154,7 @@ function CheckIcon() {
 function pillClass(active: boolean): string {
   return active
     ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
-    : 'rounded-full border border-stone-200 bg-white px-3 py-1 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+    : 'rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
 }
 
 const DEALER_CONTACT_ROLES: DealerContactRole[] = ['customer', 'staff', 'prospect'];
@@ -226,10 +226,10 @@ export function PeopleAdmin({
   );
 
   return (
-    <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-stone-500">{people.length} people</p>
+          <p className="text-xs text-muted-foreground">{people.length} people</p>
         </div>
         <Can capability="person:create">
           <button onClick={() => setAddOpen(true)} className={headerAddClass}>
@@ -245,7 +245,7 @@ export function PeopleAdmin({
           onChange={(e) => setGlobalFilter(e.target.value)}
           placeholder="Search by name, email, or dealer…"
           aria-label="Search people"
-          className="min-w-[16rem] flex-1 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+          className="min-w-[16rem] flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
         />
         <button
           type="button"
@@ -297,7 +297,7 @@ export function PeopleAdmin({
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy"
+                  className="rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
                 >
                   Clear filters
                 </button>
@@ -555,11 +555,11 @@ function PersonForm({
         </Field>
       </div>
 
-      <div className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
-        <p className="text-[11px] text-stone-500">
+      <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/40 px-3 py-2">
+        <p className="text-[11px] text-muted-foreground">
           Roles
         </p>
-        <label className="flex items-center gap-2 text-sm text-stone-700">
+        <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox.Root
             name="roles"
             value="admin"
@@ -575,7 +575,7 @@ function PersonForm({
             <strong>Admin</strong>
           </span>
         </label>
-        <label className="flex items-center gap-2 text-sm text-stone-700">
+        <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox.Root
             name="roles"
             value="coach"
@@ -591,7 +591,7 @@ function PersonForm({
             <strong>Coach</strong>
           </span>
         </label>
-        <label className="flex items-center gap-2 text-sm text-stone-700">
+        <label className="flex items-center gap-2 text-sm text-foreground">
           <Checkbox.Root
             name="roles"
             value="dealer"
@@ -605,7 +605,7 @@ function PersonForm({
           </Checkbox.Root>
           <span>
             <strong>Dealer</strong>{' '}
-            <span className="text-xs text-stone-500">
+            <span className="text-xs text-muted-foreground">
               External dealer-side contact
             </span>
           </span>
@@ -618,15 +618,15 @@ function PersonForm({
       </div>
 
       {dealer && (
-        <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50/40 px-3 py-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-stone-600">Dealers</span>
+            <span className="text-xs font-medium text-muted-foreground">Dealers</span>
             <button type="button" onClick={addDealerLink} className={rowEditClass}>
               + Link dealer
             </button>
           </div>
           {dealerLinks.length === 0 && (
-            <p className="text-[11px] text-stone-500">No dealer relationships.</p>
+            <p className="text-[11px] text-muted-foreground">No dealer relationships.</p>
           )}
           {dealerLinks.map((link, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
@@ -662,7 +662,7 @@ function PersonForm({
               >
                 <Select.Trigger
                   aria-label="Role"
-                  className="flex items-center justify-between gap-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
                 >
                   <Select.Value placeholder="role" />
                   <Select.Icon>
@@ -670,7 +670,7 @@ function PersonForm({
                       xmlns="http://www.w3.org/2000/svg"
                       viewBox="0 0 20 20"
                       fill="currentColor"
-                      className="h-3 w-3 text-stone-500"
+                      className="h-3 w-3 text-muted-foreground"
                       aria-hidden="true"
                     >
                       <path
@@ -685,14 +685,14 @@ function PersonForm({
                   <Select.Content
                     position="popper"
                     sideOffset={4}
-                    className="z-50 overflow-hidden rounded-lg border border-stone-200 bg-white shadow-[0_8px_24px_rgba(15,30,60,0.12)]"
+                    className="z-50 overflow-hidden rounded-lg border border-border bg-white shadow-[0_8px_24px_rgba(15,30,60,0.12)]"
                   >
                     <Select.Viewport className="p-1">
                       {DEALER_CONTACT_ROLES.map((r) => (
                         <Select.Item
                           key={r}
                           value={r}
-                          className="cursor-pointer rounded px-2 py-1.5 text-sm text-stone-700 outline-none data-[highlighted]:bg-accent/10 data-[highlighted]:text-navy"
+                          className="cursor-pointer rounded px-2 py-1.5 text-sm text-foreground outline-none data-[highlighted]:bg-accent/10 data-[highlighted]:text-primary"
                         >
                           <Select.ItemText>{r}</Select.ItemText>
                         </Select.Item>

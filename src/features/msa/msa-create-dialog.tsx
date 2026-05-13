@@ -90,24 +90,24 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         </DialogDescription>
 
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-stone-500">Dealer</dt>
-          <dd className="font-medium text-stone-800">{props.dealerName}</dd>
-          <dt className="text-stone-500">Recipient</dt>
-          <dd className="text-stone-800">
+          <dt className="text-muted-foreground">Dealer</dt>
+          <dd className="font-medium text-foreground">{props.dealerName}</dd>
+          <dt className="text-muted-foreground">Recipient</dt>
+          <dd className="text-foreground">
             {'error' in props.recipient ? (
               <span className="text-status-red">{props.recipient.error}</span>
             ) : (
               `${props.recipient.firstName} <${props.recipient.email}>`
             )}
           </dd>
-          <dt className="text-stone-500">First Quote</dt>
-          <dd className="text-stone-800">
+          <dt className="text-muted-foreground">First Quote</dt>
+          <dd className="text-foreground">
             {props.firstDraftQuoteId == null ? (
               <span className="text-status-red">
                 No draft Quote yet —{' '}
                 <a
                   href={`/quotes/new?dealerId=${props.dealerId}`}
-                  className="font-medium underline hover:text-navy"
+                  className="font-medium underline hover:text-primary"
                 >
                   create one first
                 </a>
@@ -116,7 +116,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
             ) : (
               <a
                 href={`/quotes/${props.firstDraftQuoteId}`}
-                className="font-medium text-navy underline"
+                className="font-medium text-primary underline"
               >
                 Quote #{props.firstDraftQuoteId}
               </a>
@@ -131,7 +131,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         )}
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <DialogClose className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy">
+          <DialogClose className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
             Cancel
           </DialogClose>
           <button

@@ -33,12 +33,12 @@ export function buildDealersColumns(
         // Render plain text instead until an archived-capable detail
         // loader exists.
         if (d.archivedAt) {
-          return <span className="font-medium text-stone-500">{d.name}</span>;
+          return <span className="font-medium text-muted-foreground">{d.name}</span>;
         }
         return (
           <Link
             href={`/dealerships/${d.id}`}
-            className="font-medium text-stone-800 transition hover:text-navy hover:underline"
+            className="font-medium text-foreground transition hover:text-primary hover:underline"
           >
             {d.name}
           </Link>
@@ -53,9 +53,9 @@ export function buildDealersColumns(
       cell: ({ row }) => {
         const name = composedContact(row.original);
         return name ? (
-          <span className="text-xs text-stone-700">{name}</span>
+          <span className="text-xs text-foreground">{name}</span>
         ) : (
-          <span className="text-xs text-stone-400">—</span>
+          <span className="text-xs text-muted-foreground/70">—</span>
         );
       },
       enableSorting: true,
@@ -66,9 +66,9 @@ export function buildDealersColumns(
       header: 'Email',
       cell: ({ row }) =>
         row.original.primaryEmail ? (
-          <span className="text-xs text-stone-600">{row.original.primaryEmail}</span>
+          <span className="text-xs text-muted-foreground">{row.original.primaryEmail}</span>
         ) : (
-          <span className="text-xs text-stone-400">—</span>
+          <span className="text-xs text-muted-foreground/70">—</span>
         ),
       enableSorting: true,
     },
@@ -78,9 +78,9 @@ export function buildDealersColumns(
       header: 'Phone',
       cell: ({ row }) =>
         row.original.primaryPhone ? (
-          <span className="text-xs text-stone-600">{row.original.primaryPhone}</span>
+          <span className="text-xs text-muted-foreground">{row.original.primaryPhone}</span>
         ) : (
-          <span className="text-xs text-stone-400">—</span>
+          <span className="text-xs text-muted-foreground/70">—</span>
         ),
       enableSorting: false,
     },
@@ -90,9 +90,9 @@ export function buildDealersColumns(
       header: 'Address',
       cell: ({ row }) =>
         row.original.address ? (
-          <span className="text-xs text-stone-600">{row.original.address}</span>
+          <span className="text-xs text-muted-foreground">{row.original.address}</span>
         ) : (
-          <span className="text-xs text-stone-400">—</span>
+          <span className="text-xs text-muted-foreground/70">—</span>
         ),
       enableSorting: false,
     },
