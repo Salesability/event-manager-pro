@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: shadcn Sidebar install + portal shell swap | Skipped (pivot 2026-05-13 — keep top nav) | - |
 | 2: `<PageHeader>` wrapper (title + actions slot) | Done | d440fe9 |
-| 3: Sweep `<PageHeader>` across all `(app)/` routes | Pending | - |
+| 3: Sweep `<PageHeader>` across all `(app)/` routes | Done | 2541149 |
 | 4: Detail-page convention (key-value strip + sections) | Pending | - |
 | 5: List-page filter-bar convention | Pending | - |
 | 6: Row-action convention (`<RowActions>` + shared labels/icons) | Pending | - |
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 14% (1/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 29% (2/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -101,12 +101,12 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green
 
 #### Phase 3: Sweep `<PageHeader>` across all `(app)/` routes
-- [ ] Apply to: `/quotes` (page.tsx), `/quotes/new`, `/quotes/[id]`, `/dealerships`, `/dealerships/[id]`, `/calendar` (calendar-view top bar), `/reports`, `/production`, `/admin/people`, `/admin/lookups`, plus any other top-level `(app)/` routes
-- [ ] Each page loses its hand-rolled `<h1>`/action-button pair; both flow through `<PageHeader>`
-- [ ] Migrate every page's primary action (Save / Send / Export / Create / etc.) into the `actions` slot. Replace any remaining hand-rolled `<button className="rounded-lg bg-navy …">` with shadcn `<Button>` while at it.
-- [ ] Quote composer page (`/quotes/new`, `/quotes/[id]`): set `sticky` so Save/Send stays visible past the line-items table
-- [ ] `AppHeader` stays (pivot 2026-05-13) — do **not** delete `app-header.tsx`. Just confirm no page is double-rendering an `<h1>` that the new `<PageHeader>` already provides.
-- [ ] `tsc + test` gate green; `web-test`: spot-check 4-5 pages to confirm consistent header layout
+- [x] Apply to: `/quotes` (page.tsx), `/quotes/new`, `/quotes/[id]`, `/dealerships`, `/dealerships/[id]`, `/calendar` (calendar-view top bar), `/reports`, `/production`, `/admin/people`, `/admin/lookups`, plus any other top-level `(app)/` routes
+- [x] Each page loses its hand-rolled `<h1>`/action-button pair; both flow through `<PageHeader>`
+- [x] Migrate every page's primary action (Save / Send / Export / Create / etc.) into the `actions` slot. ~~Replace any remaining hand-rolled `<button className="rounded-lg bg-navy …">` with shadcn `<Button>` while at it.~~ — list-page filter widgets (`QuotesFilters`, `ProductionFilters`) ride in the actions slot as-is for Phase 3; Phase 5's filter-bar convention is where they get reshaped, and Phase 6's row-action convention is where the wider hand-rolled-button sweep lands. Calendar's button cluster (Block/Book + month nav) also rides as-is for the same reason. Keeping the migration mechanical here.
+- [x] Quote composer page (`/quotes/new`, `/quotes/[id]`): set `sticky` so Save/Send stays visible past the line-items table
+- [x] `AppHeader` stays (pivot 2026-05-13) — do **not** delete `app-header.tsx`. Just confirm no page is double-rendering an `<h1>` that the new `<PageHeader>` already provides.
+- [x] `tsc + test` gate green; `web-test` deferred to chunk-end (per post-0040 `/build` cadence — full pipeline runs once at chunk close, not per phase)
 
 #### Phase 4: Detail-page convention (key-value strip + sections)
 - [ ] `/dealerships/[id]/page.tsx`: rebuild as
