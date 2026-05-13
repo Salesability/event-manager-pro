@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
-import { loadQuote, loadQuoteSendReceipt } from '@/features/quotes/queries';
+import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { displayStatusKey, STATUS_PILL_CLS } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
@@ -11,10 +11,11 @@ import { type QuoteInputs } from '@/lib/quotes/pricing';
 import { signedUrl } from '@/lib/storage/gcs';
 
 // Edit-mode quote page. Mirrors `/quotes/new` but hydrates the composer from
-// an existing row. Saving routes through `setQuoteInputs` (draft-only,
-// atomic guarded UPDATE per `actions.ts:281-289`). Non-draft statuses
-// render read-only — server-side guard is the real defence; the UI is
-// just the courtesy.
+// an existing row. Saving routes through `setQuoteInputs` (per-row atomic
+// guarded UPDATE; terminal statuses reject server-side). 0046 made sent
+// rows editable + Re-send-able; only `accepted`/`declined` lock the
+// composer, and the Send-history section below the header lists every
+// `quote.sent` audit row most-recent first.
 
 const SENT_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 
@@ -47,15 +48,19 @@ export default async function QuoteEditPage({
   const quote = await loadQuote(id);
   if (!quote) notFound();
 
-  const [dealers, catalog, recipientResult, sendReceipt] = await Promise.all([
+  const [dealers, catalog, recipientResult, sendHistory] = await Promise.all([
     loadDealers(),
     loadServiceItems(),
     resolveQuoteRecipient(quote.dealerId),
-    loadQuoteSendReceipt(quote.id),
+    loadQuoteSendHistory(quote.id),
   ]);
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 
+  // PDF storage key overwrites on every send (per 0046 Decision), so only
+  // the most-recent send row gets a Download link — older receipts point at
+  // the same (now-overwritten) object. Recipients keep their own emailed
+  // PDFs in their inbox; the staff portal's current-truth is the latest.
   let sentPdfDownloadUrl: string | null = null;
   if (quote.status !== 'draft' && quote.pdfStorageKey) {
     const bucket = process.env.GCS_BUCKET;
@@ -64,7 +69,6 @@ export default async function QuoteEditPage({
       if ('ok' in signed) sentPdfDownloadUrl = signed.url;
     }
   }
-  const emailId = readEmailId(sendReceipt?.payload);
 
   return (
     <div className="flex flex-col gap-6">
@@ -94,48 +98,56 @@ export default async function QuoteEditPage({
           {quote.dealerArchivedAt ? ' (dealer archived)' : ''}
         </p>
       </div>
-      {quote.status !== 'draft' && (
+      {quote.status !== 'draft' && sendHistory.length > 0 && (
         <section className="rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
           <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-            Send receipt
+            Send history
           </h2>
-          <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-[max-content_1fr]">
-            {quote.sentAt && (
-              <>
-                <dt className="font-medium text-stone-600">Sent</dt>
-                <dd className="text-stone-800">{formatSentAt(quote.sentAt)}</dd>
-              </>
-            )}
-            <dt className="font-medium text-stone-600">Sent to</dt>
-            <dd className="text-stone-800">
-              {quote.sentToEmail || quote.sentToFirstName
-                ? `${quote.sentToFirstName ?? ''}${
-                    quote.sentToFirstName && quote.sentToEmail ? ' ' : ''
-                  }${quote.sentToEmail ? `<${quote.sentToEmail}>` : ''}`.trim()
-                : '(recipient unknown — sent before recipient denorm shipped)'}
-            </dd>
-            {emailId && (
-              <>
-                <dt className="font-medium text-stone-600">Resend ID</dt>
-                <dd className="font-mono text-xs text-stone-700">{emailId}</dd>
-              </>
-            )}
-            {sentPdfDownloadUrl && (
-              <>
-                <dt className="font-medium text-stone-600">PDF</dt>
-                <dd>
-                  <a
-                    href={sentPdfDownloadUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-navy underline hover:no-underline"
-                  >
-                    Download sent PDF
-                  </a>
-                </dd>
-              </>
-            )}
-          </dl>
+          <ul className="mt-3 flex flex-col gap-3">
+            {sendHistory.map((row, idx) => {
+              const emailId = readEmailId(row.payload);
+              const isMostRecent = idx === 0;
+              return (
+                <li
+                  key={`${row.occurredAt.toISOString()}-${idx}`}
+                  className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-stone-800">
+                      {formatSentAt(row.occurredAt)}
+                      {isMostRecent ? (
+                        <span className="ml-2 rounded-full bg-stone-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
+                          Latest
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-xs text-stone-600">
+                      {quote.sentToEmail || quote.sentToFirstName
+                        ? `Sent to ${quote.sentToFirstName ?? ''}${
+                            quote.sentToFirstName && quote.sentToEmail ? ' ' : ''
+                          }${quote.sentToEmail ? `<${quote.sentToEmail}>` : ''}`.trim()
+                        : 'Sent to (recipient unknown — sent before recipient denorm shipped)'}
+                    </span>
+                    {emailId && (
+                      <span className="font-mono text-[11px] text-stone-500">
+                        Resend ID: {emailId}
+                      </span>
+                    )}
+                  </div>
+                  {isMostRecent && sentPdfDownloadUrl ? (
+                    <a
+                      href={sentPdfDownloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-navy underline hover:no-underline"
+                    >
+                      Download PDF
+                    </a>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
         </section>
       )}
       <QuoteComposer

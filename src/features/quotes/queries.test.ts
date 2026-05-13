@@ -33,7 +33,7 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
-import { loadQuote, loadQuoteSendReceipt, loadQuotes, loadQuotesByDealer } from './queries';
+import { loadQuote, loadQuoteSendHistory, loadQuotes, loadQuotesByDealer } from './queries';
 
 const baseRow = {
   id: 7,
@@ -201,18 +201,18 @@ describe('loadQuote', () => {
   });
 });
 
-describe('loadQuoteSendReceipt', () => {
+describe('loadQuoteSendHistory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.selectResults = [];
   });
 
-  it('returns null when no quote.sent audit row exists', async () => {
+  it('returns [] when no quote.sent audit rows exist', async () => {
     mocks.selectResults = [[]];
-    expect(await loadQuoteSendReceipt(7)).toBeNull();
+    expect(await loadQuoteSendHistory(7)).toEqual([]);
   });
 
-  it('returns the audit row when present', async () => {
+  it('returns a single-element array on a first-send-only quote', async () => {
     const occurredAt = new Date('2026-05-12T10:00:00Z');
     mocks.selectResults = [
       [
@@ -223,12 +223,36 @@ describe('loadQuoteSendReceipt', () => {
         },
       ],
     ];
-    const receipt = await loadQuoteSendReceipt(7);
-    expect(receipt).toEqual({
-      occurredAt,
-      actorUserId: 'coach-uuid',
-      payload: { pdfStorageKey: 'quotes/7/1.pdf', emailId: 'resend-msg-id' },
-    });
+    const history = await loadQuoteSendHistory(7);
+    expect(history).toEqual([
+      {
+        occurredAt,
+        actorUserId: 'coach-uuid',
+        payload: { pdfStorageKey: 'quotes/7/1.pdf', emailId: 'resend-msg-id' },
+      },
+    ]);
+  });
+
+  it('passes through every quote.sent row in the order the db returned them (desc occurredAt)', async () => {
+    // db mock relays the .orderBy() shape — the query layer is what builds
+    // the `desc(occurredAt)` predicate. Asserting that 3 rows in descending
+    // order pass through unmolested locks in the multi-row contract.
+    const latest = new Date('2026-05-12T16:00:00Z');
+    const mid = new Date('2026-05-12T12:00:00Z');
+    const first = new Date('2026-05-12T08:00:00Z');
+    mocks.selectResults = [
+      [
+        { occurredAt: latest, actorUserId: 'coach-a', payload: { emailId: 'resend-3' } },
+        { occurredAt: mid, actorUserId: 'coach-b', payload: { emailId: 'resend-2' } },
+        { occurredAt: first, actorUserId: 'coach-a', payload: { emailId: 'resend-1' } },
+      ],
+    ];
+    const history = await loadQuoteSendHistory(7);
+    expect(history.map((r) => (r.payload as { emailId: string }).emailId)).toEqual([
+      'resend-3',
+      'resend-2',
+      'resend-1',
+    ]);
   });
 });
 

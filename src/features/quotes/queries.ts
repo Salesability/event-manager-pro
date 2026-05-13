@@ -156,19 +156,20 @@ export type QuoteSendReceipt = {
   payload: unknown;
 };
 
-// Reads the `quote.sent` audit row for a quote — the source of truth for the
-// Resend message ID (`payload.emailId`) and the actor who fired send. Phase 4
-// renders the send-receipt panel off this + the row-level denorm on `quotes`.
-// Returns `null` when the quote was never sent (no audit row); `payload` stays
-// `unknown` here so callers cast/validate at the UI boundary.
-// One `quote.sent` audit row per quote in v1 (sendQuote is idempotent on the
-// already-sent path and only emits the audit on the successful draft→sent
-// transition). When 0026 follow-up (a) "degraded-send retry" lands, multiple
-// rows are possible — add `.orderBy(desc(auditLog.occurredAt))` then.
-export async function loadQuoteSendReceipt(
+// Reads every `quote.sent` audit row for a quote — Send history. Each row
+// carries the Resend message ID (`payload.emailId`) and the actor who fired
+// the send. 0046 flipped this from single-row to multi-row: each re-send
+// emits a fresh `quote.sent` audit row, so the chronology naturally falls
+// out of `.orderBy(desc(auditLog.occurredAt))`. The most-recent send is
+// `[0]`; the quote-detail page surfaces "Download PDF" only on it (the
+// `pdfStorageKey` overwrites in place, so older sends point at the current
+// object — recipients keep their own emailed PDFs).
+// Returns `[]` when the quote was never sent. `payload` stays `unknown`
+// here so callers cast/validate at the UI boundary.
+export async function loadQuoteSendHistory(
   quoteId: number,
-): Promise<QuoteSendReceipt | null> {
-  const [row] = await db
+): Promise<QuoteSendReceipt[]> {
+  return db
     .select({
       occurredAt: auditLog.occurredAt,
       actorUserId: auditLog.actorUserId,
@@ -182,8 +183,7 @@ export async function loadQuoteSendReceipt(
         eq(auditLog.action, 'quote.sent'),
       ),
     )
-    .limit(1);
-  return row ?? null;
+    .orderBy(desc(auditLog.occurredAt));
 }
 
 export async function loadQuotesByDealer(dealerId: number): Promise<Quote[]> {

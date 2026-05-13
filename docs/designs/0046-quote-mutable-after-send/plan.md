@@ -10,7 +10,7 @@
 | 1: Server-side guard relaxation (`setQuoteInputs`) + audit `quote.edited` | Done | - |
 | 2: `sendQuote` re-send path + `sent_at` reset | Done | - |
 | 3: Composer always-editable + "Re-send Quote" button | Done | - |
-| 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite | Pending | - |
+| 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite | Done | - |
 | 5: Accepted/declined immutability + MSA-bundle re-send gate | Pending | - |
 | 6: Wiki (`commercial-spine.md`) + chunk-end smoke + `/eval` | Pending | - |
 
@@ -59,7 +59,7 @@ The Phase 1 implementation needs answers before files start moving.
 - `docs/wiki/data-model.md` → `quotes` row + audit_log relationship. Phase 4 documents the multi-row send-history pattern.
 - `docs/wiki/layout.md` § Open conventions (post-0043) → the parked composer-actions-lift follow-up is a natural companion to this chunk; either tackle them together or leave the composer-actions-lift parked while this chunk lands first.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - Each phase includes implementation + the unit tests for that phase's changes.
@@ -101,12 +101,12 @@ The Phase 1 implementation needs answers before files start moving.
 - [x] `tsc + test` gate (composer has no test file today — the composer's behavior is exercised via actions.test.ts + the chunk-end web-test smoke)
 
 #### Phase 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite
-- [ ] Answer OQ #3 (rename to `loadQuoteSendHistory` returning `QuoteSendReceipt[]`)
-- [ ] Rename `loadQuoteSendReceipt` → `loadQuoteSendHistory`; return `QuoteSendReceipt[]`; add `.orderBy(desc(auditLog.occurredAt))`; update the inline comment that anticipated this
-- [ ] Update `src/features/quotes/queries.test.ts` `loadQuoteSendReceipt` block — rename + assert multi-row ordering (insert 3 audit rows for the same quote, expect 3-element array, descending)
-- [ ] `/quotes/[id]/page.tsx`: replace the single-row `<dl>` Send-history rendering (post-0043 `<Section variant="card" title="Send history">`) with a list rendering one row per send. Each row: `<RelativeTime value={sentAt}>` + Sent-to recipient + Resend ID (font-mono) + Download PDF link (only on the most-recent row, since `pdfStorageKey` overwrites)
-- [ ] Drop the "(recipient unknown — sent before recipient denorm shipped)" branch if `sentToEmail` denorm is now always present (audit) — keep the fallback if any pre-denorm rows exist in prod
-- [ ] `tsc + test` gate
+- [x] Answer OQ #3 (rename to `loadQuoteSendHistory` returning `QuoteSendReceipt[]`; no thin-wrapper — callers updated in same chunk)
+- [x] Rename `loadQuoteSendReceipt` → `loadQuoteSendHistory`; return `QuoteSendReceipt[]`; add `.orderBy(desc(auditLog.occurredAt))`; updated the inline comment
+- [x] Update `src/features/quotes/queries.test.ts` `loadQuoteSendReceipt` block — renamed; new test asserts 3-row pass-through preserving descending order from the query layer
+- [x] `/quotes/[id]/page.tsx`: replaced the single-row `<dl>` Send-history rendering with a `<ul>` of cards — one per send. Each row: absolute "Sent on …" date + Sent-to recipient (denorm) + Resend ID (font-mono) + "Latest" pill + Download PDF link (only on the most-recent row). 0043 `<Section>` shell not yet merged into main so the existing inline shell stays; a follow-up after 0043 ships can lift the shell.
+- [x] Kept the "(recipient unknown — sent before recipient denorm shipped)" fallback since the denorm is row-level (one quote, one recipient string) — pre-denorm rows in prod still exist
+- [x] `tsc + test` gate
 
 #### Phase 5: Accepted/declined immutability + MSA-bundle re-send gate
 - [ ] Confirm Phase 1 + 2 terminal-status rejects fire correctly (cross-phase regression check)
