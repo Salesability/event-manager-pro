@@ -13,7 +13,7 @@
 | 4: Detail-page convention (key-value strip + sections) | Done | 2ce556b |
 | 5: List-page filter-bar convention | Done | 2d28a39 |
 | 6: Row-action convention (`<RowActions>` + shared labels/icons) | Done | 0e74772 |
-| 7: Status `<Badge>` + relative timestamps | Pending | - |
+| 7: Status `<Badge>` + relative timestamps | Done | c5b2e65 |
 | 8: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
 
 **Spirit (locked 2026-05-13):** the same conceptual surface should look and operate the same way everywhere. Concrete evidence motivating the chunk — three list pages, three different operational vocabularies for "do something to this row":
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 71% (5/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 86% (6/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -139,13 +139,13 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green; `web-test` deferred to chunk-end. Spot-lint of the 3 refactored files is clean.
 
 #### Phase 7: Status `<Badge>` + relative timestamps
-- [ ] Extend `src/components/ui/badge.tsx` with `success` variant (green) — matches the status-green token already in `globals.css`
-- [ ] Build `src/components/app/status-badge.tsx`: enum-aware wrappers `<QuoteStatusBadge>`, `<DealerStatusBadge>`, `<MsaStatusBadge>`, `<BookingStatusBadge>` so callers pass the status value and get the right variant + label
-- [ ] Replace every status-as-colored-text site (`grep` `text-status-red`/`text-status-green`/`text-status-blue` plus any inline status class chains) with the appropriate badge
-- [ ] Confirm `date-fns` in `package.json`; add `<RelativeTime value={Date|string} />` component that renders `formatDistanceToNow` + `<Tooltip>` with the absolute timestamp
-- [ ] Replace absolute timestamps in list views (`/quotes` updated-at column, `/dealerships` last-touched, send-history rows) with `<RelativeTime>`
-- [ ] Detail pages keep absolute timestamps for hard facts (event start/end, contract dates) — relative is for *recent activity*, not *scheduled events*. Confirm during sweep.
-- [ ] `tsc + test` gate green
+- [x] Create `src/components/ui/badge.tsx` (not pre-existing — built shadcn-style with `cva`). Variants: `default` / `secondary` / `outline` / `destructive` / `success` / `warning` / `info`. `success` maps to `--color-status-green`; `info` to `--color-status-blue`; `warning` to amber-100/700 for pending/expired.
+- [x] Build `src/components/app/status-badge.tsx`: `<QuoteStatusBadge>` (DisplayStatusKey → variant map), `<DealerStatusBadge>` (status+archivedAt → Archived/active/prospect), `<MsaStatusBadge>` (Msa['status']), `<CampaignStatusBadge live past />` (replaces `BookingStatusBadge` since the domain uses `Campaign` not `Booking`).
+- [x] Replace status-pill callsites: `/quotes` row Status + `<QuoteStatusBadge>`; `/quotes/[id]` PageHeader actions + KeyValueStrip Status entry; `/dealerships/[id]` PageHeader actions (`<DealerStatusBadge>`), MSA Section actions (`<MsaStatusBadge>`), nested Quotes table; `dealers-columns.tsx` Status column; `/production` row Live/Past/Upcoming badge. Inline `DealerStatusPill` removed. `MSA_STATUS_PILL_CLS` map deleted. ~~Replace every `text-status-*` site~~ — out of scope: most remaining usages are field-error text, required-field markers, link colors (not status pills). The plan's spirit lands by replacing pills; error-text/link colors are a separate refresh.
+- [x] ~~Confirm `date-fns` in `package.json`~~ — `date-fns` is **not** a dep; used native `Intl.RelativeTimeFormat` instead (zero-dep, same ergonomics, ICU-correct localisation). `<RelativeTime value title>` renders `<time>` with the absolute timestamp in the `title` attribute so hover surfaces it (no `<Tooltip>` shadcn primitive needed — `title` covers the use case without adding `@base-ui/react/tooltip`).
+- [x] Replace absolute timestamps in list views: `/quotes` `Sent`/`Created` columns + `/quotes/[id]` Send-history rows now use `<RelativeTime>`. Unused `fmtDate` + `formatSentAt` helpers removed.
+- [x] Detail pages keep absolute timestamps for hard facts — `/dealerships/[id]` MSA Created/Signed/Expires dates stay as `fmtDate` (those are scheduled / contractual). Same on `/production` campaign date ranges. Confirmed.
+- [x] `tsc + test` gate green
 
 #### Phase 8: Wiki (`layout.md`) + chunk-end smoke
 - [ ] Write `docs/wiki/layout.md`: portal shell anatomy (`AppHeader` top nav, retained — see pivot decision), `<PageHeader>` API + when to set `sticky` (incl. the `top-16` parking rule), detail-page key-value strip pattern (when to use, label conventions), list-page filter-bar pattern, **row-action vocabulary** (canonical labels, when to use which, where the labels constant lives, the View-xor-Edit rule), status badge + relative time conventions, capability-gated nav (preserved from `app-nav.tsx`)
