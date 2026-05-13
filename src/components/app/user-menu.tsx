@@ -23,7 +23,7 @@ export function UserMenu({ email }: { email: string }) {
         aria-label="Account menu"
         className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-stone-400 text-[11px] font-bold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted-foreground text-[11px] font-bold text-white">
           {initials}
         </span>
         <svg
@@ -45,18 +45,18 @@ export function UserMenu({ email }: { email: string }) {
           side="bottom"
           align="end"
           sideOffset={6}
-          className="z-50 min-w-[14rem] overflow-hidden rounded-lg border border-stone-200 bg-white p-1 shadow-[0_8px_24px_rgba(15,30,60,0.18)]"
+          className="z-50 min-w-[14rem] overflow-hidden rounded-lg border border-border bg-white p-1 shadow-[0_8px_24px_rgba(15,30,60,0.18)]"
         >
-          <DropdownMenu.Label className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-stone-400">
+          <DropdownMenu.Label className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
             Signed in as
           </DropdownMenu.Label>
           <div
-            className="max-w-[20rem] break-all px-2 pb-2 text-xs text-stone-700"
+            className="max-w-[20rem] break-all px-2 pb-2 text-xs text-foreground"
             title={email}
           >
             {email}
           </div>
-          <DropdownMenu.Separator className="my-1 h-px bg-stone-200" />
+          <DropdownMenu.Separator className="my-1 h-px bg-muted" />
           {/* Sign-out is a Server Action. Wrap the menu item in a `<form
               action={signOut}>` and override Radix's default onSelect close
               with `requestSubmit()` so the form submit dispatches BEFORE
@@ -70,7 +70,7 @@ export function UserMenu({ email }: { email: string }) {
                 const target = e.currentTarget as HTMLElement | null;
                 target?.closest('form')?.requestSubmit();
               }}
-              className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-sm text-stone-700 outline-none transition data-[highlighted]:bg-accent/10 data-[highlighted]:text-navy"
+              className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-sm text-foreground outline-none transition data-[highlighted]:bg-accent/10 data-[highlighted]:text-primary"
             >
               Sign out
             </DropdownMenu.Item>

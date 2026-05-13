@@ -152,7 +152,7 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((hg) => (
               <tr
                 key={hg.id}
-                className="border-b border-stone-200 text-left text-[11px] font-semibold uppercase tracking-wide text-stone-500"
+                className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 {hg.headers.map((header) => {
                   const canSort = header.column.getCanSort();
@@ -160,7 +160,7 @@ export function DataTable<TData, TValue>({
                   return (
                     <th
                       key={header.id}
-                      className={`px-2 py-2 ${canSort ? 'cursor-pointer select-none hover:text-navy' : ''}`}
+                      className={`px-2 py-2 ${canSort ? 'cursor-pointer select-none hover:text-primary' : ''}`}
                       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
                       aria-sort={
                         sortDir === 'asc'
@@ -191,7 +191,7 @@ export function DataTable<TData, TValue>({
               <tr>
                 <td
                   colSpan={table.getVisibleLeafColumns().length}
-                  className="px-2 py-6 text-center text-sm text-stone-500"
+                  className="px-2 py-6 text-center text-sm text-muted-foreground"
                 >
                   {emptyState ?? 'No rows.'}
                 </td>
@@ -225,7 +225,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
   const end = Math.min(totalRows, (pageIndex + 1) * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 print:hidden">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground print:hidden">
       <div>
         {totalRows === 0 ? '0 rows' : `${start}–${end} of ${totalRows}`}
       </div>
@@ -235,7 +235,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           <select
             value={pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
-            className="rounded border border-stone-200 bg-white px-2 py-0.5 text-xs"
+            className="rounded border border-border bg-white px-2 py-0.5 text-xs"
           >
             {PAGE_SIZE_OPTIONS.map((n) => (
               <option key={n} value={n}>
@@ -248,7 +248,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           type="button"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
-          className="rounded border border-stone-200 bg-white px-2 py-0.5 disabled:opacity-50"
+          className="rounded border border-border bg-white px-2 py-0.5 disabled:opacity-50"
         >
           ← Prev
         </button>
@@ -259,7 +259,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           type="button"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          className="rounded border border-stone-200 bg-white px-2 py-0.5 disabled:opacity-50"
+          className="rounded border border-border bg-white px-2 py-0.5 disabled:opacity-50"
         >
           Next →
         </button>

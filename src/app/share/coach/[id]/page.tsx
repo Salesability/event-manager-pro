@@ -37,8 +37,8 @@ export default async function CoachSharePage({ params }: Props) {
   );
 
   return (
-    <div className="min-h-screen bg-cream">
-      <header className="bg-navy px-8 py-4">
+    <div className="min-h-screen bg-background">
+      <header className="bg-primary px-8 py-4">
         <div className="mx-auto flex max-w-[1440px] items-center gap-3 text-white">
           <Image
             src="/saledayevents-logo.jpg"

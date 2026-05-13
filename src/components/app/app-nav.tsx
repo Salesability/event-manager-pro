@@ -61,7 +61,7 @@ export function AppNav({ isAdmin }: { isAdmin: boolean }) {
             className={
               'rounded-md px-4 py-2 text-sm font-medium transition ' +
               (active
-                ? 'bg-stone-400/40 text-white'
+                ? 'bg-muted-foreground/40 text-white'
                 : 'text-white/75 hover:bg-white/10 hover:text-white')
             }
           >
@@ -88,7 +88,7 @@ function AdminMenu({
         className={
           'ml-2 flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 data-[state=open]:bg-white/15 data-[state=open]:text-white ' +
           (adminActive
-            ? 'bg-stone-400/40 text-white'
+            ? 'bg-muted-foreground/40 text-white'
             : 'text-white/75 hover:bg-white/10 hover:text-white')
         }
       >
@@ -112,7 +112,7 @@ function AdminMenu({
           side="bottom"
           align="start"
           sideOffset={6}
-          className="z-50 min-w-[12rem] overflow-hidden rounded-lg border border-stone-200 bg-white p-1 shadow-[0_8px_24px_rgba(15,30,60,0.18)]"
+          className="z-50 min-w-[12rem] overflow-hidden rounded-lg border border-border bg-white p-1 shadow-[0_8px_24px_rgba(15,30,60,0.18)]"
         >
           {ADMIN_TABS.map((tab) => {
             const active = isActive(pathname, tab.href);
@@ -121,10 +121,10 @@ function AdminMenu({
                 <Link
                   href={tab.href}
                   className={
-                    'flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-sm outline-none transition data-[highlighted]:bg-accent/10 data-[highlighted]:text-navy ' +
+                    'flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-sm outline-none transition data-[highlighted]:bg-accent/10 data-[highlighted]:text-primary ' +
                     (active
-                      ? 'bg-stone-100 font-medium text-navy'
-                      : 'text-stone-700')
+                      ? 'bg-muted font-medium text-primary'
+                      : 'text-foreground')
                   }
                 >
                   {tab.label}
