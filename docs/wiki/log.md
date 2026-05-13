@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-13 — Portal-shell + master/detail conventions land (0043)
+
+- New page: [layout.md](layout.md) — codifies the post-0043 page shape: `<PageHeader>` (with `sticky top-16` parking under the 64px AppHeader), detail-page `<KeyValueStrip>` + `<Section>`, list-page `<ListToolbar>` (URL-driven `?q`/`?status` filters), canonical row-action vocabulary (`view`/`edit`/`archive`/`activate`/`quote`), status `<Badge>` enum-aware wrappers, `<RelativeTime>` for recent activity vs absolute for scheduled facts.
+- **Pivot recorded.** The originally-planned shadcn Sidebar shell swap is **not** part of 0043 — `AppHeader` is retained. The chunk's spirit shifted from "aesthetic refresh" to "app-wide consistency in operation + look-and-feel." Concrete: row actions across `/quotes` (View only), `/production` (was View + Edit), `/dealers` (was no View) now read the same vocabulary; new `eslint-plugins/no-inline-row-action-label.mjs` prevents drift.
+- [forms.md](forms.md) — cross-link to `layout.md` added at the "page-level action slot vs. dialog footer" pointer. The two surfaces remain separate (forms convention owns dialog submits; layout convention owns page-level primary actions).
+- View-xor-Edit rule locked: a row exposes `View` when there's a detail page, `Edit` when the dialog is the canonical editor — never both. `/production` rows lost their `View` button in this chunk (no `/production/[id]` page); production is a working surface, not a reading one.
+
 ## 2026-05-13 — Sent quotes stay editable; Re-send replaces the recipient's copy (0046)
 
 - **Doctrine flip.** The "sent is locked" framing retired. `setQuoteInputs` accepts saves on any non-terminal status (`draft` / `sent` / `expired`); only the contract artifacts (`accepted` / `declined`) lock the composer. The Re-send button (button-label flip when `sentAt != null`) re-renders the PDF, overwrites the storage object, re-emails the recipient, advances `sent_at` to now (resetting the validity window via the derived `isExpired` projection), and emits a fresh `quote.sent` audit row that joins the Send-history Section.

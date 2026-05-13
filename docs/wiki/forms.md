@@ -9,6 +9,8 @@ Two acceptable shapes (per-form complexity dictates which):
 
 Both shapes use the same shadcn Field primitives for layout + validation visuals.
 
+**Page-level vs. dialog-level submission.** Form save buttons inside `<Dialog>`s stay in `<DialogFooter>` — that's the canonical dialog UX. Page-level primary actions (Save / Send / Export on a full-page form like the quote composer) live in `<PageHeader actions>` per the [layout.md](layout.md) convention, not at the bottom of a scrolling page. The two patterns don't collide; the dividing line is *which kind of submit it is*.
+
 ## Primitives
 
 | What | Import | Notes |
