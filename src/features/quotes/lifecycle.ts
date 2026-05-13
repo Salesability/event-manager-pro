@@ -66,10 +66,35 @@ async function transition(
   return { error: `Quote cannot be ${to} from status '${row.status}'.` };
 }
 
-export function markQuoteAccepted(
+export async function markQuoteAccepted(
   quoteId: number,
   updatedById: string | null = null
 ): Promise<TransitionResult> {
+  // Time-based expiry guard, layered on top of the existing status='sent'
+  // atomic-UPDATE guard inside transition(). Pre-load `sentAt` +
+  // `quoteValidDays` to compute the expiry deadline; the underlying UPDATE
+  // can't enforce time semantics. If the row isn't sitting in 'sent' we
+  // skip the check — idempotent re-accept and illegal-source-status are
+  // still handled race-safely by transition().
+  const [row] = await db
+    .select({
+      status: quotes.status,
+      sentAt: quotes.sentAt,
+      quoteValidDays: quotes.quoteValidDays,
+    })
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (row && row.status === 'sent' && row.sentAt) {
+    const expiresAt =
+      row.sentAt.getTime() + row.quoteValidDays * 24 * 60 * 60 * 1000;
+    if (expiresAt < Date.now()) {
+      const sentDate = row.sentAt.toISOString().slice(0, 10);
+      return {
+        error: `This Quote has expired (valid for ${row.quoteValidDays} days from send date — sent ${sentDate}). Re-issue a new Quote with current pricing.`,
+      };
+    }
+  }
   return transition(quoteId, 'sent', 'accepted', updatedById);
 }
 

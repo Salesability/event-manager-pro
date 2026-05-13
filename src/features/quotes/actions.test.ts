@@ -526,12 +526,23 @@ describe('declineQuote (staff-side)', () => {
   });
 });
 
+// Pre-load shape for the markQuoteAccepted expiry guard. Use a sentAt that's
+// well within the validity window so the guard passes; tests that exercise
+// the expiry rejection path override sentAt + quoteValidDays.
+const FRESH_SENT_PRELOAD = {
+  status: 'sent',
+  sentAt: new Date(),
+  quoteValidDays: 30,
+};
+
 describe('acceptQuote (staff-side)', () => {
   it('flips sent → accepted, emits audit, and promotes a prospect dealer to active', async () => {
-    // 1. markQuoteAccepted UPDATE returns one row.
-    // 2. SELECT quotes.dealerId.
-    // 3. UPDATE dealers (prospect → active) returns one row.
+    // 1. markQuoteAccepted expiry pre-load (status='sent', within window).
+    // 2. markQuoteAccepted UPDATE returns one row.
+    // 3. SELECT quotes.dealerId.
+    // 4. UPDATE dealers (prospect → active) returns one row.
     mocks.dbResults.push(
+      [FRESH_SENT_PRELOAD],
       [{ id: 42 }],
       [{ dealerId: 7 }],
       [{ id: 7 }],
@@ -560,9 +571,14 @@ describe('acceptQuote (staff-side)', () => {
   });
 
   it('does not emit dealer.activated when the dealer is already active', async () => {
-    // markQuoteAccepted UPDATE wins; SELECT dealerId; UPDATE dealers misses
-    // (guard `status='prospect'` falsy on an already-active dealer).
-    mocks.dbResults.push([{ id: 42 }], [{ dealerId: 7 }], []);
+    // markQuoteAccepted expiry pre-load; UPDATE wins; SELECT dealerId;
+    // UPDATE dealers misses (guard `status='prospect'` falsy on already-active).
+    mocks.dbResults.push(
+      [FRESH_SENT_PRELOAD],
+      [{ id: 42 }],
+      [{ dealerId: 7 }],
+      [],
+    );
     await call(acceptQuote(fd({ quoteId: '42' })));
     expect(mocks.recordAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'quote.accepted' }),
@@ -573,15 +589,26 @@ describe('acceptQuote (staff-side)', () => {
   });
 
   it('is idempotent on already-accepted — no audit, no dealer promotion', async () => {
-    // markQuoteAccepted guard misses → re-select finds 'accepted'.
-    mocks.dbResults.push([], [{ id: 42, status: 'accepted' }]);
+    // Pre-load finds 'accepted' (expiry guard skipped); UPDATE misses;
+    // re-select finds 'accepted'.
+    mocks.dbResults.push(
+      [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
+      [],
+      [{ id: 42, status: 'accepted' }],
+    );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
   it('rejects accept of a draft quote', async () => {
-    mocks.dbResults.push([], [{ id: 42, status: 'draft' }]);
+    // Pre-load finds 'draft' (expiry guard skipped — only fires inside the
+    // 'sent' branch per OQ #2); UPDATE misses; re-select finds 'draft'.
+    mocks.dbResults.push(
+      [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
+      [],
+      [{ id: 42, status: 'draft' }],
+    );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ error: "Quote cannot be accepted from status 'draft'." });
     expect(mocks.recordAudit).not.toHaveBeenCalled();
@@ -592,11 +619,54 @@ describe('acceptQuote (staff-side)', () => {
     expect(result).toEqual({ error: 'Invalid quote id.' });
     expect(mocks.updates).toHaveLength(0);
   });
+
+  it('refuses acceptance when a sent quote has expired (default 30-day window)', async () => {
+    // sent 31 days ago with the default quoteValidDays=30 → expired.
+    const sentAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push([{ status: 'sent', sentAt, quoteValidDays: 30 }]);
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: `This Quote has expired (valid for 30 days from send date — sent ${sentAt.toISOString().slice(0, 10)}). Re-issue a new Quote with current pricing.`,
+    });
+    // Guard fires before the UPDATE — no row flips, no audit emitted.
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('allows acceptance on the last valid day (regression for the happy path under the new guard)', async () => {
+    // sent 29 days ago with the default quoteValidDays=30 → still valid.
+    const sentAt = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push(
+      [{ status: 'sent', sentAt, quoteValidDays: 30 }],
+      [{ id: 42 }],
+      [{ dealerId: 7 }],
+      [{ id: 7 }],
+    );
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+    expect((mocks.updates[0].patch as Record<string, unknown>).status).toBe('accepted');
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote.accepted' }),
+    );
+  });
+
+  it('honors the per-row quoteValidDays override (7-day window expires after 8 days)', async () => {
+    // sent 8 days ago with a per-row quoteValidDays=7 → expired even though
+    // the default 30-day window would still allow it.
+    const sentAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push([{ status: 'sent', sentAt, quoteValidDays: 7 }]);
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: `This Quote has expired (valid for 7 days from send date — sent ${sentAt.toISOString().slice(0, 10)}). Re-issue a new Quote with current pricing.`,
+    });
+    expect(mocks.updates).toHaveLength(0);
+  });
 });
 
 describe('markQuoteAccepted (internal helper)', () => {
   it('flips sent → accepted atomically and reports transitioned:true', async () => {
-    mocks.dbResults.push([{ id: 42 }]);
+    // Expiry pre-load (within window) → UPDATE returns one row.
+    mocks.dbResults.push([FRESH_SENT_PRELOAD], [{ id: 42 }]);
     const result = await markQuoteAccepted(42, 'public-uuid');
     expect(result).toEqual({ ok: true, transitioned: true });
     const patch = mocks.updates[0].patch as Record<string, unknown>;
@@ -606,25 +676,35 @@ describe('markQuoteAccepted (internal helper)', () => {
   });
 
   it('reports transitioned:false on already-accepted', async () => {
-    mocks.dbResults.push([], [{ id: 42, status: 'accepted' }]);
+    // Pre-load finds 'accepted' (expiry guard skipped); UPDATE miss; reselect.
+    mocks.dbResults.push(
+      [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
+      [],
+      [{ id: 42, status: 'accepted' }],
+    );
     const result = await markQuoteAccepted(42);
     expect(result).toEqual({ ok: true, transitioned: false });
   });
 
   it('rejects accept from a non-sent status', async () => {
-    mocks.dbResults.push([], [{ id: 42, status: 'draft' }]);
+    mocks.dbResults.push(
+      [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
+      [],
+      [{ id: 42, status: 'draft' }],
+    );
     const result = await markQuoteAccepted(42);
     expect(result).toEqual({ error: "Quote cannot be accepted from status 'draft'." });
   });
 
   it('errors when the quote does not exist', async () => {
-    mocks.dbResults.push([], []);
+    // Pre-load empty (row gone) → UPDATE miss → reselect empty.
+    mocks.dbResults.push([], [], []);
     const result = await markQuoteAccepted(999);
     expect(result).toEqual({ error: 'Quote not found.' });
   });
 
   it('omits updatedById when caller passes null (public route has no user)', async () => {
-    mocks.dbResults.push([{ id: 42 }]);
+    mocks.dbResults.push([FRESH_SENT_PRELOAD], [{ id: 42 }]);
     await markQuoteAccepted(42, null);
     expect(mocks.updates[0].patch).not.toHaveProperty('updatedById');
   });
