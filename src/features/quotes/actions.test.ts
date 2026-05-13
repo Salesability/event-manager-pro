@@ -232,6 +232,7 @@ const DRAFT_ROW = {
   id: 42,
   status: 'draft',
   dealerId: 7,
+  sentAt: null,
   updatedAt: new Date('2026-05-12T12:00:00.000Z'),
   acceptToken: '11111111-2222-3333-4444-555555555555',
   quoteValidDays: 30,
@@ -248,6 +249,17 @@ const DRAFT_ROW = {
   subtotal: '6900.00',
   tax: '0.00',
   total: '6900.00',
+};
+
+// Already-sent row used by re-send tests. Pre-load matches DRAFT_ROW shape
+// but with the lifecycle fields a `sent` quote carries.
+const SENT_ROW = {
+  ...DRAFT_ROW,
+  status: 'sent',
+  sentAt: new Date('2026-05-12T13:00:00.000Z'),
+  // The composer's setQuoteInputs bumps updatedAt on every save; an
+  // already-sent row pre-loaded for re-send carries the latest one.
+  updatedAt: new Date('2026-05-12T13:00:00.000Z'),
 };
 
 const DEALER_ROW = {
@@ -407,22 +419,58 @@ describe('sendQuote', () => {
     expect((quoteData.clientAddress as string[]).length).toBe(MAX_ADDRESS_LINES);
   });
 
-  it('is idempotent on already-sent (pre-load finds status=sent, no render)', async () => {
-    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'sent' }]);
+  it('re-sends an already-sent quote: re-renders, re-uploads, resets sentAt, and emits a fresh quote.sent audit row (0046)', async () => {
+    // Pre-load finds status='sent'; dealer; UPDATE returns one row.
+    mocks.dbResults.push([SENT_ROW], [DEALER_ROW], [{ id: 42 }]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
+    expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
+    expect(mocks.putObject).toHaveBeenCalledTimes(1);
+    // PDF overwrites the existing storage key (no versioning suffix).
+    expect((mocks.putObject.mock.calls[0][0] as Record<string, unknown>).key).toBe('quotes/42/1.pdf');
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(patch.status).toBe('sent');
+    expect(patch.sentAt).toBeInstanceOf(Date);
+    // Reset to "now" — strictly after the pre-loaded `sentAt`.
+    expect((patch.sentAt as Date).getTime()).toBeGreaterThan(SENT_ROW.sentAt.getTime());
+    expect(patch.pdfStorageKey).toBe('quotes/42/1.pdf');
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote.sent', targetId: 42 }),
+    );
+  });
+
+  it('re-sends an expired quote (status=sent + past validity is presentational only)', async () => {
+    const longAgoSent = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    mocks.dbResults.push(
+      [{ ...SENT_ROW, sentAt: longAgoSent, updatedAt: longAgoSent }],
+      [DEALER_ROW],
+      [{ id: 42 }],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect((patch.sentAt as Date).getTime()).toBeGreaterThan(longAgoSent.getTime());
+  });
+
+  it('rejects send from accepted with the friendly terminal-status message (no render)', async () => {
+    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'accepted' }]);
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: 'This quote has been accepted — make a new quote to revise it.',
+    });
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
     expect(mocks.putObject).not.toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(0);
-    expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('rejects send from accepted or declined (illegal source status, no render)', async () => {
-    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'accepted' }]);
+  it('rejects send from declined with the friendly terminal-status message (no render)', async () => {
+    mocks.dbResults.push([{ ...DRAFT_ROW, status: 'declined' }]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ error: "Quote cannot be sent from status 'accepted'." });
+    expect(result).toEqual({
+      error: 'This quote has been declined — make a new quote to revise it.',
+    });
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
-    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
   });
 
   it('rejects when the quote does not exist (pre-load returns nothing)', async () => {
@@ -461,13 +509,33 @@ describe('sendQuote', () => {
 
   it('falls back to idempotent on a UPDATE race (already sent by a concurrent caller)', async () => {
     // Pre-load + dealer succeed; render succeeds; UPDATE misses before upload;
-    // re-select finds the row in 'sent'. Mimics a concurrent send winning
-    // the race after our pre-load saw it as draft.
+    // re-select finds the row in 'sent' with a different updatedAt (the
+    // concurrent caller's UPDATE bumped it). Mimics a concurrent send
+    // winning the race — OQ #6 says the second clicker sees ok:true (the
+    // row IS now freshly sent, their snapshot just wasn't the one used).
     mocks.dbResults.push(
       [DRAFT_ROW],
       [DEALER_ROW],
       [],
-      [{ id: 42, status: 'sent' }],
+      [{ id: 42, status: 'sent', updatedAt: new Date('2026-05-12T12:00:05.000Z') }],
+    );
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('is idempotent on the send-then-immediate-retry-with-same-updatedAt path (optimistic-lock collapses two concurrent re-sends)', async () => {
+    // Two clicks pre-load the same updatedAt; the first wins, the second's
+    // UPDATE misses on the (now-bumped) updatedAt predicate and re-select
+    // confirms the row is `sent`. The second click returns ok:true without
+    // a second PDF upload or audit row — exactly the concurrent-race
+    // semantic from the previous test, but exercised from the re-send path.
+    mocks.dbResults.push(
+      [SENT_ROW],
+      [DEALER_ROW],
+      [],
+      [{ id: 42, status: 'sent', updatedAt: new Date('2026-05-12T13:00:05.000Z') }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
@@ -495,7 +563,7 @@ describe('sendQuote', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('classifies UPDATE race against illegal-status (raced to declined)', async () => {
+  it('classifies UPDATE race against illegal-status (raced to declined) with the friendly terminal-status message', async () => {
     mocks.dbResults.push(
       [DRAFT_ROW],
       [DEALER_ROW],
@@ -503,7 +571,9 @@ describe('sendQuote', () => {
       [{ id: 42, status: 'declined' }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ error: "Quote cannot be sent from status 'declined'." });
+    expect(result).toEqual({
+      error: 'This quote has been declined — make a new quote to revise it.',
+    });
   });
 
   it('rejects when GCS_BUCKET is unset (no render, no DB)', async () => {

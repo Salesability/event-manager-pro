@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Server-side guard relaxation (`setQuoteInputs`) + audit `quote.edited` | Done | - |
-| 2: `sendQuote` re-send path + `sent_at` reset | Pending | - |
+| 2: `sendQuote` re-send path + `sent_at` reset | Done | - |
 | 3: Composer always-editable + "Re-send Quote" button | Pending | - |
 | 4: `loadQuoteSendHistory` multi-row + Send-history section rewrite | Pending | - |
 | 5: Accepted/declined immutability + MSA-bundle re-send gate | Pending | - |
@@ -59,7 +59,7 @@ The Phase 1 implementation needs answers before files start moving.
 - `docs/wiki/data-model.md` → `quotes` row + audit_log relationship. Phase 4 documents the multi-row send-history pattern.
 - `docs/wiki/layout.md` § Open conventions (post-0043) → the parked composer-actions-lift follow-up is a natural companion to this chunk; either tackle them together or leave the composer-actions-lift parked while this chunk lands first.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - Each phase includes implementation + the unit tests for that phase's changes.
@@ -80,15 +80,15 @@ The Phase 1 implementation needs answers before files start moving.
 - [x] `tsc + test` gate
 
 #### Phase 2: `sendQuote` re-send path + `sent_at` reset
-- [ ] Drop the `status='draft'` precondition in `sendQuote`; new branch: `sentAt == null` (first send) vs `sentAt != null` (re-send)
-- [ ] Terminal-status reject mirroring Phase 1 (accepted/declined refused with friendly error)
-- [ ] Re-render PDF + re-upload to existing `pdfStorageKey` (overwrite)
-- [ ] Update `sent_at` to `new Date()` on every successful send (resets expiry window)
-- [ ] Emit fresh `quote.sent` audit row on every send (multi-row accumulation OK)
-- [ ] Atomic UPDATE guard adapted: instead of `WHERE status='draft'`, use `WHERE updatedAt = preloaded` + `status NOT IN ('accepted', 'declined')` to keep the optimistic-lock + terminal-block invariant
-- [ ] New tests: first-send happy path (unchanged), re-send happy path (status stays `sent`, sentAt advances, audit row added, PDF re-uploaded), re-send from `expired` works, re-send from `accepted` rejected, re-send from `declined` rejected
-- [ ] New test: `sendQuote` is still idempotent on the "send-then-immediate-retry-with-same-updatedAt" path (the existing test) — the optimistic-lock keeps re-running the same send safe
-- [ ] `tsc + test` gate
+- [x] Drop the `status='draft'` precondition in `sendQuote`; pre-load now reads `sentAt` so Phase 5 can branch first-send vs re-send for the MSA-bundle gate (Phase 2 itself is branch-free — same code path serves both)
+- [x] Terminal-status reject mirroring Phase 1 (accepted/declined refused with friendly error)
+- [x] Re-render PDF + re-upload to existing `pdfStorageKey` (overwrite)
+- [x] Update `sent_at` to `new Date()` on every successful send (resets expiry window)
+- [x] Emit fresh `quote.sent` audit row on every send (multi-row accumulation OK)
+- [x] Atomic UPDATE guard adapted: instead of `WHERE status='draft'`, use `WHERE updatedAt = preloaded` + `status NOT IN ('accepted', 'declined')` to keep the optimistic-lock + terminal-block invariant
+- [x] New tests: first-send happy path (unchanged), re-send happy path (status stays `sent`, sentAt advances, audit row added, PDF re-uploaded), re-send from `expired` works, re-send from `accepted` rejected, re-send from `declined` rejected
+- [x] New test: `sendQuote` is still idempotent on the "send-then-immediate-retry-with-same-updatedAt" path (the existing test) — the optimistic-lock keeps re-running the same send safe
+- [x] `tsc + test` gate
 
 #### Phase 3: Composer always-editable + "Re-send Quote" button
 - [ ] Flip `isReadOnly = isEdit && initial.status !== 'draft'` → `isReadOnly = isEdit && (initial.status === 'accepted' || initial.status === 'declined')` (composer fields editable on `sent`/`expired`; only terminal statuses lock)

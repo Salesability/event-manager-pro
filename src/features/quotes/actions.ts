@@ -735,6 +735,11 @@ export const previewQuotePdf = capabilityClient('quote:edit')
 
 // validation: skip — id-only action; `parseId` covers the lone input. Lifecycle
 // guards run inside the transaction against the row's current status.
+//
+// 0046: `sendQuote` is now both the first-send action AND the re-send action.
+// `sentAt == null` → first send (draft → sent); `sentAt != null` → re-send
+// (sent → sent, sent_at reset, new PDF overwrite, new email, new audit row).
+// Only `accepted` / `declined` reject — those are the contract artifacts.
 export const sendQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -748,31 +753,33 @@ export const sendQuote = capabilityClient('quote:edit')
       return { error: 'GCS_BUCKET is not configured; cannot persist quote PDF.' };
     }
 
-    // Phase 4 send flow:
-    //   1. Pre-load draft row + dealer; early-fail on non-draft / missing.
+    // Send/re-send flow (0046 unified):
+    //   1. Pre-load row + dealer; reject terminal statuses (accepted/declined).
     //   2. Resolve the customer recipient (primary email of the dealer's
     //      first 'customer' contact); fail closed before any side-effects.
-    //   3. Render the PDF from the persisted snapshot.
-    //   4. Atomic guarded UPDATE `draft → sent` + sentAt + pdfStorageKey,
-    //      WHERE status='draft' AND date_trunc('ms', updatedAt)=preloaded —
-    //      eliminates the stale-snapshot race. The `date_trunc('ms', …)`
-    //      is load-bearing: `postgres-js` decodes `timestamp with time zone`
-    //      into a JS `Date` (ms precision), so any out-of-app SQL write
-    //      with microsecond precision (e.g. `updated_at = now()`) would
-    //      otherwise miss the equality check and trip the fallthrough
-    //      "cannot be sent from status 'draft'" branch.
-    //   5. On miss, re-select to classify (gone / idempotent /
-    //      concurrent-edit / illegal).
-    //   6. Upload PDF to GCS — we already own the slot, no precondition.
+    //   3. Render the PDF from the persisted snapshot (overwrite on re-send).
+    //   4. Atomic guarded UPDATE — sets status='sent' + sentAt=now +
+    //      pdfStorageKey + recipient denorm, WHERE status NOT IN
+    //      ('accepted','declined') AND date_trunc('ms', updatedAt)=preloaded.
+    //      The optimistic-lock predicate replaces the old `status='draft'`
+    //      guard: it covers both first-send and re-send while still
+    //      rejecting a row that got edited or accepted under us.
+    //   5. On miss, re-select to classify (gone / terminal /
+    //      concurrent-send-won / concurrent-edit).
+    //   6. Upload PDF to GCS — overwrites the existing object on re-send;
+    //      the storage key is the staff-portal's current-truth pointer
+    //      (recipients keep their own copies in their inbox).
     //   7. Render + send the email (HTML body + plain-text fallback + PDF
     //      attachment) via the existing Resend wiring.
-    //   8. Audit-emit + revalidate.
+    //   8. Audit-emit `quote.sent` (one row per send; multi-row accumulation
+    //      drives the Send-history Section's chronology) + revalidate.
 
     const [draft] = await db
       .select({
         id: quotes.id,
         status: quotes.status,
         dealerId: quotes.dealerId,
+        sentAt: quotes.sentAt,
         updatedAt: quotes.updatedAt,
         quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
@@ -784,12 +791,10 @@ export const sendQuote = capabilityClient('quote:edit')
       .where(eq(quotes.id, quoteId))
       .limit(1);
     if (!draft) return { error: 'Quote not found.' };
-    if (draft.status === 'sent') {
-      revalidateQuoteViews();
-      return { ok: true }; // idempotent
-    }
-    if (draft.status !== 'draft') {
-      return { error: `Quote cannot be sent from status '${draft.status}'.` };
+    if (draft.status === 'accepted' || draft.status === 'declined') {
+      return {
+        error: `This quote has been ${draft.status} — make a new quote to revise it.`,
+      };
     }
 
     // Archive-aware dealer lookup. createQuote / setQuoteDealer already
@@ -808,7 +813,7 @@ export const sendQuote = capabilityClient('quote:edit')
 
     // Resolve recipient before any side effects. If the dealer doesn't have a
     // customer contact with a primary email, we fail closed — the row stays
-    // in `draft`, the coach sees a clear error, and no PDF gets uploaded.
+    // unchanged, the coach sees a clear error, and no PDF gets uploaded.
     const recipientResult = await resolveQuoteRecipient(draft.dealerId);
     if ('error' in recipientResult) return recipientResult;
     const recipient = recipientResult.recipient;
@@ -818,6 +823,9 @@ export const sendQuote = capabilityClient('quote:edit')
 
     // Anchor both timestamps to the same `now` so the row's `sentAt` and the
     // rendered "Issued"/"Valid until" strings line up to the millisecond.
+    // On re-send, `sentAt` advances to now and the validity window resets —
+    // matching the "Re-send replaces the recipient's copy" doctrine in the
+    // composer banner copy.
     const sentAt = new Date();
     const issuedDate = sentAt.toISOString().slice(0, 10);
     const validUntilDate = isoDateOffset(sentAt, draft.quoteValidDays);
@@ -845,9 +853,13 @@ export const sendQuote = capabilityClient('quote:edit')
 
     const storageKey = pdfStorageKey(quoteId);
 
-    // Atomic guarded transition — only flip rows currently in draft. On
-    // miss, re-select to classify (gone / idempotent / illegal). Same
-    // pattern as `cancelCampaign`.
+    // Atomic guarded UPDATE. The status predicate keeps terminal rows safe
+    // (accepted/declined refuse silently → re-select classifies); the
+    // `updatedAt` equality preserves the optimistic-lock invariant on the
+    // first-send + re-send paths alike. `date_trunc('ms', …)` matches
+    // postgres-js's ms-resolution decode for timestamptz; the
+    // `::timestamptz` cast forces the bound parameter to a string that
+    // Postgres parses back to a timestamp (raw Date binding throws).
     const updated = await db
       .update(quotes)
       .set({
@@ -861,13 +873,7 @@ export const sendQuote = capabilityClient('quote:edit')
       .where(
         and(
           eq(quotes.id, quoteId),
-          eq(quotes.status, 'draft'),
-          // `${...toISOString()}::timestamptz` is load-bearing: drizzle's
-          // `sql\`\`` template doesn't carry column-type metadata for raw
-          // bindings, so `${draft.updatedAt}` (a JS `Date`) reaches
-          // `postgres-js` as a `Date` instance and throws
-          // `ERR_INVALID_ARG_TYPE`. The explicit ISO + cast forces a
-          // string parameter that Postgres parses back to `timestamptz`.
+          sql`${quotes.status} NOT IN ('accepted', 'declined')`,
           sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${draft.updatedAt.toISOString()}::timestamptz`,
         ),
       )
@@ -880,14 +886,23 @@ export const sendQuote = capabilityClient('quote:edit')
         .where(eq(quotes.id, quoteId))
         .limit(1);
       if (!row) return { error: 'Quote not found.' };
-      if (row.status === 'sent') {
+      if (row.status === 'accepted' || row.status === 'declined') {
+        return {
+          error: `This quote has been ${row.status} — make a new quote to revise it.`,
+        };
+      }
+      // Concurrent send wins the race: the row is in 'sent' but our
+      // `updatedAt` predicate missed because another caller bumped it.
+      // Per OQ #6, the second clicker sees `ok: true` (their UI may be
+      // briefly stale, but the row IS now freshly sent — the first send
+      // wins, the second is a no-op).
+      if (row.status === 'sent' && !sameTimestamp(row.updatedAt, draft.updatedAt)) {
         revalidateQuoteViews();
-        return { ok: true }; // idempotent — concurrent caller won the race
+        return { ok: true };
       }
-      if (row.status === 'draft' && !sameTimestamp(row.updatedAt, draft.updatedAt)) {
-        return { error: 'Quote was edited concurrently; please retry.' };
-      }
-      return { error: `Quote cannot be sent from status '${row.status}'.` };
+      // Status `draft` with different `updatedAt`: a concurrent edit
+      // mutated the snapshot under us. Force the coach to re-pre-load.
+      return { error: 'Quote was edited concurrently; please retry.' };
     }
 
     const uploaded = await putObject({
