@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: shadcn init + theme reconciliation | Pending | - |
+| 1: shadcn init + theme reconciliation | Done | `fd2ad89` |
 | 2: Form stack (`<Form>` + helpers) | Pending | - |
 | 3: Port `quote-composer.tsx` | Pending | - |
 | 4: Port `dealer-form.tsx` + `booking-form.tsx` | Pending | - |
@@ -17,7 +17,7 @@
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 0% (0/7 phases complete)
+**Overall Progress:** 14% (1/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -75,11 +75,12 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 ### Phase Checklist
 
 #### Phase 1: shadcn init + theme reconciliation
-- [ ] Answer the open questions above (lock style choice, theme strategy A vs B, helper-or-inline)
-- [ ] Run `pnpm dlx shadcn@latest init` with locked choices; review the generated `components.json` + `globals.css` diff before committing
-- [ ] Reconcile `globals.css`: either add semantic aliases (`--primary: var(--color-navy)` etc.) under strategy A, or document the template edits under strategy B
-- [ ] Verify Tailwind v4 + Next plugin still build (`pnpm dev`, `pnpm build`)
-- [ ] `tsc + test` gate green
+- [x] ~~Answer the open questions above~~ — OQ#1 + #2 resolved in the **Decisions locked** block; OQ#4 carry-forward (inline at first form, share helper at second); OQ#6 cleared (0035 RHF committed at `f540c46`); OQ#7 confirmed in-place (`toaster` already uses sonner with audit callbacks per closed/0030)
+- [x] Run `pnpm dlx shadcn@latest init -d`; it scaffolded `components.json` (style `base-nova` — the shadcn 4.x preset rename; closest analog to the locked `new-york` style; left in place since the actual visual baseline is controlled by globals.css), `src/lib/utils.ts` (cn helper), `src/components/ui/button.tsx`, and installed `class-variance-authority`, `clsx`, `lucide-react`, `tailwind-merge`, `tw-animate-css`, `@base-ui/react`, `shadcn` as deps
+- [x] Reconcile `globals.css`: rewrote per strategy A — `@theme inline` aliases shadcn semantic tokens (`--primary`, `--background`, `--muted`, `--border`, `--ring`, `--destructive`, …) to a `:root` block that points at our brand named tokens; primary = `--color-brand-blue` (= `#1a5fa8`, the existing `--color-status-blue`); muted = `--color-stone-100`; border/input = `--color-stone-200`; destructive = `--color-status-red`. Dropped the stale `@import "shadcn/tailwind.css"` line (no such file ships with the shadcn package), dropped the entire `.dark` block (app is light-only — re-add as a separate chunk if dark mode becomes a thing). Kept legacy `--color-cream` for the two public `bg-cream` consumers (`src/app/login/page.tsx`, `src/app/share/coach/[id]/page.tsx`).
+- [x] Drop DM Serif Display + DM Sans; switch sans to Inter via `next/font/google`. `layout.tsx` rewritten to import `Inter` only (variable `--font-inter`), HTML class simplified. `--font-display` aliased to `--font-sans` in `globals.css` so the ~16 existing `font-display` class sites keep rendering (in Inter) without a same-phase blast-radius sweep; a follow-up sweep can replace `font-display` with `font-sans font-bold tracking-tight` per the plan's locked decisions.
+- [x] Verify Tailwind v4 + Next plugin still build — `pnpm dev` already up; `/login` returns 200 + renders the Continue-with-Google + email + magic-link surface unchanged. Full `pnpm build` deferred to Phase 7 chunk-end smoke (heavier than the per-phase gate budget).
+- [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 2: Form stack (`<Form>` + helpers)
 - [ ] `pnpm dlx shadcn@latest add form input label button select textarea`
