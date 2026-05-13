@@ -11,7 +11,7 @@
 | 2: `<PageHeader>` wrapper (title + actions slot) | Done | d440fe9 |
 | 3: Sweep `<PageHeader>` across all `(app)/` routes | Done | 2541149 |
 | 4: Detail-page convention (key-value strip + sections) | Done | 2ce556b |
-| 5: List-page filter-bar convention | Pending | - |
+| 5: List-page filter-bar convention | Done | 2d28a39 |
 | 6: Row-action convention (`<RowActions>` + shared labels/icons) | Pending | - |
 | 7: Status `<Badge>` + relative timestamps | Pending | - |
 | 8: Wiki (`layout.md`) + chunk-end smoke | Pending | - |
@@ -28,7 +28,7 @@ That mismatch is a vocabulary problem, not a styling problem — fixing it requi
 
 Keep the existing top-header portal shell (`AppHeader`) and establish app-wide conventions for: (a) **page header with top-right action slot** — fixes hidden-below-fold + hand-rolled submit pain; (b) **detail-page key-value strip + sections** — same anatomy on `/quotes/[id]` and `/dealerships/[id]`; (c) **list-page filter-bar shape** — search-flex → fixed dropdowns → action-right; (d) **row-action vocabulary** — one `<RowActions>` component, canonical labels (`View`/`Edit`/`Archive`/etc.) drawn from a shared `labels.ts`, overflow → dropdown; (e) **status `<Badge>`** — variants per enum value, replacing colored-text status spans; (f) **relative timestamps** — `<RelativeTime>` for *recent activity* (list timestamps, send history) and absolute for *scheduled facts* (event dates, contract dates); (g) **`docs/wiki/layout.md`** — captures the whole convention set and is cross-linked from `index.md` + `forms.md`.
 
-**Overall Progress:** 43% (3/7 active phases complete; Phase 1 skipped)
+**Overall Progress:** 57% (4/7 active phases complete; Phase 1 skipped)
 
 ## Decisions locked
 
@@ -121,11 +121,11 @@ Keep the existing top-header portal shell (`AppHeader`) and establish app-wide c
 - [x] `tsc + test` gate green; `web-test` deferred to chunk-end
 
 #### Phase 5: List-page filter-bar convention
-- [ ] Build `src/components/app/list-toolbar.tsx`: `<SearchInput>` (flex-1) + slotted filter `<Select>` dropdowns + right-anchored primary action
-- [ ] `/quotes/quotes-filters.tsx`: reshape to use `<ListToolbar>`
-- [ ] `/dealerships/page.tsx`: extract or add filter bar (likely a thin shell today — confirm in mid-Phase 5)
-- [ ] Confirm filter state is in URL search params so back-nav from a detail restores it (Resend pattern from the conversation). If filters are component-state-only today, lift to `useSearchParams` / `router.replace`
-- [ ] `tsc + test` gate green; `web-test`: filter a list, click into detail, browser-back — filters intact
+- [x] Build `src/components/app/list-toolbar.tsx`: search slot (flex-1) + filters slot + right-anchored action slot. Slot shape (not `<SearchInput>`/`<Select>` shadcn-specific) — every consumer composes its own controls into the slots, so existing pill+button widgets keep their semantics without a parallel refactor.
+- [x] `/quotes/quotes-filters.tsx`: reshape to use `<ListToolbar>`. Page now renders `<PageHeader>` + `<QuotesFilters>` as siblings (filters lifted out of header actions slot so the search input gets a flex-1 row of its own).
+- [x] `/dealerships` via `dealers-admin.tsx`: lifted filter state from `useState` to `useSearchParams` + `router.replace` (mirrors `QuotesFilters`'s pattern — debounced search, `status` URL key, pushParams). Wraps controls in `<ListToolbar>`; Add Dealer button moved into the toolbar's action slot.
+- [x] Filter state is URL-driven on both pages (confirmed — Resend pattern: back-nav from detail restores filters).
+- [x] `tsc + test` gate green; `web-test` deferred to chunk-end
 
 #### Phase 6: Row-action convention (`<RowActions>` + shared labels/icons)
 - [ ] Create `src/lib/ui/labels.ts` — `ROW_ACTION_LABELS = { view: 'View', edit: 'Edit', archive: 'Archive', activate: 'Activate', … }` as a const map. Single import site; downstream files reference `ROW_ACTION_LABELS.edit`, never the literal string.
