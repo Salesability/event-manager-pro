@@ -1,60 +1,76 @@
 'use client';
 
-import { useActionState, useCallback, useEffect, useState } from 'react';
+import { useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import * as Form from '@radix-ui/react-form';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 
-// Per-field touched/invalid state for inline required-field messages. Radix
-// Form's `<Form.Message match="valueMissing">` only fires on `change` and
-// `invalid` events — not blur — so a required field that's tabbed past
-// without typing stays silent until submit. This hook adds the blur path:
-// onBlur of an empty input flips touched=true; onChange to a non-empty value
-// flips it back to false; onInvalid (fires when the form fails native
-// validation on submit) catches never-focused fields. Used for required
-// text fields only — typeMismatch (email shape) is still wired through
-// Radix Form's stock `<Form.Message match="typeMismatch">`.
-function useTouched() {
-  const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const fieldHandlers = useCallback(
-    (name: string) => ({
-      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
-        const empty = !e.currentTarget.value.trim();
-        setTouched((t) => (t[name] === empty ? t : { ...t, [name]: empty }));
-      },
-      onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.currentTarget.value.trim()) {
-          setTouched((t) => (t[name] ? { ...t, [name]: false } : t));
-        }
-      },
-      onInvalid: () => {
-        setTouched((t) => (t[name] ? t : { ...t, [name]: true }));
-      },
-    }),
-    [],
-  );
-  return { touched, fieldHandlers };
-}
+// 0042 Phase 4 — ported off Radix Form + useActionState onto RHF + shadcn
+// Field primitives. The hand-rolled `useTouched` hook is gone; RHF's
+// `mode: 'onTouched'` covers the blur-then-empty inline-error path. Email
+// shape validation moved off `<Form.Message match="typeMismatch">` to zod.
+// Server Action submission target unchanged (`createDealer` / `updateDealer`
+// via `toLegacyResult`); the form constructs FormData from RHF values at
+// submit time so the action layer stays stable.
 
 type Mode = 'create' | 'edit';
-type DealerFormState = { ok: true } | { error: string } | null;
 
-const inputClass =
-  'min-w-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
-
-const cancelClass =
-  'rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+const dealerFormSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Dealership name is required.'),
+  contactFirst: z.string().trim().optional(),
+  contactLast: z.string().trim().optional(),
+  contactEmail: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      'Email looks invalid.',
+    )
+    .optional(),
+  contactPhone: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  status: z.enum(['active', 'prospect']),
+  acquiredVia: z.string().trim().max(200).optional(),
+});
+type DealerFormValues = z.infer<typeof dealerFormSchema>;
 
 const submitClass =
   'rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60';
 
-const fieldClass = 'flex flex-col gap-1';
-const labelClass = 'text-xs font-medium text-stone-600';
-const messageClass = 'text-[11px] font-medium text-status-red';
+const cancelClass =
+  'rounded border border-stone-200 bg-white px-2 py-0.5 text-xs font-medium text-stone-600 transition hover:border-navy hover:text-navy';
+
+function valuesToFormData(values: DealerFormValues, id?: number): FormData {
+  const fd = new FormData();
+  if (id != null) fd.set('id', String(id));
+  fd.set('name', values.name);
+  fd.set('contactFirst', values.contactFirst ?? '');
+  fd.set('contactLast', values.contactLast ?? '');
+  fd.set('contactEmail', values.contactEmail ?? '');
+  fd.set('contactPhone', values.contactPhone ?? '');
+  fd.set('address', values.address ?? '');
+  fd.set('status', values.status);
+  fd.set('acquiredVia', values.acquiredVia ?? '');
+  return fd;
+}
 
 export function DealerForm({
   mode,
@@ -71,151 +87,148 @@ export function DealerForm({
   defaultStatus?: 'prospect' | 'active';
 }) {
   const router = useRouter();
-  const { touched, fieldHandlers } = useTouched();
-  const action = mode === 'create' ? createDealer : updateDealer;
-  const [state, formAction, pending] = useActionState<DealerFormState, FormData>(
-    async (_prev, fd) => toLegacyResult(await action(fd)),
-    null,
-  );
+  const [pending, startTransition] = useTransition();
 
+  const form = useForm<DealerFormValues>({
+    resolver: zodResolver(dealerFormSchema),
+    defaultValues: {
+      name: dealer?.name ?? '',
+      contactFirst: dealer?.contactFirstName ?? '',
+      contactLast: dealer?.contactLastName ?? '',
+      contactEmail: dealer?.primaryEmail ?? '',
+      contactPhone: dealer?.primaryPhone ?? '',
+      address: dealer?.address ?? '',
+      // create-only hint: the composer's inline-prospect path forces
+      // 'prospect' here; edit mode honours the existing row's status.
+      status:
+        defaultStatus && mode === 'create'
+          ? defaultStatus
+          : (dealer?.status ?? 'active'),
+      acquiredVia: dealer?.acquiredVia ?? '',
+    },
+    mode: 'onTouched',
+  });
+  const { register, handleSubmit, formState, setFocus } = form;
+  const { errors } = formState;
+
+  // Match the original auto-focus on the name input.
   useEffect(() => {
-    if (!state) return;
-    if ('ok' in state) {
-      toast.success(mode === 'create' ? 'Dealer added' : 'Dealer saved');
-      router.refresh();
-      onSuccess();
-    } else {
-      toast.error(state.error);
-    }
-  }, [state, mode, router, onSuccess]);
+    setFocus('name');
+  }, [setFocus]);
+
+  const onSubmit = handleSubmit((values) => {
+    startTransition(async () => {
+      const action = mode === 'create' ? createDealer : updateDealer;
+      const fd = valuesToFormData(values, mode === 'edit' ? dealer?.id : undefined);
+      const result = toLegacyResult(await action(fd));
+      if ('ok' in result) {
+        toast.success(mode === 'create' ? 'Dealer added' : 'Dealer saved');
+        router.refresh();
+        onSuccess();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  });
+
+  const hideStatusSelect = defaultStatus != null && mode === 'create';
 
   return (
-    <Form.Root action={formAction} className="mt-4 flex flex-col gap-3">
-      {mode === 'edit' && dealer && (
-        <input type="hidden" name="id" value={dealer.id} />
-      )}
-
-      <Form.Field name="name" className={fieldClass}>
-        <Form.Label className={labelClass}>Dealership name</Form.Label>
-        <Form.Control asChild>
-          <input
+    <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
+      <FieldGroup>
+        <Field data-invalid={!!errors.name || undefined}>
+          <FieldLabel htmlFor="df-name">Dealership name</FieldLabel>
+          <Input
+            id="df-name"
             type="text"
-            defaultValue={dealer?.name ?? ''}
-            className={inputClass}
-            autoFocus
-            required
-            {...fieldHandlers('name')}
+            aria-invalid={!!errors.name || undefined}
+            {...register('name')}
           />
-        </Form.Control>
-        {touched.name && (
-          <span className={messageClass}>Dealership name is required.</span>
-        )}
-      </Form.Field>
+          {errors.name && <FieldError>{errors.name.message}</FieldError>}
+        </Field>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Form.Field name="contactFirst" className={fieldClass}>
-          <Form.Label className={labelClass}>Contact first</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="text"
-              defaultValue={dealer?.contactFirstName ?? ''}
-              className={inputClass}
-            />
-          </Form.Control>
-        </Form.Field>
-        <Form.Field name="contactLast" className={fieldClass}>
-          <Form.Label className={labelClass}>Contact last</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="text"
-              defaultValue={dealer?.contactLastName ?? ''}
-              className={inputClass}
-            />
-          </Form.Control>
-        </Form.Field>
-      </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Field>
+            <FieldLabel htmlFor="df-contactFirst">Contact first</FieldLabel>
+            <Input id="df-contactFirst" type="text" {...register('contactFirst')} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="df-contactLast">Contact last</FieldLabel>
+            <Input id="df-contactLast" type="text" {...register('contactLast')} />
+          </Field>
+        </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Form.Field name="contactEmail" className={fieldClass}>
-          <Form.Label className={labelClass}>Email</Form.Label>
-          <Form.Control asChild>
-            <input
+        <div className="grid grid-cols-2 gap-2">
+          <Field data-invalid={!!errors.contactEmail || undefined}>
+            <FieldLabel htmlFor="df-contactEmail">Email</FieldLabel>
+            <Input
+              id="df-contactEmail"
               type="email"
-              defaultValue={dealer?.primaryEmail ?? ''}
-              className={inputClass}
+              aria-invalid={!!errors.contactEmail || undefined}
+              {...register('contactEmail')}
             />
-          </Form.Control>
-          <Form.Message match="typeMismatch" className={messageClass}>
-            Email looks invalid.
-          </Form.Message>
-        </Form.Field>
-        <Form.Field name="contactPhone" className={fieldClass}>
-          <Form.Label className={labelClass}>Phone</Form.Label>
-          <Form.Control asChild>
-            <input
-              type="tel"
-              defaultValue={dealer?.primaryPhone ?? ''}
-              className={inputClass}
-            />
-          </Form.Control>
-        </Form.Field>
-      </div>
+            {errors.contactEmail && (
+              <FieldError>{errors.contactEmail.message}</FieldError>
+            )}
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="df-contactPhone">Phone</FieldLabel>
+            <Input id="df-contactPhone" type="tel" {...register('contactPhone')} />
+          </Field>
+        </div>
 
-      <Form.Field name="address" className={fieldClass}>
-        <Form.Label className={labelClass}>Address</Form.Label>
-        <Form.Control asChild>
-          <input
-            type="text"
-            defaultValue={dealer?.address ?? ''}
-            className={inputClass}
-          />
-        </Form.Control>
-      </Form.Field>
+        <Field>
+          <FieldLabel htmlFor="df-address">Address</FieldLabel>
+          <Input id="df-address" type="text" {...register('address')} />
+        </Field>
 
-      {/* `defaultStatus` is a create-only hint (composer's inline-prospect
-          flow). Editing a dealer always uses the visible select so an admin
-          can flip status — passing the prop in edit mode is ignored. */}
-      {defaultStatus && mode === 'create' ? (
-        <input type="hidden" name="status" value={defaultStatus} />
-      ) : (
-        <Form.Field name="status" className={fieldClass}>
-          <Form.Label className={labelClass}>Status</Form.Label>
-          <Form.Control asChild>
-            <select defaultValue={dealer?.status ?? 'active'} className={inputClass}>
+        {!hideStatusSelect && (
+          <Field>
+            <FieldLabel htmlFor="df-status">Status</FieldLabel>
+            {/* Native select — shadcn's <Select> is a Base UI dropdown
+                composition that adds layout complexity for a 2-option toggle.
+                Keep the native <select> until a clear UX win surfaces. */}
+            <select
+              id="df-status"
+              className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+              {...register('status')}
+            >
               <option value="active">Active</option>
               <option value="prospect">Prospect</option>
             </select>
-          </Form.Control>
-        </Form.Field>
-      )}
+          </Field>
+        )}
 
-      <Form.Field name="acquiredVia" className={fieldClass}>
-        <Form.Label className={labelClass}>How did this dealer find us? (optional)</Form.Label>
-        <Form.Control asChild>
-          <input
+        <Field>
+          <FieldLabel htmlFor="df-acquiredVia">
+            How did this dealer find us? (optional)
+          </FieldLabel>
+          <Input
+            id="df-acquiredVia"
             type="text"
-            defaultValue={dealer?.acquiredVia ?? ''}
-            placeholder="Book Your Event form / referral / outbound / trade show"
             maxLength={200}
-            className={inputClass}
+            placeholder="Book Your Event form / referral / outbound / trade show"
+            {...register('acquiredVia')}
           />
-        </Form.Control>
-      </Form.Field>
+          <FieldDescription>Up to 200 characters.</FieldDescription>
+        </Field>
+      </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
         <Dialog.Close className={cancelClass}>Cancel</Dialog.Close>
-        <Form.Submit asChild>
-          <button type="submit" disabled={pending} className={submitClass}>
-            {pending
-              ? mode === 'create'
-                ? 'Creating…'
-                : 'Saving…'
-              : mode === 'create'
-                ? 'Add Dealer'
-                : 'Save'}
-          </button>
-        </Form.Submit>
+        <button type="submit" disabled={pending} className={submitClass}>
+          {pending
+            ? mode === 'create'
+              ? 'Creating…'
+              : 'Saving…'
+            : mode === 'create'
+              ? 'Add Dealer'
+              : 'Save'}
+        </button>
       </div>
-    </Form.Root>
+    </form>
   );
 }
+
+// Re-export Label so callers that previously imported from this file keep working.
+export { Label };

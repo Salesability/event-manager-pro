@@ -2,11 +2,33 @@
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import { Dialog } from '@/components/ui/dialog';
+import {
+  Field as ShadField,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createCampaign, updateCampaign } from '@/features/schedule/actions';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
+
+// 0042 Phase 4 — partial port. Swapped raw primitives for shadcn (Input,
+// Textarea, Field, FieldLabel) but kept `useActionState` + the native
+// `<form action={formAction}>` shape because the auto-fill UX (dealer-pick
+// → populate contact/phone/email unless the user has already touched them)
+// uses raw `useState` rather than RHF's form state, and a full RHF migration
+// would mean restructuring that auto-fill into `watch(dealerId)` +
+// `setValue` calls + an external touched-fields tracker. Tradeoff captured
+// in the plan body; the dealer-form sibling does the full RHF port for
+// reference.
+//
+// Native `<select>` kept (not swapped for shadcn `<Select>` — Base UI's Select
+// is a dropdown composition that adds layout complexity for these
+// straightforward option lists; the Phase 5 primitive sweep can revisit if
+// the UX clearly wins from the swap).
 
 type Mode = 'create' | 'edit';
 type State = { ok: true } | { error: string } | null;
@@ -22,8 +44,11 @@ type BookingFormProps = {
   onSuccess: () => void;
 };
 
-const inputClass =
-  'rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
+// Native-select styling mirrors shadcn's <Input> chrome so the form reads as
+// a single visual family. Kept inline rather than extracted because there are
+// only ~8 selects in this file and a one-off util doesn't earn its keep.
+const selectClass =
+  'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:text-sm';
 
 function addDays(iso: string, days: number) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -111,9 +136,11 @@ export function BookingForm({
       {mode === 'edit' && campaign && <input type="hidden" name="id" value={campaign.id} />}
       <input type="hidden" name="endDate" value={endDate} />
 
+      <FieldGroup>
+
       <div className="grid grid-cols-3 gap-3">
         <Field label="Start Date" htmlFor="bk-start" required>
-          <input
+          <Input
             id="bk-start"
             name="startDate"
             type="date"
@@ -121,7 +148,6 @@ export function BookingForm({
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             autoFocus
-            className={inputClass}
           />
         </Field>
         <Field label="Duration" htmlFor="bk-duration">
@@ -129,7 +155,7 @@ export function BookingForm({
             id="bk-duration"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
-            className={inputClass}
+            className={selectClass}
           >
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
@@ -139,13 +165,13 @@ export function BookingForm({
           </select>
         </Field>
         <Field label="End Date" htmlFor="bk-end">
-          <input
+          <Input
             id="bk-end"
             type="date"
             value={endDate}
             readOnly
             tabIndex={-1}
-            className={`${inputClass} bg-stone-100 text-stone-600`}
+            className="bg-stone-100 text-stone-600"
           />
         </Field>
       </div>
@@ -157,7 +183,7 @@ export function BookingForm({
           required
           value={dealerId}
           onChange={(e) => onDealerChange(e.target.value)}
-          className={inputClass}
+          className={selectClass}
         >
           <option value="">Select a dealership…</option>
           {dealers.map((d) => (
@@ -170,7 +196,7 @@ export function BookingForm({
 
       <div className="grid grid-cols-3 gap-3">
         <Field label="Contact" htmlFor="bk-contact">
-          <input
+          <Input
             id="bk-contact"
             name="contact"
             type="text"
@@ -179,11 +205,10 @@ export function BookingForm({
               setContact(e.target.value);
               setTouched((t) => ({ ...t, contact: true }));
             }}
-            className={inputClass}
           />
         </Field>
         <Field label="Phone" htmlFor="bk-phone">
-          <input
+          <Input
             id="bk-phone"
             name="phone"
             type="tel"
@@ -192,11 +217,10 @@ export function BookingForm({
               setPhone(e.target.value);
               setTouched((t) => ({ ...t, phone: true }));
             }}
-            className={inputClass}
           />
         </Field>
         <Field label="Email" htmlFor="bk-email">
-          <input
+          <Input
             id="bk-email"
             name="email"
             type="email"
@@ -205,7 +229,6 @@ export function BookingForm({
               setEmail(e.target.value);
               setTouched((t) => ({ ...t, email: true }));
             }}
-            className={inputClass}
           />
         </Field>
       </div>
@@ -228,7 +251,7 @@ export function BookingForm({
             id="bk-style"
             name="styleId"
             defaultValue={campaign?.styleId ?? ''}
-            className={inputClass}
+            className={selectClass}
           >
             <option value="">—</option>
             {styles.map((s) => (
@@ -255,7 +278,7 @@ export function BookingForm({
             id="bk-source"
             name="audienceSourceId"
             defaultValue={campaign?.audienceSourceId ?? ''}
-            className={inputClass}
+            className={selectClass}
           >
             <option value="">—</option>
             {sources.map((s) => (
@@ -269,43 +292,39 @@ export function BookingForm({
 
       <div className="grid grid-cols-4 gap-3">
         <Field label="Qty Records" htmlFor="bk-qty">
-          <input
+          <Input
             id="bk-qty"
             name="qtyRecords"
             type="number"
             min={0}
             defaultValue={campaign?.qtyRecords ?? ''}
-            className={inputClass}
           />
         </Field>
         <Field label="SMS/Email" htmlFor="bk-sms">
-          <input
+          <Input
             id="bk-sms"
             name="smsEmail"
             type="number"
             min={0}
             defaultValue={campaign?.smsEmail ?? ''}
-            className={inputClass}
           />
         </Field>
         <Field label="Letters" htmlFor="bk-letters">
-          <input
+          <Input
             id="bk-letters"
             name="letters"
             type="number"
             min={0}
             defaultValue={campaign?.letters ?? ''}
-            className={inputClass}
           />
         </Field>
         <Field label="BDC" htmlFor="bk-bdc">
-          <input
+          <Input
             id="bk-bdc"
             name="bdc"
             type="number"
             min={0}
             defaultValue={campaign?.bdc ?? ''}
-            className={inputClass}
           />
         </Field>
       </div>
@@ -315,7 +334,7 @@ export function BookingForm({
           id="bk-coach"
           name="coachId"
           defaultValue={campaign?.coachId ?? ''}
-          className={inputClass}
+          className={selectClass}
         >
           <option value="">—</option>
           {coaches.map((c) => (
@@ -327,14 +346,16 @@ export function BookingForm({
       </Field>
 
       <Field label="Notes" htmlFor="bk-notes">
-        <textarea
+        <Textarea
           id="bk-notes"
           name="notes"
           rows={3}
           defaultValue={campaign?.notes ?? ''}
-          className={inputClass}
+          className="resize-y"
         />
       </Field>
+
+      </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
         <button
@@ -377,6 +398,10 @@ export function BookingForm({
   );
 }
 
+// Local Field-shape helper: wraps shadcn's <Field> + <FieldLabel> with an
+// optional inline "action" slot (the "Manage" button next to Event Format /
+// Data Source). Native `<select>` + `<input>` types both work as children
+// since Field is a layout-only primitive.
 function Field({
   label,
   htmlFor,
@@ -391,18 +416,15 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <ShadField>
       <div className="flex items-center justify-between gap-2">
-        <label
-          htmlFor={htmlFor}
-          className="text-xs font-semibold uppercase tracking-wide text-stone-600"
-        >
+        <FieldLabel htmlFor={htmlFor}>
           {label}
           {required && <span className="ml-1 text-status-red">*</span>}
-        </label>
+        </FieldLabel>
         {action}
       </div>
       {children}
-    </div>
+    </ShadField>
   );
 }
