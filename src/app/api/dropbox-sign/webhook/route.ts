@@ -169,6 +169,9 @@ async function handleDeclined(signatureRequestId: string): Promise<NextResponse>
   return new NextResponse(ACK_BODY, { status: 200 });
 }
 
+// authz: public — Dropbox Sign webhook caller has no auth.users session;
+// the gate is HMAC signature verification, performed below before any DB
+// read or mutation. See the top-of-file comment for the full rationale.
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const secret = process.env.DROPBOX_SIGN_WEBHOOK_SECRET;
   if (!secret) {
