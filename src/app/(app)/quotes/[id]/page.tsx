@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
-import { KeyValueStrip } from '@/components/app/key-value-strip';
-import { PageHeader } from '@/components/app/page-header';
 import { RelativeTime } from '@/components/app/relative-time';
 import { Section } from '@/components/app/section';
 import { QuoteStatusBadge } from '@/components/app/status-badge';
@@ -97,6 +95,59 @@ export default async function QuoteEditPage({
 
   const pillKey = displayStatusKey(quote);
   const totalMoney = fmtMoney(quote.total);
+  const sendHistoryNode =
+    quote.status !== 'draft' && sendHistory.length > 0 ? (
+      <Section title="Send history" variant="card">
+        <ul className="flex flex-col gap-3">
+          {sendHistory.map((row, idx) => {
+            const emailId = readEmailId(row.payload);
+            const isMostRecent = idx === 0;
+            // Prefer the per-send recipient denorm from the audit payload
+            // (added 0046); fall back to the row-level denorm for pre-0046
+            // sends that don't carry the field.
+            const perRow = readRecipient(row.payload);
+            const recipientFirstName = perRow.firstName ?? quote.sentToFirstName;
+            const recipientEmail = perRow.email ?? quote.sentToEmail;
+            return (
+              <li
+                key={`${row.occurredAt.toISOString()}-${idx}`}
+                className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-stone-800">
+                    <RelativeTime value={row.occurredAt} />
+                    {isMostRecent ? (
+                      <span className="ml-2 rounded-full bg-stone-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
+                        Latest
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-xs text-stone-600">
+                    {recipientLabel(recipientFirstName, recipientEmail)}
+                  </span>
+                  {emailId && (
+                    <span className="font-mono text-[11px] text-stone-500">
+                      Resend ID: {emailId}
+                    </span>
+                  )}
+                </div>
+                {isMostRecent && sentPdfDownloadUrl ? (
+                  <a
+                    href={sentPdfDownloadUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-navy underline hover:no-underline"
+                  >
+                    Download PDF
+                  </a>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </Section>
+    ) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <Link
@@ -105,74 +156,6 @@ export default async function QuoteEditPage({
       >
         ← Quotes
       </Link>
-      <PageHeader
-        title={`Quote #${quote.id}`}
-        actions={<QuoteStatusBadge status={pillKey} />}
-      />
-      <KeyValueStrip
-        items={[
-          { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },
-          {
-            label: 'Dealer',
-            value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
-          },
-          { label: 'Audience', value: quote.inputs.audienceSize.toLocaleString() },
-          { label: 'Event days', value: quote.inputs.eventDays.toLocaleString() },
-          { label: 'Audience source', value: quote.audienceSourceLabel ?? '—' },
-          { label: 'Total', value: totalMoney },
-        ]}
-      />
-      {quote.status !== 'draft' && sendHistory.length > 0 && (
-        <Section title="Send history" variant="card">
-          <ul className="flex flex-col gap-3">
-            {sendHistory.map((row, idx) => {
-              const emailId = readEmailId(row.payload);
-              const isMostRecent = idx === 0;
-              // Prefer the per-send recipient denorm from the audit payload
-              // (added 0046); fall back to the row-level denorm for pre-0046
-              // sends that don't carry the field.
-              const perRow = readRecipient(row.payload);
-              const recipientFirstName = perRow.firstName ?? quote.sentToFirstName;
-              const recipientEmail = perRow.email ?? quote.sentToEmail;
-              return (
-                <li
-                  key={`${row.occurredAt.toISOString()}-${idx}`}
-                  className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-stone-800">
-                      <RelativeTime value={row.occurredAt} />
-                      {isMostRecent ? (
-                        <span className="ml-2 rounded-full bg-stone-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
-                          Latest
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="text-xs text-stone-600">
-                      {recipientLabel(recipientFirstName, recipientEmail)}
-                    </span>
-                    {emailId && (
-                      <span className="font-mono text-[11px] text-stone-500">
-                        Resend ID: {emailId}
-                      </span>
-                    )}
-                  </div>
-                  {isMostRecent && sentPdfDownloadUrl ? (
-                    <a
-                      href={sentPdfDownloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-navy underline hover:no-underline"
-                    >
-                      Download PDF
-                    </a>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      )}
       <QuoteComposer
         dealers={dealers}
         catalog={catalog}
@@ -194,6 +177,20 @@ export default async function QuoteEditPage({
         }}
         recipient={recipient}
         msaEnvelopeInFlight={msaEnvelopeInFlight}
+        pageTitle={`Quote #${quote.id}`}
+        pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
+        keyValueItems={[
+          { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },
+          {
+            label: 'Dealer',
+            value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
+          },
+          { label: 'Audience', value: quote.inputs.audienceSize.toLocaleString() },
+          { label: 'Event days', value: quote.inputs.eventDays.toLocaleString() },
+          { label: 'Audience source', value: quote.audienceSourceLabel ?? '—' },
+          { label: 'Total', value: totalMoney },
+        ]}
+        sendHistorySlot={sendHistoryNode}
       />
     </div>
   );

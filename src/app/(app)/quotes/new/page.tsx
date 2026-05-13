@@ -1,5 +1,4 @@
 import { assertCan } from '@/lib/auth/assert-can';
-import { PageHeader } from '@/components/app/page-header';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { QuoteComposer } from '@/features/quotes/quote-composer';
@@ -30,15 +29,13 @@ export default async function NewQuotePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title="New Quote"
-        description="Build a quote against the service catalog. Save Draft to persist; sending happens later."
-      />
       <QuoteComposer
         dealers={dealers}
         catalog={catalog}
         initialDealerId={parseIntOrNull(initialDealerId)}
         initialCampaignId={parseIntOrNull(initialCampaignId)}
+        pageTitle="New Quote"
+        pageDescription="Build a quote against the service catalog. Save Draft to persist; sending happens later."
       />
     </div>
   );

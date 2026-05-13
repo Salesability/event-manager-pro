@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { KeyValueStrip, type KeyValueItem } from '@/components/app/key-value-strip';
+import { PageHeader } from '@/components/app/page-header';
 import {
   Controller,
   useForm,
@@ -111,6 +113,25 @@ type Props = {
    *  envelope resolves. The UI gates the button to match the server.
    *  Always false on first-send (the MSA gate only fires on re-send). */
   msaEnvelopeInFlight?: boolean;
+  /** Page-level title rendered inside the sticky `<PageHeader>` the composer
+   *  owns. Owned by the composer (not the page) so the composer's action
+   *  buttons can ride in the same actions slot as the status badge — one
+   *  row, sticky at `top-16`. */
+  pageTitle: ReactNode;
+  /** Optional `<PageHeader>` description (1-line summary under the title).
+   *  Used on create-mode to surface the "Build a quote against the service
+   *  catalog…" copy. */
+  pageDescription?: ReactNode;
+  /** Status badge rendered after the action buttons inside the PageHeader
+   *  actions slot. Omitted on create-mode (no row, no status yet). */
+  pageStatusBadge?: ReactNode;
+  /** Detail-page key-value strip rendered just below the PageHeader.
+   *  Omitted on create-mode. */
+  keyValueItems?: KeyValueItem[];
+  /** Send-history `<Section>` (server-rendered list of `quote.sent` audit
+   *  rows). Rendered between the KeyValueStrip and the form body. Omitted
+   *  on create-mode and on drafts. */
+  sendHistorySlot?: ReactNode;
 };
 
 const labelClass = 'text-xs font-medium text-stone-600';
@@ -149,6 +170,11 @@ export function QuoteComposer({
   initial,
   recipient,
   msaEnvelopeInFlight = false,
+  pageTitle,
+  pageDescription,
+  pageStatusBadge,
+  keyValueItems,
+  sendHistorySlot,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -337,8 +363,101 @@ export function QuoteComposer({
   const persistedLineCount = initial?.lineItems.length ?? 0;
   const persistedTotal = initial?.total ?? 0;
 
+  // 0043 follow-up (a): composer renders the page header itself so the
+  // action buttons can ride in the same `<PageHeader actions>` slot as the
+  // status badge — one row, sticky at `top-16`. The buttons sit OUTSIDE the
+  // disabled `<fieldset>` below by virtue of being in the actions slot
+  // (which is sibling-of, not descendant-of, the fieldset); Preview / Close
+  // stay clickable on read-only quotes, and Save / Send still self-gate via
+  // `!isReadOnly` / `canSend`.
+  const composerActions = (
+    <>
+      {isEdit && (
+        <button
+          type="button"
+          onClick={() => router.push('/quotes')}
+          className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
+        >
+          Close
+        </button>
+      )}
+      {isEdit && (
+        <button
+          type="button"
+          onClick={onPreview}
+          disabled={previewPending}
+          className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {previewPending ? 'Loading…' : 'Preview PDF'}
+        </button>
+      )}
+      {!isReadOnly && (
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          disabled={pending || !computed.ok}
+          className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
+        </button>
+      )}
+      {canSend && (
+        <button
+          type="button"
+          onClick={() => setConfirmSendOpen(true)}
+          disabled={
+            !recipientEmail ||
+            isDirty ||
+            pending ||
+            sendPending ||
+            (isResend && msaEnvelopeInFlight)
+          }
+          title={
+            isResend && msaEnvelopeInFlight
+              ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
+              : isDirty
+                ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
+                : recipientErrorMessage ??
+                  (recipientEmail
+                    ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
+                    : undefined)
+          }
+          className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {isResend ? 'Re-send Quote' : 'Send Quote'}
+        </button>
+      )}
+      {pageStatusBadge}
+    </>
+  );
+
   return (
     <>
+      <PageHeader
+        title={pageTitle}
+        description={pageDescription}
+        actions={composerActions}
+        sticky
+      />
+      {keyValueItems && keyValueItems.length > 0 ? (
+        <KeyValueStrip items={keyValueItems} />
+      ) : null}
+      {sendHistorySlot}
+      {canSend && isDirty && (
+        <p className="text-right text-[11px] text-stone-500">
+          You have unsaved changes — save before sending.
+        </p>
+      )}
+      {canSend && !isDirty && recipientErrorMessage && (
+        <p className="text-right text-[11px] text-status-red">
+          Send disabled: {recipientErrorMessage}
+        </p>
+      )}
+      {canSend && isResend && msaEnvelopeInFlight && (
+        <p className="text-right text-[11px] text-amber-700">
+          Re-send disabled: MSA envelope awaiting signature.
+        </p>
+      )}
       {isReadOnly && initial && (
         <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
           This quote has been{' '}
@@ -355,86 +474,6 @@ export function QuoteComposer({
           {' replaces the recipient’s copy and resets the validity window.'}
         </div>
       )}
-
-      {/* 0043 follow-up (a): composer actions parked at the top of the
-       *  scrollable surface, sticky under the 64px AppHeader. Sits OUTSIDE
-       *  the `<fieldset disabled>` below so Preview / Close stay clickable
-       *  on read-only quotes; Save / Send still self-gate via `!isReadOnly`
-       *  and `canSend`. */}
-      <div className="sticky top-16 z-10 -mx-1 flex flex-col gap-1 border-b border-stone-200 bg-background px-1 py-2">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {isEdit && (
-            <button
-              type="button"
-              onClick={() => router.push('/quotes')}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-stone-700 transition hover:border-navy hover:text-navy"
-            >
-              Close
-            </button>
-          )}
-          {isEdit && (
-            <button
-              type="button"
-              onClick={onPreview}
-              disabled={previewPending}
-              className="rounded-lg border border-stone-300 bg-white px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-navy disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {previewPending ? 'Loading…' : 'Preview PDF'}
-            </button>
-          )}
-          {!isReadOnly && (
-            <button
-              type="button"
-              onClick={onSaveDraft}
-              disabled={pending || !computed.ok}
-              className="rounded-lg bg-navy px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-light disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {pending ? 'Saving…' : isEdit ? 'Save Quote' : 'Save Draft'}
-            </button>
-          )}
-          {canSend && (
-            <button
-              type="button"
-              onClick={() => setConfirmSendOpen(true)}
-              disabled={
-                !recipientEmail ||
-                isDirty ||
-                pending ||
-                sendPending ||
-                (isResend && msaEnvelopeInFlight)
-              }
-              title={
-                isResend && msaEnvelopeInFlight
-                  ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
-                  : isDirty
-                    ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
-                    : recipientErrorMessage ??
-                      (recipientEmail
-                        ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
-                        : undefined)
-              }
-              className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isResend ? 'Re-send Quote' : 'Send Quote'}
-            </button>
-          )}
-        </div>
-        {canSend && isDirty && (
-          <p className="text-right text-[11px] text-stone-500">
-            You have unsaved changes — save before sending.
-          </p>
-        )}
-        {canSend && !isDirty && recipientErrorMessage && (
-          <p className="text-right text-[11px] text-status-red">
-            Send disabled: {recipientErrorMessage}
-          </p>
-        )}
-        {canSend && isResend && msaEnvelopeInFlight && (
-          <p className="text-right text-[11px] text-amber-700">
-            Re-send disabled: MSA envelope awaiting signature.
-          </p>
-        )}
-      </div>
 
       <fieldset disabled={isReadOnly} className="contents">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
