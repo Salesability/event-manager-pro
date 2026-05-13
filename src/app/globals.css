@@ -4,43 +4,25 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * 0042 — strategy A: shadcn semantic tokens (`--primary`, `--background`,
- * `--muted`, etc.) are aliased to our named brand tokens, not to the
- * shadcn-default greyscale palette. Two layers:
- *   1. `@theme inline` registers Tailwind utility classes (`bg-primary`,
- *      `text-foreground`, etc.) by pointing each `--color-*` Tailwind token at
- *      the underlying `--*` custom property defined in `:root`.
- *   2. `:root` is the single source of truth for the actual colour values.
- *      Brand tokens (`--color-navy`, `--color-brand-blue`, `--color-stone-*`)
- *      stay defined; shadcn semantics (`--primary`, `--background`, …) point
- *      at them.
+ * 0047 — single-layer shadcn semantic tokens.
+ * `@theme inline` registers Tailwind utility classes (`bg-primary`,
+ * `text-foreground`, etc.) and points each `--color-*` Tailwind token at the
+ * underlying `--*` custom property defined in `:root`. `:root` is the single
+ * source of truth for colour values — no intermediate brand-named layer.
+ *
+ * Palette tokens kept (load-bearing): `--color-brand-blue` (`--primary`
+ * resolves to it) and `--color-status-*` (Send/Status surfaces still address
+ * the status palette directly via `bg-status-green`, `text-status-red`, etc.).
  *
  * No `.dark` block: this app is light-only. Removing dark mode keeps the
- * token graph short — re-add via a separate chunk if/when the marketing site
+ * token graph short — re-add via a separate chunk if the marketing site
  * cutover needs it.
- *
- * Display font: DM Serif Display dropped 0042 Phase 1 (user preference). Sans
- * switches to Inter; `--font-display` aliases to `--font-sans` so the ~16
- * existing `font-display` class sites keep rendering (in Inter) without a
- * blast-radius sweep. A later cleanup can replace `font-display` with
- * `font-sans font-bold tracking-tight` per the plan's locked decisions.
  */
 
 @theme inline {
-  /* ── Brand named tokens (legacy + extended) ───────────────────────────── */
-  --color-navy: #1a3a6b;
-  --color-navy-light: #1e4a82;
-  --color-navy-pale: #f0f3f8;
-  --color-accent: #b88a3a;
-  --color-accent-light: #d4a85a;
-  --color-cream: #faf8f4;            /* legacy public-page off-white (login / share-coach) */
-  --color-brand-blue: #1a5fa8;       /* logo blue (eyedropper range #1a5fa8–#1f6bc2) */
+  /* ── Palette tokens (load-bearing) ────────────────────────────────────── */
+  --color-brand-blue: #1a5fa8;       /* logo blue (eyedropper #1a5fa8–#1f6bc2) */
   --color-brand-blue-fg: #ffffff;
-  --color-stone-100: #f4f2ee;
-  --color-stone-200: #e8e4dd;
-  --color-stone-400: #a09d96;
-  --color-stone-600: #6b6760;
-  --color-stone-800: #2c2a26;
   --color-status-red: #c0392b;
   --color-status-green: #1e7e4a;
   --color-status-blue: #1a5fa8;
@@ -48,7 +30,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
 
-  /* ── shadcn semantic-token aliases (strategy A) ───────────────────────── */
+  /* ── shadcn semantic-token aliases ────────────────────────────────────── */
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -59,6 +41,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
@@ -68,7 +51,6 @@
 
   /* ── Fonts ─────────────────────────────────────────────────────────────── */
   --font-sans: var(--font-inter);
-  --font-display: var(--font-sans);
   --font-heading: var(--font-sans);
 
   /* ── Radii (shadcn scale derived from --radius) ───────────────────────── */
@@ -88,28 +70,30 @@
 
 /*
  * Source-of-truth values. Aliased above via `@theme inline`.
- * Modern-minimal aesthetic: white surfaces, neutral stone scale, brand blue
- * primary, hairline borders, 0.625rem base radius.
+ * Modern-minimal aesthetic: white surfaces, neutral stone scale, brand-blue
+ * primary, hairline borders, 0.625rem base radius. The stone scale lives
+ * inline here (no separate brand block) — these are the only neutral values
+ * the app needs.
  */
 :root {
   --background: #ffffff;
-  --foreground: var(--color-stone-800);
+  --foreground: #2c2a26;             /* near-black body text */
   --card: #ffffff;
-  --card-foreground: var(--color-stone-800);
+  --card-foreground: #2c2a26;
   --popover: #ffffff;
-  --popover-foreground: var(--color-stone-800);
+  --popover-foreground: #2c2a26;
   --primary: var(--color-brand-blue);
   --primary-foreground: var(--color-brand-blue-fg);
-  --secondary: var(--color-stone-100);
-  --secondary-foreground: var(--color-stone-800);
-  --muted: var(--color-stone-100);
-  --muted-foreground: var(--color-stone-600);
-  --accent: var(--color-accent);
+  --secondary: #f4f2ee;              /* warm light neutral */
+  --secondary-foreground: #2c2a26;
+  --muted: #f4f2ee;
+  --muted-foreground: #6b6760;       /* mid neutral for secondary text */
+  --accent: #b88a3a;                 /* warm gold accent */
   --accent-foreground: #ffffff;
   --destructive: var(--color-status-red);
   --destructive-foreground: #ffffff;
-  --border: var(--color-stone-200);
-  --input: var(--color-stone-200);
+  --border: #e8e4dd;                 /* hairline neutral */
+  --input: #e8e4dd;
   --ring: var(--color-brand-blue);
   --radius: 0.625rem;
 }
