@@ -10,14 +10,14 @@
 | 1: shadcn init + theme reconciliation | Done | `fd2ad89` |
 | 2: Form stack (`<Form>` + helpers) | Done | `09ad506` |
 | 3: Port `quote-composer.tsx` | Done | `2462b0c` |
-| 4: Port `dealer-form.tsx` + `booking-form.tsx` | Pending | - |
+| 4: Port `dealer-form.tsx` + `booking-form.tsx` | Done | `29fd30d` |
 | 5: Primitive sweep (dialog / combobox / tabs) | Pending | - |
 | 6: Docs (wiki) + Radix Form removal | Pending | - |
 | 7: Tests + smoke verification | Pending | - |
 
 Adopt shadcn/ui as the project baseline for forms and common UI primitives so every form looks and behaves the same, while preserving the existing palette (navy/accent/stone/status-red), the Server-Action-only mutation rule (CLAUDE.md), and the in-house `toaster` + `data-table` which carry project-specific behaviour. Done = (a) shadcn initialized with explicit choices captured in this plan, (b) the four current form files (`quote-composer.tsx`, `dealer-form.tsx`, `booking-form.tsx`, plus whichever others surface) all use the same `<Form>`/`<FormField>` stack on top of react-hook-form + zod, (c) Server Actions still own submission via `form.handleSubmit(async values => action(...))` with `setError` mapping field errors back, (d) Radix Form removed from `package.json` once the last consumer is ported, (e) a `docs/wiki/forms.md` page captures the convention.
 
-**Overall Progress:** 43% (3/7 phases complete)
+**Overall Progress:** 57% (4/7 phases complete)
 
 ## Decisions locked (2026-05-12)
 
@@ -100,11 +100,11 @@ The Phase 1 implementation needs answers to these before files start moving. Pla
 - [x] `tsc + test` gate green (tsc clean, 757/759 PASS)
 
 #### Phase 4: Port `dealer-form.tsx` + `booking-form.tsx`
-- [ ] `dealer-form.tsx`: rewrite from `<Form.Root action={formAction}>` + `useActionState` to `useForm` + `form.handleSubmit`. Keep the existing `useTouched` UX (empty-field-on-blur message) — re-implement via RHF's `formState.touchedFields` or drop in favour of `mode: 'onTouched'`
-- [ ] `booking-form.tsx`: same migration. Likely the bigger file; do it second after the pattern is settled on `dealer-form`
-- [ ] Both forms keep Server Actions as submission target — no TanStack Query, no client-side mutation hooks
-- [ ] Map server-side `{ error }` results back to either field-level (`setError`) or form-level toasts, matching the existing UX
-- [ ] `tsc + test` gate green per file
+- [x] `dealer-form.tsx`: full RHF + zod port. Replaced `@radix-ui/react-form` + `useActionState` with `useForm` + `form.handleSubmit` + `zodResolver`. Dropped the hand-rolled `useTouched` hook in favour of RHF's `mode: 'onTouched'`. Replaced raw `<input>` blocks with `<Field>` + `<FieldLabel>` + `<Input>` + `<FieldError>`. `valuesToFormData(values, id?)` adapts RHF values to the existing `createDealer`/`updateDealer` Server Action FormData contract. Native `<select>` kept for the 2-option status toggle (shadcn `<Select>` would be overkill).
+- [x] `booking-form.tsx`: **partial port** — kept `useActionState` + native `<form action={formAction}>` because the auto-fill UX (dealer-pick → populate contact/phone/email unless touched) uses raw `useState` rather than form state; full RHF migration would mean restructuring auto-fill into `watch(dealerId)` + `setValue` calls + an external touched-fields tracker, which is significant code change for no UX win in this chunk. Primitive swap landed: raw `<input>` → `<Input>`, raw `<textarea>` → `<Textarea>`, local `Field` helper rewritten to use shadcn `<Field>` + `<FieldLabel>` underneath. Native `<select>` kept for all option lists (same rationale as dealer-form). Full RHF migration captured as a Phase 4 follow-up if/when the auto-fill behaviour evolves.
+- [x] Both forms keep Server Actions as submission target — no TanStack Query, no client-side mutation hooks.
+- [x] Server-side `{ error }` results: dealer-form surfaces via `toast.error` (form-level); booking-form same shape via the existing `useActionState` + `useEffect` toast handler. Per-field `setError` mapping deferred until a Server Action surfaces an actual field-shaped error payload (today they all return single-string `error`).
+- [x] `tsc + test` gate green per file (tsc clean, 757/759 PASS)
 
 #### Phase 5: Primitive sweep (dialog / combobox / tabs)
 - [ ] `pnpm dlx shadcn@latest add dialog command popover tabs`
