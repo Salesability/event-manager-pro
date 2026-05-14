@@ -750,6 +750,11 @@ function PreviewDialog({
           />
         )}
       </div>
+      <div className="mt-4 flex items-center justify-end">
+        <Button type="button" outline onClick={() => onClose(false)}>
+          Close
+        </Button>
+      </div>
     </Dialog>
   );
 }
