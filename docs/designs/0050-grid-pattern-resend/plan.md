@@ -44,7 +44,7 @@ Reference screenshots in this folder ([`resend-row-with-overflow.png`](resend-ro
 | 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | `fae3713` |
 | 2: Identity-cell primitive (icon + dotted-underline View link) | Done | `8226cd2` |
 | 3: Overflow-menu row-actions primitive | Done | `be35c97` |
-| 4: Token-pill + footer-chrome polish | Pending | - |
+| 4: Token-pill + footer-chrome polish | Done | `5520046` |
 | 5: Sweep **every** grid (incl. 3 raw-table conversions) + smoke verification | Pending | - |
 
 The app's tables today render row actions as an inline button row (`<RowActions>`) and primary identifiers as solid `<Link>` text. The Resend pattern moves to **icon + dotted-underline identity** and **`…` overflow menu** for actions — denser-feeling rows with cleaner row-end chrome. "Done" is: at least three representative surfaces (`/quotes`, `/dealerships`, `/admin/people`) using the new identity-cell + overflow-menu shape; the old inline-button row shape removed from those surfaces; visual-smoke screenshots in the eval report.
@@ -69,7 +69,7 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - `docs/wiki/layout.md` — **rewritten in Phase 1** to capture the edit-default pattern (see header note). Dotted-underline label clicks through to the single editable detail page; the `…` menu owns Delete + non-CRUD. The View-xor-Edit rule is retired.
 - `docs/wiki/<ui-tables-or-whatever-0049-adds>.md` — populate on un-defer with whatever convention page 0049 leaves behind.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -100,8 +100,8 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - [x] Unit test: render with mixed link/button actions including one `tone='danger'`; assert trigger has `aria-label="Open row actions${ariaSuffix}"`, popover content lists actions in order, destructive item has the red color class. **Done:** `row-overflow-menu.test.tsx` covers 7 cases — empty filter, aria-label with/without suffix, link+button mixed ordering, onClick + disabled thread-through, destructive class composition (red items have `text-red-700!`, subtle items do not), per-callsite label override.
 
 #### Phase 4: Token-pill + footer-chrome polish
-- [ ] Add `src/components/ui/token-pill.tsx` — props: `{ value: string; maxChars?: number }`. Renders monospace pill with `bg-muted text-muted-foreground rounded-md px-2 py-0.5 font-mono text-sm` (refine post-0049); truncates to `maxChars` with trailing `…`. Used today for short opaque ids only; not a sweep target.
-- [ ] Footer chrome — match the "Page X – Y of Z keys – N items ▾" prose shape. Today's DataTable pagination block is the reference point; goal is a smaller-feeling, prose-shaped footer rather than a full Pagination component. Punt if Catalyst's table already ships the right shape. **Note:** lands on **every** grid post-Phase-5 — the three raw-table conversions inherit this footer for free since they pick up DataTable pagination as part of the migration.
+- [x] Add `src/components/ui/token-pill.tsx` — props: `{ value: string; maxChars?: number }`. Renders monospace pill with `bg-muted text-muted-foreground rounded-md px-2 py-0.5 font-mono text-sm` (refine post-0049); truncates to `maxChars` with trailing `…`. Used today for short opaque ids only; not a sweep target. **Done:** post-0049 classes are `bg-zinc-100 text-zinc-700 rounded-md px-2 py-0.5 font-mono text-xs`; default `maxChars = 20`; full value preserved on `title` for hover-reveal. 4-case unit test.
+- [x] Footer chrome — match the "Page X – Y of Z keys – N items ▾" prose shape. Today's DataTable pagination block is the reference point; goal is a smaller-feeling, prose-shaped footer rather than a full Pagination component. Punt if Catalyst's table already ships the right shape. **Note:** lands on **every** grid post-Phase-5 — the three raw-table conversions inherit this footer for free since they pick up DataTable pagination as part of the migration. **Done:** Catalyst's `<Pagination>` is href-driven (server-paged), doesn't compose with TanStack's button-callback model — punted on swap, kept the existing `<DataTablePagination>` shape but lightly polished the prose: `1 / 5` → `Page 1 of 5`, `Page size [select]` → `[select] per page`, `12 of 47` → `12 of 47 rows`. No structural change; every grid inherits the polished prose for free in Phase 5. Resend-style noun-customization (e.g. "47 quotes") parked — would require a per-surface prop and the prose feel is close enough without it.
 
 #### Phase 5: Sweep **every** grid + smoke verification
 
