@@ -41,7 +41,7 @@ Reference screenshots in this folder ([`resend-row-with-overflow.png`](resend-ro
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | - |
+| 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | `fae3713` |
 | 2: Identity-cell primitive (icon + dotted-underline View link) | Pending | - |
 | 3: Overflow-menu row-actions primitive | Pending | - |
 | 4: Token-pill + footer-chrome polish | Pending | - |
