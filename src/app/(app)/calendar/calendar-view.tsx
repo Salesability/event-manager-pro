@@ -12,10 +12,9 @@ import { Can } from '@/components/auth/can';
 import { PageHeader } from '@/components/app/page-header';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import type {
   AvailabilityBlock,
   Campaign,
@@ -590,56 +589,58 @@ export function CalendarView({
       </div>
 
       {mode === 'app' && (
-        <Dialog open={dialog.kind !== 'closed'} onOpenChange={(o) => { if (!o) closeDialog(); }}>
-          <DialogContent className={dialog.kind === 'availability' ? 'sm:max-w-[780px]' : undefined}>
-            {dialog.kind === 'detail' && (
-              <>
-                <DialogTitle>Campaign Detail</DialogTitle>
-                <EventDetail
-                  campaign={dialog.campaign}
-                  onEdit={() => setDialog({ kind: 'edit', campaign: dialog.campaign })}
-                  onClose={closeDialog}
-                />
-              </>
-            )}
-            {dialog.kind === 'create' && (
-              <>
-                <DialogTitle>Book Event</DialogTitle>
-                <BookingForm
-                  mode="create"
-                  dealers={dealers}
-                  coaches={coaches}
-                  styles={styles}
-                  sources={sources}
-                  defaultStartDate={dialog.date}
-                  onSuccess={closeDialog}
-                />
-              </>
-            )}
-            {dialog.kind === 'edit' && (
-              <>
-                <DialogTitle>Edit Campaign</DialogTitle>
-                <BookingForm
-                  mode="edit"
-                  campaign={dialog.campaign}
-                  dealers={dealers}
-                  coaches={coaches}
-                  styles={styles}
-                  sources={sources}
-                  onSuccess={closeDialog}
-                />
-              </>
-            )}
-            {dialog.kind === 'availability' && (
-              <>
-                <DialogTitle>Block Out Dates</DialogTitle>
-                <DialogDescription>
-                  Add, edit, or remove calendar blocks for holidays, closures, and coach time off.
-                </DialogDescription>
-                <AvailabilityAdmin blocks={blocks} coaches={coaches} />
-              </>
-            )}
-          </DialogContent>
+        <Dialog
+          open={dialog.kind !== 'closed'}
+          onClose={closeDialog}
+          size={dialog.kind === 'availability' ? '3xl' : 'lg'}
+        >
+          {dialog.kind === 'detail' && (
+            <>
+              <DialogTitle>Campaign Detail</DialogTitle>
+              <EventDetail
+                campaign={dialog.campaign}
+                onEdit={() => setDialog({ kind: 'edit', campaign: dialog.campaign })}
+                onClose={closeDialog}
+              />
+            </>
+          )}
+          {dialog.kind === 'create' && (
+            <>
+              <DialogTitle>Book Event</DialogTitle>
+              <BookingForm
+                mode="create"
+                dealers={dealers}
+                coaches={coaches}
+                styles={styles}
+                sources={sources}
+                defaultStartDate={dialog.date}
+                onSuccess={closeDialog}
+              />
+            </>
+          )}
+          {dialog.kind === 'edit' && (
+            <>
+              <DialogTitle>Edit Campaign</DialogTitle>
+              <BookingForm
+                mode="edit"
+                campaign={dialog.campaign}
+                dealers={dealers}
+                coaches={coaches}
+                styles={styles}
+                sources={sources}
+                onSuccess={closeDialog}
+              />
+            </>
+          )}
+          {dialog.kind === 'availability' && (
+            <>
+              <DialogTitle>Block Out Dates</DialogTitle>
+              <DialogDescription>
+                Add, edit, or remove calendar blocks for holidays, closures, and coach time off.
+              </DialogDescription>
+              <AvailabilityAdmin blocks={blocks} coaches={coaches} />
+            </>
+          )}
         </Dialog>
       )}
     </div>

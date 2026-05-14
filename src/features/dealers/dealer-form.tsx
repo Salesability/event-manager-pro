@@ -4,7 +4,6 @@ import { useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { DialogClose } from '@/components/ui/dialog';
 import {
   Field,
   FieldGroup,
@@ -57,11 +56,13 @@ export function DealerForm({
   mode,
   dealer,
   onSuccess,
+  onCancel,
   defaultStatus,
 }: {
   mode: Mode;
   dealer?: Dealer;
   onSuccess: () => void;
+  onCancel?: () => void;
   /** When set, hides the status select and submits this value. Used by the
    *  composer's inline "Add new prospect" flow (defaultStatus='prospect') so
    *  the back-office UI choice doesn't pollute the prospect-create path. */
@@ -196,7 +197,11 @@ export function DealerForm({
       </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
-        <DialogClose className={cancelClass}>Cancel</DialogClose>
+        {onCancel && (
+          <button type="button" onClick={onCancel} className={cancelClass}>
+            Cancel
+          </button>
+        )}
         <button type="submit" disabled={pending} className={submitClass}>
           {pending
             ? mode === 'create'

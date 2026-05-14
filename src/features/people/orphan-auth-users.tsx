@@ -5,11 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
 import {
   Dialog,
-  DialogClose,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { adoptOrphanAuthUser } from '@/features/people/actions';
@@ -63,14 +61,18 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
           Adopt
         </button>
       </Can>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogTitle>Adopt {orphan.email ?? orphan.userId}</DialogTitle>
-          <DialogDescription>
-            Create a contacts row for this auth user and link it.
-          </DialogDescription>
-          {open && <AdoptForm orphan={orphan} onSuccess={() => setOpen(false)} />}
-        </DialogContent>
+      <Dialog open={open} onClose={setOpen}>
+        <DialogTitle>Adopt {orphan.email ?? orphan.userId}</DialogTitle>
+        <DialogDescription>
+          Create a contacts row for this auth user and link it.
+        </DialogDescription>
+        {open && (
+          <AdoptForm
+            orphan={orphan}
+            onSuccess={() => setOpen(false)}
+            onCancel={() => setOpen(false)}
+          />
+        )}
       </Dialog>
     </li>
   );
@@ -84,9 +86,11 @@ type AdoptState =
 function AdoptForm({
   orphan,
   onSuccess,
+  onCancel,
 }: {
   orphan: OrphanAuthUser;
   onSuccess: () => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState<AdoptState, FormData>(
@@ -134,7 +138,9 @@ function AdoptForm({
         </p>
       )}
       <div className="mt-2 flex justify-end gap-2">
-        <DialogClose className={rowEditClass}>Cancel</DialogClose>
+        <button type="button" onClick={onCancel} className={rowEditClass}>
+          Cancel
+        </button>
         <button type="submit" disabled={pending} className={submitClass}>
           {pending ? 'Adopting…' : 'Adopt'}
         </button>

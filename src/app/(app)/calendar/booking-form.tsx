@@ -3,10 +3,9 @@
 import { useActionState, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import {
   Field as CatalystField,
   FieldGroup,
@@ -379,23 +378,19 @@ export function BookingForm({
         </button>
       </div>
     </form>
-      <Dialog open={stylesOpen} onOpenChange={setStylesOpen}>
-        <DialogContent>
-          <DialogTitle>Manage Event Styles</DialogTitle>
-          <DialogDescription>
-            Add, rename, or archive event formats used by bookings.
-          </DialogDescription>
-          {stylesOpen && <LookupAdmin kind="styles" items={styles} compact />}
-        </DialogContent>
+      <Dialog open={stylesOpen} onClose={setStylesOpen}>
+        <DialogTitle>Manage Event Styles</DialogTitle>
+        <DialogDescription>
+          Add, rename, or archive event formats used by bookings.
+        </DialogDescription>
+        {stylesOpen && <LookupAdmin kind="styles" items={styles} compact />}
       </Dialog>
-      <Dialog open={sourcesOpen} onOpenChange={setSourcesOpen}>
-        <DialogContent>
-          <DialogTitle>Manage Data Sources</DialogTitle>
-          <DialogDescription>
-            Add, rename, or archive campaign data-source labels.
-          </DialogDescription>
-          {sourcesOpen && <LookupAdmin kind="sources" items={sources} compact />}
-        </DialogContent>
+      <Dialog open={sourcesOpen} onClose={setSourcesOpen}>
+        <DialogTitle>Manage Data Sources</DialogTitle>
+        <DialogDescription>
+          Add, rename, or archive campaign data-source labels.
+        </DialogDescription>
+        {sourcesOpen && <LookupAdmin kind="sources" items={sources} compact />}
       </Dialog>
     </>
   );

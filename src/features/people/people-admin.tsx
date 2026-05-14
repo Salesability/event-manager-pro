@@ -23,11 +23,9 @@ import {
 } from '@/components/ui/combobox';
 import {
   Dialog,
-  DialogClose,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { Field, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
@@ -299,28 +297,32 @@ export function PeopleAdmin({
         />
       </div>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogTitle>Add Person</DialogTitle>
-          <DialogDescription>
-            Adds a contact. Picking Admin or Coach also creates a sign-in at this email.
-          </DialogDescription>
-          {addOpen && <PersonForm mode="create" dealers={dealers} onSuccess={() => setAddOpen(false)} />}
-        </DialogContent>
+      <Dialog open={addOpen} onClose={setAddOpen}>
+        <DialogTitle>Add Person</DialogTitle>
+        <DialogDescription>
+          Adds a contact. Picking Admin or Coach also creates a sign-in at this email.
+        </DialogDescription>
+        {addOpen && (
+          <PersonForm
+            mode="create"
+            dealers={dealers}
+            onSuccess={() => setAddOpen(false)}
+            onCancel={() => setAddOpen(false)}
+          />
+        )}
       </Dialog>
 
-      <Dialog open={editing != null} onOpenChange={(o) => { if (!o) setEditing(null); }}>
-        <DialogContent>
-          <DialogTitle>Edit Person — {editing?.displayName}</DialogTitle>
-          {editing && (
-            <PersonForm
-              mode="edit"
-              person={editing}
-              dealers={dealers}
-              onSuccess={() => setEditing(null)}
-            />
-          )}
-        </DialogContent>
+      <Dialog open={editing != null} onClose={() => setEditing(null)}>
+        <DialogTitle>Edit Person — {editing?.displayName}</DialogTitle>
+        {editing && (
+          <PersonForm
+            mode="edit"
+            person={editing}
+            dealers={dealers}
+            onSuccess={() => setEditing(null)}
+            onCancel={() => setEditing(null)}
+          />
+        )}
       </Dialog>
     </section>
   );
@@ -372,11 +374,13 @@ function PersonForm({
   person,
   dealers,
   onSuccess,
+  onCancel,
 }: {
   mode: 'create' | 'edit';
   person?: AdminPersonRow;
   dealers: Dealer[];
   onSuccess: () => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
   const { touched, fieldHandlers } = useTouched();
@@ -705,9 +709,13 @@ function PersonForm({
       )}
 
       <div className="mt-2 flex justify-end gap-2">
-        <DialogClose className={buttonVariants({ variant: 'outline', size: 'xs' })}>
+        <button
+          type="button"
+          onClick={onCancel}
+          className={buttonVariants({ variant: 'outline', size: 'xs' })}
+        >
           Cancel
-        </DialogClose>
+        </button>
         <Button type="submit" color="brand" disabled={pending || !hasAnyRole}>
           {pending
             ? mode === 'create'

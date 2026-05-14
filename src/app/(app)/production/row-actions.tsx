@@ -3,9 +3,8 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import { RowActions as RowActionGroup } from '@/components/app/row-actions';
 import { BookingForm } from '@/app/(app)/calendar/booking-form';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
@@ -39,19 +38,17 @@ export function RowActions({ campaign, dealers, coaches, styles, sources }: Prop
           },
         ]}
       />
-      <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
-        <DialogContent>
-          <DialogTitle>Edit Campaign</DialogTitle>
-          <BookingForm
-            mode="edit"
-            campaign={campaign}
-            dealers={dealers}
-            coaches={coaches}
-            styles={styles}
-            sources={sources}
-            onSuccess={close}
-          />
-        </DialogContent>
+      <Dialog open={open} onClose={close}>
+        <DialogTitle>Edit Campaign</DialogTitle>
+        <BookingForm
+          mode="edit"
+          campaign={campaign}
+          dealers={dealers}
+          coaches={coaches}
+          styles={styles}
+          sources={sources}
+          onSuccess={close}
+        />
       </Dialog>
     </>
   );

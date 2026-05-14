@@ -7,10 +7,9 @@ import { ListToolbar } from '@/components/app/list-toolbar';
 import { Can } from '@/components/auth/can';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -267,25 +266,28 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
         />
       </div>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogTitle>Add Dealer</DialogTitle>
-          <DialogDescription>Create a new dealership.</DialogDescription>
-          {addOpen && <DealerForm mode="create" onSuccess={() => setAddOpen(false)} />}
-        </DialogContent>
+      <Dialog open={addOpen} onClose={setAddOpen}>
+        <DialogTitle>Add Dealer</DialogTitle>
+        <DialogDescription>Create a new dealership.</DialogDescription>
+        {addOpen && (
+          <DealerForm
+            mode="create"
+            onSuccess={() => setAddOpen(false)}
+            onCancel={() => setAddOpen(false)}
+          />
+        )}
       </Dialog>
 
-      <Dialog open={editing != null} onOpenChange={(o) => { if (!o) setEditing(null); }}>
-        <DialogContent>
-          <DialogTitle>Edit Dealer — {editing?.name}</DialogTitle>
-          {editing && (
-            <DealerForm
-              mode="edit"
-              dealer={editing}
-              onSuccess={() => setEditing(null)}
-            />
-          )}
-        </DialogContent>
+      <Dialog open={editing != null} onClose={() => setEditing(null)}>
+        <DialogTitle>Edit Dealer — {editing?.name}</DialogTitle>
+        {editing && (
+          <DealerForm
+            mode="edit"
+            dealer={editing}
+            onSuccess={() => setEditing(null)}
+            onCancel={() => setEditing(null)}
+          />
+        )}
       </Dialog>
     </section>
   );

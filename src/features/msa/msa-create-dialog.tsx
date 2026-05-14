@@ -5,11 +5,9 @@ import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import {
   Dialog,
-  DialogClose,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createMsaDraft, sendMsaEnvelope } from './actions';
 
@@ -81,9 +79,8 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
   }
 
   return (
-    <Dialog open={props.open} onOpenChange={(o) => { if (!o) props.onClose(false); }}>
-      <DialogContent className="w-full sm:max-w-lg">
-        <DialogTitle>Send MSA + first Quote for signature</DialogTitle>
+    <Dialog open={props.open} onClose={() => props.onClose(false)}>
+      <DialogTitle>Send MSA + first Quote for signature</DialogTitle>
         <DialogDescription>
           A bundled envelope is sent to the Client via Dropbox Sign. The Client
           signs once and both documents take effect.
@@ -131,9 +128,13 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         )}
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <DialogClose className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
+          <button
+            type="button"
+            onClick={() => props.onClose(false)}
+            className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
+          >
             Cancel
-          </DialogClose>
+          </button>
           <button
             type="button"
             onClick={onSubmit}
@@ -143,7 +144,6 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
             {pending ? 'Sending…' : 'Send for signature'}
           </button>
         </div>
-      </DialogContent>
     </Dialog>
   );
 }

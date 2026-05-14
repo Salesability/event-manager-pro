@@ -22,11 +22,9 @@ import {
 } from '@/components/ui/combobox';
 import {
   Dialog,
-  DialogClose,
-  DialogContent,
   DialogDescription,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/catalyst/dialog';
 import {
   Field,
   FieldGroup,
@@ -746,31 +744,29 @@ function PreviewDialog({
   error: string | null;
 }) {
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(false); }}>
-      <DialogContent className="w-full sm:max-w-4xl">
-        <DialogTitle>Quote preview</DialogTitle>
-        <DialogDescription>
-          PDF rendered from the saved snapshot. Matches what gets emailed on
-          Send.
-        </DialogDescription>
-        <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-border bg-muted">
-          {error ? (
-            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
-              {error}
-            </div>
-          ) : loading || !pdfUrl ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Rendering PDF…
-            </div>
-          ) : (
-            <iframe
-              title="Quote PDF preview"
-              src={pdfUrl}
-              className="h-full w-full"
-            />
-          )}
-        </div>
-      </DialogContent>
+    <Dialog open={open} onClose={() => onClose(false)} size="4xl">
+      <DialogTitle>Quote preview</DialogTitle>
+      <DialogDescription>
+        PDF rendered from the saved snapshot. Matches what gets emailed on
+        Send.
+      </DialogDescription>
+      <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-border bg-muted">
+        {error ? (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
+            {error}
+          </div>
+        ) : loading || !pdfUrl ? (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Rendering PDF…
+          </div>
+        ) : (
+          <iframe
+            title="Quote PDF preview"
+            src={pdfUrl}
+            className="h-full w-full"
+          />
+        )}
+      </div>
     </Dialog>
   );
 }
@@ -800,42 +796,44 @@ function ConfirmSendDialog({
   // exactly what the dealer's "Valid until" line will say after re-send.
   const newValidUntil = isResend ? formatValidUntil(quoteValidDays) : null;
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(false); }}>
-      <DialogContent>
-        <DialogTitle>
-          {isResend ? 'Re-send this quote?' : 'Send this quote?'}
-        </DialogTitle>
-        <DialogDescription>
-          {isResend
-            ? `The recipient will receive a new PDF; the validity window resets to ${newValidUntil}.`
-            : 'The recipient will receive a PDF by email. Accepted/declined quotes are locked — edits up to that point are allowed.'}
-        </DialogDescription>
-        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Recipient</dt>
-          <dd className="font-medium text-foreground">
-            {recipientEmail ?? <span className="text-status-red">none</span>}
-          </dd>
-          <dt className="text-muted-foreground">Line items</dt>
-          <dd className="tabular-nums text-foreground">{lineCount}</dd>
-          <dt className="text-muted-foreground">Total</dt>
-          <dd className="font-semibold tabular-nums text-foreground">
-            {fmtMoney(total)}
-          </dd>
-        </dl>
-        <div className="mt-6 flex items-center justify-end gap-2">
-          <DialogClose className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary">
-            Cancel
-          </DialogClose>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={pending || !recipientEmail}
-            className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {pending ? 'Sending…' : isResend ? 'Re-send' : 'Send'}
-          </button>
-        </div>
-      </DialogContent>
+    <Dialog open={open} onClose={() => onClose(false)}>
+      <DialogTitle>
+        {isResend ? 'Re-send this quote?' : 'Send this quote?'}
+      </DialogTitle>
+      <DialogDescription>
+        {isResend
+          ? `The recipient will receive a new PDF; the validity window resets to ${newValidUntil}.`
+          : 'The recipient will receive a PDF by email. Accepted/declined quotes are locked — edits up to that point are allowed.'}
+      </DialogDescription>
+      <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">Recipient</dt>
+        <dd className="font-medium text-foreground">
+          {recipientEmail ?? <span className="text-status-red">none</span>}
+        </dd>
+        <dt className="text-muted-foreground">Line items</dt>
+        <dd className="tabular-nums text-foreground">{lineCount}</dd>
+        <dt className="text-muted-foreground">Total</dt>
+        <dd className="font-semibold tabular-nums text-foreground">
+          {fmtMoney(total)}
+        </dd>
+      </dl>
+      <div className="mt-6 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => onClose(false)}
+          className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={pending || !recipientEmail}
+          className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {pending ? 'Sending…' : isResend ? 'Re-send' : 'Send'}
+        </button>
+      </div>
     </Dialog>
   );
 }
