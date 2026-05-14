@@ -43,7 +43,7 @@ Reference screenshots in this folder ([`resend-row-with-overflow.png`](resend-ro
 |-------|--------|--------|
 | 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | `fae3713` |
 | 2: Identity-cell primitive (icon + dotted-underline View link) | Done | `8226cd2` |
-| 3: Overflow-menu row-actions primitive | Pending | - |
+| 3: Overflow-menu row-actions primitive | Done | `be35c97` |
 | 4: Token-pill + footer-chrome polish | Pending | - |
 | 5: Sweep **every** grid (incl. 3 raw-table conversions) + smoke verification | Pending | - |
 
@@ -69,7 +69,7 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - `docs/wiki/layout.md` — **rewritten in Phase 1** to capture the edit-default pattern (see header note). Dotted-underline label clicks through to the single editable detail page; the `…` menu owns Delete + non-CRUD. The View-xor-Edit rule is retired.
 - `docs/wiki/<ui-tables-or-whatever-0049-adds>.md` — populate on un-defer with whatever convention page 0049 leaves behind.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -94,10 +94,10 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - [x] Unit test: render with + without icon, with + without sublabel, assert label is wrapped in a single `<Link>` to the supplied `href`. **Done:** `row-identity-cell.test.tsx` covers 6 cases — href wrapping, dotted-underline class composition, icon-tone class for `blue`, no-icon collapse, sublabel present/absent, default `stone` tone.
 
 #### Phase 3: Overflow-menu row-actions primitive
-- [ ] Add `src/components/app/row-overflow-menu.tsx` — props: `{ actions: ReadonlyArray<RowAction | null | false>; ariaSuffix?: string }`. Renders a single `…` icon button as trigger; opens a popover (Radix or Catalyst dropdown — match 0049's primitive) with one row per action: icon + label + destructive-red coloring when `tone === 'danger'`.
-- [ ] Re-use `ROW_ACTION_ICONS` / `ROW_ACTION_LABELS` / `RowActionKind` from `src/lib/ui/{icons,labels}.ts` — the vocabulary maps stay; only the rendering layer changes.
+- [x] Add `src/components/app/row-overflow-menu.tsx` — props: `{ actions: ReadonlyArray<RowAction | null | false>; ariaSuffix?: string }`. Renders a single `…` icon button as trigger; opens a popover (Radix or Catalyst dropdown — match 0049's primitive) with one row per action: icon + label + destructive-red coloring when `tone === 'danger'`. **Done:** composes Catalyst `<Dropdown>` / `<DropdownButton>` / `<DropdownMenu>` / `<DropdownItem>` (Headless UI Menu under the hood) — keyboard nav (Arrow/Home/End), Escape close, focus-restore come for free. `MoreHorizontal` from `lucide-react` is the `…` glyph. `RowAction` type re-exported from `row-actions.tsx`.
+- [x] Re-use `ROW_ACTION_ICONS` / `ROW_ACTION_LABELS` / `RowActionKind` from `src/lib/ui/{icons,labels}.ts` — the vocabulary maps stay; only the rendering layer changes.
 - [ ] Lint rule audit: `eslint-plugins/no-inline-row-action-label.mjs` may need a parallel `prefer-row-overflow-menu` rule that flags `<RowActions>` usage inside columns files where the new overflow shape should be used. Decide after Phase 5 whether to add or punt.
-- [ ] Unit test: render with mixed link/button actions including one `tone='danger'`; assert trigger has `aria-label="Open row actions${ariaSuffix}"`, popover content lists actions in order, destructive item has the red color class.
+- [x] Unit test: render with mixed link/button actions including one `tone='danger'`; assert trigger has `aria-label="Open row actions${ariaSuffix}"`, popover content lists actions in order, destructive item has the red color class. **Done:** `row-overflow-menu.test.tsx` covers 7 cases — empty filter, aria-label with/without suffix, link+button mixed ordering, onClick + disabled thread-through, destructive class composition (red items have `text-red-700!`, subtle items do not), per-callsite label override.
 
 #### Phase 4: Token-pill + footer-chrome polish
 - [ ] Add `src/components/ui/token-pill.tsx` — props: `{ value: string; maxChars?: number }`. Renders monospace pill with `bg-muted text-muted-foreground rounded-md px-2 py-0.5 font-mono text-sm` (refine post-0049); truncates to `maxChars` with trailing `…`. Used today for short opaque ids only; not a sweep target.
