@@ -83,6 +83,26 @@ describe('renderQuotePdf', () => {
     expect(Math.min(...drawnY)).toBeGreaterThanOrEqual(50);
   });
 
+  it('draws the quote-<timestamp> display name as the left-column subtitle', async () => {
+    const drawn: string[] = [];
+    const originalDrawText = PDFPage.prototype.drawText;
+    const drawTextSpy = vi
+      .spyOn(PDFPage.prototype, 'drawText')
+      .mockImplementation(function (
+        this: PDFPage,
+        text: string,
+        options?: Parameters<PDFPage['drawText']>[1],
+      ) {
+        drawn.push(text);
+        return originalDrawText.call(this, text, options);
+      });
+    // 2026-05-08 13:00 UTC = 09:00 EDT
+    await renderQuotePdf({ ...fixture, createdAt: new Date('2026-05-08T13:00:00.000Z') });
+    drawTextSpy.mockRestore();
+    expect(drawn).toContain('quote-20260508-0900');
+    expect(drawn).not.toContain('Quote #Q-2026-0001');
+  });
+
   it('draws the "Valid until: YYYY-MM-DD" line as a sibling to the Issued line', async () => {
     const drawn: string[] = [];
     const originalDrawText = PDFPage.prototype.drawText;
