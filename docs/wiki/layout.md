@@ -29,8 +29,10 @@ Every `(app)/` page renders the same anatomy inside `<main>`:
 <Section variant title>    ← grouped content
 …
 <ListToolbar search filters actions?>   ← list pages
-<table>…</table>
+<DataTable columns data … />            ← the single grid primitive
 ```
+
+**One grid primitive.** Every grid renders via [`<DataTable>`](../../src/components/ui/data-table.tsx) (TanStack column-defs rendered into Catalyst's `<Table>`). No raw `<table>` markup in `src/app/**` or `src/features/**` except inside form composers (the line-items table inside `quote-composer.tsx` is a form sub-element, not a row-action grid). Search lives on `<DataTable globalFilter globalFilterFn>` and pagination on `<DataTable initialPageSize>`; per-surface helpers like the old `filterQuotes`/`filterCampaigns` retired in 0050.
 
 ### `<PageHeader>` — top-of-page surface
 
@@ -83,20 +85,25 @@ Canonical kinds and the lucide icon for each:
 
 | Kind | Label | Icon | When to use |
 |------|-------|------|-------------|
-| `view` | View | `Eye` | Open a *reading* surface — a detail page (or dialog) that's primarily read-only. |
-| `edit` | Edit | `Pencil` | Open an *editing* surface — the canonical editor for the record, whether that lives on a page (e.g. `/quotes/[id]` is the composer) or in a dialog. |
-| `archive` | Archive | `Archive` | Soft-delete state flip. Pair with `tone: 'danger'`. |
-| `activate` | Activate | `CheckCircle` | Prospect → active state flip. Pair with `tone: 'success'`. |
-| `quote` | Quote | `FilePlus` | Workflow-launch verb on dealer rows ("create a new quote against this dealer"). |
+| `edit` | Edit | `Pencil` | The default row-click destination — opens the single editable detail page for the record. Surfaces it on the identity cell, not as a separate action. |
+| `archive` | Archive | `Archive` | Soft-delete state flip. Lives inside the `…` overflow menu. Pair with `tone: 'danger'`. |
+| `activate` | Activate | `CheckCircle` | Prospect → active state flip. Lives inside the `…` overflow menu. Pair with `tone: 'success'`. |
+| `quote` | Quote | `FilePlus` | Workflow-launch verb on dealer rows ("create a new quote against this dealer"). Lives inside the `…` overflow menu. |
+| `view` | View | `Eye` | Reserved for genuinely read-only surfaces (e.g. an archived record where Edit is structurally disabled). Avoid on standard CRUD grids — the identity cell IS the View/Edit affordance. |
 
-**View-xor-Edit.** A row exposes `View` *or* `Edit` for navigation, never both. The label tracks **what the user is about to do**, not the surface type — a "detail page" that's actually an editor (like the quote composer) gets `Edit`, not `View`:
-- `/quotes` rows → `Edit` (destination `/quotes/[id]` IS the composer — fully editable post-0046; "view" would mischaracterize the operation).
-- `/dealerships` rows → `View` + `Quote`/`Edit`/`Activate`/`Archive` (destination `/dealerships/[id]` is a read-only management page — MSA + Quotes panels, no inline form).
-- `/production` rows → `Edit` only (no `/production/[id]` page — the dialog is the canonical editor; production is a working surface, not a reading one).
+**Edit-default row pattern.** Row click goes to a single editable detail page; the same page renders read-only when the viewer lacks edit permission (field-level `disabled`), not as a separate `View` surface. The dotted-underline label on `<RowIdentityCell>` is the click target; Delete and any non-CRUD verbs collapse into the row-end `…` overflow menu (`<RowOverflowMenu>`). Established by 0050; replaces the prior View-xor-Edit rule.
+
+Rationale: users are coaches/admins whose primary work is editing the document. Defaulting to a View page costs a click and a context-switch back to Edit. Collapsing View+Edit into one page makes the CRUD pattern uniform across surfaces — every list grid behaves identically (`<RowIdentityCell>` clicks through to `/<entity>/[id]`; `<RowOverflowMenu>` carries the rest).
+
+Implications:
+- Detail pages must autosave or surface an unsaved-changes guard so stray row-clicks can't strand fields mid-edit.
+- Read-only display (future client-portal viewers, role-scoped users) renders the *same* page with fields disabled by role — not a separate `View` surface.
+- Edit-permission scoping to authored documents is acknowledged future work.
+- Surfaces today rendering read-only management pages (e.g. `/dealerships/[id]`) become editable detail pages over time; flag scope on each sweep.
 
 **Drift guard.** [`eslint-plugins/no-inline-row-action-label.mjs`](../../eslint-plugins/no-inline-row-action-label.mjs) lints `src/app/**/row-actions.tsx` and `src/features/**/*-columns.tsx` for inline literals matching the canonical vocabulary (`View` / `Edit` / `Archive` / `Activate` / `Open` / `Details` / `Manage` / `Show`). The constant is the single source. Per-line opt-out via `// row-label: ok`.
 
-**Overflow.** Inline-only today (every consumer renders ≤4 actions). A future kebab-`<DropdownMenu>` overflow is parked as a 0043 follow-up — install the shadcn DropdownMenu primitive when a row genuinely needs 4+ actions.
+**Overflow primitive.** The row-end `…` button is [`<RowOverflowMenu>`](../../src/components/app/row-overflow-menu.tsx) (0050) — composes Catalyst's `<Dropdown>` / `<DropdownMenu>` / `<DropdownItem>`. Re-uses `ROW_ACTION_KINDS` / `ROW_ACTION_ICONS` / `ROW_ACTION_LABELS` from `src/lib/ui/`. Inline-button `<RowActions>` is retired on swept surfaces; it remains in tree only until the 0043 follow-up (b) sweep finishes.
 
 ## Status badges + relative time
 

@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-14 — Edit-default row pattern + one-grid-primitive doctrine (0050 Phase 1)
+
+- [layout.md](layout.md) — page anatomy diagram pinned to `<DataTable>` (no raw `<table>` in `src/app/**` or `src/features/**` except form composers); row-action vocabulary table rewritten: `view` retired as the default click destination and reserved for genuinely read-only surfaces; **Edit-default row pattern** replaces **View-xor-Edit**. Row click → single editable detail page (same page renders disabled fields when the viewer lacks edit permission, not a separate `View` surface); Delete + non-CRUD verbs collapse into the row-end `…` overflow menu (`<RowOverflowMenu>`, ships in 0050 Phase 3). Implications captured: detail pages must autosave or guard unsaved changes; field-level `disabled` is the read-only render path.
+- Phase 1 deliverable; primitives (`<RowIdentityCell>`, `<RowOverflowMenu>`, `<TokenPill>`) ship in Phases 2–4 and the sweep across every grid + the three raw-table conversions (`/quotes`, `/production`, `/dealerships/[id]` Quotes panel) lands in Phase 5.
+
 ## 2026-05-13 — Portal-shell + master/detail conventions land (0043)
 
 - New page: [layout.md](layout.md) — codifies the post-0043 page shape: `<PageHeader>` (with `sticky top-16` parking under the 64px AppHeader), detail-page `<KeyValueStrip>` + `<Section>`, list-page `<ListToolbar>` (URL-driven `?q`/`?status` filters), canonical row-action vocabulary (`view`/`edit`/`archive`/`activate`/`quote`), status `<Badge>` enum-aware wrappers, `<RelativeTime>` for recent activity vs absolute for scheduled facts.

@@ -1,0 +1,130 @@
+# Grid pattern — Resend-style row identity + overflow actions
+
+**Started:** 2026-05-14
+
+> **History.** Scaffolded into `future/` on 2026-05-13 with un-defer trigger "`0049-migrate-to-catalyst` closes." Un-deferred 2026-05-14 after [`closed/0049-migrate-to-catalyst`](../closed/0049-migrate-to-catalyst/plan.md) shipped; folder moved to top-level + cross-refs swept. Phase 1 re-walks anchors against the post-0049 codebase — `<DataTable>` now composes Catalyst's `<Table>` underneath TanStack, `<RowActions>` carries the canonical `RowActionKind`/`ROW_ACTION_ICONS`/`ROW_ACTION_LABELS` vocabulary.
+
+> **Edit-default row pattern** *(decision 2026-05-14).* Row click → single editable detail page (no separate View vs Edit modes). Delete and any non-CRUD actions live in the row's `…` overflow menu. Rationale: users are coaches/admins whose primary work on a document is editing it, so defaulting to a View page wastes a click; collapsing View+Edit into one page makes the CRUD pattern dead-simple across surfaces. Implications:
+> - `docs/wiki/layout.md`'s View-xor-Edit rule (L86–95) needs rewriting — Phase 1 deliverable below.
+> - Edit pages must autosave or surface an unsaved-changes guard so stray row-clicks can't strand fields mid-edit.
+> - Read-only display (future client-portal viewers, role-scoped users) renders the *same* page with fields disabled by role — not a separate `View` surface.
+> - Edit-permission scoping to authored documents is acknowledged future work, out of scope for this chunk.
+> - Swept surfaces today rendering read-only management pages (e.g. `/dealerships/[id]`) will need conversion to editable detail pages as part of Phase 5; flag scope on un-defer audit.
+
+> **One-primitive consistency precondition** *(decision 2026-05-14).* Every grid in the app converges on `<DataTable>` (TanStack column-defs rendered into Catalyst's `<Table>` — confirmed post-0049 in `src/components/ui/data-table.tsx`). Today three surfaces render hand-rolled HTML `<table>` markup and must migrate onto `<DataTable>` as part of this chunk:
+> - `/quotes` — `src/app/(app)/quotes/page.tsx:55`
+> - `/production` — `src/app/(app)/production/page.tsx:54`
+> - `/dealerships/[id]` Quotes panel — `src/app/(app)/dealerships/[id]/page.tsx:195`
+>
+> Scope grows accordingly: Phase 5 sweep is **every grid in the app on the new shape**, not just three representatives. The grid-rules check at chunk-end is: zero raw `<table>` elements remain in `src/app/**` or `src/features/**` (excluding `quote-composer.tsx`'s line-items table — that's a form sub-element, not a row-action grid). The `quote-composer.tsx` raw table is explicitly out of scope.
+
+> **Search + pagination consolidate too** *(decision 2026-05-14).* Side-benefit of the primitive convergence. Today's app has two search implementations and split pagination:
+> - **Search:** TanStack `globalFilter` + `globalFilterFn` on `/admin/dealers` (`src/features/dealers/dealers-admin.tsx:47`) + `/admin/people` (`src/features/people/people-admin.tsx:245`) + `/reports`; hand-rolled in-memory filter helpers on the raw-table surfaces — `filterQuotes()` at `src/app/(app)/quotes/page.tsx:83` (matches on `dealerName` only + status), `filterCampaigns()` at `src/app/(app)/production/filter.ts:14` (matches on `dealerName`/`coachName`/`styleLabel`/`notes`/`contact` + status + show-cancelled). `/dealerships/[id]` Quotes panel has no search today.
+> - **Pagination:** built into `<DataTable>` (page-size selector + prev/next + `1 / N` indicator at `src/components/ui/data-table.tsx:198–237`); the raw-table surfaces render every row, no paging.
+>
+> Migrating to `<DataTable>` collapses both to a single mechanism: one TanStack `globalFilter` shape app-wide, and TanStack pagination + Resend-shaped footer on every grid. The hand-rolled `filterQuotes` / `filterCampaigns` helpers retire as part of Phase 5; predicate logic moves into per-surface `globalFilterFn` callbacks following the `dealersGlobalFilterFn` precedent.
+>
+> Non-goal: DB-layer search + paged loads stay out of scope. Every grid still loads all rows server-side and filters/paginates in-memory — fine at current volumes; revisit when any single grid passes a few hundred rows in production.
+
+## Visual target
+
+Reference screenshots in this folder ([`resend-row-with-overflow.png`](resend-row-with-overflow.png), [`resend-row-action-menu.png`](resend-row-action-menu.png)) — Resend's API-keys table is the model. Cues to copy:
+
+1. **Identity cell — leading icon avatar + dotted-underline label.** The row's primary identifier (e.g. "Onboarding") renders with a small rounded-square tinted icon to its left and a *dotted* underline on the text. The underline communicates "click to view" without the visual heaviness of a solid blue link. The whole label is the View affordance.
+2. **Opaque-value pill.** Token-shaped columns (`re_5wj99ctm…`) render as a pill: light gray background, monospace, truncated with ellipsis, fixed width.
+3. **Semantic value column.** Plain text like permission ("Sending access"), relative time ("1 day ago", "12 days ago") — no chrome, just typography.
+4. **Row-end `…` overflow menu.** All per-row actions collapse into a single trailing `…` button. Clicking opens a popover with icon + label rows. Destructive actions (`Delete API key`) render in destructive-red with a trash icon. The current inline-button-row shape is retired on adopted surfaces.
+5. **Airy rows.** Generous vertical padding, very subtle 1px dividers, gray-50 header background. Comparable to today's `<DataTable>` but with more whitespace.
+6. **Footer chrome.** `Page 1 – 1 of 1 keys – 40 items ▾` — pagination shown as plain prose with a page-size disclosure caret. Match in spirit; exact shape can stay close to today's pagination block.
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | - |
+| 2: Identity-cell primitive (icon + dotted-underline View link) | Pending | - |
+| 3: Overflow-menu row-actions primitive | Pending | - |
+| 4: Token-pill + footer-chrome polish | Pending | - |
+| 5: Sweep **every** grid (incl. 3 raw-table conversions) + smoke verification | Pending | - |
+
+The app's tables today render row actions as an inline button row (`<RowActions>`) and primary identifiers as solid `<Link>` text. The Resend pattern moves to **icon + dotted-underline identity** and **`…` overflow menu** for actions — denser-feeling rows with cleaner row-end chrome. "Done" is: at least three representative surfaces (`/quotes`, `/dealerships`, `/admin/people`) using the new identity-cell + overflow-menu shape; the old inline-button row shape removed from those surfaces; visual-smoke screenshots in the eval report.
+
+## Code Anchors
+
+> **Phase 1 audit (2026-05-14) — anchors confirmed.** `<DataTable>` post-0049 = TanStack column-defs rendered into Catalyst `<Table>` primitives (`src/components/ui/data-table.tsx:1-194`, default `initialPageSize = 25`; only `/admin/dealers` overrides to 50). `<RowActions>` unchanged by 0049 — still consumes `ROW_ACTION_ICONS` + `ROW_ACTION_LABELS` + `RowActionKind` from `src/lib/ui/`. Catalyst `<Dropdown>` / `<DropdownMenu>` / `<DropdownItem>` (Headless UI Menu under the hood) is the right primitive for the new `<RowOverflowMenu>` — both `as={Link}` (href) and `as="button"` paths supported. Raw-table inventory matches the plan: `src/app/(app)/quotes/page.tsx:55`, `src/app/(app)/production/page.tsx:54`, `src/app/(app)/dealerships/[id]/page.tsx:195`, plus `src/features/quotes/quote-composer.tsx:611` (form sub-element, explicitly out of scope). Anchors below stand as written.
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| `src/components/app/row-overflow-menu.tsx` — `…` trigger + popover with icon+label rows, destructive-red variant | `src/components/app/row-actions.tsx:1-50` | Same layer (app-level composable), same vocabulary surface (`RowActionKind` + `ROW_ACTION_ICONS` + `ROW_ACTION_LABELS`), replaces inline-row rendering with popover-menu rendering — re-use the kind/icon/label maps unchanged |
+| `src/components/app/row-identity-cell.tsx` — leading-icon slot + dotted-underline `<Link>` | `src/components/app/page-header.tsx` (chrome composability shape) + `src/components/ui/data-table.tsx:30-60` (column-def consumer) | New primitive but composes existing chrome; reads as a row-cell counterpart to `<PageHeader>`'s identity block |
+| `src/components/ui/token-pill.tsx` — monospace truncated chip | `src/components/app/status-badge.tsx` (badge shape primitive) | Same chip-shape vocabulary; differs only in monospace font + truncation behavior |
+| Extend `<DataTable>` (or its 0049 successor) — accept identity-cell column + overflow-actions column as first-class column types | `src/components/ui/data-table.tsx:30-60` | The column-def shape is where the new cell types plug in; keep `ColumnDef<TData, TValue>` boundary intact |
+| Convert `/quotes` raw table → `<DataTable>` + add `quotes-columns.tsx` | `src/app/(app)/quotes/page.tsx:55` (raw `<table>` to retire), `src/features/people/people-columns.tsx` (columns-file shape to mirror) | Lead surface — highest-traffic grid; lands the new primitive convergence first |
+| Convert `/production` raw table → `<DataTable>` + add `production-columns.tsx` | `src/app/(app)/production/page.tsx:54` | Second raw-table conversion; row-action vocabulary already on `<RowActions>` per 0043 follow-up (b) |
+| Convert `/dealerships/[id]` Quotes panel → `<DataTable>` | `src/app/(app)/dealerships/[id]/page.tsx:195` | Third raw-table conversion; nested grid inside a detail page — confirm `<DataTable>` composes inside `<Section>` without chrome conflict |
+| Sweep `/admin/dealers` + `/admin/people` columns onto new identity-cell + overflow-menu shape | `src/features/dealers/dealers-columns.tsx`, `src/features/people/people-columns.tsx` | Already-TanStack surfaces — straightforward sweep, exercises identity-cell flexibility (dealer name+region, person name+role) |
+| Sweep `/reports` columns | `src/features/reports/reports-columns.tsx` | Final TanStack consumer; ensures no grid is left on the old shape |
+
+**Conventions referenced:**
+- `docs/wiki/layout.md` — **rewritten in Phase 1** to capture the edit-default pattern (see header note). Dotted-underline label clicks through to the single editable detail page; the `…` menu owns Delete + non-CRUD. The View-xor-Edit rule is retired.
+- `docs/wiki/<ui-tables-or-whatever-0049-adds>.md` — populate on un-defer with whatever convention page 0049 leaves behind.
+
+**Overall Progress:** 20% (1/5 phases complete)
+
+**Note:**
+- Each phase includes both implementation and tests
+- Visual diff (screenshot capture) carries more weight than integration tests for this chunk; assert structural shape in unit tests (e.g. "overflow trigger renders with aria-label X; clicking opens popover with N items") rather than pixel layouts
+- **DRY where shape genuinely repeats; resist premature abstraction.** New primitives (`<RowIdentityCell>`, `<RowOverflowMenu>`, `<TokenPill>`) carry their weight by virtue of multi-surface use. For per-surface logic like `globalFilterFn` predicates or `*-columns.tsx` column-defs, factor a shared helper only when three or more surfaces converge on the same shape (e.g. "needle matches if any of these stringly fields includes it"); two-surface coincidence stays inline. The Phase 1 audit + Phase 5 DRY check call this out explicitly.
+
+### Phase Checklist
+
+#### Phase 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick
+- [x] Re-walk `src/components/ui/data-table.tsx` and `src/components/app/row-actions.tsx` to see what 0049 left behind — primitive names, vocabulary maps, column-def shape. Update the Code Anchors table above before any code lands. **Done:** Code Anchors note above refreshed with audit findings; both files match plan's tentative shape.
+- [x] **Confirm the single grid primitive.** `<DataTable>` (TanStack + Catalyst `<Table>`) is the chosen primitive; verify the post-0049 shape still composes cleanly and that no second grid stack snuck in. Output of this bullet is a one-line statement in `docs/wiki/layout.md`: *"All grids render via `<DataTable>`. No raw `<table>` in `src/app/**` or `src/features/**` except inside form composers."* **Done:** statement landed in `docs/wiki/layout.md` under "Page shape" → "One grid primitive."
+- [x] **Inventory raw-table surfaces.** Re-run `grep -rn "<table\b" src/app src/features` and reconcile against the three known callsites (`/quotes`, `/production`, `/dealerships/[id]` Quotes panel). Any new raw tables get added to Phase 5 scope; `quote-composer.tsx`'s line-items table stays excluded (form sub-element). **Done:** `rg "<table\b" src/app src/features` returns exactly the three known callsites + `src/features/quotes/quote-composer.tsx:611` (excluded). No new raw tables. Phase 5 scope unchanged.
+- [x] Rewrite `docs/wiki/layout.md`'s View-xor-Edit rule (currently L86–95) to capture the edit-default pattern from the header note: row click → single editable detail page; `…` overflow menu owns Delete + non-CRUD; role-based read-only render replaces the separate `View` surface; the `view` `RowActionKind` is retained only for genuinely read-only surfaces (e.g. archived records) if any survive the sweep — decision deferred to Phase 5 confirmation. Append a one-liner to `docs/wiki/log.md`. **Done:** layout.md rewritten (vocabulary table flipped to edit-default; `view` kind reserved for genuinely read-only surfaces); log.md entry appended under 2026-05-14.
+- [x] Confirm `/quotes` is the lead surface (default). Today it's a raw `<table>` — Phase 5 converts it onto `<DataTable>` *and* applies the new identity-cell + overflow-menu shape in the same sweep, so it's two moves landing together. Confirm the row schema has fields for: identity label, leading icon (or null), one opaque pill value (or null), 2–4 semantic columns, 1–4 row actions. **Done:** `/quotes` row schema confirmed from `src/app/(app)/quotes/page.tsx:55-75`: identity = `dealerName` (+ optional `Dealer archived` sublabel), no opaque pill column (omit `<TokenPill>` here — keep it primitive-only for Phase 4), semantic cols = Status / Total / Sent / Created (4), row actions live on `<QuoteRowActions>` (1–3 depending on status). Fits the shape.
+- [x] Confirm the dotted-underline / `…` / pill shapes can land within whatever Catalyst-shadcn primitives 0049 ships — if they can't, note the gap as a v2 follow-up rather than re-fighting the migration's choices. **Done:** dotted-underline composes against Catalyst `<Link>` via Tailwind utilities (`underline decoration-dotted decoration-zinc-400 underline-offset-4 hover:decoration-zinc-900` — verified against `src/components/catalyst/link.tsx`); `…` overflow menu composes against Catalyst `<Dropdown>` / `<DropdownMenu>` / `<DropdownItem>` (Headless UI Menu under the hood; supports both `as={Link}` href items and `as="button"` action items); pill is plain Tailwind chrome — no Catalyst gap. No v2 follow-up needed.
+- [x] **Search predicate audit.** Capture each surface's current filter predicate verbatim and decide the post-port `globalFilterFn` shape: `/quotes` → `filterQuotes()` at `src/app/(app)/quotes/page.tsx:83` (matches `dealerName` + status pill); `/production` → `filterCampaigns()` at `src/app/(app)/production/filter.ts:14` (matches `dealerName`/`coachName`/`styleLabel`/`notes`/`contact` + status pill + show-cancelled); `/dealerships/[id]` Quotes panel (no search today — decide whether to add one in Phase 5 or leave paginated-but-unfiltered); existing `dealersGlobalFilterFn` (`src/features/dealers/dealers-admin.tsx:47`) + `peopleGlobalFilterFn` (`src/features/people/people-admin.tsx:245`) for shape comparison. If three or more share a "needle-includes any-of these stringly fields" shape, factor a `makeNeedleFilter<T>(rowToStrings: (r: T) => Array<string | null | undefined>)` helper (likely at `src/lib/ui/data-table-filters.ts`) per the DRY note above; otherwise leave each predicate co-located with its columns file. **Done — DRY threshold met (4-of-4).** All four predicates collapse to "lowercase needle includes-in any of these stringly fields" — dealers (name/contact/email/phone/address), people (displayName/email/dealerLinks[].dealerName), quotes (dealerName), production (dealerName/coachName/styleLabel/notes/contact). Decision: factor `makeNeedleFilter<T>(rowToStrings: (r: T) => Array<string | null | undefined>): FilterFn<T>` at `src/lib/ui/data-table-filters.ts` during Phase 5 wiring; status pill / show-cancelled / role-multi stay as `columnFilters` entries (existing dealers/people pattern), not folded into the needle. `/dealerships/[id]` Quotes panel ships without a `globalFilter` (small, dealer-scoped).
+- [x] **Pagination page-size audit.** Confirm current `<DataTable>` `initialPageSize` and decide per-surface or app-wide default. Resend's reference table shows **40**. Inventory today's row counts per surface (`/quotes`, `/production`, `/admin/dealers`, `/admin/people`, `/reports`, dealerships Quotes panel) — if every surface currently fits on one page at size 40, keep one default; if any surface routinely exceeds 100 rows, consider 25 or 50 with a per-surface override. **Done:** `<DataTable>` default `initialPageSize = 25`; sole override is `/admin/dealers → 50`. Resend's 40 is a feel reference, not a hard number; keeping the 25 default app-wide preserves the existing layout cadence and the page-size selector ([10, 25, 50, 100]) gives users the escape hatch. No app-wide flip in this chunk; per-surface overrides land case-by-case in Phase 5 if a converted surface obviously needs one.
+
+#### Phase 2: Identity-cell primitive
+- [ ] Add `src/components/app/row-identity-cell.tsx` — props: `{ icon?: ReactNode; iconTone?: 'green'|'blue'|'amber'|'stone'; label: string; href: string; sublabel?: string }`. Renders rounded-square tinted icon + dotted-underline label + optional sublabel below.
+- [ ] Dotted-underline class composition (tentative — refine post-0049): `underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 hover:decoration-foreground`. Verify against Catalyst's Link variants once 0049 ships.
+- [ ] Unit test: render with + without icon, with + without sublabel, assert label is wrapped in a single `<Link>` to the supplied `href`.
+
+#### Phase 3: Overflow-menu row-actions primitive
+- [ ] Add `src/components/app/row-overflow-menu.tsx` — props: `{ actions: ReadonlyArray<RowAction | null | false>; ariaSuffix?: string }`. Renders a single `…` icon button as trigger; opens a popover (Radix or Catalyst dropdown — match 0049's primitive) with one row per action: icon + label + destructive-red coloring when `tone === 'danger'`.
+- [ ] Re-use `ROW_ACTION_ICONS` / `ROW_ACTION_LABELS` / `RowActionKind` from `src/lib/ui/{icons,labels}.ts` — the vocabulary maps stay; only the rendering layer changes.
+- [ ] Lint rule audit: `eslint-plugins/no-inline-row-action-label.mjs` may need a parallel `prefer-row-overflow-menu` rule that flags `<RowActions>` usage inside columns files where the new overflow shape should be used. Decide after Phase 5 whether to add or punt.
+- [ ] Unit test: render with mixed link/button actions including one `tone='danger'`; assert trigger has `aria-label="Open row actions${ariaSuffix}"`, popover content lists actions in order, destructive item has the red color class.
+
+#### Phase 4: Token-pill + footer-chrome polish
+- [ ] Add `src/components/ui/token-pill.tsx` — props: `{ value: string; maxChars?: number }`. Renders monospace pill with `bg-muted text-muted-foreground rounded-md px-2 py-0.5 font-mono text-sm` (refine post-0049); truncates to `maxChars` with trailing `…`. Used today for short opaque ids only; not a sweep target.
+- [ ] Footer chrome — match the "Page X – Y of Z keys – N items ▾" prose shape. Today's DataTable pagination block is the reference point; goal is a smaller-feeling, prose-shaped footer rather than a full Pagination component. Punt if Catalyst's table already ships the right shape. **Note:** lands on **every** grid post-Phase-5 — the three raw-table conversions inherit this footer for free since they pick up DataTable pagination as part of the migration.
+
+#### Phase 5: Sweep **every** grid + smoke verification
+
+**Raw-table → `<DataTable>` conversions** (each adds a `*-columns.tsx` file and migrates the page render):
+- [ ] `/quotes`: retire `src/app/(app)/quotes/page.tsx:55` raw `<table>` → render via `<DataTable>` + new `src/features/quotes/quotes-columns.tsx`. Identity column → `<RowIdentityCell>` (icon: small `quote` glyph, label: `quoteDisplayName(createdAt)` from [`closed/0048-quote-timestamp-naming`](../closed/0048-quote-timestamp-naming/plan.md), href: `/quotes/[id]`). Row actions → `<RowOverflowMenu>` (replaces `QuoteRowActions`).
+- [ ] `/production`: retire `src/app/(app)/production/page.tsx:54` raw `<table>` → `<DataTable>` + new `src/features/campaigns/production-columns.tsx` (or feature-appropriate path). Identity column → `<RowIdentityCell>` (icon: campaign glyph, label: campaign name, href: campaign detail). Row actions → `<RowOverflowMenu>`.
+- [ ] `/dealerships/[id]` Quotes panel: retire `src/app/(app)/dealerships/[id]/page.tsx:195` raw `<table>` → `<DataTable>` using the same `quotes-columns.tsx` (or a filtered variant). Confirm it composes inside `<Section>` chrome without double borders/headers.
+
+**Identity-cell + overflow-menu sweep on existing TanStack consumers:**
+- [ ] `/admin/dealers` columns (`src/features/dealers/dealers-columns.tsx`): identity column → `<RowIdentityCell>` (icon: dealership glyph, label: dealer name, sublabel: city/region, href: `/dealerships/[id]` or `/admin/dealers/[id]` — confirm in audit). Inline `<RowActions>` → `<RowOverflowMenu>`.
+- [ ] `/admin/people` columns (`src/features/people/people-columns.tsx`): identity column → `<RowIdentityCell>` (icon: person glyph or initials avatar, label: full name, sublabel: role, href: `/admin/people/[id]`). Inline `<RowActions>` → `<RowOverflowMenu>`.
+- [ ] `/reports` columns (`src/features/reports/reports-columns.tsx`): apply identity-cell + overflow-menu shape where each report's row pattern matches; if a report intentionally diverges (e.g. pure metric grid with no row actions), document the exception in `docs/wiki/layout.md`.
+
+**Search + pagination wiring (post-conversion):**
+- [ ] `/quotes` `globalFilterFn`: port `filterQuotes()`'s predicate (`dealerName.toLowerCase().includes(needle)`) into a TanStack `FilterFn<Quote>`; status pill moves to a `columnFilters` entry matching the dealers-admin pattern. Delete `filterQuotes()` from `page.tsx` and the in-page `pickedQ`/`pickedStatus` plumbing once the new shape compiles.
+- [ ] `/production` `globalFilterFn`: port `filterCampaigns()`'s 5-field needle match into a TanStack `FilterFn<Campaign>`; status pill + show-cancelled toggle move to `columnFilters` entries. Delete `src/app/(app)/production/filter.ts` once the new shape compiles.
+- [ ] `/dealerships/[id]` Quotes panel: by default, ship with **no `globalFilter`** (the panel is dealer-scoped and small); Phase 1 audit may override if it found a user need.
+- [ ] **DRY check.** Now that all four `globalFilterFn` callbacks live side-by-side (dealers, people, quotes, production), measure shape overlap. If three or more match the `makeNeedleFilter<T>(rowToStrings)` shape from Phase 1, land the shared helper now and re-point those callbacks at it. If only two match, leave them inline. Capture the call in the eval report.
+- [ ] Pagination smoke: each converted surface (`/quotes`, `/production`, dealerships Quotes panel) renders the `1 / N` indicator + page-size selector + prev/next buttons inherited from `<DataTable>`. Filter-then-paginate works: setting `?q=foo` reduces row count and resets `pageIndex` to 0 (TanStack default behavior — verify).
+
+**Verification:**
+- [ ] Grid-rules check: `rg "<table\b" src/app src/features` returns **only** `src/features/quotes/quote-composer.tsx:611` (line-items in the editable form — explicitly out of scope). Any other hit blocks chunk-end.
+- [ ] Filter-helper retirement check: `rg "filterQuotes\b|filterCampaigns\b" src/` returns zero matches outside `*.test.ts`. Any surviving callsite means the port left a dead helper.
+- [ ] Smoke (web-test): `goto /quotes`, `/production`, `/dealerships/[id]`, `/admin/dealers`, `/admin/people`, `/reports` — for each, expect first row's identity cell to have a dotted-underline label + leading icon; click `…` trigger; expect popover with edit-default vocabulary; destructive items styled in red.
+- [ ] Visual smoke (manual): capture side-by-side screenshots of `/quotes` and one raw-table conversion (`/production` or dealerships Quotes panel) before-and-after; attach to eval report.
+- [ ] Codex pass: feed the new primitives + every swept columns file to Codex; specifically ask (i) whether the dotted-underline shape (a non-standard link affordance) is accessible — keyboard + screen-reader semantics on the cell-wide click target, (ii) whether the raw-table → `<DataTable>` conversions preserve every column's existing sort/filter behavior, (iii) whether any swept surface lost the View affordance in a way that broke a read-only use case.
