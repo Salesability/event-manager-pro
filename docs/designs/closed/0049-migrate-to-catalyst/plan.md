@@ -13,7 +13,7 @@
 | 5: DataTable restyle + rewire 0043 conventions (PageHeader, RowActions, KeyValueStrip, Section) | Done | `5436457` |
 | 6: Drain ALL legacy CSS from `globals.css` (delete `--color-*`, `--shadow-*`, `--radius-*`) | Done | `5436457` (folded into Phase 5 codemod sweep — Phase 2 reset globals.css; no further work needed) |
 | 7: Remove orphaned UI deps (`@base-ui/react`, `shadcn`, three Radix primitives, `cva`, `tailwind-merge` if unused) | Done | `efddfe8` |
-| 8: Smoke + Codex eval | Pending | - |
+| 8: Smoke + Codex eval | Done | `697a051` (eval report) + `f6e9aeb` (in-cycle M1 fix) |
 
 This chunk replaces the shadcn + Base UI + standalone Radix primitive stack with Catalyst (Tailwind UI Kit at `/Users/davidwhogan/Downloads/catalyst-ui-kit/typescript/`), and drains every project-specific CSS custom property from `src/app/globals.css` so the file is reduced to Tailwind base + the load-bearing print stylesheet + whatever Catalyst's component-CSS expects (per-component `--btn-bg`/`--btn-border`/etc. tokens are component-scoped, not global). Catalyst's design philosophy is "Tailwind's default palettes plus per-component CSS custom props" — incompatible with shadcn's `--primary`/`--accent`/`--muted` semantic-token layer, so the 0047 single-layer collapse gets replaced wholesale rather than extended. "Done" is: every shadcn primitive in `src/components/ui/*` deleted; every callsite uses Catalyst; `globals.css` contains only `@import "tailwindcss"`, the print stylesheet, the `body`/`@layer base` rules, and a Tailwind `@theme` block that defines a logo-derived `brand` color ramp + zinc neutrals; the unused UI deps are removed from `package.json`; static + browser + Codex eval clean. Chroma-from-logo is **folded into Phase 2** (user decision 2026-05-13) — the starter palette is logo-derived from the start, not a Tailwind-default placeholder, so no follow-up chunk needed for chroma.
 
@@ -45,7 +45,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - shadcn's `--primary`/`--accent`/`--secondary`/`--muted`/`--card`/`--popover` semantic-token layer (the post-0047 collapse) gets replaced by Catalyst's per-component CSS custom-prop approach
 - `cn()` from `src/lib/utils.ts` — Catalyst uses `clsx` directly; the `tw-merge` wrapper becomes orphan unless other callers exist (check during Phase 7)
 
-**Overall Progress:** 87% (7/8 phases complete)
+**Overall Progress:** 100% (8/8 phases complete)
 
 **Note:**
 - This is a foundation swap; behavior should be visually equivalent or better per-component, never worse
