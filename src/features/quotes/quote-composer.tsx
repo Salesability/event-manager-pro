@@ -605,7 +605,7 @@ export function QuoteComposer({
       </section>
 
       <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Line items (computed)</h2>
+        <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Summary</h2>
         {display.ok ? (
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             <table className="w-full text-sm">
