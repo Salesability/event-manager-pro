@@ -34,7 +34,8 @@ import {
   FieldError,
   FieldLabel,
 } from '@/components/ui/field';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@/components/catalyst/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -222,10 +223,8 @@ export function PeopleAdmin({
         </div>
         <Can capability="person:create">
           <Button
-            variant="outline"
-            size="sm"
+            outline
             onClick={() => setAddOpen(true)}
-            className="border-accent/40 text-accent hover:border-accent hover:bg-accent/10"
           >
             + Add Person
           </Button>
@@ -615,7 +614,7 @@ function PersonForm({
         <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Dealers</span>
-            <Button type="button" variant="outline" size="xs" onClick={addDealerLink}>
+            <Button type="button" outline onClick={addDealerLink}>
               + Link dealer
             </Button>
           </div>
@@ -697,8 +696,7 @@ function PersonForm({
               </Select.Root>
               <Button
                 type="button"
-                variant="destructive"
-                size="xs"
+                color="red"
                 onClick={() => removeDealerLink(i)}
                 aria-label="Remove dealer link"
               >
@@ -713,7 +711,7 @@ function PersonForm({
         <DialogClose className={buttonVariants({ variant: 'outline', size: 'xs' })}>
           Cancel
         </DialogClose>
-        <Button type="submit" variant="default" size="sm" disabled={pending || !hasAnyRole}>
+        <Button type="submit" color="brand" disabled={pending || !hasAnyRole}>
           {pending
             ? mode === 'create'
               ? 'Creating…'

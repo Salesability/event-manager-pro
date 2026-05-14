@@ -36,7 +36,7 @@ import {
   FieldLegend,
   FieldSet,
 } from '@/components/ui/field';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -376,8 +376,7 @@ export function QuoteComposer({
       {isEdit && (
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          outline
           onClick={() => router.push('/quotes')}
         >
           Close
@@ -386,11 +385,10 @@ export function QuoteComposer({
       {isEdit && (
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          outline
           onClick={onPreview}
           disabled={previewPending}
-          className="text-primary"
+          className="text-brand-700"
         >
           {previewPending ? 'Loading…' : 'Preview PDF'}
         </Button>
@@ -398,8 +396,7 @@ export function QuoteComposer({
       {!isReadOnly && (
         <Button
           type="button"
-          variant="default"
-          size="sm"
+          color="brand"
           onClick={onSaveDraft}
           disabled={pending || !computed.ok}
         >
