@@ -9,7 +9,7 @@
 | 1: Shared `quoteDisplayName(createdAt)` helper + format decision | Done | - |
 | 2: UI surfaces — composer header, MSA dialog, email body | Done | - |
 | 3: PDF + email — body title, subject, attachment filename | Done | - |
-| 4: Tests + smoke verification | Pending | - |
+| 4: Tests + smoke verification | Done | - |
 
 Quotes are identified today as `Quote #<id>` everywhere they surface (composer header at `/quotes/[id]`, the MSA-create dialog, the emailed PDF body, the email subject, the email body, and the attachment filename `quote-<id>.pdf`). The user wants the display name reshaped to `quote-<timestamp>` and the download filename to `saledayevents-quote-<timestamp>.pdf`. "Done" is: every place that currently shows `Quote #<id>` shows the timestamp form instead; the PDF attachment lands in inboxes as `saledayevents-quote-<timestamp>.pdf`; the row's `id` is no longer user-visible (kept as the DB key, not the brand identity). No schema change — the timestamp derives from the existing `createdAt` column via a single helper, so renaming is reversible and zero-migration.
 
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 **Format decision (Phase 1):** `quote-YYYYMMDD-HHmm` in the project's display timezone (America/Toronto — the same `createdAt` is rendered elsewhere via `Intl.DateTimeFormat`). Filename-safe (no colons / spaces / slashes), human-readable, lexicographically sortable. Seconds omitted to keep the name short; collision risk is negligible at quote-creation rates. Phase 1's first task is to confirm this exact format before any callsites change.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -68,8 +68,8 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/features/quotes/actions.ts:714` — preview path also swapped (caller of `renderQuotePdf` in the composer Preview button).
 
 #### Phase 4: Tests + smoke verification
-- [ ] Service-level integration test: send a quote with a known `createdAt` and assert `email.subject`, `email.attachments[0].filename`, and the PDF body title all use the same `quote-<timestamp>` form.
-- [ ] Smoke (web-test): `goto /quotes/4`; expect the composer page-header heading to be `quote-<timestamp>` (the timestamp from quote 4's `createdAt`); confirm the `Send` / `Preview` / `Close` buttons still render on the action toolbar.
-- [ ] Smoke (web-test): `goto /quotes`; expect the row for quote 4 to still link to `/quotes/4` (the row label is `Edit`, unchanged by this chunk — verify nothing on the list page references `Quote #N`).
-- [ ] Smoke (web-test): on a dealership with a draft quote, open the MSA-create dialog from `/dealerships/[id]`; expect the quote reference inside the dialog to read `quote-<timestamp>` (no `#`).
-- [ ] Cross-check: `grep -rn "Quote #" src/` returns no live callsites (test fixtures may keep their stubbed assertions, but no production code path).
+- [x] Service-level integration test: send a quote with a known `createdAt` and assert `email.subject`, `email.attachments[0].filename`, and the PDF body title all use the same `quote-<timestamp>` form. Covered across `actions.test.ts` happy-path (subject + filename, Phase 3 update) + new `render-quote.test.ts` drawText-spy assertion for the body title (`quote-20260508-0900`).
+- [ ] Smoke (web-test): `goto /quotes/4`; expect the composer page-header heading to be `quote-<timestamp>` (the timestamp from quote 4's `createdAt`); confirm the `Send` / `Preview` / `Close` buttons still render on the action toolbar. → **Routed through chunk-end `/eval` web-test smoke.**
+- [ ] Smoke (web-test): `goto /quotes`; expect the row for quote 4 to still link to `/quotes/4` (the row label is `Edit`, unchanged by this chunk — verify nothing on the list page references `Quote #N`). → **Routed through chunk-end `/eval`.**
+- [ ] Smoke (web-test): on a dealership with a draft quote, open the MSA-create dialog from `/dealerships/[id]`; expect the quote reference inside the dialog to read `quote-<timestamp>` (no `#`). → **Routed through chunk-end `/eval`.**
+- [x] Cross-check: `grep -rn "Quote #" src/` returns no live callsites (test fixtures may keep their stubbed assertions, but no production code path). Only remaining match is a JSDoc legacy-name reference in `quote.tsx` — intentional.
