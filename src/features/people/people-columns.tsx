@@ -70,7 +70,7 @@ export function buildPeopleColumns(
         return (
           <RowIdentityCell
             icon={<User className="size-4" />}
-            iconTone="blue"
+            iconTone="brand"
             label={p.displayName}
             onClick={() => actions.onEdit(p)}
           />

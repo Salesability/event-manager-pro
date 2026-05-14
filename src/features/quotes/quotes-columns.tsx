@@ -45,7 +45,7 @@ export function buildQuotesColumns(
         return (
           <RowIdentityCell
             icon={<FileText className="size-4" />}
-            iconTone="blue"
+            iconTone="brand"
             label={quoteDisplayName(q.createdAt)}
             href={`/quotes/${q.id}`}
             sublabel={sublabel}

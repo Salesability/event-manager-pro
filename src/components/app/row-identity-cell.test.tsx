@@ -8,6 +8,7 @@ type AnyEl = ReactElement<{
   href?: string;
   type?: string;
   onClick?: () => void;
+  color?: string;
   'aria-hidden'?: boolean;
 }>;
 
@@ -49,25 +50,27 @@ describe('RowIdentityCell', () => {
     expect(link?.props.className).toMatch(/hover:decoration-zinc-900/);
   });
 
-  it('renders the icon slot with the requested tone when icon is provided', () => {
+  it('renders the icon slot as a Catalyst Badge with the requested color', () => {
     const tree = RowIdentityCell({
       label: 'quote-20260512-0900',
       href: '/quotes/4',
       icon: '📋',
-      iconTone: 'blue',
+      iconTone: 'brand',
     }) as AnyEl;
-    const iconWrapper = walk(tree).find(
-      (el) => el.props['aria-hidden'] === true && typeof el.props.className === 'string',
-    );
-    expect(iconWrapper).toBeDefined();
-    expect(iconWrapper?.props.className).toMatch(/bg-brand-100/);
-    expect(iconWrapper?.props.className).toMatch(/text-brand-700/);
+    const badge = walk(tree).find((el) => el.props['aria-hidden'] === true);
+    expect(badge).toBeDefined();
+    expect(badge?.props.color).toBe('brand');
+    // The icon glyph is the Badge's only child.
+    expect(badge?.props.children).toBe('📋');
+    // Shape override classes keep the 28x28 square chip.
+    expect(badge?.props.className).toMatch(/size-7!/);
+    expect(badge?.props.className).toMatch(/px-0!/);
   });
 
   it('omits the icon slot entirely when no icon is supplied', () => {
     const tree = RowIdentityCell({ label: 'Acme', href: '/x' }) as AnyEl;
-    const iconWrapper = walk(tree).find((el) => el.props['aria-hidden'] === true);
-    expect(iconWrapper).toBeUndefined();
+    const badge = walk(tree).find((el) => el.props['aria-hidden'] === true);
+    expect(badge).toBeUndefined();
   });
 
   it('renders the sublabel in zinc-500 when provided, and omits it otherwise', () => {
@@ -82,14 +85,14 @@ describe('RowIdentityCell', () => {
     expect(findByText(withoutSublabel, 'Toronto · archived')).toBeUndefined();
   });
 
-  it("defaults iconTone to 'stone' (zinc-100 chip) when a tone isn't specified", () => {
+  it("defaults iconTone to 'zinc' (Catalyst Badge's own default) when not specified", () => {
     const tree = RowIdentityCell({
       label: 'Acme',
       href: '/x',
       icon: <span>·</span>,
     }) as AnyEl;
-    const iconWrapper = walk(tree).find((el) => el.props['aria-hidden'] === true);
-    expect(iconWrapper?.props.className).toMatch(/bg-zinc-100/);
+    const badge = walk(tree).find((el) => el.props['aria-hidden'] === true);
+    expect(badge?.props.color).toBe('zinc');
   });
 
   it('renders a <button> with onClick instead of a <Link> when href is omitted', () => {

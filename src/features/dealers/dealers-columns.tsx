@@ -2,6 +2,7 @@
 
 import { Building2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
+import { Badge } from '@/components/catalyst/badge';
 import { RowIdentityCell } from '@/components/app/row-identity-cell';
 import { RowOverflowMenu } from '@/components/app/row-overflow-menu';
 import { DealerStatusBadge } from '@/components/app/status-badge';
@@ -34,14 +35,18 @@ export function buildDealersColumns(
         // Render the identity cell with a plain-text label until an
         // archived-capable detail loader exists.
         if (d.archivedAt) {
+          // Archived dealers route nowhere (`loadDealer` filters
+          // `archivedAt IS NULL`), so render the chip + label flat —
+          // no `<RowIdentityCell>` dotted-underline affordance.
           return (
             <div className="flex items-center gap-3">
-              <span
+              <Badge
+                color="zinc"
                 aria-hidden
-                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-400"
+                className="size-7! shrink-0 justify-center px-0! py-0!"
               >
                 <Building2 className="size-4" />
-              </span>
+              </Badge>
               <span className="truncate text-sm font-semibold text-zinc-500">
                 {d.name}
               </span>
@@ -51,7 +56,7 @@ export function buildDealersColumns(
         return (
           <RowIdentityCell
             icon={<Building2 className="size-4" />}
-            iconTone="blue"
+            iconTone="brand"
             label={d.name}
             href={`/dealerships/${d.id}`}
           />

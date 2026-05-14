@@ -63,7 +63,7 @@ export function buildProductionColumns(
         return (
           <RowIdentityCell
             icon={<Megaphone className="size-4" />}
-            iconTone="blue"
+            iconTone="brand"
             label={c.dealerName}
             sublabel={range}
             onClick={() => actions.onEdit(c)}
