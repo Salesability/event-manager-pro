@@ -37,8 +37,8 @@ import {
 } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/catalyst/input';
+import { Textarea } from '@/components/catalyst/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';

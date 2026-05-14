@@ -12,7 +12,7 @@ import {
   Description,
 } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createDealer, updateDealer } from '@/features/schedule/actions';

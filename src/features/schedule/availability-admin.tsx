@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from '@/components/ui/toaster';
 import { Field, FieldGroup, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/catalyst/input';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   archiveAvailabilityBlock,

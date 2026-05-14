@@ -12,8 +12,8 @@ import {
   FieldGroup,
   Label,
 } from '@/components/catalyst/fieldset';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/catalyst/input';
+import { Textarea } from '@/components/catalyst/textarea';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createCampaign, updateCampaign } from '@/features/schedule/actions';

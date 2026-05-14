@@ -33,7 +33,7 @@ import { Field, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
 import { buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archivePerson, createPerson, updatePerson } from '@/features/people/actions';
