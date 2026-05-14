@@ -42,7 +42,7 @@ Reference screenshots in this folder ([`resend-row-with-overflow.png`](resend-ro
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Post-0049 audit + edit-default wiki rewrite + lead-surface pick | Done | `fae3713` |
-| 2: Identity-cell primitive (icon + dotted-underline View link) | Pending | - |
+| 2: Identity-cell primitive (icon + dotted-underline View link) | Done | `8226cd2` |
 | 3: Overflow-menu row-actions primitive | Pending | - |
 | 4: Token-pill + footer-chrome polish | Pending | - |
 | 5: Sweep **every** grid (incl. 3 raw-table conversions) + smoke verification | Pending | - |
@@ -69,7 +69,7 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - `docs/wiki/layout.md` — **rewritten in Phase 1** to capture the edit-default pattern (see header note). Dotted-underline label clicks through to the single editable detail page; the `…` menu owns Delete + non-CRUD. The View-xor-Edit rule is retired.
 - `docs/wiki/<ui-tables-or-whatever-0049-adds>.md` — populate on un-defer with whatever convention page 0049 leaves behind.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -89,9 +89,9 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - [x] **Pagination page-size audit.** Confirm current `<DataTable>` `initialPageSize` and decide per-surface or app-wide default. Resend's reference table shows **40**. Inventory today's row counts per surface (`/quotes`, `/production`, `/admin/dealers`, `/admin/people`, `/reports`, dealerships Quotes panel) — if every surface currently fits on one page at size 40, keep one default; if any surface routinely exceeds 100 rows, consider 25 or 50 with a per-surface override. **Done:** `<DataTable>` default `initialPageSize = 25`; sole override is `/admin/dealers → 50`. Resend's 40 is a feel reference, not a hard number; keeping the 25 default app-wide preserves the existing layout cadence and the page-size selector ([10, 25, 50, 100]) gives users the escape hatch. No app-wide flip in this chunk; per-surface overrides land case-by-case in Phase 5 if a converted surface obviously needs one.
 
 #### Phase 2: Identity-cell primitive
-- [ ] Add `src/components/app/row-identity-cell.tsx` — props: `{ icon?: ReactNode; iconTone?: 'green'|'blue'|'amber'|'stone'; label: string; href: string; sublabel?: string }`. Renders rounded-square tinted icon + dotted-underline label + optional sublabel below.
-- [ ] Dotted-underline class composition (tentative — refine post-0049): `underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 hover:decoration-foreground`. Verify against Catalyst's Link variants once 0049 ships.
-- [ ] Unit test: render with + without icon, with + without sublabel, assert label is wrapped in a single `<Link>` to the supplied `href`.
+- [x] Add `src/components/app/row-identity-cell.tsx` — props: `{ icon?: ReactNode; iconTone?: 'green'|'blue'|'amber'|'stone'; label: string; href: string; sublabel?: string }`. Renders rounded-square tinted icon + dotted-underline label + optional sublabel below.
+- [x] Dotted-underline class composition (refined post-0049): `underline decoration-dotted decoration-zinc-400 underline-offset-4 hover:decoration-zinc-900` (zinc-* tokens since 0049's codemod retired `muted-foreground` → `zinc-500` and friends; brand-500 focus ring keeps keyboard focus visible).
+- [x] Unit test: render with + without icon, with + without sublabel, assert label is wrapped in a single `<Link>` to the supplied `href`. **Done:** `row-identity-cell.test.tsx` covers 6 cases — href wrapping, dotted-underline class composition, icon-tone class for `blue`, no-icon collapse, sublabel present/absent, default `stone` tone.
 
 #### Phase 3: Overflow-menu row-actions primitive
 - [ ] Add `src/components/app/row-overflow-menu.tsx` — props: `{ actions: ReadonlyArray<RowAction | null | false>; ariaSuffix?: string }`. Renders a single `…` icon button as trigger; opens a popover (Radix or Catalyst dropdown — match 0049's primitive) with one row per action: icon + label + destructive-red coloring when `tone === 'danger'`.
