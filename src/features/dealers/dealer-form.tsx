@@ -30,10 +30,10 @@ import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
 type Mode = 'create' | 'edit';
 
 const submitClass =
-  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 const cancelClass =
-  'rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
+  'rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 
 function valuesToFormData(values: DealerFormValues, id?: number): FormData {
   const fd = new FormData();
@@ -172,7 +172,7 @@ export function DealerForm({
                 Keep the native <select> until a clear UX win surfaces. */}
             <select
               id="df-status"
-              className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm"
+              className="h-8 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm"
               {...register('status')}
             >
               <option value="active">Active</option>

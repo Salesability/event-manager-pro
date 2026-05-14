@@ -17,44 +17,36 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useEffect, useState } from 'react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/catalyst/table';
 
 // Headless data-table wrapper. Owns sort + pagination + filter state and
-// renders the table chrome in this app's Tailwind vocabulary so consumers
-// (People today; Production + Lookups in future polish chunks) only have
-// to write column defs.
-//
-// Filter state (`globalFilter`, `columnFilters`) is intentionally hoisted
-// so callers can wire their own search box / pill bar; the DataTable just
-// reflects the current filter state into its row model.
+// renders the table chrome via Catalyst's <Table> primitives so consumers
+// only have to write column defs. TanStack's useReactTable row model stays;
+// only the chrome got swapped.
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
 type DataTableProps<TData, TValue> = {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  // Initial sort. Defaults to nothing — pass e.g. `[{ id: 'displayName', desc: false }]`.
   initialSorting?: SortingState;
-  // Per-column visibility map. Keys = column ids. Useful for toggling a
-  // column off when no row would have a meaningful value.
   columnVisibility?: VisibilityState;
-  // Hoisted filter state — caller controls the search box / facet UI.
   globalFilter?: string;
   onGlobalFilterChange?: (value: string) => void;
   columnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (updater: Updater<ColumnFiltersState>) => void;
-  // Optional cross-column global filter. Defaults to TanStack's built-in
-  // per-column fuzzy match — pass one for queries that span multiple fields
-  // (e.g. name + email + dealer name in a single textbox).
   globalFilterFn?: FilterFn<TData>;
-  // Hoisted sort state. When provided, the table becomes "controlled" for
-  // sorting — useful when sort needs to survive parent remounts (e.g. tabs
-  // that unmount their content panel on switch). Pass both or neither.
   sorting?: SortingState;
   onSortingChange?: (updater: Updater<SortingState>) => void;
-  // Hoisted pagination state. Same controlled/uncontrolled rule as `sorting`.
   pagination?: PaginationState;
   onPaginationChange?: (updater: Updater<PaginationState>) => void;
-  // Default page size. Used only when `pagination` is uncontrolled.
   initialPageSize?: number;
   emptyState?: React.ReactNode;
 };
@@ -87,10 +79,6 @@ export function DataTable<TData, TValue>({
   const pagination = paginationProp ?? internalPagination;
   const onPaginationChange = onPaginationChangeProp ?? setInternalPagination;
 
-  // The `react-hooks/incompatible-library` rule fires here because TanStack
-  // Table's hook returns functions that the lint rule's heuristic flags as
-  // unstable — false positive. The library's API contract guarantees stable
-  // identities for the methods we use; this is the canonical TanStack pattern.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<TData>({
     data,
@@ -121,12 +109,6 @@ export function DataTable<TData, TValue>({
     ...(globalFilterFn != null && { globalFilterFn }),
   });
 
-  // Print path: bypass pagination so all filtered rows make it onto the
-  // page rather than just the current 25-row slice the user happens to be
-  // viewing. The flag flips via the browser's `beforeprint` event (synchronous,
-  // fires before the print preview captures the DOM) and clears on
-  // `afterprint`. The Tailwind `print:hidden` on the pagination footer keeps
-  // the chrome out of the printed view.
   const [isPrinting, setIsPrinting] = useState(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -146,70 +128,65 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr
-                key={hg.id}
-                className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+      <Table dense>
+        <TableHead>
+          {table.getHeaderGroups().map((hg) => (
+            <TableRow key={hg.id}>
+              {hg.headers.map((header) => {
+                const canSort = header.column.getCanSort();
+                const sortDir = header.column.getIsSorted();
+                return (
+                  <TableHeader
+                    key={header.id}
+                    className={`text-[11px] uppercase tracking-wide ${canSort ? 'cursor-pointer select-none hover:text-brand-700' : ''}`}
+                    onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
+                    aria-sort={
+                      sortDir === 'asc'
+                        ? 'ascending'
+                        : sortDir === 'desc'
+                          ? 'descending'
+                          : 'none'
+                    }
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(header.column.columnDef.header, header.getContext())}
+                      {canSort && (
+                        <span aria-hidden className="text-[10px]">
+                          {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : '↕'}
+                        </span>
+                      )}
+                    </span>
+                  </TableHeader>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableHead>
+        <TableBody>
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={table.getVisibleLeafColumns().length}
+                className="py-6 text-center text-sm text-zinc-500"
               >
-                {hg.headers.map((header) => {
-                  const canSort = header.column.getCanSort();
-                  const sortDir = header.column.getIsSorted();
-                  return (
-                    <th
-                      key={header.id}
-                      className={`px-2 py-2 ${canSort ? 'cursor-pointer select-none hover:text-primary' : ''}`}
-                      onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                      aria-sort={
-                        sortDir === 'asc'
-                          ? 'ascending'
-                          : sortDir === 'desc'
-                            ? 'descending'
-                            : 'none'
-                      }
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                        {canSort && (
-                          <span aria-hidden className="text-[10px]">
-                            {sortDir === 'asc' ? '↑' : sortDir === 'desc' ? '↓' : '↕'}
-                          </span>
-                        )}
-                      </span>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="px-2 py-6 text-center text-sm text-muted-foreground"
-                >
-                  {emptyState ?? 'No rows.'}
-                </td>
-              </tr>
-            ) : (
-              rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-2 py-2 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                {emptyState ?? 'No rows.'}
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id} className="align-middle">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       <DataTablePagination table={table} />
     </div>
@@ -225,7 +202,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
   const end = Math.min(totalRows, (pageIndex + 1) * pageSize);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground print:hidden">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 print:hidden">
       <div>
         {totalRows === 0 ? '0 rows' : `${start}–${end} of ${totalRows}`}
       </div>
@@ -235,7 +212,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           <select
             value={pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
-            className="rounded border border-border bg-white px-2 py-0.5 text-xs"
+            className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs"
           >
             {PAGE_SIZE_OPTIONS.map((n) => (
               <option key={n} value={n}>
@@ -248,7 +225,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           type="button"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
-          className="rounded border border-border bg-white px-2 py-0.5 disabled:opacity-50"
+          className="rounded border border-zinc-200 bg-white px-2 py-0.5 disabled:opacity-50"
         >
           ← Prev
         </button>
@@ -259,7 +236,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
           type="button"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
-          className="rounded border border-border bg-white px-2 py-0.5 disabled:opacity-50"
+          className="rounded border border-zinc-200 bg-white px-2 py-0.5 disabled:opacity-50"
         >
           Next →
         </button>

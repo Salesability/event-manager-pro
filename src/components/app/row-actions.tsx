@@ -44,13 +44,13 @@ type RowActionsProps = {
 
 const toneClass: Record<NonNullable<BaseAction['tone']>, string> = {
   subtle:
-    'border border-border bg-card text-muted-foreground hover:border-foreground hover:text-foreground',
+    'border border-zinc-200 bg-white text-zinc-500 hover:border-zinc-900 hover:text-zinc-900',
   accent:
-    'border border-accent/40 bg-card text-accent hover:border-accent hover:bg-accent/10',
+    'border border-brand-200 bg-white text-brand-700 hover:border-brand-500 hover:bg-brand-50',
   success:
-    'border border-emerald-200 bg-card text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50',
+    'border border-emerald-200 bg-white text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50',
   danger:
-    'border border-border bg-card text-status-red hover:border-status-red hover:bg-status-red/10',
+    'border border-zinc-200 bg-white text-status-red hover:border-status-red hover:bg-status-red/10',
 };
 
 const buttonShape =

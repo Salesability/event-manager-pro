@@ -31,13 +31,13 @@ const UNIT_LABEL: Record<ServiceItemUnit, string> = {
 };
 
 const selectClass =
-  'h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm';
+  'h-9 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm';
 
 const buttonClass =
-  'rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 const submitClass =
-  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 function formatPrice(item: ServiceItem): string {
   if (item.unit === 'range') {
@@ -54,21 +54,21 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
   const rows = useMemo(() => items, [items]);
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-sans font-bold tracking-tight text-2xl text-primary">Services</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h2 className="font-sans font-bold tracking-tight text-2xl text-brand-700">Services</h2>
+          <p className="mt-1 text-sm text-zinc-500">
             Catalog the quote composer reads. Codes are immutable; archive instead of renaming.
           </p>
         </div>
-        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+        <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
           {rows.length}
         </span>
       </div>
 
       <Can capability="lookup:edit">
-        <div className="mt-4 rounded-xl border border-border bg-muted p-4">
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-100 p-4">
           <ServiceForm
             mode="create"
             defaultSortOrder={rows.length}
@@ -77,9 +77,9 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
         </div>
       </Can>
 
-      <div className="mt-4 flex flex-col divide-y divide-border">
+      <div className="mt-4 flex flex-col divide-y divide-zinc-200">
         {rows.length === 0 ? (
-          <div className="rounded-lg bg-muted px-3 py-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg bg-zinc-100 px-3 py-6 text-center text-sm text-zinc-500">
             No service items yet.
           </div>
         ) : (
@@ -114,15 +114,15 @@ function ServiceRow({ item, onChanged }: { item: ServiceItem; onChanged: () => v
     <div className="flex min-h-14 items-center gap-3 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="font-mono text-xs text-muted-foreground">{item.code}</span>
-          <span className="text-sm font-medium text-foreground">{item.label}</span>
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="font-mono text-xs text-zinc-500">{item.code}</span>
+          <span className="text-sm font-medium text-zinc-900">{item.label}</span>
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
             {UNIT_LABEL[item.unit]}
           </span>
-          <span className="text-sm tabular-nums text-foreground">{formatPrice(item)}</span>
+          <span className="text-sm tabular-nums text-zinc-900">{formatPrice(item)}</span>
         </div>
         {item.description ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">{item.description}</p>
+          <p className="mt-0.5 text-xs text-zinc-500">{item.description}</p>
         ) : null}
       </div>
       <Can capability="lookup:edit">
@@ -152,7 +152,7 @@ function ServiceRow({ item, onChanged }: { item: ServiceItem; onChanged: () => v
               }
             });
           }}
-          className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           x
         </button>
@@ -237,7 +237,7 @@ function ServiceForm(props: ServiceFormProps) {
         {isEdit ? (
           <Field className="md:col-span-2">
             <Label>Code</Label>
-            <div className="flex h-9 items-center rounded-lg border border-border bg-muted px-3 font-mono text-xs text-muted-foreground">
+            <div className="flex h-9 items-center rounded-lg border border-zinc-200 bg-zinc-100 px-3 font-mono text-xs text-zinc-500">
               {props.item.code}
             </div>
           </Field>

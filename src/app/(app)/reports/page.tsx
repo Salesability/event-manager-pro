@@ -25,7 +25,7 @@ export default async function ReportsPage() {
         description="Booking summary across dealers, coaches, and months — plus the full production list."
       />
 
-      <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <ReportsTabs byDealer={byDealer} byCoach={byCoach} byMonth={byMonth} full={full} />
       </section>
     </div>

@@ -111,22 +111,22 @@ export default async function QuoteEditPage({
             return (
               <li
                 key={`${row.occurredAt.toISOString()}-${idx}`}
-                className="flex flex-col gap-1 rounded-lg border border-border bg-white p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+                className="flex flex-col gap-1 rounded-lg border border-zinc-200 bg-white p-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
               >
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-foreground">
+                  <span className="text-zinc-900">
                     <RelativeTime value={row.occurredAt} />
                     {isMostRecent ? (
-                      <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-foreground">
+                      <span className="ml-2 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-900">
                         Latest
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-zinc-500">
                     {recipientLabel(recipientFirstName, recipientEmail)}
                   </span>
                   {emailId && (
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <span className="font-mono text-[11px] text-zinc-500">
                       Resend ID: {emailId}
                     </span>
                   )}
@@ -136,7 +136,7 @@ export default async function QuoteEditPage({
                     href={sentPdfDownloadUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary underline hover:no-underline"
+                    className="text-brand-700 underline hover:no-underline"
                   >
                     Download PDF
                   </a>
@@ -152,7 +152,7 @@ export default async function QuoteEditPage({
     <div className="flex flex-col gap-6">
       <Link
         href="/quotes"
-        className="text-xs font-medium text-muted-foreground transition hover:text-foreground"
+        className="text-xs font-medium text-zinc-500 transition hover:text-zinc-900"
       >
         ← Quotes
       </Link>

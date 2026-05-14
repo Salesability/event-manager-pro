@@ -29,13 +29,13 @@ const KIND_LABELS: Record<AvailabilityKind, string> = {
 };
 
 const selectClass =
-  'h-9 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm disabled:bg-muted disabled:text-muted-foreground/70';
+  'h-9 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm disabled:bg-zinc-100 disabled:text-zinc-500/70';
 
 const buttonClass =
-  'rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 const submitClass =
-  'h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
+  'h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function AvailabilityAdmin({
   blocks,
@@ -80,17 +80,17 @@ export function AvailabilityAdmin({
 
       <div className="max-h-[440px] overflow-y-auto pr-1">
         {grouped.length === 0 ? (
-          <div className="rounded-lg bg-muted px-3 py-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg bg-zinc-100 px-3 py-8 text-center text-sm text-zinc-500">
             No blocked dates.
           </div>
         ) : (
           <div className="flex flex-col gap-5">
             {grouped.map((group) => (
               <section key={group.month} className="flex flex-col gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
                   {group.month}
                 </h3>
-                <div className="divide-y divide-border rounded-xl border border-border bg-white">
+                <div className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white">
                   {group.blocks.map((block) => (
                     <AvailabilityRow
                       key={`${block.id}:${block.startDate}:${block.endDate}:${block.kind}:${block.reason ?? ''}`}
@@ -172,14 +172,14 @@ function AvailabilityRow({
     <div className="flex items-start gap-3 p-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-foreground">
+          <span className="font-semibold text-zinc-900">
             {formatRange(block.startDate, block.endDate)}
           </span>
           <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-status-red">
             {KIND_LABELS[block.kind]}
           </span>
         </div>
-        <div className="mt-1 text-xs text-muted-foreground">
+        <div className="mt-1 text-xs text-zinc-500">
           {block.reason || 'Blocked'}
           {coachName ? ` · ${coachName}` : ''}
         </div>
@@ -193,7 +193,7 @@ function AvailabilityRow({
           onClick={archive}
           disabled={pending}
           aria-label={`Remove ${formatRange(block.startDate, block.endDate)}`}
-          className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           x
         </button>
@@ -293,7 +293,7 @@ function AvailabilityForm(props: AvailabilityFormProps) {
       className={
         isEdit
           ? 'flex flex-col gap-3'
-          : 'rounded-xl border border-border bg-muted p-3'
+          : 'rounded-xl border border-zinc-200 bg-zinc-100 p-3'
       }
     >
       <FieldGroup>

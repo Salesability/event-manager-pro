@@ -21,7 +21,7 @@ export function MsaCreateTrigger(props: MsaPanelTriggerProps) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10"
+        className="rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
       >
         Create MSA + send for signature
       </button>

@@ -10,7 +10,7 @@ type AppHeaderProps = {
 
 export function AppHeader({ email, isAdmin }: AppHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-primary px-8 shadow-[0_4px_16px_rgba(15,30,60,0.12)] print:hidden">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-brand-600 px-8 shadow-[0_4px_16px_rgba(15,30,60,0.12)] print:hidden">
       <Link href="/calendar" className="flex items-center" aria-label="SaleDay Events — home">
         <Image
           src="/saledayevents-logo.jpg"

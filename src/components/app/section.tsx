@@ -21,12 +21,12 @@ export function Section({
       className={cn(
         'space-y-3',
         variant === 'card' &&
-          'rounded-2xl border border-border bg-card p-5 shadow-soft',
+          'rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm',
         className,
       )}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
           {title}
         </h2>
         {actions ? <div className="flex items-center gap-2">{actions}</div> : null}

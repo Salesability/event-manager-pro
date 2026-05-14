@@ -11,7 +11,7 @@ export function displayStatusKey(quote: Quote): DisplayStatusKey {
 }
 
 export const STATUS_PILL_CLS: Record<DisplayStatusKey, string> = {
-  draft: 'bg-muted text-muted-foreground',
+  draft: 'bg-zinc-100 text-zinc-500',
   sent: 'bg-status-blue/15 text-status-blue',
   accepted: 'bg-status-green/15 text-status-green',
   declined: 'bg-status-red/15 text-status-red',

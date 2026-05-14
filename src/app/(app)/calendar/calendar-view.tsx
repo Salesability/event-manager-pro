@@ -453,7 +453,7 @@ export function CalendarView({
                   <button
                     type="button"
                     onClick={() => setDialog({ kind: 'availability' })}
-                    className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
+                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
                   >
                     Block Date
                   </button>
@@ -472,17 +472,17 @@ export function CalendarView({
             <button
               type="button"
               onClick={() => changeMonth(-1)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-primary transition hover:border-primary hover:bg-muted"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-brand-700 transition hover:border-brand-500 hover:bg-zinc-100"
             >
               ‹
             </button>
-            <span className="min-w-[180px] text-center font-sans font-bold tracking-tight text-xl text-primary">
+            <span className="min-w-[180px] text-center font-sans font-bold tracking-tight text-xl text-brand-700">
               {MONTHS[month]} {year}
             </span>
             <button
               type="button"
               onClick={() => changeMonth(1)}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-primary transition hover:border-primary hover:bg-muted"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-brand-700 transition hover:border-brand-500 hover:bg-zinc-100"
             >
               ›
             </button>
@@ -527,12 +527,12 @@ export function CalendarView({
       <div className="relative" ref={wrapperRef}>
         <div
           ref={gridRef}
-          className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-border bg-muted shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
+          className="grid grid-cols-7 gap-px overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
         >
           {DAYS.map((d) => (
             <div
               key={d}
-              className="bg-primary py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70"
+              className="bg-brand-600 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wider text-white/70"
             >
               {d}
             </div>
@@ -552,9 +552,9 @@ export function CalendarView({
                 }
                 className={[
                   'relative bg-white p-2 text-left transition-colors',
-                  clickable ? 'cursor-pointer hover:bg-primary/5' : '',
-                  c.otherMonth ? 'bg-muted' : '',
-                  c.isToday ? 'bg-primary/10' : '',
+                  clickable ? 'cursor-pointer hover:bg-brand-700/5' : '',
+                  c.otherMonth ? 'bg-zinc-100' : '',
+                  c.isToday ? 'bg-brand-50' : '',
                   blocked ? 'bg-red-50' : '',
                   isSelected && !c.otherMonth && !blocked ? 'bg-amber-50' : '',
                 ]
@@ -564,7 +564,7 @@ export function CalendarView({
                 <div
                   className={[
                     'text-xs font-medium',
-                    c.otherMonth ? 'text-muted-foreground/70' : 'text-foreground',
+                    c.otherMonth ? 'text-zinc-500/70' : 'text-zinc-900',
                     c.isToday ? 'text-status-blue font-semibold' : '',
                     blocked ? 'text-status-red' : '',
                   ]
@@ -649,12 +649,12 @@ export function CalendarView({
 
 function Stat({ label, value, sub }: { label: string; value: number; sub: string }) {
   return (
-    <div className="rounded-xl border border-border bg-white px-4 py-3 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+    <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500/70">
         {label}
       </div>
-      <div className="mt-1 font-sans font-bold tracking-tight text-3xl text-primary">{value}</div>
-      <div className="text-xs text-muted-foreground">{sub}</div>
+      <div className="mt-1 font-sans font-bold tracking-tight text-3xl text-brand-700">{value}</div>
+      <div className="text-xs text-zinc-500">{sub}</div>
     </div>
   );
 }
@@ -675,7 +675,7 @@ function Pill({
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-xs font-semibold transition ${
-        active ? 'border-primary' : 'border-transparent'
+        active ? 'border-brand-500' : 'border-transparent'
       }`}
       style={{ background: `${colorBg}22`, color: colorBg }}
     >

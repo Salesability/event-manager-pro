@@ -104,8 +104,8 @@ function useTouched() {
 
 function pillClass(active: boolean): string {
   return active
-    ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
-    : 'rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
+    ? 'rounded-full border border-brand-500 bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 transition'
+    : 'rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 }
 
 const DEALER_CONTACT_ROLES: DealerContactRole[] = ['customer', 'staff', 'prospect'];
@@ -177,10 +177,10 @@ export function PeopleAdmin({
   );
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-muted-foreground">{people.length} people</p>
+          <p className="text-xs text-zinc-500">{people.length} people</p>
         </div>
         <Can capability="person:create">
           <Button
@@ -199,7 +199,7 @@ export function PeopleAdmin({
           onChange={(e) => setGlobalFilter(e.target.value)}
           placeholder="Search by name, email, or dealer…"
           aria-label="Search people"
-          className="min-w-[16rem] flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+          className="min-w-[16rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20"
         />
         <button
           type="button"
@@ -251,7 +251,7 @@ export function PeopleAdmin({
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
+                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
                 >
                   Clear filters
                 </button>
@@ -515,11 +515,11 @@ function PersonForm({
         </Field>
       </div>
 
-      <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/40 px-3 py-2">
-        <p className="text-[11px] text-muted-foreground">
+      <div className="flex flex-col gap-1 rounded-lg border border-zinc-200 bg-zinc-100/40 px-3 py-2">
+        <p className="text-[11px] text-zinc-500">
           Roles
         </p>
-        <label className="flex items-center gap-2 text-sm text-foreground">
+        <label className="flex items-center gap-2 text-sm text-zinc-900">
           <Checkbox
             name="roles"
             value="admin"
@@ -530,7 +530,7 @@ function PersonForm({
             <strong>Admin</strong>
           </span>
         </label>
-        <label className="flex items-center gap-2 text-sm text-foreground">
+        <label className="flex items-center gap-2 text-sm text-zinc-900">
           <Checkbox
             name="roles"
             value="coach"
@@ -541,7 +541,7 @@ function PersonForm({
             <strong>Coach</strong>
           </span>
         </label>
-        <label className="flex items-center gap-2 text-sm text-foreground">
+        <label className="flex items-center gap-2 text-sm text-zinc-900">
           <Checkbox
             name="roles"
             value="dealer"
@@ -550,7 +550,7 @@ function PersonForm({
           />
           <span>
             <strong>Dealer</strong>{' '}
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-zinc-500">
               External dealer-side contact
             </span>
           </span>
@@ -563,15 +563,15 @@ function PersonForm({
       </div>
 
       {dealer && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+        <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 bg-zinc-100/40 px-3 py-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Dealers</span>
+            <span className="text-xs font-medium text-zinc-500">Dealers</span>
             <Button type="button" outline onClick={addDealerLink}>
               + Link dealer
             </Button>
           </div>
           {dealerLinks.length === 0 && (
-            <p className="text-[11px] text-muted-foreground">No dealer relationships.</p>
+            <p className="text-[11px] text-zinc-500">No dealer relationships.</p>
           )}
           {dealerLinks.map((link, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">

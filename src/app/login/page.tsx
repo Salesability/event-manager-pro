@@ -18,8 +18,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background px-8 py-16">
-      <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-border bg-white p-8 shadow-[0_8px_32px_rgba(15,30,60,0.18)]">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-white px-8 py-16">
+      <div className="flex w-full max-w-sm flex-col gap-6 rounded-2xl border border-zinc-200 bg-white p-8 shadow-[0_8px_32px_rgba(15,30,60,0.18)]">
         <div className="flex flex-col items-center gap-3 text-center">
           <Image
             src="/saledayevents-logo.jpg"
@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             priority
             className="h-16 w-auto"
           />
-          <p className="text-sm text-muted-foreground">Sign-in is invitation only.</p>
+          <p className="text-sm text-zinc-500">Sign-in is invitation only.</p>
         </div>
 
         {sent ? (
@@ -42,7 +42,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <input type="hidden" name="next" value={target} />
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-medium text-foreground shadow-[0_1px_4px_rgba(15,30,60,0.08)] transition hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(15,30,60,0.12)]"
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 shadow-[0_1px_4px_rgba(15,30,60,0.08)] transition hover:-translate-y-px hover:shadow-[0_4px_16px_rgba(15,30,60,0.12)]"
               >
                 <GoogleG />
                 Continue with Google
@@ -50,16 +50,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </form>
 
             <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-muted" />
-              <span className="text-xs uppercase tracking-wide text-muted-foreground/70">or</span>
-              <div className="h-px flex-1 bg-muted" />
+              <div className="h-px flex-1 bg-zinc-100" />
+              <span className="text-xs uppercase tracking-wide text-zinc-500/70">or</span>
+              <div className="h-px flex-1 bg-zinc-100" />
             </div>
 
             <form action={signInWithMagicLink} className="flex flex-col gap-3">
               <input type="hidden" name="next" value={target} />
               <label
                 htmlFor="email"
-                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="text-xs font-semibold uppercase tracking-wide text-zinc-500"
               >
                 Email
               </label>
@@ -69,11 +69,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 type="email"
                 required
                 autoComplete="email"
-                className="rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20"
               />
               <button
                 type="submit"
-                className="rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary/90 hover:-translate-y-px hover:shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
+                className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-brand-700 hover:-translate-y-px hover:shadow-[0_1px_4px_rgba(15,30,60,0.08)]"
               >
                 Send magic link
               </button>

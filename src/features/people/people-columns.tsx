@@ -62,7 +62,7 @@ export function buildPeopleColumns(
       accessorKey: 'displayName',
       header: 'Name',
       cell: ({ row }) => (
-        <div className="font-medium text-foreground">{row.original.displayName}</div>
+        <div className="font-medium text-zinc-900">{row.original.displayName}</div>
       ),
       enableSorting: true,
     },
@@ -72,9 +72,9 @@ export function buildPeopleColumns(
       header: 'Email',
       cell: ({ row }) =>
         row.original.email ? (
-          <span className="text-xs text-muted-foreground">{row.original.email}</span>
+          <span className="text-xs text-zinc-500">{row.original.email}</span>
         ) : (
-          <span className="text-xs text-muted-foreground/70">—</span>
+          <span className="text-xs text-zinc-500/70">—</span>
         ),
       enableSorting: true,
     },
@@ -95,10 +95,10 @@ export function buildPeopleColumns(
               key={r}
               className={`${chipBase} ${
                 r === 'admin'
-                  ? 'bg-accent/15 text-accent'
+                  ? 'bg-brand-100 text-brand-700'
                   : r === 'coach'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-muted text-muted-foreground'
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'bg-zinc-100 text-zinc-500'
               }`}
             >
               {r}
@@ -106,7 +106,7 @@ export function buildPeopleColumns(
           );
         }
         if (chips.length === 0) {
-          return <span className="text-xs text-muted-foreground/70">—</span>;
+          return <span className="text-xs text-zinc-500/70">—</span>;
         }
         return <div className="flex flex-wrap gap-1">{chips}</div>;
       },
@@ -125,14 +125,14 @@ export function buildPeopleColumns(
       cell: ({ row }) => {
         const p = row.original;
         if (p.dealerLinks.length === 0) {
-          return <span className="text-xs text-muted-foreground/70">—</span>;
+          return <span className="text-xs text-zinc-500/70">—</span>;
         }
         return (
           <div className="flex flex-wrap gap-1">
             {p.dealerLinks.map((d: DealerLink, i: number) => (
               <span
                 key={`${d.dealerId}:${d.role}:${i}`}
-                className={`${chipBase} bg-muted text-muted-foreground`}
+                className={`${chipBase} bg-zinc-100 text-zinc-500`}
                 title={`${d.role} at ${d.dealerName}`}
               >
                 {d.dealerName} · {d.role}
@@ -148,7 +148,7 @@ export function buildPeopleColumns(
       accessorFn: (p) => p.authUser?.lastSignInAt ?? null,
       header: 'Last sign-in',
       cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-zinc-500">
           {fmtDateTime(row.original.authUser?.lastSignInAt ?? null)}
         </span>
       ),
@@ -170,7 +170,7 @@ export function buildPeopleColumns(
             className={`${chipBase} ${
               status === 'active'
                 ? 'bg-status-green/15 text-status-green'
-                : 'bg-muted text-muted-foreground'
+                : 'bg-zinc-100 text-zinc-500'
             }`}
           >
             {status}

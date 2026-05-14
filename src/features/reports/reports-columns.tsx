@@ -35,7 +35,7 @@ function buildAggregateColumns<K extends number | null | string>(
       accessorKey: 'groupLabel',
       header: groupHeader,
       cell: ({ row }) => (
-        <span className="font-medium text-foreground">{row.original.groupLabel}</span>
+        <span className="font-medium text-zinc-900">{row.original.groupLabel}</span>
       ),
       enableSorting: true,
       // Month tab passes `sortByKey` because `groupLabel` is "April 2026" /
@@ -118,8 +118,8 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       header: 'Start',
       cell: ({ row }) => (
         <div>
-          <div className="text-xs font-semibold text-primary">{fmtDate(row.original.startDate)}</div>
-          <div className="text-[11px] text-muted-foreground/70">→ {fmtDate(row.original.endDate)}</div>
+          <div className="text-xs font-semibold text-brand-700">{fmtDate(row.original.startDate)}</div>
+          <div className="text-[11px] text-zinc-500/70">→ {fmtDate(row.original.endDate)}</div>
         </div>
       ),
       enableSorting: true,
@@ -135,7 +135,7 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       accessorKey: 'dealerName',
       header: 'Dealership',
       cell: ({ row }) => (
-        <span className="font-semibold text-foreground">{row.original.dealerName}</span>
+        <span className="font-semibold text-zinc-900">{row.original.dealerName}</span>
       ),
       enableSorting: true,
     },
@@ -143,7 +143,7 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       id: 'styleLabel',
       accessorFn: (c) => c.styleLabel ?? '',
       header: 'Format',
-      cell: ({ row }) => row.original.styleLabel ?? <span className="text-muted-foreground/70">—</span>,
+      cell: ({ row }) => row.original.styleLabel ?? <span className="text-zinc-500/70">—</span>,
       enableSorting: true,
     },
     {
@@ -151,7 +151,7 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       accessorFn: (c) => c.audienceSourceLabel ?? '',
       header: 'Data Source',
       cell: ({ row }) =>
-        row.original.audienceSourceLabel ?? <span className="text-muted-foreground/70">—</span>,
+        row.original.audienceSourceLabel ?? <span className="text-zinc-500/70">—</span>,
       enableSorting: true,
     },
     {
@@ -192,7 +192,7 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
         row.original.coachName ? (
           <span className="font-semibold">{row.original.coachName}</span>
         ) : (
-          <span className="text-muted-foreground/70">—</span>
+          <span className="text-zinc-500/70">—</span>
         ),
       enableSorting: true,
     },

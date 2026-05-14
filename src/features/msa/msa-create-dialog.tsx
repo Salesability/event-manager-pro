@@ -87,24 +87,24 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         </DialogDescription>
 
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Dealer</dt>
-          <dd className="font-medium text-foreground">{props.dealerName}</dd>
-          <dt className="text-muted-foreground">Recipient</dt>
-          <dd className="text-foreground">
+          <dt className="text-zinc-500">Dealer</dt>
+          <dd className="font-medium text-zinc-900">{props.dealerName}</dd>
+          <dt className="text-zinc-500">Recipient</dt>
+          <dd className="text-zinc-900">
             {'error' in props.recipient ? (
               <span className="text-status-red">{props.recipient.error}</span>
             ) : (
               `${props.recipient.firstName} <${props.recipient.email}>`
             )}
           </dd>
-          <dt className="text-muted-foreground">First Quote</dt>
-          <dd className="text-foreground">
+          <dt className="text-zinc-500">First Quote</dt>
+          <dd className="text-zinc-900">
             {props.firstDraftQuoteId == null ? (
               <span className="text-status-red">
                 No draft Quote yet —{' '}
                 <a
                   href={`/quotes/new?dealerId=${props.dealerId}`}
-                  className="font-medium underline hover:text-primary"
+                  className="font-medium underline hover:text-brand-700"
                 >
                   create one first
                 </a>
@@ -113,7 +113,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
             ) : (
               <a
                 href={`/quotes/${props.firstDraftQuoteId}`}
-                className="font-medium text-primary underline"
+                className="font-medium text-brand-700 underline"
               >
                 Quote #{props.firstDraftQuoteId}
               </a>
@@ -131,7 +131,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
           <button
             type="button"
             onClick={() => props.onClose(false)}
-            className="rounded-lg border border-input bg-white px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700"
           >
             Cancel
           </button>

@@ -135,14 +135,14 @@ export function ReportsTabs({
         <div className="flex items-center gap-2 print:hidden">
           <a
             href={`/reports/export?tab=${tab}`}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 transition hover:border-brand-500 hover:text-brand-700"
           >
             ⬇ Export CSV
           </a>
           <button
             type="button"
             onClick={() => window.print()}
-            className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-foreground transition hover:border-primary hover:text-primary"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-900 transition hover:border-brand-500 hover:text-brand-700"
           >
             🖨 Print
           </button>
@@ -193,14 +193,14 @@ export function ReportsTabs({
             onChange={(e) => setFullGlobalFilter(e.target.value)}
             placeholder="Search dealer, coach, format, notes…"
             aria-label="Search campaigns"
-            className="min-w-[16rem] flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+            className="min-w-[16rem] flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20"
           />
-          <label className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground">
+          <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500">
             Month
             <select
               value={fullMonthValue}
               onChange={(e) => setFullMonth(e.target.value)}
-              className="rounded border border-border bg-white px-2 py-0.5 text-xs"
+              className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs"
             >
               <option value="">All months</option>
               {fullMonthOptions.map((m) => (

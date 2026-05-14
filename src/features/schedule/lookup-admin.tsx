@@ -51,10 +51,10 @@ const configs: Record<
 };
 
 const inputClass =
-  'min-w-0 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
+  'min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20';
 
 const buttonClass =
-  'rounded-lg border border-border bg-white px-3 py-2 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50';
+  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function LookupAdmin({
   kind,
@@ -115,12 +115,12 @@ export function LookupAdmin({
       className={
         compact
           ? 'flex flex-col gap-3'
-          : 'rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]'
+          : 'rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]'
       }
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-sans font-bold tracking-tight text-2xl text-primary">{config.title}</h2>
-        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+        <h2 className="font-sans font-bold tracking-tight text-2xl text-brand-700">{config.title}</h2>
+        <span className="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
           {rows.length}
         </span>
       </div>
@@ -136,16 +136,16 @@ export function LookupAdmin({
           <button
             type="submit"
             disabled={pending}
-            className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add
           </button>
         </form>
       </Can>
 
-      <div className="mt-4 flex flex-col divide-y divide-border">
+      <div className="mt-4 flex flex-col divide-y divide-zinc-200">
         {rows.length === 0 ? (
-          <div className="rounded-lg bg-muted px-3 py-6 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg bg-zinc-100 px-3 py-6 text-center text-sm text-zinc-500">
             {config.empty}
           </div>
         ) : (
@@ -263,7 +263,7 @@ function LookupRow({
         </>
       ) : (
         <>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-900">
             {item.label}
           </span>
           <Can capability="lookup:edit">
@@ -275,7 +275,7 @@ function LookupRow({
               onClick={archive}
               disabled={pending}
               aria-label={`Archive ${item.label}`}
-              className="rounded-lg border border-border bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
               x
             </button>

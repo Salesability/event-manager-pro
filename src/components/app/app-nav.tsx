@@ -66,7 +66,7 @@ export function AppNav({ isAdmin }: { isAdmin: boolean }) {
             className={
               'rounded-md px-4 py-2 text-sm font-medium transition ' +
               (active
-                ? 'bg-muted-foreground/40 text-white'
+                ? 'bg-zinc-500/40 text-white'
                 : 'text-white/75 hover:bg-white/10 hover:text-white')
             }
           >

@@ -17,8 +17,8 @@ const PILLS: ReadonlyArray<{ value: Pill; label: string }> = [
 
 function pillClass(active: boolean): string {
   return active
-    ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
-    : 'rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
+    ? 'rounded-full border border-brand-500 bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 transition'
+    : 'rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 }
 
 function isPill(v: string): v is Pill {
@@ -71,15 +71,15 @@ export function QuotesFilters({
   return (
     <ListToolbar
       search={
-        <div className="flex w-full items-center gap-2 rounded-lg border border-border bg-white px-3 py-1.5 transition focus-within:border-accent">
-          <span className="text-muted-foreground/70">🔍</span>
+        <div className="flex w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 transition focus-within:border-brand-500">
+          <span className="text-zinc-500/70">🔍</span>
           <input
             type="text"
             value={q}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search by dealer…"
             aria-label="Search quotes"
-            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+            className="w-full bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-500/70"
           />
         </div>
       }

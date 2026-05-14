@@ -52,7 +52,7 @@ type BookingFormProps = {
 // a single visual family. Kept inline rather than extracted because there are
 // only ~8 selects in this file and a one-off util doesn't earn its keep.
 const selectClass =
-  'h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:text-sm';
+  'h-8 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:opacity-50 md:text-sm';
 
 function addDays(iso: string, days: number) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -175,7 +175,7 @@ export function BookingForm({
             value={endDate}
             readOnly
             tabIndex={-1}
-            className="bg-muted text-muted-foreground"
+            className="bg-zinc-100 text-zinc-500"
           />
         </Field>
       </div>
@@ -245,7 +245,7 @@ export function BookingForm({
             <button
               type="button"
               onClick={() => setStylesOpen(true)}
-              className="text-xs font-semibold normal-case text-accent transition hover:text-primary"
+              className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
             >
               Manage
             </button>
@@ -272,7 +272,7 @@ export function BookingForm({
             <button
               type="button"
               onClick={() => setSourcesOpen(true)}
-              className="text-xs font-semibold normal-case text-accent transition hover:text-primary"
+              className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
             >
               Manage
             </button>
@@ -365,14 +365,14 @@ export function BookingForm({
         <button
           type="button"
           onClick={onSuccess}
-          className="rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-input hover:text-primary"
+          className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-500 transition hover:border-zinc-300 hover:text-brand-700"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={pending}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? 'Saving…' : mode === 'create' ? 'Book Event' : 'Save'}
         </button>

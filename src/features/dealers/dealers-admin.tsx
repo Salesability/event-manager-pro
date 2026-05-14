@@ -26,8 +26,8 @@ function isStatusPill(v: string): v is StatusPill {
 
 function pillClass(active: boolean): string {
   return active
-    ? 'rounded-full border border-accent bg-accent/15 px-3 py-1 text-xs font-semibold text-accent transition'
-    : 'rounded-full border border-border bg-white px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
+    ? 'rounded-full border border-brand-500 bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 transition'
+    : 'rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 }
 
 function matchesPill(dealer: Dealer, pill: StatusPill): boolean {
@@ -61,7 +61,7 @@ const dealersGlobalFilterFn: FilterFn<Dealer> = (row, _columnId, filterValue) =>
 };
 
 const headerAddClass =
-  'rounded-lg border border-accent/40 bg-white px-3 py-1 text-xs font-semibold text-accent transition hover:border-accent hover:bg-accent/10';
+  'rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50';
 
 // Compose the archive confirm message from the row's facets, mirroring the
 // people-admin pattern. Counts (linked contacts, referenced campaigns) aren't
@@ -188,7 +188,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   );
 
   return (
-    <section className="rounded-2xl border border-border bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
       <ListToolbar
         search={
           <input
@@ -197,7 +197,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search by name, contact, or email…"
             aria-label="Search dealers"
-            className="w-full rounded-lg border border-border bg-white px-3 py-1.5 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20"
           />
         }
         filters={
@@ -236,7 +236,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
           </Can>
         }
       />
-      <p className="mt-2 text-xs text-muted-foreground">{filteredDealers.length} dealers</p>
+      <p className="mt-2 text-xs text-zinc-500">{filteredDealers.length} dealers</p>
 
       <div className="mt-3">
         <DataTable
@@ -254,7 +254,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
                 <button
                   type="button"
                   onClick={clearFilters}
-                  className="rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary"
+                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
                 >
                   Clear filters
                 </button>

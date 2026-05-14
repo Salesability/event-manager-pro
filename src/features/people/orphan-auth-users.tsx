@@ -14,13 +14,13 @@ import { adoptOrphanAuthUser } from '@/features/people/actions';
 import type { OrphanAuthUser } from '@/features/people/queries';
 
 const inputClass =
-  'min-w-0 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20';
+  'min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20';
 
 const rowEditClass =
-  'rounded border border-border bg-white px-2 py-0.5 text-xs font-medium text-muted-foreground transition hover:border-primary hover:text-primary';
+  'rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 
 const submitClass =
-  'rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60';
+  'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 // Surfaced only when the page query found at least one orphan auth.users row.
 // Adopting one materializes a contacts row + email identifier and links via
@@ -50,8 +50,8 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
   return (
     <li className="flex items-center justify-between gap-4 rounded-lg border border-amber-200 bg-white px-4 py-2">
       <div className="min-w-0 text-sm">
-        <div className="truncate font-medium text-foreground">{orphan.email ?? orphan.userId}</div>
-        <div className="text-xs text-muted-foreground">
+        <div className="truncate font-medium text-zinc-900">{orphan.email ?? orphan.userId}</div>
+        <div className="text-xs text-zinc-500">
           providers: {orphan.providers.join(', ')}
           {orphan.lastSignInAt && ` · last sign-in ${new Date(orphan.lastSignInAt).toLocaleDateString()}`}
         </div>
@@ -117,7 +117,7 @@ function AdoptForm({
       <input type="hidden" name="userId" value={orphan.userId} />
       {orphan.email && <input type="hidden" name="email" value={orphan.email} />}
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        <label className="flex flex-col gap-1 text-xs font-medium text-zinc-500">
           First name
           <input
             type="text"
@@ -127,13 +127,13 @@ function AdoptForm({
             required
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        <label className="flex flex-col gap-1 text-xs font-medium text-zinc-500">
           Last name
           <input type="text" name="lastName" className={inputClass} required />
         </label>
       </div>
       {orphan.email && (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[11px] text-zinc-500">
           Will use <code>{orphan.email}</code> as the primary email identifier.
         </p>
       )}

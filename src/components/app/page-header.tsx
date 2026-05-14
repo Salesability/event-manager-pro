@@ -24,17 +24,17 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'flex flex-wrap items-start justify-between gap-3 border-b border-border bg-background py-4',
+        'flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 bg-white py-4',
         sticky && 'sticky top-16 z-10',
         className,
       )}
     >
       <div className="min-w-0 flex-1 space-y-1">
-        <h1 className="font-sans text-3xl font-bold tracking-tight text-foreground">
+        <h1 className="font-sans text-3xl font-bold tracking-tight text-zinc-900">
           {title}
         </h1>
         {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm text-zinc-500">{description}</p>
         ) : null}
       </div>
       {actions ? (
