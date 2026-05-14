@@ -204,11 +204,15 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500 print:hidden">
       <div>
-        {totalRows === 0 ? '0 rows' : `${start}–${end} of ${totalRows}`}
+        {totalRows === 0
+          ? '0 rows'
+          : `${start}–${end} of ${totalRows} ${totalRows === 1 ? 'row' : 'rows'}`}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        <span>
+          {pageCount === 0 ? 'Page 0 of 0' : `Page ${pageIndex + 1} of ${pageCount}`}
+        </span>
         <label className="flex items-center gap-1">
-          Page size
           <select
             value={pageSize}
             onChange={(e) => table.setPageSize(Number(e.target.value))}
@@ -220,6 +224,7 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
               </option>
             ))}
           </select>
+          <span>per page</span>
         </label>
         <button
           type="button"
@@ -229,9 +234,6 @@ function DataTablePagination<TData>({ table }: { table: TanstackTable<TData> }) 
         >
           ← Prev
         </button>
-        <span>
-          {pageCount === 0 ? '0 / 0' : `${pageIndex + 1} / ${pageCount}`}
-        </span>
         <button
           type="button"
           onClick={() => table.nextPage()}
