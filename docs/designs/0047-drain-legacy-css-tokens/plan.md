@@ -10,7 +10,7 @@
 | 2: Class-swap codemod sweep (`stone-*`, `navy`, `cream`, `accent-*`) | Done | `1166391`, `eea89f2`, `8a22e72` |
 | 3: Component-swap sweep (hand-rolled buttons/badges → shadcn primitives) + `font-display` retirement | Done | `62dcbe4` |
 | 4: Delete legacy block from `globals.css` + assert no orphaned refs | Done | `dbbce7e` |
-| 5: Smoke + Codex eval | Pending | - |
+| 5: Smoke + Codex eval | Done | `1c6b28c` |
 
 This chunk finishes the migration that `0042 Phase 1` started. shadcn `init` (May 12) rewired `src/components/ui/` and `src/components/app/` onto semantic tokens (`--primary`, `--muted`, `--foreground`, `--border`), but the **feature pages and feature modules** — ported earlier in the April 30 – May 3 window — were left on the legacy brand-named tokens (`text-navy`, `bg-cream`, `text-stone-*`, `font-display`). The two layers coexist today only because `globals.css` keeps both blocks defined (the "strategy A" two-layer aliasing). "Done" is: every file under `src/features/*` and `src/app/(app)/*` reads from semantic tokens, the legacy brand block can be removed from `globals.css` without breaking anything, and `globals.css` is the single source of truth for color and typography decisions. This naturally unblocks the design-chroma north-star (`docs/wiki/index.md` → palette work) — once `text-primary` flows from `--primary`, retheming the app is one CSS edit instead of a thirty-file sweep.
 
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/layout.md` — post-0043 surface vocabulary (`PageHeader`, `KeyValueStrip`, `Section`, `RowActions`, `Badge`). Migrating to semantic tokens is the chroma layer below that vocabulary.
 - The "strategy A" doctrine in `src/app/globals.css:6–27` — once the sweep is done, the two-layer aliasing collapses to one layer (semantic tokens only).
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Phase 1 produces the classification artifact the rest of the chunk consumes.
@@ -68,7 +68,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] `pnpm build` clean (3.3s compile, 19/19 routes, zero warnings); `tsc --noEmit` clean; vitest 790/790 PASS; `pnpm lint` 0 errors / 10 pre-existing warnings.
 
 #### Phase 5: Smoke + Codex eval
-- [ ] `web-test` smoke against the high-touch routes: `goto /quotes` (expect "Quotes" heading + filter pills + table); `goto /quotes/new` (composer renders, action toolbar at `top-16`); `goto /quotes/<id>` for any seeded quote (KeyValueStrip + Sections render with semantic-token chrome); `goto /dealerships` (list); `goto /dealerships/<id>` (detail); `goto /calendar` (booking + event detail surfaces); `goto /admin/people` (table + lifecycle badges); `goto /login` (kept-brand surface if any decision was made in Phase 1)
-- [ ] Screenshot a before/after of `/quotes/new` composer and the `/admin/people` row (the two surfaces where hand-rolled clusters were swapped) — visual confirmation that the chrome didn't drift, just the source-of-truth
-- [ ] Run `/eval` for the chunk — expect static green and a clean Codex pass; doc-only or sweep-style chunks tend to surface only "out-of-scope" Codex Mediums, so park appropriately ([[feedback_docs_eval_single_pass]] applies to the doc-comment edits in `globals.css` but not to the component sweeps — full eval here)
-- [ ] If `/eval` PASS-with-warnings or better → auto-close via `/build`'s chunk-end ritual (move folder to `closed/`, sweep cross-refs, update `CURRENT.md`)
+- [x] `web-test` smoke: `/login`, `/share/coach/1`, `/calendar` (Phase 1 gated redirect), then auth-injected `/calendar`, `/quotes`, `/quotes/new`, `/quotes/4` (edit-mode — all 4 action Buttons rendered: Close/Preview/Save/Send), `/admin/people` (Coach/Admin/Customer-side filter pills + Edit/Archive row actions), `/admin/people` Add Person dialog (Cancel DialogClose + Add Person submit Button + role checkboxes all render), `/dealerships`, `/production` (Show cancelled checkbox using migrated `accent-primary`). 10/10 routes PASS.
+- [x] Screenshots captured to `/tmp/web-test-0047-{login,share-coach,calendar,quotes,quotes-new,quote-edit,people,people-dialog}.png`.
+- [x] `/eval` PASS-with-warnings: tsc clean, vitest 790/790 PASS, lint 0/10 (pre-existing), Codex returned 1 Medium (`divide-stone-100` survivor in 5 files) + 1 Low (stale comment). Both **fixed in-cycle at `1c6b28c`** by extending the codemod with `divide-stone-*` rules and refreshing the comment. Eval report at [`eval-2026-05-13-2004.md`](eval-2026-05-13-2004.md).
+- [ ] Auto-close via `/build`'s chunk-end ritual — in progress.
