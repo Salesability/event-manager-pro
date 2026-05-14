@@ -6,7 +6,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Shared `quoteDisplayName(createdAt)` helper + format decision | Pending | - |
+| 1: Shared `quoteDisplayName(createdAt)` helper + format decision | Done | - |
 | 2: UI surfaces — composer header, MSA dialog, email body | Pending | - |
 | 3: PDF + email — body title, subject, attachment filename | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 **Format decision (Phase 1):** `quote-YYYYMMDD-HHmm` in the project's display timezone (America/Toronto — the same `createdAt` is rendered elsewhere via `Intl.DateTimeFormat`). Filename-safe (no colons / spaces / slashes), human-readable, lexicographically sortable. Seconds omitted to keep the name short; collision risk is negligible at quote-creation rates. Phase 1's first task is to confirm this exact format before any callsites change.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -43,10 +43,10 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Shared `quoteDisplayName` helper + format decision
-- [ ] Confirm format spec: `quote-YYYYMMDD-HHmm` in America/Toronto. Note locale + zero-padding + lower-case `quote-` prefix. Document the decision inline in `display-name.ts` as the single source of truth.
-- [ ] Add `src/features/quotes/display-name.ts` exporting `quoteDisplayName(createdAt: Date): string` and `quoteDownloadFilename(createdAt: Date): string`. Pure functions, no IO, no `Date.now()`. Filename helper composes `quoteDisplayName` + `'saledayevents-'` prefix + `'.pdf'` suffix.
-- [ ] Add `src/features/quotes/display-name.test.ts` — three or four representative cases (a fixed UTC instant rendered in America/Toronto, a DST-boundary instant, a zero-padding case like `00:05` → `0005`).
-- [ ] `pnpm tsc --noEmit` + `pnpm vitest run src/features/quotes/display-name.test.ts` clean.
+- [x] Confirm format spec: `quote-YYYYMMDD-HHmm` in America/Toronto. Note locale + zero-padding + lower-case `quote-` prefix. Document the decision inline in `display-name.ts` as the single source of truth.
+- [x] Add `src/features/quotes/display-name.ts` exporting `quoteDisplayName(createdAt: Date): string` and `quoteDownloadFilename(createdAt: Date): string`. Pure functions, no IO, no `Date.now()`. Filename helper composes `quoteDisplayName` + `'saledayevents-'` prefix + `'.pdf'` suffix.
+- [x] Add `src/features/quotes/display-name.test.ts` — three or four representative cases (a fixed UTC instant rendered in America/Toronto, a DST-boundary instant, a zero-padding case like `00:05` → `0005`).
+- [x] `pnpm tsc --noEmit` + `pnpm vitest run src/features/quotes/display-name.test.ts` clean.
 
 #### Phase 2: UI surfaces — composer header + MSA dialog
 - [ ] `src/app/(app)/quotes/[id]/page.tsx:180` — replace `pageTitle={`Quote #${quote.id}`}` with `pageTitle={quoteDisplayName(quote.createdAt)}`. (`quote.createdAt` is already on the query result; verify upstream selection if not.)
