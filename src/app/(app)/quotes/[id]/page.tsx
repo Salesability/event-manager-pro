@@ -96,6 +96,8 @@ export default async function QuoteEditPage({
 
   const pillKey = displayStatusKey(quote);
   const totalMoney = fmtMoney(quote.total);
+  const validUntilDate =
+    quote.sentAt != null ? isoDateOffset(quote.sentAt, quote.quoteValidDays) : null;
   const sendHistoryNode =
     quote.status !== 'draft' && sendHistory.length > 0 ? (
       <Section title="Send history" variant="card">
@@ -182,13 +184,15 @@ export default async function QuoteEditPage({
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
         keyValueItems={[
           { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },
+          ...(validUntilDate
+            ? [{ label: 'Valid until', value: validUntilDate }]
+            : []),
           {
             label: 'Dealer',
             value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
           },
           { label: 'Audience', value: quote.inputs.audienceSize.toLocaleString() },
           { label: 'Event days', value: quote.inputs.eventDays.toLocaleString() },
-          { label: 'Audience source', value: quote.audienceSourceLabel ?? '—' },
           { label: 'Total', value: totalMoney },
         ]}
         sendHistorySlot={sendHistoryNode}
@@ -212,4 +216,10 @@ function fmtMoney(amount: string): string {
   const n = Number(amount);
   if (!Number.isFinite(n)) return amount;
   return n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' });
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function isoDateOffset(base: Date, days: number): string {
+  return new Date(base.getTime() + days * MS_PER_DAY).toISOString().slice(0, 10);
 }
