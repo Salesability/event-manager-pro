@@ -1,25 +1,20 @@
-import { Badge, type BadgeVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/catalyst/badge';
 import type { DisplayStatusKey } from '@/features/quotes/status-display';
 import type { Msa } from '@/features/msa/queries';
 import type { Dealer } from '@/features/schedule/queries';
 
-/**
- * Enum-aware status badge wrappers (0043 Phase 7). Callers pass the raw
- * status value and get the right variant + label without restating the
- * mapping at every callsite. New enums get a new wrapper here, not a new
- * inline switch.
- */
+type BadgeColor = 'zinc' | 'brand' | 'green' | 'amber' | 'blue' | 'red';
 
-const QUOTE_VARIANT: Record<DisplayStatusKey, BadgeVariant> = {
-  draft: 'secondary',
-  sent: 'info',
-  accepted: 'success',
-  declined: 'destructive',
-  expired: 'warning',
+const QUOTE_COLOR: Record<DisplayStatusKey, BadgeColor> = {
+  draft: 'zinc',
+  sent: 'blue',
+  accepted: 'green',
+  declined: 'red',
+  expired: 'amber',
 };
 
 export function QuoteStatusBadge({ status }: { status: DisplayStatusKey }) {
-  return <Badge variant={QUOTE_VARIANT[status]}>{status}</Badge>;
+  return <Badge color={QUOTE_COLOR[status]}>{status}</Badge>;
 }
 
 type DealerStatusInput = {
@@ -29,21 +24,21 @@ type DealerStatusInput = {
 
 export function DealerStatusBadge({ status, archivedAt }: DealerStatusInput) {
   if (archivedAt) {
-    return <Badge variant="outline">Archived</Badge>;
+    return <Badge color="zinc">Archived</Badge>;
   }
-  const variant: BadgeVariant = status === 'active' ? 'success' : 'warning';
-  return <Badge variant={variant}>{status}</Badge>;
+  const color: BadgeColor = status === 'active' ? 'green' : 'amber';
+  return <Badge color={color}>{status}</Badge>;
 }
 
-const MSA_VARIANT: Record<Msa['status'], BadgeVariant> = {
-  pending: 'warning',
-  active: 'success',
-  expired: 'outline',
-  terminated: 'destructive',
+const MSA_COLOR: Record<Msa['status'], BadgeColor> = {
+  pending: 'amber',
+  active: 'green',
+  expired: 'zinc',
+  terminated: 'red',
 };
 
 export function MsaStatusBadge({ status }: { status: Msa['status'] }) {
-  return <Badge variant={MSA_VARIANT[status]}>{status}</Badge>;
+  return <Badge color={MSA_COLOR[status]}>{status}</Badge>;
 }
 
 type CampaignStatusBadgeProps = {
@@ -52,7 +47,7 @@ type CampaignStatusBadgeProps = {
 };
 
 export function CampaignStatusBadge({ live, past }: CampaignStatusBadgeProps) {
-  if (live) return <Badge variant="success">Live</Badge>;
-  if (past) return <Badge variant="outline">Past</Badge>;
-  return <Badge variant="info">Upcoming</Badge>;
+  if (live) return <Badge color="green">Live</Badge>;
+  if (past) return <Badge color="zinc">Past</Badge>;
+  return <Badge color="blue">Upcoming</Badge>;
 }
