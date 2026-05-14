@@ -38,6 +38,20 @@ export function buildProductionColumns(
   actions: CampaignColumnActions,
   todayIso: string,
 ): ColumnDef<Campaign>[] {
+  // Filter closes over `todayIso` so it stays in lockstep with cell
+  // rendering. Recomputing the date inside the filterFn would let the
+  // UI pill drift from the badge / CSV near midnight or when the
+  // browser timezone differs from the deploy server's (Codex Medium
+  // surfaced this — Toronto-server vs. ET-client at 23:55).
+  const filterTimeStatus: FilterFn<Campaign> = (row, _columnId, filterValue: unknown) => {
+    if (!filterValue || typeof filterValue !== 'object') return true;
+    const { time, showCancelled } = filterValue as ProductionStatusFilter;
+    if (!showCancelled && row.original.status === 'cancelled') return false;
+    if (time === 'upcoming') return row.original.endDate >= todayIso;
+    if (time === 'past') return row.original.endDate < todayIso;
+    return true;
+  };
+
   return [
     {
       id: 'identity',
@@ -194,26 +208,3 @@ export type ProductionStatusFilter = {
    *  checkbox behavior. */
   showCancelled: boolean;
 };
-
-const filterTimeStatus: FilterFn<Campaign> = (row, _columnId, filterValue: unknown) => {
-  // Filter accepts the shaped object above. An undefined / falsy filter
-  // matches everything; a bare-string filter is a defensive fallback
-  // (older callers).
-  if (!filterValue || typeof filterValue !== 'object') return true;
-  const { time, showCancelled } = filterValue as ProductionStatusFilter;
-  if (!showCancelled && row.original.status === 'cancelled') return false;
-  const today = todayIsoSafe();
-  if (time === 'upcoming') return row.original.endDate >= today;
-  if (time === 'past') return row.original.endDate < today;
-  return true;
-};
-
-// Local copy of today's ISO date — kept inside this file so the column
-// def doesn't depend on a non-pure function closure for the filter.
-// The page-level renderer passes its own `todayIso` into
-// `buildProductionColumns` for cell rendering; the filter uses the
-// same date logic (`new Date()`).
-function todayIsoSafe(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}

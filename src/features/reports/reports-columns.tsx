@@ -1,8 +1,6 @@
 'use client';
 
-import { Building2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { RowIdentityCell } from '@/components/app/row-identity-cell';
 import type {
   Campaign,
   CampaignAggregateRow,
@@ -27,44 +25,25 @@ function fmtDate(iso: string): string {
 // thing that varies is the first column header and (for the month tab) the
 // sort comparator. Return a fresh array per caller so each table mounts
 // independent column instances.
-type AggregateOpts<K> = {
-  sortByKey?: boolean;
-  /** If present, the groupLabel column renders as `<RowIdentityCell>`
-   *  with the supplied href — typical for the dealer aggregate tab,
-   *  where each row drill-throughs to `/dealerships/[id]`. Coach and
-   *  month aggregates pass nothing (no detail page exists for them). */
-  identityHrefFor?: (row: CampaignAggregateRow<K>) => string | null;
-  /** Icon for the identity-cell variant (e.g. `<Building2 />` on the
-   *  dealer tab). Ignored when `identityHrefFor` is omitted. */
-  identityIcon?: React.ReactNode;
-};
-
+//
+// No row drill-through. The natural destination (`/dealerships/[id]`)
+// gates `admin:access`, but `/reports` admits coaches too — a
+// dotted-underline link from a coach view would route to a 403.
+// Archived dealers compound the problem: `loadDealer()` filters them
+// out, so historical report rows would 404 even for admins. See
+// `docs/wiki/layout.md` → "Identity-cell exceptions on `/reports`".
 function buildAggregateColumns<K extends number | null | string>(
   groupHeader: string,
-  opts: AggregateOpts<K> = {},
+  sortByKey?: boolean,
 ): ColumnDef<CampaignAggregateRow<K>>[] {
-  const { sortByKey, identityHrefFor, identityIcon } = opts;
   return [
     {
       id: 'groupLabel',
       accessorKey: 'groupLabel',
       header: groupHeader,
-      cell: ({ row }) => {
-        const href = identityHrefFor ? identityHrefFor(row.original) : null;
-        if (href) {
-          return (
-            <RowIdentityCell
-              icon={identityIcon}
-              iconTone="blue"
-              label={row.original.groupLabel}
-              href={href}
-            />
-          );
-        }
-        return (
-          <span className="font-medium text-zinc-900">{row.original.groupLabel}</span>
-        );
-      },
+      cell: ({ row }) => (
+        <span className="font-medium text-zinc-900">{row.original.groupLabel}</span>
+      ),
       enableSorting: true,
       // Month tab passes `sortByKey` because `groupLabel` is "April 2026" /
       // "August 2026" / … which sorts alphabetically (April < August <
@@ -124,24 +103,15 @@ function buildAggregateColumns<K extends number | null | string>(
 }
 
 export function buildClientColumns(): ColumnDef<CampaignAggregateRow<number>>[] {
-  // Each row drill-throughs to its dealer detail page — the same edit-default
-  // surface `/admin/dealers` and `/dealerships` route to.
-  return buildAggregateColumns<number>('Dealer', {
-    identityHrefFor: (row) => (row.groupKey != null ? `/dealerships/${row.groupKey}` : null),
-    identityIcon: <Building2 className="size-4" />,
-  });
+  return buildAggregateColumns<number>('Dealer');
 }
 
 export function buildCoachColumns(): ColumnDef<CampaignAggregateRow<number | null>>[] {
-  // No `/coaches/[id]` page today — identity column stays as plain text
-  // until one exists. Documented as an intentional divergence in
-  // `docs/wiki/layout.md`.
   return buildAggregateColumns<number | null>('Coach');
 }
 
 export function buildMonthColumns(): ColumnDef<CampaignAggregateRow<string>>[] {
-  // Pure metric aggregate by month — no detail surface. Plain text label.
-  return buildAggregateColumns<string>('Month', { sortByKey: true });
+  return buildAggregateColumns<string>('Month', /* sortByKey */ true);
 }
 
 // Full Production Report — flat campaign list. Mirrors `/production` columns
@@ -172,12 +142,7 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
       accessorKey: 'dealerName',
       header: 'Dealership',
       cell: ({ row }) => (
-        <RowIdentityCell
-          icon={<Building2 className="size-4" />}
-          iconTone="blue"
-          label={row.original.dealerName}
-          href={`/dealerships/${row.original.dealerId}`}
-        />
+        <span className="font-semibold text-zinc-900">{row.original.dealerName}</span>
       ),
       enableSorting: true,
     },

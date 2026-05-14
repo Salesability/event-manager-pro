@@ -105,7 +105,7 @@ Implications:
 
 **Overflow primitive.** The row-end `…` button is [`<RowOverflowMenu>`](../../src/components/app/row-overflow-menu.tsx) (0050) — composes Catalyst's `<Dropdown>` / `<DropdownMenu>` / `<DropdownItem>`. Re-uses `ROW_ACTION_KINDS` / `ROW_ACTION_ICONS` / `ROW_ACTION_LABELS` from `src/lib/ui/`. Inline-button `<RowActions>` is retired on swept surfaces; it remains in tree only until the 0043 follow-up (b) sweep finishes.
 
-**Identity-cell exceptions on `/reports`.** The Coach and Month aggregate tabs render the group label as plain text (no `<RowIdentityCell>`) because no detail-page surface exists for those groupings — there's no `/coaches/[id]` and no `/reports/[month]`. Documented as an intentional divergence; revisit if those surfaces ever ship. The Dealer aggregate tab and the Full Production Report tab both use `<RowIdentityCell>` with `href` to `/dealerships/[id]` (drill-through).
+**Identity-cell exceptions on `/reports`.** Every report tab renders the group/dealer label as plain text (no `<RowIdentityCell>`). Three reasons compound: (a) no detail page exists for `/coaches/[id]` or `/reports/[month]`, (b) `/reports` admits coaches via `reports:view`, but `/dealerships/[id]` gates `admin:access` — a coach clicking a dealer drill-through would route to a 403, (c) `loadDealer()` filters archived rows, so historical report dealers would 404 even for admins. The exception holds until either a coach-safe dealer surface or an archived-loader exists. Documented intentionally.
 
 ## Status badges + relative time
 
