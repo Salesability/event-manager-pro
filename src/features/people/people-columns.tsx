@@ -1,8 +1,10 @@
 'use client';
 
+import { User } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/catalyst/badge';
-import { RowActions } from '@/components/app/row-actions';
+import { RowIdentityCell } from '@/components/app/row-identity-cell';
+import { RowOverflowMenu } from '@/components/app/row-overflow-menu';
 import { useCan } from '@/components/auth/can';
 import type {
   AdminPersonRow,
@@ -59,9 +61,21 @@ export function buildPeopleColumns(
       id: 'displayName',
       accessorKey: 'displayName',
       header: 'Name',
-      cell: ({ row }) => (
-        <div className="font-medium text-zinc-900">{row.original.displayName}</div>
-      ),
+      // No `/admin/people/[id]` detail page today — the canonical editor
+      // is the inline Edit dialog. Identity cell uses button-shape so
+      // the dotted-underline click still routes to "the canonical
+      // editor" per the edit-default doctrine.
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <RowIdentityCell
+            icon={<User className="size-4" />}
+            iconTone="blue"
+            label={p.displayName}
+            onClick={() => actions.onEdit(p)}
+          />
+        );
+      },
       enableSorting: true,
     },
     {
@@ -178,20 +192,21 @@ function PersonRowActions({
   const canArchive = useCan('person:archive');
   const status = lifecycle(person);
   const isActive = status === 'active';
+  // Identity cell IS the Edit affordance (button-shape onClick fires
+  // the dialog). Overflow menu carries Archive only — and only when
+  // archive is currently meaningful (active lifecycle). `canEdit`
+  // still gates the entire menu since archiving without edit is not
+  // a coherent capability today.
+  if (!canEdit) return null;
   return (
-    <RowActions
+    <RowOverflowMenu
+      ariaSuffix={person.displayName}
       actions={[
-        canEdit && {
-          kind: 'edit',
-          onClick: () => actions.onEdit(person),
-          ariaSuffix: person.displayName,
-        },
         isActive &&
           canArchive && {
             kind: 'archive',
             onClick: () => actions.onArchive(person),
             tone: 'danger',
-            ariaSuffix: person.displayName,
           },
       ]}
     />

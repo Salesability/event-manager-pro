@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { FilterFn } from '@tanstack/react-table';
 import { ListToolbar } from '@/components/app/list-toolbar';
 import { Can } from '@/components/auth/can';
 import {
@@ -12,6 +11,7 @@ import {
 } from '@/components/catalyst/dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
+import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archiveDealer, convertProspectToActive } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
@@ -44,21 +44,13 @@ function matchesPill(dealer: Dealer, pill: StatusPill): boolean {
   }
 }
 
-const dealersGlobalFilterFn: FilterFn<Dealer> = (row, _columnId, filterValue) => {
-  const q = String(filterValue ?? '').toLowerCase().trim();
-  if (!q) return true;
-  const d = row.original;
-  if (d.name.toLowerCase().includes(q)) return true;
-  const contact = [d.contactFirstName, d.contactLastName]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  if (contact.includes(q)) return true;
-  if (d.primaryEmail && d.primaryEmail.toLowerCase().includes(q)) return true;
-  if (d.primaryPhone && d.primaryPhone.toLowerCase().includes(q)) return true;
-  if (d.address && d.address.toLowerCase().includes(q)) return true;
-  return false;
-};
+const dealersGlobalFilterFn = makeNeedleFilter<Dealer>((d) => [
+  d.name,
+  [d.contactFirstName, d.contactLastName].filter(Boolean).join(' '),
+  d.primaryEmail,
+  d.primaryPhone,
+  d.address,
+]);
 
 const headerAddClass =
   'rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50';

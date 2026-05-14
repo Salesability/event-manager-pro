@@ -7,11 +7,10 @@ import { Section } from '@/components/app/section';
 import {
   DealerStatusBadge,
   MsaStatusBadge,
-  QuoteStatusBadge,
 } from '@/components/app/status-badge';
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
-import { displayStatusKey } from '@/features/quotes/status-display';
+import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import {
   firstDraftQuoteForDealer,
@@ -191,51 +190,7 @@ export default async function DealerDetailPage({
             )}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-200">
-            <table className="w-full text-sm">
-              <thead className="bg-brand-600 text-left text-[11px] font-semibold uppercase tracking-wider text-white/80">
-                <tr>
-                  <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
-                  <th className="px-3 py-2.5">Sent</th>
-                  <th className="px-3 py-2.5">Created</th>
-                  <th className="px-3 py-2.5">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {quotes.map((quote) => {
-                  const pillKey = displayStatusKey(quote);
-                  return (
-                    <tr key={quote.id} className="border-b border-zinc-200 last:border-b-0">
-                      <td className="px-3 py-2.5 align-top">
-                        <QuoteStatusBadge status={pillKey} />
-                      </td>
-                      <td className="px-3 py-2.5 text-right align-top font-semibold tabular-nums">
-                        {fmtMoney(quote.total)}
-                      </td>
-                      <td className="px-3 py-2.5 align-top text-xs text-zinc-500">
-                        {fmtDate(quote.sentAt)}
-                      </td>
-                      <td className="px-3 py-2.5 align-top text-xs text-zinc-500">
-                        {fmtDate(quote.createdAt)}
-                      </td>
-                      <td className="px-3 py-2.5 align-top">
-                        <Link
-                          href={`/quotes/${quote.id}`}
-                          aria-label={`View quote #${quote.id}`}
-                          className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
-                        >
-                          View
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DealerQuotesPanel quotes={quotes} />
         )}
       </Section>
     </div>
@@ -251,12 +206,6 @@ function parsePositiveIntPathSegment(v: string): number | null {
   const n = Number(v);
   if (!Number.isInteger(n) || n <= 0 || n > Number.MAX_SAFE_INTEGER) return null;
   return n;
-}
-
-function fmtMoney(amount: string): string {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return amount;
-  return n.toLocaleString('en-CA', { style: 'currency', currency: 'CAD' });
 }
 
 function fmtDate(d: Date | null): string {

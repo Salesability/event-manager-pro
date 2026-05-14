@@ -11,7 +11,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { Checkbox } from '@/components/catalyst/checkbox';
 import { Listbox, ListboxOption, ListboxLabel } from '@/components/catalyst/listbox';
-import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
+import type { ColumnFiltersState } from '@tanstack/react-table';
+import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
 import { Can } from '@/components/auth/can';
 import { Combobox, ComboboxOption, ComboboxLabel } from '@/components/catalyst/combobox';
 import {
@@ -37,16 +38,14 @@ import type { Dealer } from '@/features/schedule/queries';
 
 // Cross-column substring search for the toolbar input. Hits displayName,
 // primary email, and any linked dealer name — dealer search by typing the
-// dealership name was a stated muscle-memory want.
-const peopleGlobalFilterFn: FilterFn<AdminPersonRow> = (row, _columnId, filterValue) => {
-  const q = String(filterValue ?? '').toLowerCase().trim();
-  if (!q) return true;
-  const p = row.original;
-  if (p.displayName.toLowerCase().includes(q)) return true;
-  if (p.email && p.email.toLowerCase().includes(q)) return true;
-  if (p.dealerLinks.some((l) => l.dealerName.toLowerCase().includes(q))) return true;
-  return false;
-};
+// dealership name was a stated muscle-memory want. Dealer-name fields are
+// spread out from the dealerLinks array so the shared `makeNeedleFilter`
+// helper still matches against each individually.
+const peopleGlobalFilterFn = makeNeedleFilter<AdminPersonRow>((p) => [
+  p.displayName,
+  p.email,
+  ...p.dealerLinks.map((l) => l.dealerName),
+]);
 
 function toggleRoleFilter(
   prev: ColumnFiltersState,

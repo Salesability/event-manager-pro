@@ -3,7 +3,7 @@ import { type NextRequest } from 'next/server';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
-import { filterCampaigns, todayIso } from '../filter';
+import { todayIso } from '../filter';
 
 const HEADERS = [
   'Date Range',
@@ -33,7 +33,29 @@ export async function GET(request: NextRequest) {
   const showCancelled = sp.get('cancelled') === '1';
 
   const today = todayIso();
-  const rows = filterCampaigns(await loadCampaigns(), { q, status, showCancelled });
+  const all = await loadCampaigns();
+  // Inline the same predicate the client-side `<ProductionAdmin>`
+  // applies (search needle across dealer/coach/style/notes/contact +
+  // upcoming/past time-window + show-cancelled toggle). Server-side
+  // copy is intentional — the previous shared helper crossed the
+  // client/server boundary, and the new TanStack pipeline doesn't
+  // export a server-runnable function.
+  const needle = q.trim().toLowerCase();
+  const rows = all.filter((c) => {
+    if (!showCancelled && c.status === 'cancelled') return false;
+    if (status === 'upcoming' && !(c.endDate >= today)) return false;
+    if (status === 'past' && !(c.endDate < today)) return false;
+    if (needle) {
+      const hit =
+        c.dealerName.toLowerCase().includes(needle) ||
+        (c.coachName?.toLowerCase().includes(needle) ?? false) ||
+        (c.styleLabel?.toLowerCase().includes(needle) ?? false) ||
+        (c.notes?.toLowerCase().includes(needle) ?? false) ||
+        (c.contact?.toLowerCase().includes(needle) ?? false);
+      if (!hit) return false;
+    }
+    return true;
+  });
 
   const csv = buildCsv(
     HEADERS,

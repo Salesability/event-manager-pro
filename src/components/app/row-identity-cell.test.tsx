@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { RowIdentityCell } from './row-identity-cell';
 
@@ -6,6 +6,8 @@ type AnyEl = ReactElement<{
   children?: unknown;
   className?: string;
   href?: string;
+  type?: string;
+  onClick?: () => void;
   'aria-hidden'?: boolean;
 }>;
 
@@ -88,5 +90,19 @@ describe('RowIdentityCell', () => {
     }) as AnyEl;
     const iconWrapper = walk(tree).find((el) => el.props['aria-hidden'] === true);
     expect(iconWrapper?.props.className).toMatch(/bg-zinc-100/);
+  });
+
+  it('renders a <button> with onClick instead of a <Link> when href is omitted', () => {
+    const onClick = vi.fn();
+    const tree = RowIdentityCell({ label: 'Alice Coach', onClick }) as AnyEl;
+    // No href anywhere in the tree on the button variant.
+    const anyHref = walk(tree).find((el) => el.props.href != null);
+    expect(anyHref).toBeUndefined();
+    const btn = walk(tree).find(
+      (el) => el.props.type === 'button' && typeof el.props.onClick === 'function',
+    );
+    expect(btn).toBeDefined();
+    expect(btn?.props.onClick).toBe(onClick);
+    expect(btn?.props.className).toMatch(/decoration-dotted/);
   });
 });

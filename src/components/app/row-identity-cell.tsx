@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 
 type IconTone = 'green' | 'blue' | 'amber' | 'stone';
 
-type RowIdentityCellProps = {
+type SharedRowIdentityCellProps = {
   /** Leading rounded-square icon. Pass a lucide icon (`<MailIcon />`),
    *  an emoji span, or any other 14–16px element. Pass nothing for a
    *  label-only cell (the leading slot collapses). */
@@ -17,14 +17,29 @@ type RowIdentityCellProps = {
    *  resolves to a solid-zinc hover — communicates "click to open"
    *  without the heaviness of a blue link. */
   label: string;
-  /** Edit-default destination — the single editable detail page for
-   *  the record (no separate View surface; field-level disabled
-   *  handles read-only viewers). */
-  href: string;
   /** Optional muted second line for context (e.g. dealer city, role,
    *  archived state). Sits below the dotted label in zinc-500. */
   sublabel?: ReactNode;
 };
+
+type RowIdentityCellLinkProps = SharedRowIdentityCellProps & {
+  /** Edit-default destination — the single editable detail page for
+   *  the record (no separate View surface; field-level disabled
+   *  handles read-only viewers). */
+  href: string;
+  onClick?: never;
+};
+
+type RowIdentityCellButtonProps = SharedRowIdentityCellProps & {
+  /** Button-shape variant for surfaces whose canonical editor is a
+   *  dialog rather than a detail page (e.g. `/admin/people` —
+   *  edit-default fires the Edit dialog). Use sparingly; a detail
+   *  page is the doctrine, and this variant is the stopgap. */
+  onClick: () => void;
+  href?: never;
+};
+
+type RowIdentityCellProps = RowIdentityCellLinkProps | RowIdentityCellButtonProps;
 
 const iconToneClass: Record<IconTone, string> = {
   green: 'bg-emerald-100 text-emerald-700',
@@ -44,13 +59,10 @@ const iconToneClass: Record<IconTone, string> = {
  * cell carries it, and only identity cells carry it, so a reader can
  * scan a grid and locate the click-through affordance at a glance.
  */
-export function RowIdentityCell({
-  icon,
-  iconTone = 'stone',
-  label,
-  href,
-  sublabel,
-}: RowIdentityCellProps) {
+export function RowIdentityCell(props: RowIdentityCellProps) {
+  const { icon, iconTone = 'stone', label, sublabel } = props;
+  const labelClass =
+    'truncate text-left text-sm font-semibold text-zinc-900 underline decoration-dotted decoration-zinc-400 underline-offset-4 transition-colors hover:decoration-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500';
   return (
     <div className="flex items-center gap-3">
       {icon != null && (
@@ -65,12 +77,15 @@ export function RowIdentityCell({
         </span>
       )}
       <span className="flex min-w-0 flex-col">
-        <Link
-          href={href}
-          className="truncate text-sm font-semibold text-zinc-900 underline decoration-dotted decoration-zinc-400 underline-offset-4 transition-colors hover:decoration-zinc-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
-        >
-          {label}
-        </Link>
+        {props.href != null ? (
+          <Link href={props.href} className={labelClass}>
+            {label}
+          </Link>
+        ) : (
+          <button type="button" onClick={props.onClick} className={labelClass}>
+            {label}
+          </button>
+        )}
         {sublabel != null && (
           <span className="truncate text-xs text-zinc-500">{sublabel}</span>
         )}

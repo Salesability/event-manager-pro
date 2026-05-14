@@ -1,8 +1,9 @@
 'use client';
 
-import Link from 'next/link';
+import { Building2 } from 'lucide-react';
 import type { ColumnDef } from '@tanstack/react-table';
-import { RowActions } from '@/components/app/row-actions';
+import { RowIdentityCell } from '@/components/app/row-identity-cell';
+import { RowOverflowMenu } from '@/components/app/row-overflow-menu';
 import { DealerStatusBadge } from '@/components/app/status-badge';
 import { useCan } from '@/components/auth/can';
 import type { Dealer } from '@/features/schedule/queries';
@@ -30,18 +31,30 @@ export function buildDealersColumns(
         const d = row.original;
         // Archived dealers can't be loaded via `loadDealer` (which filters
         // `archivedAt IS NULL`), so a link would route to a guaranteed 404.
-        // Render plain text instead until an archived-capable detail
-        // loader exists.
+        // Render the identity cell with a plain-text label until an
+        // archived-capable detail loader exists.
         if (d.archivedAt) {
-          return <span className="font-medium text-zinc-500">{d.name}</span>;
+          return (
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-400"
+              >
+                <Building2 className="size-4" />
+              </span>
+              <span className="truncate text-sm font-semibold text-zinc-500">
+                {d.name}
+              </span>
+            </div>
+          );
         }
         return (
-          <Link
+          <RowIdentityCell
+            icon={<Building2 className="size-4" />}
+            iconTone="blue"
+            label={d.name}
             href={`/dealerships/${d.id}`}
-            className="font-medium text-zinc-900 transition hover:text-brand-700 hover:underline"
-          >
-            {d.name}
-          </Link>
+          />
         );
       },
       enableSorting: true,
@@ -130,40 +143,36 @@ function DealerRowActions({
   const showActivate =
     !dealer.archivedAt && dealer.status === 'prospect' && actions.onActivate != null;
   const archived = dealer.archivedAt != null;
+  // Edit-default: row click → `/dealerships/[id]`; the View action has
+  // retired (the identity cell IS the click-through affordance). The
+  // overflow menu carries everything else: Quote (workflow-launch),
+  // Activate (state flip on prospects), Edit (canonical editor dialog
+  // for now — full editable-detail-page conversion is a follow-up),
+  // Archive (destructive).
   return (
-    <RowActions
+    <RowOverflowMenu
+      ariaSuffix={dealer.name}
       actions={[
-        !archived && {
-          kind: 'view',
-          href: `/dealerships/${dealer.id}`,
-          ariaSuffix: dealer.name,
-        },
         !archived &&
           canQuote && {
             kind: 'quote',
             href: `/quotes/new?dealerId=${dealer.id}`,
-            tone: 'accent',
-            ariaSuffix: `for ${dealer.name}`,
           },
         showActivate &&
           canEdit && {
             kind: 'activate',
             onClick: () => actions.onActivate!(dealer),
-            tone: 'success',
-            ariaSuffix: dealer.name,
           },
         !archived &&
           canEdit && {
             kind: 'edit',
             onClick: () => actions.onEdit(dealer),
-            ariaSuffix: dealer.name,
           },
         !archived &&
           canArchive && {
             kind: 'archive',
             onClick: () => actions.onArchive(dealer),
             tone: 'danger',
-            ariaSuffix: dealer.name,
           },
       ]}
     />
