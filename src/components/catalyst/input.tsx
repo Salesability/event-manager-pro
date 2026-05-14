@@ -79,8 +79,9 @@ export const Input = forwardRef(function Input(
           'bg-transparent dark:bg-white/5',
           // Hide default focus styles
           'focus:outline-hidden',
-          // Invalid state
+          // Invalid state — Headless's data-invalid plus the aria-invalid path RHF uses on Server-Action forms
           'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
+          'aria-[invalid=true]:border-red-500 aria-[invalid=true]:data-hover:border-red-500 dark:aria-[invalid=true]:border-red-600',
           // Disabled state
           'data-disabled:border-zinc-950/20 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
           // System icons

@@ -41,8 +41,9 @@ export const Textarea = forwardRef(function Textarea(
           'bg-transparent dark:bg-white/5',
           // Hide default focus styles
           'focus:outline-hidden',
-          // Invalid state
+          // Invalid state — Headless's data-invalid plus the aria-invalid path RHF uses on Server-Action forms
           'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
+          'aria-[invalid=true]:border-red-500 aria-[invalid=true]:data-hover:border-red-500 dark:aria-[invalid=true]:border-red-600',
           // Disabled state
           'disabled:border-zinc-950/20 dark:disabled:border-white/15 dark:disabled:bg-white/2.5 dark:data-hover:disabled:border-white/15',
           // Resizable

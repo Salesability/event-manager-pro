@@ -78,6 +78,19 @@ const eslintConfig = defineConfig([
       "no-inline-row-action-label/no-inline-row-action-label": "error",
     },
   },
+  // 0049 — Catalyst sources copied verbatim from
+  // `/Users/davidwhogan/Downloads/catalyst-ui-kit/typescript/`. We deliberately
+  // do not re-style them. Catalyst's authors use `let` for variables ESLint
+  // would otherwise flag `prefer-const`, plus they use `<img>` rather than
+  // `next/image` (Catalyst is framework-agnostic). Both are stylistic; relax
+  // here so a future re-copy stays a no-op.
+  {
+    files: ["src/components/catalyst/**/*.{ts,tsx}"],
+    rules: {
+      "prefer-const": "off",
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

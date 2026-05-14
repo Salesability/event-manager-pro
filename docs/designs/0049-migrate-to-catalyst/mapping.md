@@ -8,7 +8,7 @@ Catalyst components read **Tailwind v4's `@theme` output directly**, via the `va
 
 - Phase 2's `globals.css` reshape **must** drop the shadcn semantic-token layer entirely — Catalyst won't render correctly while it's still in place, but it also won't read from it. The two layers are independent.
 - The `brand` color family must be registered as a Tailwind v4 `@theme` family — `--color-brand-50` … `--color-brand-950` — to be consumable by Catalyst components.
-- Per-component CSS custom props (`--btn-bg`, `--btn-border`, `--btn-icon`, `--btn-hover-overlay`, `--gutter`) are set inline via Tailwind `[--btn-bg:var(--color-...)]` utilities — they're component-local, not in `globals.css`. No global drain work needed for these.
+- Per-component CSS custom props (`--btn-bg`, `--btn-border`, `--btn-icon`, `--btn-hover-overlay`, `--gutter`) are set inline via Tailwind arbitrary-property utilities `[--btn-bg:var(--color-zinc-600)]` etc. — they're component-local, not in `globals.css`. No global drain work needed for these.
 - Catalyst components ship dark-mode classes. The app is light-only today (no `dark:` toggle); dark classes will be inert. This is fine.
 - `<Button color="brand">` etc. won't work out-of-the-box — Catalyst's `button.tsx` colors map (`button.tsx:59-158`) lists 22 named colors but not `brand`. Phase 2 must **add a `brand` entry** to that map (and to `badge.tsx`'s equivalent) so callsites can reference `color="brand"`. This is a deliberate edit to the verbatim-copied file; record the diff in the Phase 2 commit.
 
