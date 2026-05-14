@@ -115,7 +115,7 @@ function useTouched() {
 
 // Radix Checkbox doesn't render a tick visual itself — it ships an unstyled
 // button + Indicator slot. These classes turn the button into a checkbox-
-// shaped target and flip the navy-on-white look when `data-state="checked"`.
+// shaped target and flip to primary-fill on `data-state="checked"`.
 // `roleCheckboxClass` is shared across the three role checkboxes so the
 // fieldset stays visually uniform. `CheckIcon` is the indicator SVG (matches
 // the inline-SVG idiom used by the Dialog wrapper).

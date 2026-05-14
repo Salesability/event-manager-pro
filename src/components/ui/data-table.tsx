@@ -186,7 +186,7 @@ export function DataTable<TData, TValue>({
               </tr>
             ))}
           </thead>
-          <tbody className="divide-y divide-stone-100">
+          <tbody className="divide-y divide-border">
             {rows.length === 0 ? (
               <tr>
                 <td

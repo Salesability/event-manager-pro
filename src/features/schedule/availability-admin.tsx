@@ -94,7 +94,7 @@ export function AvailabilityAdmin({
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {group.month}
                 </h3>
-                <div className="divide-y divide-stone-100 rounded-xl border border-border bg-white">
+                <div className="divide-y divide-border rounded-xl border border-border bg-white">
                   {group.blocks.map((block) => (
                     <AvailabilityRow
                       key={`${block.id}:${block.startDate}:${block.endDate}:${block.kind}:${block.reason ?? ''}`}

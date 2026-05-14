@@ -50,6 +50,11 @@ const RULES = [
   [/border-stone-200\b/g, 'border-border'],
   [/border-stone-300\b/g, 'border-input'],
 
+  // divide-stone-* (table/list row dividers — same mapping as border-stone-*)
+  [/divide-stone-100\b/g, 'divide-border'],
+  [/divide-stone-200\b/g, 'divide-border'],
+  [/divide-stone-300\b/g, 'divide-input'],
+
   [/bg-cream\b/g, 'bg-background'],
 
   // navy variants — must come after the prefixed forms (navy-pale, navy-light)

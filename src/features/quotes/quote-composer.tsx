@@ -639,7 +639,7 @@ export function QuoteComposer({
                   <th className="px-3 py-2 text-right">Line total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-border">
                 {display.lines.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-6 text-center text-xs text-muted-foreground">

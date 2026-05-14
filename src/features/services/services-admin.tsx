@@ -81,7 +81,7 @@ export function ServicesAdmin({ items }: { items: ServiceItem[] }) {
         </div>
       </Can>
 
-      <div className="mt-4 flex flex-col divide-y divide-stone-100">
+      <div className="mt-4 flex flex-col divide-y divide-border">
         {rows.length === 0 ? (
           <div className="rounded-lg bg-muted px-3 py-6 text-center text-sm text-muted-foreground">
             No service items yet.
