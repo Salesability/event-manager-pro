@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Catalyst install + dep mapping + gap decisions | Done | `762ac1a` |
-| 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape (no semantic-token layer) | Done | - |
+| 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape (no semantic-token layer) | Done | `9279617` |
 | 3: Primitive swap — Button, Badge, Field/FieldGroup/Label, Input, Textarea | Pending | - |
 | 4: Primitive swap — Dialog, Combobox, Select/Listbox, Checkbox, Dropdown | Pending | - |
 | 5: DataTable restyle + rewire 0043 conventions (PageHeader, RowActions, KeyValueStrip, Section) | Pending | - |
