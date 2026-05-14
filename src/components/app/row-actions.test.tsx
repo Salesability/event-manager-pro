@@ -78,7 +78,7 @@ describe('RowActions', () => {
       actions: [{ kind: 'archive', onClick: () => {}, tone: 'danger' }],
     }) as AnyEl;
     const btn = walk(tree).find((el) => el.type === 'button');
-    expect(btn?.props.className).toMatch(/status-red/);
+    expect(btn?.props.className).toMatch(/text-red-700/);
   });
 
   it('honors a per-callsite label override', () => {

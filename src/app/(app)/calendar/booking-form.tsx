@@ -418,7 +418,7 @@ function Field({
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={htmlFor}>
           {label}
-          {required && <span className="ml-1 text-status-red">*</span>}
+          {required && <span className="ml-1 text-red-700">*</span>}
         </Label>
         {action}
       </div>

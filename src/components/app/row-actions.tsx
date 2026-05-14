@@ -50,7 +50,7 @@ const toneClass: Record<NonNullable<BaseAction['tone']>, string> = {
   success:
     'border border-emerald-200 bg-white text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50',
   danger:
-    'border border-zinc-200 bg-white text-status-red hover:border-status-red hover:bg-status-red/10',
+    'border border-zinc-200 bg-white text-red-700 hover:border-red-500 hover:bg-red-50',
 };
 
 const buttonShape =

@@ -15,6 +15,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/catalyst/dialog';
+import { Button } from '@/components/catalyst/button';
 import type {
   AvailabilityBlock,
   Campaign,
@@ -450,22 +451,14 @@ export function CalendarView({
             {mode === 'app' && (
               <>
                 <Can capability="availability:edit">
-                  <button
-                    type="button"
-                    onClick={() => setDialog({ kind: 'availability' })}
-                    className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm font-semibold text-status-red transition hover:border-status-red hover:bg-red-50"
-                  >
+                  <Button outline onClick={() => setDialog({ kind: 'availability' })}>
                     Block Date
-                  </button>
+                  </Button>
                 </Can>
                 <Can capability="campaign:create">
-                  <button
-                    type="button"
-                    onClick={() => setDialog({ kind: 'create' })}
-                    className="rounded-lg bg-status-green px-3 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-                  >
+                  <Button color="green" onClick={() => setDialog({ kind: 'create' })}>
                     + Book Event
-                  </button>
+                  </Button>
                 </Can>
               </>
             )}
@@ -565,8 +558,8 @@ export function CalendarView({
                   className={[
                     'text-xs font-medium',
                     c.otherMonth ? 'text-zinc-500/70' : 'text-zinc-900',
-                    c.isToday ? 'text-status-blue font-semibold' : '',
-                    blocked ? 'text-status-red' : '',
+                    c.isToday ? 'text-brand-700 font-semibold' : '',
+                    blocked ? 'text-red-700' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -574,7 +567,7 @@ export function CalendarView({
                   {c.day}
                 </div>
                 {blocked && (
-                  <span className="mt-0.5 block text-[9px] font-bold tracking-wide text-status-red">
+                  <span className="mt-0.5 block text-[9px] font-bold tracking-wide text-red-700">
                     🚫 {blocked.reason ?? 'Blocked'}
                   </span>
                 )}

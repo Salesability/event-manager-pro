@@ -29,11 +29,6 @@
   --color-brand-800: oklch(30.0% 0.088 252.5);
   --color-brand-900: oklch(25.0% 0.070 252.5);
   --color-brand-950: oklch(19.0% 0.050 252.5);
-
-  /* Status colors */
-  --color-status-red: #c0392b;
-  --color-status-green: #1e7e4a;
-  --color-status-blue: #1a5fa8;
 }
 
 body {

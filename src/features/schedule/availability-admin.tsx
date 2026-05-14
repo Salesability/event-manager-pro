@@ -175,7 +175,7 @@ function AvailabilityRow({
           <span className="font-semibold text-zinc-900">
             {formatRange(block.startDate, block.endDate)}
           </span>
-          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-status-red">
+          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
             {KIND_LABELS[block.kind]}
           </span>
         </div>
@@ -193,7 +193,7 @@ function AvailabilityRow({
           onClick={archive}
           disabled={pending}
           aria-label={`Remove ${formatRange(block.startDate, block.endDate)}`}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           x
         </button>

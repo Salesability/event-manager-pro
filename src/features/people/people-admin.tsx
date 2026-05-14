@@ -555,7 +555,7 @@ function PersonForm({
           </span>
         </label>
         {!hasAnyRole && (
-          <p className="text-[11px] text-status-red">
+          <p className="text-[11px] text-red-700">
             Pick at least one role.
           </p>
         )}

@@ -33,7 +33,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
 
         {sent ? (
-          <div className="rounded-lg border border-status-green/30 bg-status-green/10 p-4 text-sm text-status-green">
+          <div className="rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-700">
             Check <span className="font-mono">{sent}</span> for your sign-in link.
           </div>
         ) : (
@@ -82,7 +82,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         )}
 
         {error && (
-          <div className="rounded-lg border border-status-red/30 bg-status-red/10 p-3 text-sm text-status-red">
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}

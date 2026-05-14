@@ -9,11 +9,3 @@ export type DisplayStatusKey = QuoteStatus | 'expired';
 export function displayStatusKey(quote: Quote): DisplayStatusKey {
   return quote.isExpired ? 'expired' : quote.status;
 }
-
-export const STATUS_PILL_CLS: Record<DisplayStatusKey, string> = {
-  draft: 'bg-zinc-100 text-zinc-500',
-  sent: 'bg-status-blue/15 text-status-blue',
-  accepted: 'bg-status-green/15 text-status-green',
-  declined: 'bg-status-red/15 text-status-red',
-  expired: 'bg-amber-100 text-amber-700',
-};

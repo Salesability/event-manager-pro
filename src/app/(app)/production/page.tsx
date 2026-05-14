@@ -123,11 +123,11 @@ function CampaignRow({
       <td className="border-b border-zinc-200 px-3 py-2.5 align-top">
         <div className="text-xs">{campaign.contact ?? '—'}</div>
         <div className="text-[11px] text-zinc-500/70">{campaign.phone ?? '—'}</div>
-        <div className="text-[11px] text-status-blue">{campaign.email ?? '—'}</div>
+        <div className="text-[11px] text-brand-700">{campaign.email ?? '—'}</div>
       </td>
       <td className="border-b border-zinc-200 px-3 py-2.5 align-top">
         {campaign.styleLabel ? (
-          <span className="inline-block rounded-full bg-status-blue/10 px-2 py-0.5 text-[11px] font-semibold text-status-blue">
+          <span className="inline-block rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700">
             {campaign.styleLabel}
           </span>
         ) : (

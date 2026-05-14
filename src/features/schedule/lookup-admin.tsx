@@ -275,7 +275,7 @@ function LookupRow({
               onClick={archive}
               disabled={pending}
               aria-label={`Archive ${item.label}`}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-status-red transition hover:border-status-red hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               x
             </button>

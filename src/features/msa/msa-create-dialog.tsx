@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/catalyst/dialog';
+import { Button } from '@/components/catalyst/button';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createMsaDraft, sendMsaEnvelope } from './actions';
 
@@ -92,7 +93,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
           <dt className="text-zinc-500">Recipient</dt>
           <dd className="text-zinc-900">
             {'error' in props.recipient ? (
-              <span className="text-status-red">{props.recipient.error}</span>
+              <span className="text-red-700">{props.recipient.error}</span>
             ) : (
               `${props.recipient.firstName} <${props.recipient.email}>`
             )}
@@ -100,7 +101,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
           <dt className="text-zinc-500">First Quote</dt>
           <dd className="text-zinc-900">
             {props.firstDraftQuoteId == null ? (
-              <span className="text-status-red">
+              <span className="text-red-700">
                 No draft Quote yet —{' '}
                 <a
                   href={`/quotes/new?dealerId=${props.dealerId}`}
@@ -122,27 +123,23 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
         </dl>
 
         {lastError && (
-          <p className="mt-3 rounded-lg bg-status-red/10 px-3 py-2 text-xs text-status-red">
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
             {lastError}
           </p>
         )}
 
         <div className="mt-6 flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => props.onClose(false)}
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700"
-          >
+          <Button type="button" outline onClick={() => props.onClose(false)}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            color="green"
             onClick={onSubmit}
             disabled={pending || !canSubmit}
-            className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? 'Sending…' : 'Send for signature'}
-          </button>
+          </Button>
         </div>
     </Dialog>
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_QUOTE_INPUTS } from '@/lib/quotes/pricing';
 import type { Quote } from './queries';
-import { STATUS_PILL_CLS, displayStatusKey } from './status-display';
+import { displayStatusKey } from './status-display';
 
 function makeQuote(overrides: Partial<Quote>): Quote {
   return {
@@ -45,11 +45,3 @@ describe('displayStatusKey', () => {
   });
 });
 
-describe('STATUS_PILL_CLS', () => {
-  it('carries a tailwind class for every display key', () => {
-    for (const key of ['draft', 'sent', 'accepted', 'declined', 'expired'] as const) {
-      expect(typeof STATUS_PILL_CLS[key]).toBe('string');
-      expect(STATUS_PILL_CLS[key].length).toBeGreaterThan(0);
-    }
-  });
-});

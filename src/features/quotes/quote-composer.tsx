@@ -395,8 +395,9 @@ export function QuoteComposer({
         </Button>
       )}
       {canSend && (
-        <button
+        <Button
           type="button"
+          color="green"
           onClick={() => setConfirmSendOpen(true)}
           disabled={
             !recipientEmail ||
@@ -415,10 +416,9 @@ export function QuoteComposer({
                     ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
                     : undefined)
           }
-          className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isResend ? 'Re-send Quote' : 'Send Quote'}
-        </button>
+        </Button>
       )}
       {pageStatusBadge}
     </>
@@ -441,7 +441,7 @@ export function QuoteComposer({
         </p>
       )}
       {canSend && !isDirty && recipientErrorMessage && (
-        <p className="text-right text-[11px] text-status-red">
+        <p className="text-right text-[11px] text-red-700">
           Send disabled: {recipientErrorMessage}
         </p>
       )}
@@ -681,7 +681,7 @@ export function QuoteComposer({
             </table>
           </div>
         ) : (
-          <div className="rounded-xl border border-status-red/40 bg-status-red/5 px-3 py-2 text-xs text-status-red">
+          <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
             {display.error}
           </div>
         )}
@@ -736,7 +736,7 @@ function PreviewDialog({
       </DialogDescription>
       <div className="mt-4 h-[70vh] overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
         {error ? (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-status-red">
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-700">
             {error}
           </div>
         ) : loading || !pdfUrl ? (
@@ -792,7 +792,7 @@ function ConfirmSendDialog({
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
         <dt className="text-zinc-500">Recipient</dt>
         <dd className="font-medium text-zinc-900">
-          {recipientEmail ?? <span className="text-status-red">none</span>}
+          {recipientEmail ?? <span className="text-red-700">none</span>}
         </dd>
         <dt className="text-zinc-500">Line items</dt>
         <dd className="tabular-nums text-zinc-900">{lineCount}</dd>
@@ -802,21 +802,17 @@ function ConfirmSendDialog({
         </dd>
       </dl>
       <div className="mt-6 flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => onClose(false)}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-1.5 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700"
-        >
+        <Button type="button" outline onClick={() => onClose(false)}>
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          color="green"
           onClick={onConfirm}
           disabled={pending || !recipientEmail}
-          className="rounded-lg bg-status-green px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {pending ? 'Sending…' : isResend ? 'Re-send' : 'Send'}
-        </button>
+        </Button>
       </div>
     </Dialog>
   );

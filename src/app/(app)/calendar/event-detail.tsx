@@ -3,6 +3,7 @@
 import { useTransition } from 'react';
 import Link from 'next/link';
 import { Can } from '@/components/auth/can';
+import { Badge } from '@/components/catalyst/badge';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { cancelCampaign } from '@/features/schedule/actions';
@@ -82,7 +83,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
         {campaign.contact && <Row label="Contact" value={campaign.contact} />}
         {campaign.phone && <Row label="Phone" value={campaign.phone} />}
         {campaign.email && (
-          <Row label="Email" value={<span className="text-status-blue">{campaign.email}</span>} />
+          <Row label="Email" value={<span className="text-brand-700">{campaign.email}</span>} />
         )}
         {campaign.styleLabel && (
           <Row
@@ -105,13 +106,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
         {campaign.notes && <Row label="Notes" value={campaign.notes} fullWidth />}
         <Row
           label="Status"
-          value={
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusBadgeClass(campaign.status)}`}
-            >
-              {campaign.status}
-            </span>
-          }
+          value={<Badge color={statusBadgeColor(campaign.status)}>{campaign.status}</Badge>}
         />
       </dl>
 
@@ -153,7 +148,7 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
               type="button"
               onClick={onCancel}
               disabled={pending}
-              className="rounded-lg border border-status-red/40 bg-white px-3 py-1.5 text-xs font-semibold text-status-red transition hover:bg-status-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel Campaign
             </button>
@@ -201,16 +196,16 @@ function formatDate(iso: string) {
   });
 }
 
-function statusBadgeClass(status: Campaign['status']) {
+function statusBadgeColor(status: Campaign['status']): 'green' | 'zinc' | 'red' | 'brand' {
   switch (status) {
     case 'booked':
-      return 'bg-status-green/15 text-status-green';
+      return 'green';
     case 'completed':
-      return 'bg-zinc-100 text-zinc-500';
+      return 'zinc';
     case 'cancelled':
-      return 'bg-status-red/15 text-status-red';
+      return 'red';
     case 'draft':
     default:
-      return 'bg-status-blue/15 text-status-blue';
+      return 'brand';
   }
 }
