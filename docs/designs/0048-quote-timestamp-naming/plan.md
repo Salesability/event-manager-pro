@@ -8,7 +8,7 @@
 |-------|--------|--------|
 | 1: Shared `quoteDisplayName(createdAt)` helper + format decision | Done | - |
 | 2: UI surfaces — composer header, MSA dialog, email body | Done | - |
-| 3: PDF + email — body title, subject, attachment filename | Pending | - |
+| 3: PDF + email — body title, subject, attachment filename | Done | - |
 | 4: Tests + smoke verification | Pending | - |
 
 Quotes are identified today as `Quote #<id>` everywhere they surface (composer header at `/quotes/[id]`, the MSA-create dialog, the emailed PDF body, the email subject, the email body, and the attachment filename `quote-<id>.pdf`). The user wants the display name reshaped to `quote-<timestamp>` and the download filename to `saledayevents-quote-<timestamp>.pdf`. "Done" is: every place that currently shows `Quote #<id>` shows the timestamp form instead; the PDF attachment lands in inboxes as `saledayevents-quote-<timestamp>.pdf`; the row's `id` is no longer user-visible (kept as the DB key, not the brand identity). No schema change — the timestamp derives from the existing `createdAt` column via a single helper, so renaming is reversible and zero-migration.
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 **Format decision (Phase 1):** `quote-YYYYMMDD-HHmm` in the project's display timezone (America/Toronto — the same `createdAt` is rendered elsewhere via `Intl.DateTimeFormat`). Filename-safe (no colons / spaces / slashes), human-readable, lexicographically sortable. Seconds omitted to keep the name short; collision risk is negligible at quote-creation rates. Phase 1's first task is to confirm this exact format before any callsites change.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -56,12 +56,16 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] ~~Test case: MSA-create dialog renders `quote-<timestamp>` when a draft quote exists.~~ Deferred to Phase 4's web-test smoke (RTL test scaffold for client-side dialogs not yet established).
 
 #### Phase 3: PDF + email — body title, subject, attachment filename
-- [ ] `src/lib/pdf/render-quote.ts:184` — replace `Quote #${quote.quoteNumber}` with `quoteDisplayName(quote.createdAt)`. Drop `quoteNumber` from the `QuoteRow` arg shape if no other caller reads it (grep `render-quote` callers — `actions.ts` is the only one).
-- [ ] `src/lib/email/templates/quote.tsx` — replace `quoteNumber: string` field with `createdAt: Date` on `QuoteEmailFields`; rewrite subject (`:111`) and inline body reference (`:83`) to use `quoteDisplayName(createdAt)`. JSDoc on `:31` updated to reflect the new identity shape.
-- [ ] `src/features/quotes/actions.ts:967-973` — call site: pass `createdAt: draft.createdAt` instead of `quoteNumber: String(quoteId)`.
-- [ ] `src/features/quotes/actions.ts:982` — replace attachment `filename: `quote-${quoteId}.pdf`` with `filename: quoteDownloadFilename(draft.createdAt)`.
-- [ ] Update `src/features/quotes/actions.test.ts:178, 332` subject assertions to match the new format (with a stubbed `createdAt` on the test fixture).
-- [ ] `pnpm tsc --noEmit` + `pnpm vitest run src/features/quotes/` clean.
+- [x] `src/lib/pdf/render-quote.ts:184` — replace `Quote #${quote.quoteNumber}` with `quoteDisplayName(quote.createdAt)`. Drop `quoteNumber` from the `QuoteRow` arg shape if no other caller reads it (grep `render-quote` callers — `actions.ts` is the only one). **In-cycle addendum**: msa/actions.ts is the second caller — sweep it the same way.
+- [x] `src/lib/email/templates/quote.tsx` — replace `quoteNumber: string` field with `createdAt: Date` on `QuoteEmailFields`; rewrite subject (`:111`) and inline body reference (`:83`) to use `quoteDisplayName(createdAt)`. JSDoc on `:31` updated to reflect the new identity shape.
+- [x] `src/features/quotes/actions.ts:967-973` — call site: pass `createdAt: draft.createdAt` instead of `quoteNumber: String(quoteId)`. (Also added `createdAt` to the `draft` projection at `:777`.)
+- [x] `src/features/quotes/actions.ts:982` — replace attachment `filename: `quote-${quoteId}.pdf`` with `filename: quoteDownloadFilename(draft.createdAt)`.
+- [x] Update `src/features/quotes/actions.test.ts:178, 332` subject assertions to match the new format (with a stubbed `createdAt` on the test fixture). Also updated `msa/actions.test.ts` bundled-attachment assertion + `render-quote.test.ts` fixture.
+- [x] `pnpm tsc --noEmit` + `pnpm vitest run src/features/quotes/` clean.
+
+**In-cycle Code Anchor additions** (not pre-listed):
+- `src/features/msa/actions.ts:289-300` — bundled-quote `QuoteData` swap to `createdAt`, plus `:328` Dropbox Sign message + `:332` attachment filename — keeps the customer-facing MSA envelope on the same display name as the standalone send.
+- `src/features/quotes/actions.ts:714` — preview path also swapped (caller of `renderQuotePdf` in the composer Preview button).
 
 #### Phase 4: Tests + smoke verification
 - [ ] Service-level integration test: send a quote with a known `createdAt` and assert `email.subject`, `email.attachments[0].filename`, and the PDF body title all use the same `quote-<timestamp>` form.
