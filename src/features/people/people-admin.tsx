@@ -9,8 +9,8 @@ import {
   useTransition,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import * as Checkbox from '@radix-ui/react-checkbox';
-import * as Select from '@radix-ui/react-select';
+import { Checkbox } from '@/components/catalyst/checkbox';
+import { Listbox, ListboxOption, ListboxLabel } from '@/components/catalyst/listbox';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
 import { Combobox, ComboboxOption, ComboboxLabel } from '@/components/catalyst/combobox';
@@ -100,33 +100,6 @@ function useTouched() {
     [],
   );
   return { touched, fieldHandlers };
-}
-
-// Radix Checkbox doesn't render a tick visual itself — it ships an unstyled
-// button + Indicator slot. These classes turn the button into a checkbox-
-// shaped target and flip to primary-fill on `data-state="checked"`.
-// `roleCheckboxClass` is shared across the three role checkboxes so the
-// fieldset stays visually uniform. `CheckIcon` is the indicator SVG (matches
-// the inline-SVG idiom used by the Dialog wrapper).
-const roleCheckboxClass =
-  'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-input bg-white transition data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
-
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className="h-3 w-3"
-      aria-hidden="true"
-    >
-      <path
-        fillRule="evenodd"
-        d="M16.704 5.29a1 1 0 0 1 .005 1.414l-7.5 7.55a1 1 0 0 1-1.42.004l-3.5-3.5a1 1 0 1 1 1.414-1.415l2.79 2.79 6.79-6.84a1 1 0 0 1 1.42-.004Z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
 }
 
 function pillClass(active: boolean): string {
@@ -547,49 +520,34 @@ function PersonForm({
           Roles
         </p>
         <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox.Root
+          <Checkbox
             name="roles"
             value="admin"
             checked={admin}
-            onCheckedChange={(c) => setAdmin(c === true)}
-            className={roleCheckboxClass}
-          >
-            <Checkbox.Indicator>
-              <CheckIcon />
-            </Checkbox.Indicator>
-          </Checkbox.Root>
+            onChange={setAdmin}
+          />
           <span>
             <strong>Admin</strong>
           </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox.Root
+          <Checkbox
             name="roles"
             value="coach"
             checked={coach}
-            onCheckedChange={(c) => setCoach(c === true)}
-            className={roleCheckboxClass}
-          >
-            <Checkbox.Indicator>
-              <CheckIcon />
-            </Checkbox.Indicator>
-          </Checkbox.Root>
+            onChange={setCoach}
+          />
           <span>
             <strong>Coach</strong>
           </span>
         </label>
         <label className="flex items-center gap-2 text-sm text-foreground">
-          <Checkbox.Root
+          <Checkbox
             name="roles"
             value="dealer"
             checked={dealer}
-            onCheckedChange={(c) => setDealerChecked(c === true)}
-            className={roleCheckboxClass}
-          >
-            <Checkbox.Indicator>
-              <CheckIcon />
-            </Checkbox.Indicator>
-          </Checkbox.Root>
+            onChange={setDealerChecked}
+          />
           <span>
             <strong>Dealer</strong>{' '}
             <span className="text-xs text-muted-foreground">
@@ -633,53 +591,20 @@ function PersonForm({
                   </ComboboxOption>
                 )}
               </Combobox>
-              <Select.Root
+              <Listbox
                 value={link.role}
-                onValueChange={(v) =>
+                onChange={(v) =>
                   setDealerLink(i, { role: v as DealerContactRole })
                 }
+                placeholder="role"
+                aria-label="Role"
               >
-                <Select.Trigger
-                  aria-label="Role"
-                  className="flex items-center justify-between gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-foreground outline-none transition focus:border-accent focus:ring-3 focus:ring-accent/20"
-                >
-                  <Select.Value placeholder="role" />
-                  <Select.Icon>
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="h-3 w-3 text-muted-foreground"
-                      aria-hidden="true"
-                    >
-                      <path
-                        fillRule="evenodd"
-                        d="M5.22 7.22a.75.75 0 0 1 1.06 0L10 10.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 8.28a.75.75 0 0 1 0-1.06Z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  </Select.Icon>
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Content
-                    position="popper"
-                    sideOffset={4}
-                    className="z-50 overflow-hidden rounded-lg border border-border bg-white shadow-[0_8px_24px_rgba(15,30,60,0.12)]"
-                  >
-                    <Select.Viewport className="p-1">
-                      {DEALER_CONTACT_ROLES.map((r) => (
-                        <Select.Item
-                          key={r}
-                          value={r}
-                          className="cursor-pointer rounded px-2 py-1.5 text-sm text-foreground outline-none data-[highlighted]:bg-accent/10 data-[highlighted]:text-primary"
-                        >
-                          <Select.ItemText>{r}</Select.ItemText>
-                        </Select.Item>
-                      ))}
-                    </Select.Viewport>
-                  </Select.Content>
-                </Select.Portal>
-              </Select.Root>
+                {DEALER_CONTACT_ROLES.map((r) => (
+                  <ListboxOption key={r} value={r}>
+                    <ListboxLabel>{r}</ListboxLabel>
+                  </ListboxOption>
+                ))}
+              </Listbox>
               <Button
                 type="button"
                 color="red"
