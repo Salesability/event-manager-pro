@@ -6,8 +6,8 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Catalyst install + dep mapping + gap decisions | Done | - |
-| 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape (no semantic-token layer) | Pending | - |
+| 1: Catalyst install + dep mapping + gap decisions | Done | `762ac1a` |
+| 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape (no semantic-token layer) | Done | - |
 | 3: Primitive swap — Button, Badge, Field/FieldGroup/Label, Input, Textarea | Pending | - |
 | 4: Primitive swap — Dialog, Combobox, Select/Listbox, Checkbox, Dropdown | Pending | - |
 | 5: DataTable restyle + rewire 0043 conventions (PageHeader, RowActions, KeyValueStrip, Section) | Pending | - |
@@ -45,7 +45,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - shadcn's `--primary`/`--accent`/`--secondary`/`--muted`/`--card`/`--popover` semantic-token layer (the post-0047 collapse) gets replaced by Catalyst's per-component CSS custom-prop approach
 - `cn()` from `src/lib/utils.ts` — Catalyst uses `clsx` directly; the `tw-merge` wrapper becomes orphan unless other callers exist (check during Phase 7)
 
-**Overall Progress:** 12% (1/8 phases complete)
+**Overall Progress:** 25% (2/8 phases complete)
 
 **Note:**
 - This is a foundation swap; behavior should be visually equivalent or better per-component, never worse
@@ -69,14 +69,16 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape
 
-- [ ] **Eyedropper the logo** at `public/saledayevents-logo.jpg` for the brand seed. Known anchor from prior chunks: `#1a5fa8` (logo blue, eyedropper range `#1a5fa8–#1f6bc2`). Confirm with a fresh pixel sample — pick the visually-dominant value as the `brand-500` mid-tone.
-- [ ] **Generate a logo-anchored ramp** for `brand-50/100/200/300/400/500/600/700/800/900/950` using OKLCH-spaced lightness steps around the seed. Tools that produce one obvious answer: uicolors.app, palette.style, or a small ad-hoc OKLCH script (preferred — checked-in and re-runnable). The seed's OKLCH chroma + hue stay constant across the ramp; only lightness varies. Document the generator approach in a `docs/designs/0049-migrate-to-catalyst/palette.md` artifact (script or table) so the choice is reversible.
-- [ ] **Register the ramp** in Tailwind v4's `@theme` block inside `src/app/globals.css` as `--color-brand-50` through `--color-brand-950`. Catalyst components use `<Button color="brand">` / `<Badge color="brand">` etc. — naming the family `brand` lets every callsite use a stable name regardless of the underlying hex values (chroma can re-tune later via a 1-file edit, no callsite churn).
-- [ ] **Neutrals: keep Tailwind's default `zinc`** (user decision 2026-05-13, soft commit — flippable to `slate`/`stone`/`neutral` family if the live UI feels too cool against the brand blue). Catalyst's whole component library is tuned for zinc-on-white; using anything else would require restyling Catalyst components in Phase 3+.
-- [ ] **Drop `@import "tw-animate-css"`** (user decision 2026-05-13). Catalyst's animations come from Headless UI's `<Transition>`; the `tw-animate-css` shim is no longer load-bearing.
-- [ ] Rewrite `src/app/globals.css` to: keep `@import "tailwindcss"`, the new `@theme` block with the `brand-*` ramp, the `body` rule, `@media print`, and `@layer base`. **Drop** the entire shadcn `--primary`/`--accent`/`--muted`/`--card`/`--popover`/`--secondary`/`--border`/`--input`/`--ring`/`--foreground`/`--background`/`--destructive`/`--radius` semantic-token block, the `:root` source-of-truth block, the `--shadow-*` definitions, the `--radius-sm` through `--radius-4xl` shadcn scale, and the `--font-display`/`--font-heading` aliases (keep `--font-sans: var(--font-inter)`).
-- [ ] `pnpm tsc --noEmit && pnpm test` — both green. **Note: the app will look broken at this point** (every shadcn primitive still uses `--primary`/`--muted`/etc. tokens which no longer resolve). This is expected; Phase 3 fixes it by deleting the shadcn primitives entirely. The fast gate is type/test correctness, not visual correctness, at this phase.
-- [ ] Commit as `feat(css): logo-derived brand ramp + zinc neutrals; drop shadcn semantic-token layer + tw-animate-css (0049 Phase 2)` — visual brokenness is the explicit trade-off, called out in the message.
+**Reframed 2026-05-13 (user direction "ship it as Phase 2"):** rather than "drop X, Y, Z from the legacy file", we **reset globals.css to the canonical `create-next-app --tailwind` shape** (verbatim from `vercel/next.js@canary` `packages/create-next-app/templates/app-tw/ts/app/globals.css`) and add only three load-bearing pieces — the logo-derived `brand` ramp, the `--color-status-*` triplet, and the Inter font wiring. Constructive framing, identical end-state; cleaner to reason about. The app will look severely broken between this commit and the end of Phase 5 (every `text-accent`, `bg-primary`, `bg-muted`, `border-border`, `focus:ring-ring` callsite resolves to no token, since the shadcn middle layer is gone) — this is the explicit trade-off, called out in the commit message.
+
+- [x] **Eyedropper logo seed locked at `#1a5fa8`** (anchor from prior chunks, eyedropper range `#1a5fa8–#1f6bc2`). OKLCH: ~L=0.441, C=0.121, H=252.5°.
+- [x] **Generator script** at [`palette.mjs`](palette.mjs) — emits the `--color-brand-*` block to stdout from the seed's OKLCH triple. Re-runnable; chroma can re-tune via a 1-file edit. Constant hue (252.5°), tapered chroma (peaks near brand-400/500, dips at extremes), Tailwind-style lightness ramp.
+- [x] **Rewrite `src/app/globals.css`** to the canonical create-next-app shape + 3 additions (brand ramp, status colors, Inter wiring) + the load-bearing `@media print` block. Three deltas from the canonical create-next-app file: (a) drop the `--font-mono`/Geist line (Inter only, no mono); (b) drop the `prefers-color-scheme: dark` block (light-only app); (c) add the `@theme` block with brand ramp + status colors + print stylesheet. Net 143 → 64 lines.
+- [x] **Extend Catalyst's color maps to support `brand`** — added `brand:` entry to `button.tsx`'s `colors` map (matching `blue:` shape, swapping `--color-blue-*` → `--color-brand-*`) and `badge.tsx`'s color map (matching `blue:` shape). Catalyst sources at `src/components/catalyst/{button,badge}.tsx` now diverge from verbatim — this is the one deliberate edit recorded in the Phase 2 commit.
+- [x] **Drop `@import "tw-animate-css"`** — gone in the rewrite.
+- [x] **Neutrals: keep Tailwind's default `zinc`** — handled implicitly via Tailwind v4's built-in palette; no globals.css entry needed.
+- [x] `pnpm tsc --noEmit && pnpm test` — both green (tsc clean, vitest 797/799 PASS). **Visual state right after this commit:** gold (#b88a3a) **gone everywhere** ✓; brand-blue stays for surfaces using `--color-status-blue`; Send Quote green (`--color-status-green`) and red errors (`--color-status-red`) intact; every other shadcn-semantic-token surface (filter pills, focus rings, dropdown highlights, muted backgrounds, hairline borders) renders broken until Phase 3-5 lands Catalyst primitives.
+- [ ] Commit as `feat(css): reset globals.css to create-next-app baseline + brand ramp + status colors (0049 Phase 2)`.
 
 #### Phase 3: Primitive swap — Button, Badge, Field/FieldGroup/Label, Input, Textarea
 

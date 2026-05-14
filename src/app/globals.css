@@ -1,107 +1,40 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
-/*
- * 0047 — single-layer shadcn semantic tokens.
- * `@theme inline` registers Tailwind utility classes (`bg-primary`,
- * `text-foreground`, etc.) and points each `--color-*` Tailwind token at the
- * underlying `--*` custom property defined in `:root`. `:root` is the single
- * source of truth for colour values — no intermediate brand-named layer.
- *
- * Palette tokens kept (load-bearing): `--color-brand-blue` (`--primary`
- * resolves to it) and `--color-status-*` (Send/Status surfaces still address
- * the status palette directly via `bg-status-green`, `text-status-red`, etc.).
- *
- * No `.dark` block: this app is light-only. Removing dark mode keeps the
- * token graph short — re-add via a separate chunk if the marketing site
- * cutover needs it.
- */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
 
 @theme inline {
-  /* ── Palette tokens (load-bearing) ────────────────────────────────────── */
-  --color-brand-blue: #1a5fa8;       /* logo blue (eyedropper #1a5fa8–#1f6bc2) */
-  --color-brand-blue-fg: #ffffff;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+}
+
+@theme {
+  /* Logo-derived brand ramp — see docs/designs/0049-migrate-to-catalyst/palette.mjs */
+  --color-brand-50: oklch(97.0% 0.018 252.5);
+  --color-brand-100: oklch(94.0% 0.034 252.5);
+  --color-brand-200: oklch(88.0% 0.064 252.5);
+  --color-brand-300: oklch(78.0% 0.094 252.5);
+  --color-brand-400: oklch(62.0% 0.118 252.5);
+  --color-brand-500: oklch(44.1% 0.121 252.5);  /* #1a5fa8 seed */
+  --color-brand-600: oklch(40.0% 0.115 252.5);
+  --color-brand-700: oklch(35.0% 0.103 252.5);
+  --color-brand-800: oklch(30.0% 0.088 252.5);
+  --color-brand-900: oklch(25.0% 0.070 252.5);
+  --color-brand-950: oklch(19.0% 0.050 252.5);
+
+  /* Status colors */
   --color-status-red: #c0392b;
   --color-status-green: #1e7e4a;
   --color-status-blue: #1a5fa8;
-
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-
-  /* ── shadcn semantic-token aliases ────────────────────────────────────── */
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-
-  /* ── Fonts ─────────────────────────────────────────────────────────────── */
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-sans);
-
-  /* ── Radii (shadcn scale derived from --radius) ───────────────────────── */
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-
-  /* ── Project shadows ──────────────────────────────────────────────────── */
-  --shadow-soft: 0 1px 4px rgba(15, 30, 60, 0.08);
-  --shadow-medium: 0 4px 16px rgba(15, 30, 60, 0.12);
-  --shadow-deep: 0 8px 32px rgba(15, 30, 60, 0.18);
-}
-
-/*
- * Source-of-truth values. Aliased above via `@theme inline`.
- * Modern-minimal aesthetic: white surfaces, neutral stone scale, brand-blue
- * primary, hairline borders, 0.625rem base radius. The stone scale lives
- * inline here (no separate brand block) — these are the only neutral values
- * the app needs.
- */
-:root {
-  --background: #ffffff;
-  --foreground: #2c2a26;             /* near-black body text */
-  --card: #ffffff;
-  --card-foreground: #2c2a26;
-  --popover: #ffffff;
-  --popover-foreground: #2c2a26;
-  --primary: var(--color-brand-blue);
-  --primary-foreground: var(--color-brand-blue-fg);
-  --secondary: #f4f2ee;              /* warm light neutral */
-  --secondary-foreground: #2c2a26;
-  --muted: #f4f2ee;
-  --muted-foreground: #6b6760;       /* mid neutral for secondary text */
-  --accent: #b88a3a;                 /* warm gold accent */
-  --accent-foreground: #ffffff;
-  --destructive: var(--color-status-red);
-  --destructive-foreground: #ffffff;
-  --border: #e8e4dd;                 /* hairline neutral */
-  --input: #e8e4dd;
-  --ring: var(--color-brand-blue);
-  --radius: 0.625rem;
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 @media print {
@@ -126,17 +59,5 @@ body {
     border: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
   }
 }
