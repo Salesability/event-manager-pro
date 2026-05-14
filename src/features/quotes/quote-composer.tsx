@@ -12,14 +12,7 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from '@/components/ui/combobox';
+import { Combobox, ComboboxOption, ComboboxLabel } from '@/components/catalyst/combobox';
 import {
   Dialog,
   DialogDescription,
@@ -499,25 +492,20 @@ export function QuoteComposer({
                     : null;
                   return (
                     <Combobox
-                      items={dealerOptions}
-                      itemToStringValue={(item) => item.value}
-                      itemToStringLabel={(item) => item.label}
+                      options={dealerOptions}
+                      displayValue={(item) => item?.label ?? ''}
                       value={selected}
-                      onValueChange={(item) =>
+                      onChange={(item) =>
                         field.onChange(item ? Number(item.value) : null)
                       }
+                      placeholder="Pick a dealer…"
+                      aria-label="Dealer"
                     >
-                      <ComboboxInput placeholder="Pick a dealer…" aria-label="Dealer" />
-                      <ComboboxContent>
-                        <ComboboxEmpty>No matches.</ComboboxEmpty>
-                        <ComboboxList>
-                          {(item) => (
-                            <ComboboxItem key={item.value} value={item}>
-                              {item.label}
-                            </ComboboxItem>
-                          )}
-                        </ComboboxList>
-                      </ComboboxContent>
+                      {(item) => (
+                        <ComboboxOption value={item}>
+                          <ComboboxLabel>{item.label}</ComboboxLabel>
+                        </ComboboxOption>
+                      )}
                     </Combobox>
                   );
                 }}

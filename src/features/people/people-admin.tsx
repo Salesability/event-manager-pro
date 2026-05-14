@@ -13,14 +13,7 @@ import * as Checkbox from '@radix-ui/react-checkbox';
 import * as Select from '@radix-ui/react-select';
 import type { ColumnFiltersState, FilterFn } from '@tanstack/react-table';
 import { Can } from '@/components/auth/can';
-import {
-  Combobox,
-  ComboboxContent,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-} from '@/components/ui/combobox';
+import { Combobox, ComboboxOption, ComboboxLabel } from '@/components/catalyst/combobox';
 import {
   Dialog,
   DialogDescription,
@@ -625,28 +618,20 @@ function PersonForm({
           {dealerLinks.map((link, i) => (
             <div key={i} className="grid grid-cols-[1fr_auto_auto] items-center gap-2">
               <Combobox
-                items={dealerOptions}
-                itemToStringValue={(item) => item.value}
-                itemToStringLabel={(item) => item.label}
+                options={dealerOptions}
+                displayValue={(item) => item?.label ?? ''}
                 value={dealerOptions.find((o) => o.value === String(link.dealerId)) ?? null}
-                onValueChange={(item) =>
+                onChange={(item) =>
                   setDealerLink(i, { dealerId: item?.value ?? '' })
                 }
+                placeholder="Type a dealership name…"
+                aria-label="Dealer"
               >
-                <ComboboxInput
-                  placeholder="Type a dealership name…"
-                  aria-label="Dealer"
-                />
-                <ComboboxContent>
-                  <ComboboxEmpty>No matching dealers.</ComboboxEmpty>
-                  <ComboboxList>
-                    {(item) => (
-                      <ComboboxItem key={item.value} value={item}>
-                        {item.label}
-                      </ComboboxItem>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
+                {(item) => (
+                  <ComboboxOption value={item}>
+                    <ComboboxLabel>{item.label}</ComboboxLabel>
+                  </ComboboxOption>
+                )}
               </Combobox>
               <Select.Root
                 value={link.role}
