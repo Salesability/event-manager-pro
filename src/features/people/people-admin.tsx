@@ -23,7 +23,6 @@ import { DataTable } from '@/components/ui/data-table';
 import { Field, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
-import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -619,13 +618,9 @@ function PersonForm({
       )}
 
       <div className="mt-2 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className={buttonVariants({ variant: 'outline', size: 'xs' })}
-        >
+        <Button type="button" outline onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
         <Button type="submit" color="brand" disabled={pending || !hasAnyRole}>
           {pending
             ? mode === 'create'

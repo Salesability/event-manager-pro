@@ -30,7 +30,7 @@ import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
 import { Textarea } from '@/components/catalyst/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ToggleGroup, ToggleGroupItem } from '@/components/catalyst/toggle-group';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -566,12 +566,8 @@ export function QuoteComposer({
               <Fieldset>
                 <Legend>Record retrieval bracket</Legend>
                 <ToggleGroup
-                  value={[String(field.value)]}
-                  onValueChange={(arr) => {
-                    // Base UI's single-mode ToggleGroup still returns an array;
-                    // pick the single pressed value or fall back to 0 (None).
-                    field.onChange(arr.length ? Number(arr[0]) : 0);
-                  }}
+                  value={String(field.value)}
+                  onValueChange={(v) => field.onChange(Number(v))}
                   className="flex-wrap"
                 >
                   {RETRIEVAL_BRACKETS.map((amount) => (
