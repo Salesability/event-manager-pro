@@ -1,6 +1,13 @@
 'use client';
 
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import {
+  Dropdown,
+  DropdownButton,
+  DropdownMenu,
+  DropdownItem,
+  DropdownDivider,
+  DropdownHeader,
+} from '@/components/catalyst/dropdown';
 import { signOut } from '@/features/auth/actions';
 
 // Replaces the inline avatar pill + email + standalone Sign out button that
@@ -9,21 +16,21 @@ import { signOut } from '@/features/auth/actions';
 // — pulls ~30% of the bar width back, and creates the affordance home for
 // future per-user settings (profile, theme, MFA).
 //
-// Radix DropdownMenu over Popover because it ships keyboard semantics —
-// roving tabindex, arrow-key item navigation, Escape close, focus-restore
-// to the trigger — that match menu-pattern expectations. Same precedent as
-// 0024 picking Combobox over a hand-rolled popover for the dealer picker.
+// Catalyst Dropdown (Headless UI) over Popover because it ships keyboard
+// semantics — roving tabindex, arrow-key item navigation, Escape close,
+// focus-restore to the trigger — that match menu-pattern expectations.
 
 export function UserMenu({ email }: { email: string }) {
   const initials = deriveInitials(email);
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger
+    <Dropdown>
+      <DropdownButton
+        as="button"
         aria-label="Account menu"
         className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-1 pr-3 transition hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted-foreground text-[11px] font-bold text-white">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-500 text-[11px] font-bold text-white">
           {initials}
         </span>
         <svg
@@ -39,45 +46,25 @@ export function UserMenu({ email }: { email: string }) {
             clipRule="evenodd"
           />
         </svg>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          side="bottom"
-          align="end"
-          sideOffset={6}
-          className="z-50 min-w-[14rem] overflow-hidden rounded-lg border border-border bg-white p-1 shadow-[0_8px_24px_rgba(15,30,60,0.18)]"
-        >
-          <DropdownMenu.Label className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+      </DropdownButton>
+      <DropdownMenu anchor="bottom end" className="min-w-[14rem]">
+        <DropdownHeader>
+          <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             Signed in as
-          </DropdownMenu.Label>
-          <div
-            className="max-w-[20rem] break-all px-2 pb-2 text-xs text-foreground"
-            title={email}
-          >
+          </div>
+          <div className="max-w-[20rem] break-all text-xs text-zinc-900" title={email}>
             {email}
           </div>
-          <DropdownMenu.Separator className="my-1 h-px bg-muted" />
-          {/* Sign-out is a Server Action. Wrap the menu item in a `<form
-              action={signOut}>` and override Radix's default onSelect close
-              with `requestSubmit()` so the form submit dispatches BEFORE
-              the portal unmounts (Codex 0030 Phase 2 Medium — the natural
-              `<button type="submit">` ordering is fragile across browsers
-              under Radix's onSelect → unmount race). */}
-          <form action={signOut}>
-            <DropdownMenu.Item
-              onSelect={(e) => {
-                e.preventDefault();
-                const target = e.currentTarget as HTMLElement | null;
-                target?.closest('form')?.requestSubmit();
-              }}
-              className="flex w-full cursor-pointer items-center rounded px-2 py-1.5 text-sm text-foreground outline-none transition data-[highlighted]:bg-accent/10 data-[highlighted]:text-primary"
-            >
-              Sign out
-            </DropdownMenu.Item>
-          </form>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+        </DropdownHeader>
+        <DropdownDivider />
+        {/* Sign-out is a Server Action. Wrap the menu item in a `<form
+            action={signOut}>` so the menu close + form submit don't race.
+            The DropdownItem renders as a submit button. */}
+        <form action={signOut}>
+          <DropdownItem type="submit">Sign out</DropdownItem>
+        </form>
+      </DropdownMenu>
+    </Dropdown>
   );
 }
 

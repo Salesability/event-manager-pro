@@ -8,7 +8,7 @@ import type {
   SortingState,
 } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/catalyst/tabs';
 import {
   buildClientColumns,
   buildCoachColumns,
