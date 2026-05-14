@@ -8,6 +8,7 @@ export type MsaPanelTriggerProps = {
   dealerName: string;
   recipient: { email: string; firstName: string } | { error: string };
   firstDraftQuoteId: number | null;
+  firstDraftQuoteCreatedAt: Date | null;
 };
 
 // Client-side trigger button + dialog wrapper. The dealership page renders
@@ -32,6 +33,7 @@ export function MsaCreateTrigger(props: MsaPanelTriggerProps) {
         dealerName={props.dealerName}
         recipient={props.recipient}
         firstDraftQuoteId={props.firstDraftQuoteId}
+        firstDraftQuoteCreatedAt={props.firstDraftQuoteCreatedAt}
       />
     </>
   );

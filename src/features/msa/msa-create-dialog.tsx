@@ -10,6 +10,7 @@ import {
 } from '@/components/catalyst/dialog';
 import { Button } from '@/components/catalyst/button';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
+import { quoteDisplayName } from '@/features/quotes/display-name';
 import { createMsaDraft, sendMsaEnvelope } from './actions';
 
 export type MsaCreateDialogProps = {
@@ -24,6 +25,10 @@ export type MsaCreateDialogProps = {
   /** Id of the dealer's first draft Quote. When `null`, the dialog renders
    *  the "create a draft Quote first" guidance. */
   firstDraftQuoteId: number | null;
+  /** `createdAt` of the dealer's first draft Quote — drives the
+   *  `quote-<timestamp>` display name. Paired with `firstDraftQuoteId`; both
+   *  null together when no draft exists. */
+  firstDraftQuoteCreatedAt: Date | null;
 };
 
 // Single-click "create MSA + send envelope" flow. Two-step action sequence:
@@ -116,7 +121,9 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
                 href={`/quotes/${props.firstDraftQuoteId}`}
                 className="font-medium text-brand-700 underline"
               >
-                Quote #{props.firstDraftQuoteId}
+                {props.firstDraftQuoteCreatedAt
+                  ? quoteDisplayName(props.firstDraftQuoteCreatedAt)
+                  : `quote ${props.firstDraftQuoteId}`}
               </a>
             )}
           </dd>

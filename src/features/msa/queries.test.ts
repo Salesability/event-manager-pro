@@ -24,7 +24,7 @@ vi.mock('@/lib/db', () => {
 });
 
 import {
-  firstDraftQuoteIdForDealer,
+  firstDraftQuoteForDealer,
   loadActiveOrPendingMsa,
   loadMsasByDealer,
 } from './queries';
@@ -89,14 +89,15 @@ describe('loadActiveOrPendingMsa', () => {
   });
 });
 
-describe('firstDraftQuoteIdForDealer', () => {
-  it('returns the id of the first draft quote', async () => {
-    mocks.dbResults.push([{ id: 42 }]);
-    expect(await firstDraftQuoteIdForDealer(7)).toBe(42);
+describe('firstDraftQuoteForDealer', () => {
+  it('returns the id + createdAt of the first draft quote', async () => {
+    const createdAt = new Date('2026-05-14T18:30:00Z');
+    mocks.dbResults.push([{ id: 42, createdAt }]);
+    expect(await firstDraftQuoteForDealer(7)).toEqual({ id: 42, createdAt });
   });
 
   it('returns null when no draft quote exists', async () => {
     mocks.dbResults.push([]);
-    expect(await firstDraftQuoteIdForDealer(7)).toBeNull();
+    expect(await firstDraftQuoteForDealer(7)).toBeNull();
   });
 });

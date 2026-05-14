@@ -7,6 +7,7 @@ import { QuoteStatusBadge } from '@/components/app/status-badge';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { displayStatusKey } from '@/features/quotes/status-display';
+import { quoteDisplayName } from '@/features/quotes/display-name';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
@@ -177,7 +178,7 @@ export default async function QuoteEditPage({
         }}
         recipient={recipient}
         msaEnvelopeInFlight={msaEnvelopeInFlight}
-        pageTitle={`Quote #${quote.id}`}
+        pageTitle={quoteDisplayName(quote.createdAt)}
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
         keyValueItems={[
           { label: 'Status', value: <QuoteStatusBadge status={pillKey} /> },

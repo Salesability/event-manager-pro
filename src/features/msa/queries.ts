@@ -81,18 +81,18 @@ export async function loadActiveOrPendingMsa(
   return pending ?? null;
 }
 
-// Returns the id of the dealer's first draft Quote so the Phase 5 MSA panel
-// can decide whether to enable the "Create MSA + send" button (requires a
-// draft Quote in the envelope per the bundled-send v1 contract). Used by the
-// dealer-detail page as part of its server-side data fetch.
-export async function firstDraftQuoteIdForDealer(
+// Returns the dealer's first draft Quote (id + createdAt) so the Phase 5 MSA
+// panel can decide whether to enable the "Create MSA + send" button (requires
+// a draft Quote in the envelope per the bundled-send v1 contract). `createdAt`
+// drives the `quote-<timestamp>` display name in the create-MSA dialog.
+export async function firstDraftQuoteForDealer(
   dealerId: number,
-): Promise<number | null> {
+): Promise<{ id: number; createdAt: Date } | null> {
   const [row] = await db
-    .select({ id: quotes.id })
+    .select({ id: quotes.id, createdAt: quotes.createdAt })
     .from(quotes)
     .where(and(eq(quotes.dealerId, dealerId), eq(quotes.status, 'draft')))
     .orderBy(quotes.id)
     .limit(1);
-  return row?.id ?? null;
+  return row ?? null;
 }

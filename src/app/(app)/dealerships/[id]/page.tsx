@@ -14,7 +14,7 @@ import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { displayStatusKey } from '@/features/quotes/status-display';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import {
-  firstDraftQuoteIdForDealer,
+  firstDraftQuoteForDealer,
   loadActiveOrPendingMsa,
 } from '@/features/msa/queries';
 import { MsaCreateTrigger } from '@/features/msa/msa-panel';
@@ -40,10 +40,10 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const [quotes, msa, firstDraftQuoteId, recipientResult] = await Promise.all([
+  const [quotes, msa, firstDraftQuote, recipientResult] = await Promise.all([
     loadQuotesByDealer(id),
     loadActiveOrPendingMsa(id),
-    firstDraftQuoteIdForDealer(id),
+    firstDraftQuoteForDealer(id),
     resolveQuoteRecipient(id),
   ]);
   const recipient =
@@ -156,7 +156,8 @@ export default async function DealerDetailPage({
                 dealerId={dealer.id}
                 dealerName={dealer.name}
                 recipient={recipient}
-                firstDraftQuoteId={firstDraftQuoteId}
+                firstDraftQuoteId={firstDraftQuote?.id ?? null}
+                firstDraftQuoteCreatedAt={firstDraftQuote?.createdAt ?? null}
               />
             )}
           </div>
