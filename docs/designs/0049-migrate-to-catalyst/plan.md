@@ -6,7 +6,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Catalyst install + dep mapping + gap decisions | Pending | - |
+| 1: Catalyst install + dep mapping + gap decisions | Done | - |
 | 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape (no semantic-token layer) | Pending | - |
 | 3: Primitive swap — Button, Badge, Field/FieldGroup/Label, Input, Textarea | Pending | - |
 | 4: Primitive swap — Dialog, Combobox, Select/Listbox, Checkbox, Dropdown | Pending | - |
@@ -45,7 +45,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - shadcn's `--primary`/`--accent`/`--secondary`/`--muted`/`--card`/`--popover` semantic-token layer (the post-0047 collapse) gets replaced by Catalyst's per-component CSS custom-prop approach
 - `cn()` from `src/lib/utils.ts` — Catalyst uses `clsx` directly; the `tw-merge` wrapper becomes orphan unless other callers exist (check during Phase 7)
 
-**Overall Progress:** 0% (0/8 phases complete)
+**Overall Progress:** 12% (1/8 phases complete)
 
 **Note:**
 - This is a foundation swap; behavior should be visually equivalent or better per-component, never worse
@@ -59,23 +59,13 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 1: Catalyst install + dep mapping + gap decisions
 
-- [ ] Copy `/Users/davidwhogan/Downloads/catalyst-ui-kit/typescript/*.tsx` (27 files) into `src/components/catalyst/`. Do not modify at copy time — verbatim.
-- [ ] `pnpm add @headlessui/react motion clsx` (Catalyst's hard deps per its README).
-- [ ] Confirm Tailwind is on v4.0+ (`pnpm list tailwindcss`). The repo currently runs Tailwind v4 (per `globals.css:1` `@import "tailwindcss"`); no upgrade should be needed.
-- [ ] Build a `src/components/catalyst/INDEX.md` (or similar working note in this plan folder) mapping every current shadcn callsite to its Catalyst counterpart. Capture:
-  - Button (2 callsite files, dozens of sites within) — Catalyst `<Button color="zinc">` / `outline` / `plain` props
-  - Badge (used app-wide via the 0043 wrappers `QuoteStatusBadge`/`PersonLifecycleBadge`/etc.) — Catalyst `<Badge color="zinc">` per status
-  - Dialog (9 callsite files) — Catalyst `<Dialog>` / `<DialogTitle>` / `<DialogDescription>` / `<DialogBody>` / `<DialogActions>` shape
-  - Combobox (3 callsite files: `dealer-form.tsx`, `quote-composer.tsx`, `people-admin.tsx`)
-  - Input/Textarea/Field/FieldGroup/FieldLabel (~6 callsite files each)
-  - Radix Checkbox (1 callsite: `people-admin.tsx`) — Catalyst `<Checkbox>`
-  - Radix Dropdown (2 callsite files) — Catalyst `<Dropdown>` / `<DropdownButton>` / `<DropdownMenu>`
-  - Radix Select (1 callsite) — Catalyst `<Listbox>` (Catalyst's select equivalent)
-- [ ] Decide the three known gaps and document the call in the mapping doc:
-  - **DataTable** — recommendation: keep TanStack `useReactTable` row model, restyle by composing Catalyst `<Table>`/`<TableRow>`/`<TableCell>` primitives. The 0043 `<RowActions>` survives as the row-action callsite.
-  - **ToggleGroup** (1 callsite: `quote-composer.tsx`) — **decided: build custom on Headless UI `<RadioGroup>`** (user decision 2026-05-13). Lives at `src/components/catalyst/toggle-group.tsx` so the primitive layer is pure Catalyst + Headless UI; no retained shadcn primitive.
-  - **Toaster** — recommendation: keep current `src/components/ui/toaster.tsx` (sonner-based). Catalyst doesn't ship a toaster. Mark it explicitly as a kept-shadcn file; do not delete in Phase 7.
-- [ ] Confirm Catalyst's expected CSS shape by reading at least 3 Catalyst components (`button.tsx`, `dialog.tsx`, `input.tsx`) and noting which CSS custom props they expect (`--btn-bg`, `--btn-border`, etc.). These get defined per-component, not globally; document the implication for Phase 6's CSS drain.
+- [x] Copy `/Users/davidwhogan/Downloads/catalyst-ui-kit/typescript/*.tsx` (27 files) into `src/components/catalyst/`. Do not modify at copy time — verbatim.
+- [x] `pnpm add @headlessui/react motion clsx` (Catalyst's hard deps per its README). `clsx@2.1.1` already present; added `@headlessui/react@2.2.10` + `motion@12.38.0`. pnpm pruned transitive `date-fns@4.1.0` (no direct importers — safe).
+- [x] Confirm Tailwind is on v4.0+ (`pnpm list tailwindcss`). Confirmed: `tailwindcss@4.2.4` + `@tailwindcss/postcss@4.2.4`.
+- [x] Build mapping doc — see [`mapping.md`](mapping.md). Captures CSS-shape contract (Catalyst reads Tailwind v4 `@theme` direct, NOT shadcn semantic tokens), per-primitive callsite counts (Button 2, Badge 1 internal, Dialog 9, Combobox 2 (plan claimed 3 — `dealer-form.tsx` does NOT use Combobox; corrected), Field 6, Input 6, Textarea 3, Tabs 1, ToggleGroup 1, Radix Checkbox/Select/Dropdown 1/1/2), and the Tabs gap surfaced during the audit (see Phase 4 update below).
+- [x] Decide the three known gaps and document the call in the mapping doc — locked: DataTable keeps TanStack + restyles via Catalyst Table; ToggleGroup builds on Headless UI `<RadioGroup>`; Toaster keeps sonner-based file as the lone retained shadcn primitive. **NEW gap surfaced during audit:** Tabs (1 callsite `reports-tabs.tsx`) — Catalyst doesn't ship; decision: build on Headless UI `<TabGroup>`. Added to Phase 4 checklist.
+- [x] Confirm Catalyst's expected CSS shape by reading 3 Catalyst components — read `button.tsx` (uses `var(--color-zinc-500)`, `var(--color-blue-600)` etc., per-component `--btn-bg`/`--btn-border`/`--btn-icon` props inline), `dialog.tsx` (uses `var(--radius-lg)`, `bg-zinc-950/25` backdrop, `bg-white` panel — no global custom-prop dependencies), `input.tsx` (uses `var(--radius-lg)`, `border-zinc-950/10`, `focus-within:after:ring-blue-500`). Implication for Phase 6 drain documented in mapping.md: shadcn semantic-token layer is dead weight under Catalyst; per-component custom props are local (Tailwind-utility-inline), no global drain work needed for them.
+- [x] **Important architectural note discovered:** Catalyst's `button.tsx:59-158` `colors` map and `badge.tsx`'s equivalent list 22 named colors but NOT `brand`. To support `<Button color="brand">` / `<Badge color="brand">`, Phase 2 must add a `brand:` entry to those maps. This is a deliberate edit to the verbatim-copied file; record the diff in the Phase 2 commit message.
 
 #### Phase 2: Logo-derived `brand` palette + zinc neutrals + `globals.css` reshape
 
@@ -103,6 +93,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] **Select/Listbox:** find the 1 file using `@radix-ui/react-select` (`people-admin.tsx`'s dealer-link role select) → swap to Catalyst `<Listbox>` (which Catalyst uses as its select equivalent).
 - [ ] **Checkbox:** swap `import * as Checkbox from '@radix-ui/react-checkbox'` in `people-admin.tsx` → Catalyst's `<Checkbox>`. The custom `roleCheckboxClass` styling can be replaced by Catalyst's color prop.
 - [ ] **Dropdown:** swap `@radix-ui/react-dropdown-menu` callsites (2 files) → Catalyst `<Dropdown>` / `<DropdownButton>` / `<DropdownMenu>` / `<DropdownItem>`.
+- [ ] **Tabs (gap surfaced in Phase 1 audit):** build `src/components/catalyst/tabs.tsx` on Headless UI `<TabGroup>` / `<TabList>` / `<Tab>` / `<TabPanels>` / `<TabPanel>`, mapping the shadcn `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` API shape (1 callsite: `reports-tabs.tsx`).
 - [ ] Commit per primitive; fast gate after each.
 
 #### Phase 5: DataTable restyle + rewire 0043 conventions
