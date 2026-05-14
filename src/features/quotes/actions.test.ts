@@ -175,7 +175,7 @@ beforeEach(() => {
     recipient: { email: 'buyer@dealer.test', firstName: 'Pat' },
   });
   mocks.quoteEmail.mockResolvedValue({
-    subject: 'Your Salesability Quote — Quote #42',
+    subject: 'Your Salesability Quote — quote-20260512-0700',
     text: 'Plain text body',
     html: '<p>HTML body</p>',
   });
@@ -228,12 +228,16 @@ describe('createQuote', () => {
 
 // Realistic draft row that sendQuote pre-loads. Tests can override fields
 // via spread; the mocked db queue feeds the values through.
+// `createdAt` (2026-05-12 11:00 UTC = 07:00 EDT) renders as
+// `quote-20260512-0700` via `quoteDisplayName` — used in subject/filename
+// assertions below.
 const DRAFT_ROW = {
   id: 42,
   status: 'draft',
   dealerId: 7,
   sentAt: null,
   updatedAt: new Date('2026-05-12T12:00:00.000Z'),
+  createdAt: new Date('2026-05-12T11:00:00.000Z'),
   acceptToken: '11111111-2222-3333-4444-555555555555',
   quoteValidDays: 30,
   lineItems: [
@@ -280,7 +284,7 @@ describe('sendQuote', () => {
     // Renderer received a QuoteData assembled from the row + dealer.
     expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
     const quoteData = mocks.renderQuotePdf.mock.calls[0][0] as Record<string, unknown>;
-    expect(quoteData.quoteNumber).toBe('42');
+    expect(quoteData.createdAt).toEqual(DRAFT_ROW.createdAt);
     expect(quoteData.clientName).toBe('Acme Auto Group');
     expect(quoteData.clientAddress).toEqual([
       '456 Dealership Boulevard',
@@ -329,10 +333,10 @@ describe('sendQuote', () => {
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
     const sendArg = mocks.sendEmail.mock.calls[0][0] as Record<string, unknown>;
     expect(sendArg.to).toBe('buyer@dealer.test');
-    expect(sendArg.subject).toBe('Your Salesability Quote — Quote #42');
+    expect(sendArg.subject).toBe('Your Salesability Quote — quote-20260512-0700');
     expect(sendArg.html).toBe('<p>HTML body</p>');
     const attachments = sendArg.attachments as Array<Record<string, unknown>>;
-    expect(attachments[0].filename).toBe('quote-42.pdf');
+    expect(attachments[0].filename).toBe('saledayevents-quote-20260512-0700.pdf');
     expect(attachments[0].contentType).toBe('application/pdf');
 
     // Email template received the recipient name + quote summary; no
@@ -341,7 +345,7 @@ describe('sendQuote', () => {
     expect(mocks.quoteEmail).toHaveBeenCalledTimes(1);
     const tplArg = mocks.quoteEmail.mock.calls[0][0] as Record<string, unknown>;
     expect(tplArg.firstName).toBe('Pat');
-    expect(tplArg.quoteNumber).toBe('42');
+    expect(tplArg.createdAt).toEqual(DRAFT_ROW.createdAt);
     expect(tplArg).not.toHaveProperty('acceptUrl');
     expect(tplArg).not.toHaveProperty('declineUrl');
 

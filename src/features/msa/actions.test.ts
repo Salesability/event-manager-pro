@@ -152,6 +152,7 @@ const DRAFT_QUOTE_ROW = {
   id: 42,
   dealerId: 7,
   status: 'draft' as const,
+  createdAt: new Date('2026-05-12T11:00:00.000Z'),
   quoteValidDays: 30,
   lineItems: [
     {
@@ -297,7 +298,7 @@ describe('sendMsaEnvelope', () => {
     const files = envelopeArg.files as Array<{ filename: string }>;
     expect(files).toHaveLength(2);
     expect(files[0].filename).toBe('msa-1.pdf');
-    expect(files[1].filename).toBe('quote-42.pdf');
+    expect(files[1].filename).toBe('saledayevents-quote-20260512-0700.pdf');
     expect((envelopeArg.signer as { emailAddress: string }).emailAddress).toBe(
       'buyer@dealer.test',
     );

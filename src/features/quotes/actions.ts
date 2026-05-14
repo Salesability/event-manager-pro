@@ -25,6 +25,7 @@ import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 import { MAX_ADDRESS_LINES } from './constants';
 import { resolveQuoteRecipient } from './recipient';
+import { quoteDownloadFilename } from './display-name';
 
 // 0026 Phase 2 — `quotes` data model + bare-bones Server Actions.
 //
@@ -679,6 +680,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
         status: quotes.status,
         dealerId: quotes.dealerId,
         sentAt: quotes.sentAt,
+        createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
@@ -712,7 +714,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
     const validUntilDate = isoDateOffset(anchorDate, quote.quoteValidDays);
 
     const rendered = await renderQuotePdf({
-      quoteNumber: String(quoteId),
+      createdAt: quote.createdAt,
       issuedDate,
       validUntilDate,
       clientName: dealer.name,
@@ -781,6 +783,7 @@ export const sendQuote = capabilityClient('quote:edit')
         dealerId: quotes.dealerId,
         sentAt: quotes.sentAt,
         updatedAt: quotes.updatedAt,
+        createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
@@ -859,7 +862,7 @@ export const sendQuote = capabilityClient('quote:edit')
     const issuedDate = sentAt.toISOString().slice(0, 10);
     const validUntilDate = isoDateOffset(sentAt, draft.quoteValidDays);
     const quoteData: QuoteData = {
-      quoteNumber: String(quoteId),
+      createdAt: draft.createdAt,
       issuedDate,
       validUntilDate,
       clientName: dealer.name,
@@ -966,7 +969,7 @@ export const sendQuote = capabilityClient('quote:edit')
     // see the next send attempt early-fail on the idempotent path until then.
     const email = await quoteEmail({
       firstName: recipient.firstName,
-      quoteNumber: String(quoteId),
+      createdAt: draft.createdAt,
       clientName: dealer.name,
       issuedDate,
       validUntilDate,
@@ -979,7 +982,7 @@ export const sendQuote = capabilityClient('quote:edit')
       html: email.html,
       attachments: [
         {
-          filename: `quote-${quoteId}.pdf`,
+          filename: quoteDownloadFilename(draft.createdAt),
           content: rendered.body,
           contentType: 'application/pdf',
         },

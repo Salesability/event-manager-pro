@@ -7,7 +7,7 @@ vi.mock('server-only', () => ({}));
 import { MAX_LINE_ITEMS, renderQuotePdf, type QuoteData, type QuoteLineItem } from './render-quote';
 
 const fixture: QuoteData = {
-  quoteNumber: 'Q-2026-0001',
+  createdAt: new Date('2026-05-08T13:00:00.000Z'),
   issuedDate: '2026-05-08',
   validUntilDate: '2026-06-07',
   clientName: 'Acme Auto Group',

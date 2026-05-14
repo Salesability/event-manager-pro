@@ -2,6 +2,7 @@ import 'server-only';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import { quoteDisplayName } from '@/features/quotes/display-name';
 
 export type QuoteLineItem = {
   description: string;
@@ -11,7 +12,8 @@ export type QuoteLineItem = {
 };
 
 export type QuoteData = {
-  quoteNumber: string;
+  /** Quote row's `createdAt` — drives the `quote-<timestamp>` display name. */
+  createdAt: Date;
   issuedDate: string;
   /** ISO `YYYY-MM-DD` derived from `sentAt + quoteValidDays` (or today + quoteValidDays for unsent drafts). */
   validUntilDate: string;
@@ -154,8 +156,8 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
     // the title baseline down by its cap-height. Logo (image) is positioned
     // by its bottom-left corner so we set y = yTop - logoH.
     // The "Issued" + sender stack is the RIGHT column under the logo; the
-    // Quote # is the LEFT column under the title. Columns are independent
-    // until the Bill To row, where they merge.
+    // quote display name is the LEFT column under the title. Columns are
+    // independent until the Bill To row, where they merge.
     const logoBytes = await readFile(
       path.join(process.cwd(), 'public', 'saledayevents-logo.jpg'),
     );
@@ -181,7 +183,7 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
       color: black,
     });
     const yLeft = titleBaseline - 18;
-    page.drawText(`Quote #${quote.quoteNumber}`, {
+    page.drawText(quoteDisplayName(quote.createdAt), {
       x: margin,
       y: yLeft,
       size: 11,

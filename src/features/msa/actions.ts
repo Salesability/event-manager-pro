@@ -9,6 +9,7 @@ import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import { renderMsaPdf, type MsaPdfData } from '@/lib/pdf/render-msa';
 import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
+import { quoteDisplayName, quoteDownloadFilename } from '@/features/quotes/display-name';
 import { putObject } from '@/lib/storage/gcs';
 import { sendSignatureRequest } from '@/lib/dropbox-sign/client';
 import { currentMsaTemplateVersion } from '@/lib/dropbox-sign/templates';
@@ -238,6 +239,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
         id: quotes.id,
         dealerId: quotes.dealerId,
         status: quotes.status,
+        createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
         lineItems: quotes.lineItems,
         subtotal: quotes.subtotal,
@@ -287,7 +289,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     // isn't sent yet — the date will continue to render this way when
     // sendQuote eventually flips the row.
     const quoteData: QuoteData = {
-      quoteNumber: String(quote.id),
+      createdAt: quote.createdAt,
       issuedDate,
       validUntilDate: isoDateOffset(new Date(), quote.quoteValidDays),
       clientName: dealer.name,
@@ -324,11 +326,11 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       subject: `Master Service Agreement — ${dealer.name}`,
       message:
         customMessage ||
-        `Please review and sign your Salesability Master Service Agreement (#${msaId}) and your first Quote (#${quote.id}).`,
+        `Please review and sign your Salesability Master Service Agreement (#${msaId}) and your first Quote (${quoteDisplayName(quote.createdAt)}).`,
       signer: { emailAddress: recipient.email, name: recipient.firstName },
       files: [
         { filename: `msa-${msaId}.pdf`, body: msaPdf.body },
-        { filename: `quote-${quote.id}.pdf`, body: quotePdf.body },
+        { filename: quoteDownloadFilename(quote.createdAt), body: quotePdf.body },
       ],
       metadata: { msaId: String(msaId), quoteId: String(quote.id) },
     });

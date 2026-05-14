@@ -9,6 +9,7 @@ import {
   Text,
 } from '@react-email/components';
 import { render } from '@react-email/render';
+import { quoteDisplayName } from '@/features/quotes/display-name';
 
 // First React Email template in the codebase (0026 Phase 4). Pattern: each
 // template module exports a JSX component for the React Email preview tooling
@@ -28,8 +29,9 @@ const cad = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' 
 export type QuoteEmailFields = {
   /** First name of the recipient contact for the salutation. */
   firstName: string;
-  /** Quote row identity (renders as `Quote #N`). */
-  quoteNumber: string;
+  /** Quote row's `createdAt` — drives the `quote-<timestamp>` display name
+   *  that appears in the subject + body in place of the legacy `Quote #N`. */
+  createdAt: Date;
   /** Dealer (client) name — appears in the body and the subject's tail. */
   clientName: string;
   /** Issued date as `YYYY-MM-DD` (rendered ISO). */
@@ -42,6 +44,7 @@ export type QuoteEmailFields = {
 
 export function QuoteEmail(f: QuoteEmailFields) {
   const totalStr = cad.format(f.total);
+  const displayName = quoteDisplayName(f.createdAt);
   return (
     <Html lang="en">
       <Head />
@@ -80,8 +83,8 @@ export function QuoteEmail(f: QuoteEmailFields) {
           </Text>
           <Text style={{ color: '#444444', fontSize: '14px', margin: '0 0 16px 0' }}>
             Please find your quote for {f.clientName} attached as a PDF. Total:{' '}
-            <strong style={{ color: '#111111' }}>{totalStr}</strong> (Quote #
-            {f.quoteNumber}, issued {f.issuedDate}).
+            <strong style={{ color: '#111111' }}>{totalStr}</strong> ({displayName},
+            issued {f.issuedDate}).
           </Text>
           <Text style={{ color: '#444444', fontSize: '14px', margin: '0 0 16px 0' }}>
             Please respond by{' '}
@@ -108,7 +111,7 @@ export type QuoteEmailRender = {
 };
 
 export async function quoteEmail(f: QuoteEmailFields): Promise<QuoteEmailRender> {
-  const subject = `Your Salesability Quote — Quote #${f.quoteNumber}`;
+  const subject = `Your Salesability Quote — ${quoteDisplayName(f.createdAt)}`;
   const element = QuoteEmail(f);
   const [html, text] = await Promise.all([
     render(element),
