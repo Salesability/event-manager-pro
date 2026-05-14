@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Stop Tailwind v4 from scanning markdown prose under docs/. Without this,
+ * casual mentions like `[--btn-bg:var(--color-...)]` in plan / eval / mapping
+ * docs get compiled as CSS classes and break the build. */
+@source not "../../docs";
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
