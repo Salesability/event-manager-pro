@@ -12,7 +12,10 @@ export default async function DealershipsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Dealers" />
+      <PageHeader
+        title="Dealers"
+        description="Every dealer account — active, prospect, and archived."
+      />
       <DealersAdmin dealers={dealers} />
     </div>
   );
