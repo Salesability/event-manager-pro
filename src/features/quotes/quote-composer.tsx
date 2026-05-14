@@ -420,14 +420,22 @@ export function QuoteComposer({
           {isResend ? 'Re-send Quote' : 'Send Quote'}
         </Button>
       )}
-      {pageStatusBadge}
     </>
   );
 
   return (
     <>
       <PageHeader
-        title={pageTitle}
+        title={
+          pageStatusBadge ? (
+            <span className="inline-flex items-center gap-3">
+              {pageTitle}
+              {pageStatusBadge}
+            </span>
+          ) : (
+            pageTitle
+          )
+        }
         description={pageDescription}
         actions={composerActions}
         sticky
