@@ -6,12 +6,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+import { Field, FieldGroup, Label } from '@/components/catalyst/fieldset';
+import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/ui/input';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -240,14 +236,14 @@ function ServiceForm(props: ServiceFormProps) {
       <FieldGroup className="md:col-span-6 md:grid md:grid-cols-6 md:gap-3 md:space-y-0">
         {isEdit ? (
           <Field className="md:col-span-2">
-            <FieldLabel>Code</FieldLabel>
+            <Label>Code</Label>
             <div className="flex h-9 items-center rounded-lg border border-border bg-muted px-3 font-mono text-xs text-muted-foreground">
               {props.item.code}
             </div>
           </Field>
         ) : (
-          <Field data-invalid={!!errors.code || undefined} className="md:col-span-2">
-            <FieldLabel htmlFor="svc-code">Code</FieldLabel>
+          <Field className="md:col-span-2">
+            <Label htmlFor="svc-code">Code</Label>
             <Input
               id="svc-code"
               type="text"
@@ -260,8 +256,8 @@ function ServiceForm(props: ServiceFormProps) {
           </Field>
         )}
 
-        <Field data-invalid={!!errors.label || undefined} className="md:col-span-2">
-          <FieldLabel htmlFor="svc-label">Label</FieldLabel>
+        <Field className="md:col-span-2">
+          <Label htmlFor="svc-label">Label</Label>
           <Input
             id="svc-label"
             type="text"
@@ -272,8 +268,8 @@ function ServiceForm(props: ServiceFormProps) {
           {errors.label && <FieldError>{errors.label.message}</FieldError>}
         </Field>
 
-        <Field data-invalid={!!errors.unit || undefined}>
-          <FieldLabel htmlFor="svc-unit">Unit</FieldLabel>
+        <Field>
+          <Label htmlFor="svc-unit">Unit</Label>
           <select id="svc-unit" className={selectClass} {...register('unit')}>
             {SERVICE_UNITS.map((u) => (
               <option key={u} value={u}>
@@ -284,8 +280,8 @@ function ServiceForm(props: ServiceFormProps) {
           {errors.unit && <FieldError>{errors.unit.message}</FieldError>}
         </Field>
 
-        <Field data-invalid={!!errors.sortOrder || undefined}>
-          <FieldLabel htmlFor="svc-sort">Sort</FieldLabel>
+        <Field>
+          <Label htmlFor="svc-sort">Sort</Label>
           <Input
             id="svc-sort"
             type="number"
@@ -298,8 +294,8 @@ function ServiceForm(props: ServiceFormProps) {
 
         {unit === 'range' ? (
           <>
-            <Field data-invalid={!!errors.unitPriceMin || undefined}>
-              <FieldLabel htmlFor="svc-min">Min $</FieldLabel>
+            <Field>
+              <Label htmlFor="svc-min">Min $</Label>
               <Input
                 id="svc-min"
                 type="number"
@@ -312,8 +308,8 @@ function ServiceForm(props: ServiceFormProps) {
                 <FieldError>{errors.unitPriceMin.message}</FieldError>
               )}
             </Field>
-            <Field data-invalid={!!errors.unitPriceMax || undefined}>
-              <FieldLabel htmlFor="svc-max">Max $</FieldLabel>
+            <Field>
+              <Label htmlFor="svc-max">Max $</Label>
               <Input
                 id="svc-max"
                 type="number"
@@ -328,8 +324,8 @@ function ServiceForm(props: ServiceFormProps) {
             </Field>
           </>
         ) : (
-          <Field data-invalid={!!errors.unitPrice || undefined} className="md:col-span-2">
-            <FieldLabel htmlFor="svc-price">Unit $ (blank = variable)</FieldLabel>
+          <Field className="md:col-span-2">
+            <Label htmlFor="svc-price">Unit $ (blank = variable)</Label>
             <Input
               id="svc-price"
               type="number"
@@ -342,11 +338,8 @@ function ServiceForm(props: ServiceFormProps) {
           </Field>
         )}
 
-        <Field
-          data-invalid={!!errors.description || undefined}
-          className="md:col-span-4"
-        >
-          <FieldLabel htmlFor="svc-desc">Description (optional)</FieldLabel>
+        <Field className="md:col-span-4">
+          <Label htmlFor="svc-desc">Description (optional)</Label>
           <Input
             id="svc-desc"
             type="text"

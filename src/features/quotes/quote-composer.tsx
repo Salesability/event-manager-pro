@@ -29,13 +29,13 @@ import {
 } from '@/components/ui/dialog';
 import {
   Field,
-  FieldDescription,
-  FieldError,
   FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-} from '@/components/ui/field';
+  Label,
+  Description,
+  Legend,
+  Fieldset,
+} from '@/components/catalyst/fieldset';
+import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -577,8 +577,8 @@ export function QuoteComposer({
             control={control}
             name="recordRetrievalAmount"
             render={({ field }) => (
-              <FieldSet>
-                <FieldLegend>Record retrieval bracket</FieldLegend>
+              <Fieldset>
+                <Legend>Record retrieval bracket</Legend>
                 <ToggleGroup
                   value={[String(field.value)]}
                   onValueChange={(arr) => {
@@ -594,7 +594,7 @@ export function QuoteComposer({
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-              </FieldSet>
+              </Fieldset>
             )}
           />
 
@@ -901,8 +901,8 @@ function NumberField({
 }) {
   const id = `qf-${registration.name}`;
   return (
-    <Field data-invalid={!!error || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <Field>
+      <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
         type="number"
@@ -914,7 +914,7 @@ function NumberField({
       {error ? (
         <FieldError>{error}</FieldError>
       ) : help ? (
-        <FieldDescription>{help}</FieldDescription>
+        <Description>{help}</Description>
       ) : null}
     </Field>
   );
@@ -933,8 +933,8 @@ function TextAreaField({
 }) {
   const id = `qf-${registration.name}`;
   return (
-    <Field data-invalid={!!error || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+    <Field>
+      <Label htmlFor={id}>{label}</Label>
       <Textarea
         id={id}
         placeholder={placeholder}

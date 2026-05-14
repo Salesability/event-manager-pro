@@ -7,13 +7,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { DialogClose } from '@/components/ui/dialog';
 import {
   Field,
-  FieldDescription,
-  FieldError,
   FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+  Label,
+  Description,
+} from '@/components/catalyst/fieldset';
+import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
@@ -118,8 +117,8 @@ export function DealerForm({
   return (
     <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
       <FieldGroup>
-        <Field data-invalid={!!errors.name || undefined}>
-          <FieldLabel htmlFor="df-name">Dealership name</FieldLabel>
+        <Field>
+          <Label htmlFor="df-name">Dealership name</Label>
           <Input
             id="df-name"
             type="text"
@@ -131,18 +130,18 @@ export function DealerForm({
 
         <div className="grid grid-cols-2 gap-2">
           <Field>
-            <FieldLabel htmlFor="df-contactFirst">Contact first</FieldLabel>
+            <Label htmlFor="df-contactFirst">Contact first</Label>
             <Input id="df-contactFirst" type="text" {...register('contactFirst')} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="df-contactLast">Contact last</FieldLabel>
+            <Label htmlFor="df-contactLast">Contact last</Label>
             <Input id="df-contactLast" type="text" {...register('contactLast')} />
           </Field>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <Field data-invalid={!!errors.contactEmail || undefined}>
-            <FieldLabel htmlFor="df-contactEmail">Email</FieldLabel>
+          <Field>
+            <Label htmlFor="df-contactEmail">Email</Label>
             <Input
               id="df-contactEmail"
               type="email"
@@ -154,19 +153,19 @@ export function DealerForm({
             )}
           </Field>
           <Field>
-            <FieldLabel htmlFor="df-contactPhone">Phone</FieldLabel>
+            <Label htmlFor="df-contactPhone">Phone</Label>
             <Input id="df-contactPhone" type="tel" {...register('contactPhone')} />
           </Field>
         </div>
 
         <Field>
-          <FieldLabel htmlFor="df-address">Address</FieldLabel>
+          <Label htmlFor="df-address">Address</Label>
           <Input id="df-address" type="text" {...register('address')} />
         </Field>
 
         {!hideStatusSelect && (
           <Field>
-            <FieldLabel htmlFor="df-status">Status</FieldLabel>
+            <Label htmlFor="df-status">Status</Label>
             {/* Native select — shadcn's <Select> is a Base UI dropdown
                 composition that adds layout complexity for a 2-option toggle.
                 Keep the native <select> until a clear UX win surfaces. */}
@@ -182,9 +181,9 @@ export function DealerForm({
         )}
 
         <Field>
-          <FieldLabel htmlFor="df-acquiredVia">
+          <Label htmlFor="df-acquiredVia">
             How did this dealer find us? (optional)
-          </FieldLabel>
+          </Label>
           <Input
             id="df-acquiredVia"
             type="text"
@@ -192,7 +191,7 @@ export function DealerForm({
             placeholder="Book Your Event form / referral / outbound / trade show"
             {...register('acquiredVia')}
           />
-          <FieldDescription>Up to 200 characters.</FieldDescription>
+          <Description>Up to 200 characters.</Description>
         </Field>
       </FieldGroup>
 

@@ -29,11 +29,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { DataTable } from '@/components/ui/data-table';
-import {
-  Field,
-  FieldError,
-  FieldLabel,
-} from '@/components/ui/field';
+import { Field, Label } from '@/components/catalyst/fieldset';
+import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -498,8 +495,8 @@ function PersonForm({
         ))}
 
       <div className="grid grid-cols-2 gap-2">
-        <Field data-invalid={touched.firstName || undefined}>
-          <FieldLabel htmlFor="person-firstName">First name</FieldLabel>
+        <Field>
+          <Label htmlFor="person-firstName">First name</Label>
           <Input
             id="person-firstName"
             name="firstName"
@@ -512,8 +509,8 @@ function PersonForm({
           />
           {touched.firstName && <FieldError>First name is required.</FieldError>}
         </Field>
-        <Field data-invalid={touched.lastName || undefined}>
-          <FieldLabel htmlFor="person-lastName">Last name</FieldLabel>
+        <Field>
+          <Label htmlFor="person-lastName">Last name</Label>
           <Input
             id="person-lastName"
             name="lastName"
@@ -529,7 +526,7 @@ function PersonForm({
 
       <div className="grid grid-cols-2 gap-2">
         <Field>
-          <FieldLabel htmlFor="person-email">Email</FieldLabel>
+          <Label htmlFor="person-email">Email</Label>
           <Input
             id="person-email"
             name="email"
@@ -538,7 +535,7 @@ function PersonForm({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="person-phone">Phone</FieldLabel>
+          <Label htmlFor="person-phone">Phone</Label>
           <Input
             id="person-phone"
             name="phone"

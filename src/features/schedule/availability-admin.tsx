@@ -5,12 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from '@/components/ui/toaster';
-import {
-  Field,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+import { Field, FieldGroup, Label } from '@/components/catalyst/fieldset';
+import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/ui/input';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -302,8 +298,8 @@ function AvailabilityForm(props: AvailabilityFormProps) {
     >
       <FieldGroup>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field data-invalid={!!errors.startDate || undefined}>
-            <FieldLabel htmlFor="avl-start">Start Date</FieldLabel>
+          <Field>
+            <Label htmlFor="avl-start">Start Date</Label>
             <Input
               id="avl-start"
               type="date"
@@ -313,8 +309,8 @@ function AvailabilityForm(props: AvailabilityFormProps) {
             />
             {errors.startDate && <FieldError>{errors.startDate.message}</FieldError>}
           </Field>
-          <Field data-invalid={!!errors.endDate || undefined}>
-            <FieldLabel htmlFor="avl-end">End Date</FieldLabel>
+          <Field>
+            <Label htmlFor="avl-end">End Date</Label>
             <Input
               id="avl-end"
               type="date"
@@ -323,8 +319,8 @@ function AvailabilityForm(props: AvailabilityFormProps) {
             />
             {errors.endDate && <FieldError>{errors.endDate.message}</FieldError>}
           </Field>
-          <Field data-invalid={!!errors.kind || undefined}>
-            <FieldLabel htmlFor="avl-kind">Type</FieldLabel>
+          <Field>
+            <Label htmlFor="avl-kind">Type</Label>
             <select id="avl-kind" className={selectClass} {...register('kind')}>
               {AVAILABILITY_KINDS.map((k) => (
                 <option key={k} value={k}>
@@ -334,8 +330,8 @@ function AvailabilityForm(props: AvailabilityFormProps) {
             </select>
             {errors.kind && <FieldError>{errors.kind.message}</FieldError>}
           </Field>
-          <Field data-invalid={!!errors.coachId || undefined}>
-            <FieldLabel htmlFor="avl-coach">Coach</FieldLabel>
+          <Field>
+            <Label htmlFor="avl-coach">Coach</Label>
             <select
               id="avl-coach"
               disabled={kind !== 'coach_unavailable'}
@@ -355,8 +351,8 @@ function AvailabilityForm(props: AvailabilityFormProps) {
           </Field>
         </div>
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <Field data-invalid={!!errors.reason || undefined}>
-            <FieldLabel htmlFor="avl-reason">Reason</FieldLabel>
+          <Field>
+            <Label htmlFor="avl-reason">Reason</Label>
             <Input
               id="avl-reason"
               type="text"

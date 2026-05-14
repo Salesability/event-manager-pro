@@ -8,10 +8,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Field as ShadField,
+  Field as CatalystField,
   FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+  Label,
+} from '@/components/catalyst/fieldset';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toaster';
@@ -419,15 +419,15 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <ShadField>
+    <CatalystField>
       <div className="flex items-center justify-between gap-2">
-        <FieldLabel htmlFor={htmlFor}>
+        <Label htmlFor={htmlFor}>
           {label}
           {required && <span className="ml-1 text-status-red">*</span>}
-        </FieldLabel>
+        </Label>
         {action}
       </div>
       {children}
-    </ShadField>
+    </CatalystField>
   );
 }
