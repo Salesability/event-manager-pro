@@ -75,7 +75,7 @@ The app's tables today render row actions as an inline button row (`<RowActions>
 - [ ] Footer chrome — match the "Page X – Y of Z keys – N items ▾" prose shape. Today's DataTable pagination block is the reference point; goal is a smaller-feeling, prose-shaped footer rather than a full Pagination component. Punt if Catalyst's table already ships the right shape.
 
 #### Phase 5: Sweep representative grids + smoke verification
-- [ ] `/quotes` columns: identity column → `<RowIdentityCell>` (icon: small `quote` glyph, label: `quoteDisplayName(createdAt)` from [`closed/0048-quote-timestamp-naming`](../../0048-quote-timestamp-naming/plan.md) if shipped, href: `/quotes/[id]`). Inline `<RowActions>` → `<RowOverflowMenu>`.
+- [ ] `/quotes` columns: identity column → `<RowIdentityCell>` (icon: small `quote` glyph, label: `quoteDisplayName(createdAt)` from [`closed/0048-quote-timestamp-naming`](../../closed/0048-quote-timestamp-naming/plan.md) if shipped, href: `/quotes/[id]`). Inline `<RowActions>` → `<RowOverflowMenu>`.
 - [ ] `/dealerships` columns: identity column → `<RowIdentityCell>` (icon: small `dealership` glyph, label: dealer name, sublabel: city/region, href: `/dealerships/[id]`). Inline `<RowActions>` → `<RowOverflowMenu>`.
 - [ ] `/admin/people` columns: identity column → `<RowIdentityCell>` (icon: small `person` glyph or initials avatar, label: full name, sublabel: role, href: `/admin/people/[id]`). Inline `<RowActions>` → `<RowOverflowMenu>`.
 - [ ] Smoke (web-test): `goto /quotes`; expect first row's identity cell to have a dotted-underline label + leading icon; click `…` trigger on row; expect popover with `Edit` and `Delete` (or chunk-appropriate actions); `Delete` styled in destructive-red.
