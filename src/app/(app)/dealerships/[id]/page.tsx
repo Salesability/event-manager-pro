@@ -156,8 +156,7 @@ export default async function DealerDetailPage({
                 dealerId={dealer.id}
                 dealerName={dealer.name}
                 recipient={recipient}
-                firstDraftQuoteId={firstDraftQuote?.id ?? null}
-                firstDraftQuoteCreatedAt={firstDraftQuote?.createdAt ?? null}
+                firstDraftQuote={firstDraftQuote}
               />
             )}
           </div>

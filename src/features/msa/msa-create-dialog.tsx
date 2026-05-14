@@ -22,13 +22,10 @@ export type MsaCreateDialogProps = {
    *  instead of the action surface — the bundled-envelope flow has no
    *  sensible fallback without a customer-contact primary email. */
   recipient: { email: string; firstName: string } | { error: string };
-  /** Id of the dealer's first draft Quote. When `null`, the dialog renders
-   *  the "create a draft Quote first" guidance. */
-  firstDraftQuoteId: number | null;
-  /** `createdAt` of the dealer's first draft Quote — drives the
-   *  `quote-<timestamp>` display name. Paired with `firstDraftQuoteId`; both
-   *  null together when no draft exists. */
-  firstDraftQuoteCreatedAt: Date | null;
+  /** The dealer's first draft Quote (id + createdAt) — drives the
+   *  `quote-<timestamp>` display name. `null` when no draft exists, in which
+   *  case the dialog renders the "create a draft Quote first" guidance. */
+  firstDraftQuote: { id: number; createdAt: Date } | null;
 };
 
 // Single-click "create MSA + send envelope" flow. Two-step action sequence:
@@ -50,7 +47,8 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
   const [lastError, setLastError] = useState<string | null>(null);
 
   const noRecipient = 'error' in props.recipient;
-  const noDraftQuote = props.firstDraftQuoteId == null;
+  const draftQuote = props.firstDraftQuote;
+  const noDraftQuote = draftQuote == null;
   const canSubmit = !noRecipient && !noDraftQuote;
 
   function onSubmit() {
@@ -70,7 +68,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
 
       const sendFd = new FormData();
       sendFd.set('msaId', String(createResult.msaId));
-      sendFd.set('firstQuoteId', String(props.firstDraftQuoteId));
+      sendFd.set('firstQuoteId', String(draftQuote!.id));
       const sendResult = toLegacyResult(await sendMsaEnvelope(sendFd));
       if (!('ok' in sendResult)) {
         setLastError(sendResult.error);
@@ -105,7 +103,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
           </dd>
           <dt className="text-zinc-500">First Quote</dt>
           <dd className="text-zinc-900">
-            {props.firstDraftQuoteId == null ? (
+            {draftQuote == null ? (
               <span className="text-red-700">
                 No draft Quote yet —{' '}
                 <a
@@ -118,12 +116,10 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
               </span>
             ) : (
               <a
-                href={`/quotes/${props.firstDraftQuoteId}`}
+                href={`/quotes/${draftQuote.id}`}
                 className="font-medium text-brand-700 underline"
               >
-                {props.firstDraftQuoteCreatedAt
-                  ? quoteDisplayName(props.firstDraftQuoteCreatedAt)
-                  : `quote ${props.firstDraftQuoteId}`}
+                {quoteDisplayName(draftQuote.createdAt)}
               </a>
             )}
           </dd>
