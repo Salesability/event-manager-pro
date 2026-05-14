@@ -368,15 +368,6 @@ export function QuoteComposer({
         <Button
           type="button"
           outline
-          onClick={() => router.push('/quotes')}
-        >
-          Close
-        </Button>
-      )}
-      {isEdit && (
-        <Button
-          type="button"
-          outline
           onClick={onPreview}
           disabled={previewPending}
           className="text-brand-700"
