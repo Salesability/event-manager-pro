@@ -55,10 +55,12 @@ export function QuotesAdmin({ quotes }: { quotes: Quote[] }) {
   function pushParams(next: { q?: string; status?: Pill }) {
     const sp = new URLSearchParams(window.location.search);
     if (next.q !== undefined) {
-      next.q ? sp.set('q', next.q) : sp.delete('q');
+      if (next.q) sp.set('q', next.q);
+      else sp.delete('q');
     }
     if (next.status !== undefined) {
-      next.status ? sp.set('status', next.status) : sp.delete('status');
+      if (next.status) sp.set('status', next.status);
+      else sp.delete('status');
     }
     const qs = sp.toString();
     startTransition(() => {

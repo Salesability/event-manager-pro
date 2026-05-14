@@ -73,13 +73,16 @@ export function ProductionAdmin({
   }) {
     const sp = new URLSearchParams(params.toString());
     if (next.q !== undefined) {
-      next.q ? sp.set('q', next.q) : sp.delete('q');
+      if (next.q) sp.set('q', next.q);
+      else sp.delete('q');
     }
     if (next.status !== undefined) {
-      next.status ? sp.set('status', next.status) : sp.delete('status');
+      if (next.status) sp.set('status', next.status);
+      else sp.delete('status');
     }
     if (next.cancelled !== undefined) {
-      next.cancelled ? sp.set('cancelled', '1') : sp.delete('cancelled');
+      if (next.cancelled) sp.set('cancelled', '1');
+      else sp.delete('cancelled');
     }
     const qs = sp.toString();
     startTransition(() => {
