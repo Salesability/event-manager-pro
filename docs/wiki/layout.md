@@ -41,6 +41,7 @@ Every `(app)/` page renders the same anatomy inside `<main>`:
 Props: `{ title: ReactNode, actions?, description?, sticky? }`. Title renders bold-Inter (`font-sans font-bold tracking-tight text-3xl text-foreground`) — the post-0042 type scale.
 
 - **Actions slot.** Page-level primary actions (Save / Send / Export / status-pill) live in the top-right of `<PageHeader>`. Hand-rolled `<h1>` + button pairs are the lint smell this fixes. Dialog actions still go in `<DialogFooter>` — that's a different concern.
+- **Description on every list/grid page.** List and grid pages (`/calendar`, `/production`, `/dealerships`, `/quotes`, `/admin/people`, `/admin/lookups`, `/reports`) must pass a `description` — a one-sentence note naming the data and the filter dimensions (e.g. `"Every quote in the pipeline — drafts, sent, accepted, declined."`). It anchors the page for first-time viewers and keeps the type-scale balanced under the title. Detail pages (`/dealerships/[id]`, `/quotes/[id]`) can omit it — their identity is the record name, and the `<KeyValueStrip>` carries the at-a-glance summary.
 - **Sticky on long pages only.** Set `sticky` on the quote composer (`/quotes/new`, `/quotes/[id]`) where the line-items table scrolls past the fold. Default is non-sticky to keep visual weight low.
 - **Sticky parking.** When `sticky`, the header uses `sticky top-16 z-10`. `top-16` (not `top-0`) parks it just under the 64px `AppHeader`. `z-10` keeps it below the AppHeader's `z-30`.
 
