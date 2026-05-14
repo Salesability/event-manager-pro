@@ -7,7 +7,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Shared `quoteDisplayName(createdAt)` helper + format decision | Done | - |
-| 2: UI surfaces — composer header, MSA dialog, email body | Pending | - |
+| 2: UI surfaces — composer header, MSA dialog, email body | Done | - |
 | 3: PDF + email — body title, subject, attachment filename | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 **Format decision (Phase 1):** `quote-YYYYMMDD-HHmm` in the project's display timezone (America/Toronto — the same `createdAt` is rendered elsewhere via `Intl.DateTimeFormat`). Filename-safe (no colons / spaces / slashes), human-readable, lexicographically sortable. Seconds omitted to keep the name short; collision risk is negligible at quote-creation rates. Phase 1's first task is to confirm this exact format before any callsites change.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -49,11 +49,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] `pnpm tsc --noEmit` + `pnpm vitest run src/features/quotes/display-name.test.ts` clean.
 
 #### Phase 2: UI surfaces — composer header + MSA dialog
-- [ ] `src/app/(app)/quotes/[id]/page.tsx:180` — replace `pageTitle={`Quote #${quote.id}`}` with `pageTitle={quoteDisplayName(quote.createdAt)}`. (`quote.createdAt` is already on the query result; verify upstream selection if not.)
-- [ ] `src/features/msa/msa-create-dialog.tsx:121` — switch from rendering `Quote #{firstDraftQuoteId}` to `{quoteDisplayName(firstDraftQuoteCreatedAt)}`. Update the dialog's props type to carry `firstDraftQuoteCreatedAt: Date` and thread it from the call site (search for `firstDraftQuoteId` callers).
-- [ ] `/quotes/new` page header (`src/app/(app)/quotes/new/page.tsx:37`) — leave `"New Quote"` as is (pre-save, no `createdAt` yet); confirm decision in plan body.
-- [ ] Test case: render `/quotes/[id]` page-header smoke and assert the new title shape (`quote-20260513-1430` for a fixed `createdAt`).
-- [ ] Test case: MSA-create dialog renders `quote-<timestamp>` when a draft quote exists.
+- [x] `src/app/(app)/quotes/[id]/page.tsx:180` — replace `pageTitle={`Quote #${quote.id}`}` with `pageTitle={quoteDisplayName(quote.createdAt)}`. (`quote.createdAt` is already on the query result; verify upstream selection if not.)
+- [x] `src/features/msa/msa-create-dialog.tsx:121` — switch from rendering `Quote #{firstDraftQuoteId}` to `{quoteDisplayName(firstDraftQuoteCreatedAt)}`. Update the dialog's props type to carry `firstDraftQuoteCreatedAt: Date` and thread it from the call site (search for `firstDraftQuoteId` callers).
+- [x] `/quotes/new` page header (`src/app/(app)/quotes/new/page.tsx:37`) — leave `"New Quote"` as is (pre-save, no `createdAt` yet); confirm decision in plan body.
+- [ ] ~~Test case: render `/quotes/[id]` page-header smoke and assert the new title shape (`quote-20260513-1430` for a fixed `createdAt`).~~ Deferred to Phase 4's web-test smoke (no component-test harness for server-rendered pages in this repo).
+- [ ] ~~Test case: MSA-create dialog renders `quote-<timestamp>` when a draft quote exists.~~ Deferred to Phase 4's web-test smoke (RTL test scaffold for client-side dialogs not yet established).
 
 #### Phase 3: PDF + email — body title, subject, attachment filename
 - [ ] `src/lib/pdf/render-quote.ts:184` — replace `Quote #${quote.quoteNumber}` with `quoteDisplayName(quote.createdAt)`. Drop `quoteNumber` from the `QuoteRow` arg shape if no other caller reads it (grep `render-quote` callers — `actions.ts` is the only one).
