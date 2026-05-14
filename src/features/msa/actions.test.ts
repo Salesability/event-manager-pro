@@ -298,7 +298,7 @@ describe('sendMsaEnvelope', () => {
     const files = envelopeArg.files as Array<{ filename: string }>;
     expect(files).toHaveLength(2);
     expect(files[0].filename).toBe('msa-1.pdf');
-    expect(files[1].filename).toBe('saledayevents-quote-20260512-0700.pdf');
+    expect(files[1].filename).toBe('saledayevents-Quote-20260512-0700.pdf');
     expect((envelopeArg.signer as { emailAddress: string }).emailAddress).toBe(
       'buyer@dealer.test',
     );

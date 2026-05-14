@@ -83,7 +83,7 @@ describe('renderQuotePdf', () => {
     expect(Math.min(...drawnY)).toBeGreaterThanOrEqual(50);
   });
 
-  it('draws the quote-<timestamp> display name as the left-column subtitle', async () => {
+  it('draws the Quote-<timestamp> display name as the left-column subtitle', async () => {
     const drawn: string[] = [];
     const originalDrawText = PDFPage.prototype.drawText;
     const drawTextSpy = vi
@@ -99,7 +99,7 @@ describe('renderQuotePdf', () => {
     // 2026-05-08 13:00 UTC = 09:00 EDT
     await renderQuotePdf({ ...fixture, createdAt: new Date('2026-05-08T13:00:00.000Z') });
     drawTextSpy.mockRestore();
-    expect(drawn).toContain('quote-20260508-0900');
+    expect(drawn).toContain('Quote-20260508-0900');
     expect(drawn).not.toContain('Quote #Q-2026-0001');
   });
 
