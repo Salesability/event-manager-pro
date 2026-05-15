@@ -45,7 +45,7 @@ vi.mock('@/lib/storage/gcs', () => ({ putObject: mocks.putObject }));
 vi.mock('@/features/quotes/recipient', () => ({
   resolveQuoteRecipient: mocks.resolveQuoteRecipient,
 }));
-vi.mock('@/lib/dropbox-sign/client', () => ({
+vi.mock('@/lib/boldsign/client', () => ({
   sendSignatureRequest: mocks.sendSignatureRequest,
 }));
 vi.mock('@/lib/dropbox-sign/templates', () => ({
@@ -197,7 +197,7 @@ beforeEach(() => {
   });
   mocks.sendSignatureRequest.mockResolvedValue({
     ok: true,
-    signatureRequestId: 'sig-req-abc',
+    documentId: 'doc-abc',
   });
   mocks.dbResults = [];
   mocks.inserts = [];
@@ -305,7 +305,7 @@ describe('sendMsaEnvelope', () => {
 
     expect(mocks.updates).toHaveLength(1);
     const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.providerDocumentId).toBe('sig-req-abc');
+    expect(patch.providerDocumentId).toBe('doc-abc');
 
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'msa.sent',
@@ -314,7 +314,7 @@ describe('sendMsaEnvelope', () => {
       payload: {
         dealerId: 7,
         quoteId: 42,
-        signatureRequestId: 'sig-req-abc',
+        providerDocumentId: 'doc-abc',
         draftPdfStorageKey: 'msa/1/draft.pdf',
       },
     });
@@ -342,7 +342,7 @@ describe('sendMsaEnvelope', () => {
     expect(mocks.putObject).not.toHaveBeenCalled();
   });
 
-  it('does not mutate row state when the Dropbox Sign API call fails', async () => {
+  it('does not mutate row state when the BoldSign API call fails', async () => {
     mocks.dbResults.push([MSA_PENDING], [DEALER_ROW], [DRAFT_QUOTE_ROW]);
     mocks.sendSignatureRequest.mockResolvedValueOnce({
       error: 'rate limit',
@@ -351,7 +351,7 @@ describe('sendMsaEnvelope', () => {
       sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
     );
     expect((result as { error: string }).error).toContain(
-      'Dropbox Sign send failed',
+      'BoldSign send failed',
     );
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.recordAudit).not.toHaveBeenCalled();

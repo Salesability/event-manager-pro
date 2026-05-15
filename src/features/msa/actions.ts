@@ -11,7 +11,7 @@ import { renderMsaPdf, type MsaPdfData } from '@/lib/pdf/render-msa';
 import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
 import { quoteDisplayName, quoteDownloadFilename } from '@/features/quotes/display-name';
 import { putObject } from '@/lib/storage/gcs';
-import { sendSignatureRequest } from '@/lib/dropbox-sign/client';
+import { sendSignatureRequest } from '@/lib/boldsign/client';
 import { currentMsaTemplateVersion } from '@/lib/dropbox-sign/templates';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { MAX_ADDRESS_LINES } from '@/features/quotes/constants';
@@ -27,7 +27,7 @@ import type { ComputedLine } from '@/lib/quotes/pricing';
 //      plan body); expired/terminated rows allow a renewal-style fresh draft.
 //   2. `sendMsaEnvelope(msaId, firstQuoteId)` — bundles the rendered MSA PDF
 //      with the dealer's first draft Quote PDF, posts the envelope to
-//      Dropbox Sign, persists the returned `providerDocumentId`, and
+//      BoldSign, persists the returned `providerDocumentId`, and
 //      emits `msa.sent`.
 //
 // Atomic-transition shape mirrors `sendQuote`: pre-load the row, side-effect
@@ -320,7 +320,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       return { error: `MSA draft upload failed: ${draftUpload.error}` };
     }
 
-    // Post the envelope to Dropbox Sign.
+    // Post the envelope to BoldSign.
     const customMessage = field(formData, 'message');
     const sendResult = await sendSignatureRequest({
       subject: `Master Service Agreement — ${dealer.name}`,
@@ -335,7 +335,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       metadata: { msaId: String(msaId), quoteId: String(quote.id) },
     });
     if ('error' in sendResult) {
-      return { error: `Dropbox Sign send failed: ${sendResult.error}` };
+      return { error: `BoldSign send failed: ${sendResult.error}` };
     }
 
     // Atomic guarded persist: only set the document id when it was still
@@ -344,7 +344,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     const updated = await db
       .update(masterServiceAgreements)
       .set({
-        providerDocumentId: sendResult.signatureRequestId,
+        providerDocumentId: sendResult.documentId,
         updatedById: userId,
       })
       .where(
@@ -369,7 +369,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       payload: {
         dealerId: msa.dealerId,
         quoteId: quote.id,
-        signatureRequestId: sendResult.signatureRequestId,
+        providerDocumentId: sendResult.documentId,
         draftPdfStorageKey: draftKey,
       },
     });

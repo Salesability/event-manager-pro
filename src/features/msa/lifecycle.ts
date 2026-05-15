@@ -4,10 +4,10 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { auditLog, masterServiceAgreements } from '@/lib/db/schema';
 
-// Internal lifecycle-transition helpers for MSAs. Called by the Dropbox Sign
-// webhook route handler at `/api/dropbox-sign/webhook` (the rare legitimate
+// Internal lifecycle-transition helpers for MSAs. Called by the BoldSign
+// webhook route handler at `/api/boldsign/webhook` (the rare legitimate
 // route handler per CLAUDE.md → "Mutations go through Server Actions" — the
-// caller is an external Dropbox Sign POST, not our UI). Webhook has no
+// caller is an external BoldSign POST, not our UI). Webhook has no
 // session/user, so these helpers also write the audit row directly with
 // `actorUserId = null` (audit_log.actor_user_id is nullable for exactly this
 // kind of system-driven event).
