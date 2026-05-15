@@ -78,19 +78,28 @@ describe('boldsign client', () => {
     expect(mocks.ctorCalls).toBe(0);
   });
 
-  it('configures DocumentApi with the env API key + sandbox URL when APP_ENV is not production', () => {
+  it('configures DocumentApi with the env API key and the default US host when BOLDSIGN_API_BASE_URL is unset', () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    delete process.env.BOLDSIGN_API_BASE_URL;
     const result = client();
     expect('ok' in result && result.ok).toBe(true);
-    expect(mocks.ctorBasePath).toBe('https://api-sandbox.boldsign.com');
+    expect(mocks.ctorBasePath).toBe('https://api.boldsign.com');
     expect(mocks.setApiKeyCalls).toEqual(['bs_test_abc']);
   });
 
-  it('points at production URL when APP_ENV=production', () => {
+  it('uses the same host regardless of APP_ENV (sandbox vs. prod is per-request)', () => {
     process.env.BOLDSIGN_API_KEY = 'bs_live_abc';
     process.env.APP_ENV = 'production';
+    delete process.env.BOLDSIGN_API_BASE_URL;
     client();
     expect(mocks.ctorBasePath).toBe('https://api.boldsign.com');
+  });
+
+  it('honors BOLDSIGN_API_BASE_URL when set (non-US regions: api-eu, api-ca)', () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.BOLDSIGN_API_BASE_URL = 'https://api-ca.boldsign.com';
+    client();
+    expect(mocks.ctorBasePath).toBe('https://api-ca.boldsign.com');
   });
 
   it('caches the configured client across calls (singleton)', () => {
@@ -119,6 +128,7 @@ describe('sendSignatureRequest', () => {
 
   it('returns ok with documentId on success', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
     const result = await sendSignatureRequest(sample);
     expect(result).toEqual({ ok: true, documentId: 'doc-abc' });
     expect(mocks.sendDocumentCalls).toHaveLength(1);
@@ -126,6 +136,7 @@ describe('sendSignatureRequest', () => {
 
   it('returns {error} when sendDocument throws', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
     mocks.sendDocumentError = new Error('Network down');
     const result = await sendSignatureRequest(sample);
     expect(result).toEqual({ error: 'Network down' });
@@ -133,6 +144,7 @@ describe('sendSignatureRequest', () => {
 
   it('returns {error} when sendDocument returns no documentId', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
     mocks.sendDocumentResponse = {};
     const result = await sendSignatureRequest(sample);
     expect(result).toEqual({ error: 'BoldSign returned no documentId.' });
@@ -140,6 +152,7 @@ describe('sendSignatureRequest', () => {
 
   it('marks isSandbox=true when APP_ENV is not production', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
     await sendSignatureRequest(sample);
     const sent = mocks.sendDocumentCalls[0] as { isSandbox?: boolean };
     expect(sent.isSandbox).toBe(true);
@@ -155,11 +168,56 @@ describe('sendSignatureRequest', () => {
 
   it('forwards metadata when supplied', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
     await sendSignatureRequest({ ...sample, metadata: { msaId: '42' } });
     const sent = mocks.sendDocumentCalls[0] as {
       metaData?: Record<string, string>;
     };
     expect(sent.metaData).toEqual({ msaId: '42' });
+  });
+
+  it('refuses to send when APP_ENV is not production and EMAIL_DEV_TO is unset', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    delete process.env.EMAIL_DEV_TO;
+    const result = await sendSignatureRequest(sample);
+    expect(result).toEqual({
+      error:
+        'BoldSign send refused: APP_ENV is not "production" and EMAIL_DEV_TO is not set. Set EMAIL_DEV_TO to redirect, or APP_ENV=production to real-send.',
+    });
+    expect(mocks.sendDocumentCalls).toHaveLength(0);
+  });
+
+  it('redirects signer.emailAddress to EMAIL_DEV_TO in non-prod, preserving signer.name', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{ emailAddress?: string; name?: string }>;
+    };
+    expect(sent.signers?.[0]?.emailAddress).toBe('dev@example.test');
+    expect(sent.signers?.[0]?.name).toBe('Alice');
+  });
+
+  it('does NOT redirect signer.emailAddress when APP_ENV=production', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_live_abc';
+    process.env.APP_ENV = 'production';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{ emailAddress?: string }>;
+    };
+    expect(sent.signers?.[0]?.emailAddress).toBe('a@b.co');
+  });
+
+  it('treats ` Production ` (whitespace + case) as production — no redirect', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_live_abc';
+    process.env.APP_ENV = ' Production ';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{ emailAddress?: string }>;
+    };
+    expect(sent.signers?.[0]?.emailAddress).toBe('a@b.co');
   });
 });
 

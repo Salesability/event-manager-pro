@@ -7,14 +7,15 @@ export type ClientResult =
 
 let cached: { documentApi: DocumentApi } | null = null;
 
-const PRODUCTION_BASE_URL = 'https://api.boldsign.com';
-const SANDBOX_BASE_URL = 'https://api-sandbox.boldsign.com';
-
-function baseUrlForEnv(): string {
-  return process.env.APP_ENV === 'production'
-    ? PRODUCTION_BASE_URL
-    : SANDBOX_BASE_URL;
-}
+// BoldSign hosts API endpoints per region: US = api.boldsign.com,
+// EU = api-eu.boldsign.com, CA = api-ca.boldsign.com. The region is fixed
+// by the BoldSign account, not by sandbox vs. production — sandbox keys
+// hit the same regional host as production keys for that account, with
+// sandbox-vs-prod signaled by the per-request `isSandbox` flag in
+// `sendSignatureRequest`. Default to US; override via env for accounts in
+// other regions (a CA-region key 401s against the US host with an empty
+// response body, which is what the SDK surfaces as "Invalid authentication").
+const DEFAULT_BASE_URL = 'https://api.boldsign.com';
 
 export function client(): ClientResult {
   if (cached) return { ok: true, ...cached };
@@ -22,7 +23,8 @@ export function client(): ClientResult {
   const apiKey = process.env.BOLDSIGN_API_KEY;
   if (!apiKey) return { error: 'BOLDSIGN_API_KEY is not set.' };
 
-  const documentApi = new DocumentApi(baseUrlForEnv());
+  const baseUrl = process.env.BOLDSIGN_API_BASE_URL ?? DEFAULT_BASE_URL;
+  const documentApi = new DocumentApi(baseUrl);
   documentApi.setApiKey(apiKey);
 
   cached = { documentApi };
@@ -57,6 +59,35 @@ export type SendSignatureRequestResult =
   | { ok: true; documentId: string }
   | { error: string };
 
+// Mirrors the Resend redirect doctrine in `src/lib/email/send.ts:34-58`
+// applied to BoldSign's vendor-sent signing-request email — and reuses the
+// same `EMAIL_DEV_TO` env var rather than introducing a second one, so
+// non-prod environments only ever need a single inbox configured for
+// dev-mail-of-any-kind (transactional + signing). Real-send to the
+// caller-provided signer address requires explicit `APP_ENV=production`;
+// any other environment redirects the signer's emailAddress to
+// `EMAIL_DEV_TO`, or refuses the send if that env is unset. BoldSign's
+// `isSandbox: true` flag stamps the document as non-binding but does NOT
+// stop BoldSign from emailing the recipient — that's why the redirect lives
+// here and not in BoldSign's sandbox-mode behaviour. APP_ENV is normalised
+// to lowercase so ` Production ` / `Production` don't fall through and
+// silently redirect to a dev inbox in real prod (matches `send.ts:47-49`).
+type SignerRedirectDecision =
+  | { redirect: true; to: string }
+  | { redirect: false; reason: 'production' | 'no-dev-target' };
+
+function decideSignerRedirect(): SignerRedirectDecision {
+  const appEnv = process.env.APP_ENV?.trim().toLowerCase();
+  if (appEnv === 'production') {
+    return { redirect: false, reason: 'production' };
+  }
+  const devTo = process.env.EMAIL_DEV_TO?.trim();
+  if (!devTo) {
+    return { redirect: false, reason: 'no-dev-target' };
+  }
+  return { redirect: true, to: devTo };
+}
+
 // Wrapper around `DocumentApi.sendDocument` (inline-upload flow per D #2
 // 2026-05-15 — the MSA prose is rendered in-repo and uploaded with each
 // envelope, no BoldSign-side template). The signer receives an email
@@ -68,14 +99,24 @@ export async function sendSignatureRequest(
   const c = client();
   if ('error' in c) return c;
 
+  const redirect = decideSignerRedirect();
+  if (!redirect.redirect && redirect.reason === 'no-dev-target') {
+    return {
+      error:
+        'BoldSign send refused: APP_ENV is not "production" and EMAIL_DEV_TO is not set. Set EMAIL_DEV_TO to redirect, or APP_ENV=production to real-send.',
+    };
+  }
+
   const sendForSign = new SendForSign();
   sendForSign.title = input.subject;
   sendForSign.message = input.message;
   sendForSign.isSandbox = process.env.APP_ENV !== 'production';
 
   const signer = new DocumentSigner();
+  // signer.name keeps the original Client name so the dev inbox can still see
+  // who the envelope was meant for; only emailAddress is rewritten.
   signer.name = input.signer.name;
-  signer.emailAddress = input.signer.emailAddress;
+  signer.emailAddress = redirect.redirect ? redirect.to : input.signer.emailAddress;
   sendForSign.signers = [signer];
 
   sendForSign.files = input.files.map((f) => ({

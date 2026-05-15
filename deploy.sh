@@ -30,6 +30,20 @@ IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
 # Override via PROD_SITE_URL if the service hostname changes.
 PROD_SITE_URL="${PROD_SITE_URL:-https://event-manager-pro-7435lagfjq-nn.a.run.app}"
 
+# APP_ENV value baked into the Cloud Run service. Default 'production' real-
+# sends through Resend (no EMAIL_DEV_TO redirect) and marks BoldSign envelopes
+# as non-sandbox (sendForSign.isSandbox = false). Override to any
+# non-production value (e.g. 'sandbox', 'staging') to flip the BoldSign
+# `isSandbox` flag and route Resend mail through `EMAIL_DEV_TO`:
+#   DEPLOY_APP_ENV=sandbox ./deploy.sh
+# Note: sandbox-vs-prod is signaled per-request via the `isSandbox` flag, NOT
+# by a different host — BoldSign uses one regional host per account regardless
+# of mode (BOLDSIGN_API_BASE_URL below picks the region). A sandbox-tier
+# API key against APP_ENV=production (or vice versa) 401s — match them.
+# Separate name from APP_ENV so that sourcing .env.local (which sets
+# APP_ENV=development for the local dev server) doesn't shadow it.
+DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"
+
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
 # because Next.js inlines them into the client bundle.
@@ -38,6 +52,12 @@ REQUIRED_VARS=(
     "NEXT_PUBLIC_SUPABASE_ANON_KEY"
     "DATABASE_URL"
     "SUPABASE_SERVICE_ROLE_KEY"
+    "MSA_TEMPLATE_VERSION"
+    "BOLDSIGN_API_KEY"
+    "BOLDSIGN_WEBHOOK_SECRET"
+    "GCS_BUCKET"
+    "RESEND_API_KEY"
+    "RESEND_FROM_EMAIL"
 )
 MISSING_VARS=()
 for var in "${REQUIRED_VARS[@]}"; do
@@ -71,6 +91,9 @@ ensure_secret() {
 
 ensure_secret "${DB_SECRET_NAME}" "DATABASE_URL"
 ensure_secret "${SERVICE_ROLE_SECRET_NAME}" "SUPABASE_SERVICE_ROLE_KEY"
+ensure_secret "boldsign-api-key" "BOLDSIGN_API_KEY"
+ensure_secret "boldsign-webhook-secret" "BOLDSIGN_WEBHOOK_SECRET"
+ensure_secret "resend-api-key" "RESEND_API_KEY"
 
 PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 RUNTIME_SA="${GCP_RUNTIME_SA:-${PROJECT_NUMBER}-compute@developer.gserviceaccount.com}"
@@ -88,6 +111,9 @@ grant_secret_access() {
 
 grant_secret_access "${DB_SECRET_NAME}"
 grant_secret_access "${SERVICE_ROLE_SECRET_NAME}"
+grant_secret_access "boldsign-api-key"
+grant_secret_access "boldsign-webhook-secret"
+grant_secret_access "resend-api-key"
 
 echo "🏗️  Building image ${IMAGE} via Cloud Build..."
 gcloud builds submit \
@@ -103,7 +129,35 @@ ENV_VARS="^${ENV_DELIM}^"
 ENV_VARS+="NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}"
 ENV_VARS+="${ENV_DELIM}NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
 ENV_VARS+="${ENV_DELIM}SITE_URL=${PROD_SITE_URL}"
-ENV_VARS+="${ENV_DELIM}APP_ENV=production"
+ENV_VARS+="${ENV_DELIM}APP_ENV=${DEPLOY_APP_ENV}"
+ENV_VARS+="${ENV_DELIM}MSA_TEMPLATE_VERSION=${MSA_TEMPLATE_VERSION}"
+ENV_VARS+="${ENV_DELIM}GCS_BUCKET=${GCS_BUCKET}"
+ENV_VARS+="${ENV_DELIM}RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}"
+# Optional vars — only include if set locally
+if [ -n "${GCS_PROJECT_ID:-}" ]; then
+    ENV_VARS+="${ENV_DELIM}GCS_PROJECT_ID=${GCS_PROJECT_ID}"
+fi
+if [ -n "${EMAIL_DEV_TO:-}" ]; then
+    ENV_VARS+="${ENV_DELIM}EMAIL_DEV_TO=${EMAIL_DEV_TO}"
+fi
+# BOLDSIGN_API_BASE_URL picks the regional API host (US default unset; EU =
+# api-eu.boldsign.com; CA = api-ca.boldsign.com). Optional — only included
+# when set locally; absent means Cloud Run uses the US default at runtime.
+if [ -n "${BOLDSIGN_API_BASE_URL:-}" ]; then
+    ENV_VARS+="${ENV_DELIM}BOLDSIGN_API_BASE_URL=${BOLDSIGN_API_BASE_URL}"
+fi
+
+BOLDSIGN_HOST="${BOLDSIGN_API_BASE_URL:-https://api.boldsign.com (US default)}"
+if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+    BOLDSIGN_MODE="production (isSandbox=false — key must be a production-tier key)"
+else
+    BOLDSIGN_MODE="sandbox (isSandbox=true — key must be a sandbox-tier key)"
+fi
+echo "📍 BoldSign host: ${BOLDSIGN_HOST}"
+echo "📍 BoldSign mode: ${BOLDSIGN_MODE} (APP_ENV=${DEPLOY_APP_ENV})"
+if [ "${DEPLOY_APP_ENV}" != "production" ] && [ -z "${EMAIL_DEV_TO:-}" ]; then
+    echo "⚠️  DEPLOY_APP_ENV=${DEPLOY_APP_ENV} but EMAIL_DEV_TO is unset — sendEmail + BoldSign sendSignatureRequest will refuse to send on the deployed service."
+fi
 
 echo "🚀 Deploying ${IMAGE} to Cloud Run service ${SERVICE_NAME} in ${REGION}..."
 gcloud run deploy "${SERVICE_NAME}" \
@@ -114,7 +168,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --allow-unauthenticated \
     --port=3000 \
     --set-env-vars="${ENV_VARS}" \
-    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest"
+    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest"
 
 echo "✅ Deployment complete."
 echo "🌐 Service URL:"
