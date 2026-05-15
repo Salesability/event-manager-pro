@@ -818,7 +818,7 @@ export const sendQuote = capabilityClient('quote:edit')
     // pre-dates the MSA bundle by definition, and the MSA-bundle envelope
     // path lives in `sendMsaEnvelope` (it bundles the draft Quote alongside
     // the MSA PDF). Re-sending a Quote *while the dealer's MSA envelope is
-    // sitting in Dropbox Sign awaiting signature* would confuse the signer:
+    // sitting in BoldSign awaiting signature* would confuse the signer:
     // they'd see two different Quote PDFs. Block re-send until the envelope
     // resolves (signed → MSA goes `active`; declined → manual cleanup).
     if (draft.sentAt != null) {

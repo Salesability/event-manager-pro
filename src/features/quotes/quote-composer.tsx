@@ -101,7 +101,7 @@ type Props = {
   /** Edit-mode only. Drives the Send confirm dialog. */
   recipient?: Recipient;
   /** Re-send only. True when the dealer's MSA is `pending` with an envelope
-   *  posted to Dropbox Sign — `sendQuote` will refuse re-send until the
+   *  posted to BoldSign — `sendQuote` will refuse re-send until the
    *  envelope resolves. The UI gates the button to match the server.
    *  Always false on first-send (the MSA gate only fires on re-send). */
   msaEnvelopeInFlight?: boolean;
@@ -535,6 +535,7 @@ export function QuoteComposer({
             registration={register('eventDays', { valueAsNumber: true })}
             error={errors.eventDays?.message}
             help="Each day beyond day one adds an additional-day line."
+            spinner
           />
 
           <div className="grid grid-cols-3 gap-2">
@@ -873,6 +874,7 @@ function NumberField({
   step,
   help,
   error,
+  spinner,
 }: {
   label: string;
   registration: UseFormRegisterReturn;
@@ -880,6 +882,9 @@ function NumberField({
   step?: string;
   help?: string;
   error?: string;
+  /** Opt back into native +/- spin buttons. Off everywhere by default (see
+   *  globals.css); flip on for small-range day-count style fields. */
+  spinner?: boolean;
 }) {
   const id = `qf-${registration.name}`;
   return (
@@ -891,6 +896,7 @@ function NumberField({
         min={min ?? 0}
         step={step ?? '1'}
         aria-invalid={!!error || undefined}
+        {...(spinner ? { 'data-spinner': '' } : {})}
         {...registration}
       />
       {error ? (

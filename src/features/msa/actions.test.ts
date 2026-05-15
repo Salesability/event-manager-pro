@@ -48,7 +48,7 @@ vi.mock('@/features/quotes/recipient', () => ({
 vi.mock('@/lib/boldsign/client', () => ({
   sendSignatureRequest: mocks.sendSignatureRequest,
 }));
-vi.mock('@/lib/dropbox-sign/templates', () => ({
+vi.mock('@/features/msa/template-version', () => ({
   currentMsaTemplateVersion: mocks.currentMsaTemplateVersion,
 }));
 

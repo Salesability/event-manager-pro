@@ -32,7 +32,7 @@ export type MsaCreateDialogProps = {
 //   1. `createMsaDraft(dealerId)` inserts the `pending` row + emits
 //      `msa.created` audit.
 //   2. `sendMsaEnvelope(msaId, firstDraftQuoteId)` renders both PDFs, uploads
-//      the draft to GCS, posts the envelope to Dropbox Sign, and persists
+//      the draft to GCS, posts the envelope to BoldSign, and persists
 //      the returned `providerDocumentId` + emits `msa.sent`.
 //
 // On step-2 failure the `pending` row stays put — a follow-up "Resend" surface
@@ -40,7 +40,7 @@ export type MsaCreateDialogProps = {
 // the action). That follow-up is out of scope for 0041 v1; for now a failed
 // send surfaces a toast and the operator can either re-open the dialog (the
 // `providerDocumentId IS NULL` guard makes the action safely re-runnable)
-// or chase Dropbox-Sign creds out-of-band.
+// or chase BoldSign creds out-of-band.
 export function MsaCreateDialog(props: MsaCreateDialogProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -86,7 +86,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
     <Dialog open={props.open} onClose={() => props.onClose(false)}>
       <DialogTitle>Send MSA + first Quote for signature</DialogTitle>
         <DialogDescription>
-          A bundled envelope is sent to the Client via Dropbox Sign. The Client
+          A bundled envelope is sent to the Client via BoldSign. The Client
           signs once and both documents take effect.
         </DialogDescription>
 

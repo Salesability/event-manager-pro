@@ -70,7 +70,7 @@ export default async function QuoteEditPage({
     loadServiceItems(),
     resolveQuoteRecipient(quote.dealerId),
     loadQuoteSendHistory(quote.id),
-    // 0046 Phase 5: when the dealer\'s MSA envelope is in Dropbox Sign awaiting
+    // 0046 Phase 5: when the dealer\'s MSA envelope is with BoldSign awaiting
     // signature, the server-side `sendQuote` action refuses re-send. The
     // composer mirrors this state so the button reads as disabled rather
     // than firing then surfacing the server-side error.

@@ -12,7 +12,7 @@ import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/re
 import { quoteDisplayName, quoteDownloadFilename } from '@/features/quotes/display-name';
 import { putObject } from '@/lib/storage/gcs';
 import { sendSignatureRequest } from '@/lib/boldsign/client';
-import { currentMsaTemplateVersion } from '@/lib/dropbox-sign/templates';
+import { currentMsaTemplateVersion } from './template-version';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { MAX_ADDRESS_LINES } from '@/features/quotes/constants';
 import type { ComputedLine } from '@/lib/quotes/pricing';
@@ -201,7 +201,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     }
 
     // Pre-load the MSA + the dealer + the first Quote. Early-fail on any
-    // mismatch before calling the Dropbox Sign API or rendering anything.
+    // mismatch before calling the BoldSign API or rendering anything.
     const [msa] = await db
       .select({
         id: masterServiceAgreements.id,

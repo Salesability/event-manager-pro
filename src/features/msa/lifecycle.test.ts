@@ -106,7 +106,7 @@ describe('markMsaSigned', () => {
     expect(mocks.inserts).toHaveLength(0); // no audit emit on replay
   });
 
-  it('returns error when the dropbox sign document id has no matching row', async () => {
+  it('returns error when the provider document id has no matching row', async () => {
     mocks.dbResults.push([]); // UPDATE miss
     mocks.dbResults.push([]); // re-select also empty
     const result = await markMsaSigned('sig-req-unknown', 'msa/1/signed.pdf');

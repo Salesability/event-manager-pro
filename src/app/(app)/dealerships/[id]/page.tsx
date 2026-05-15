@@ -144,8 +144,8 @@ export default async function DealerDetailPage({
             )}
             {msa.status === 'pending' && msa.providerDocumentId && (
               <dd className="col-span-full mt-1 text-xs text-zinc-500">
-                Envelope sent — awaiting signer. Sign event arrives via Dropbox
-                Sign webhook.
+                Envelope sent — awaiting signer. Sign event arrives via
+                BoldSign webhook.
               </dd>
             )}
           </dl>
