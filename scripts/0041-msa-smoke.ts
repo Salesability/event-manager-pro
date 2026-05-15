@@ -54,14 +54,14 @@ async function insert() {
   expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + 1);
 
   // Pending row: as if `sendMsaEnvelope` posted the envelope but the signer
-  // hasn't acted yet. `dropboxSignDocumentId` is set so the panel renders the
+  // hasn't acted yet. `providerDocumentId` is set so the panel renders the
   // "awaiting signer" caption.
   const [pending] = await db
     .insert(masterServiceAgreements)
     .values({
       dealerId: DEALER_ID,
       status: 'pending',
-      dropboxSignDocumentId: PENDING_DROPBOX_ID,
+      providerDocumentId: PENDING_DROPBOX_ID,
       templateVersion: `${FIXTURE_MARKER}-v1`,
     })
     .returning({ id: masterServiceAgreements.id });
@@ -75,7 +75,7 @@ async function insert() {
     .values({
       dealerId: DEALER_ID,
       status: 'active',
-      dropboxSignDocumentId: SIGNED_DROPBOX_ID,
+      providerDocumentId: SIGNED_DROPBOX_ID,
       signedAt,
       expiresAt,
       signedPdfStorageKey: `msa/${FIXTURE_MARKER}/signed.pdf`,
@@ -101,13 +101,13 @@ async function cleanup() {
   const rows = await db
     .select({
       id: masterServiceAgreements.id,
-      dropboxSignDocumentId: masterServiceAgreements.dropboxSignDocumentId,
+      providerDocumentId: masterServiceAgreements.providerDocumentId,
     })
     .from(masterServiceAgreements)
     .where(
       and(
         eq(masterServiceAgreements.dealerId, DEALER_ID),
-        sql`${masterServiceAgreements.dropboxSignDocumentId} IN (${PENDING_DROPBOX_ID}, ${SIGNED_DROPBOX_ID})`,
+        sql`${masterServiceAgreements.providerDocumentId} IN (${PENDING_DROPBOX_ID}, ${SIGNED_DROPBOX_ID})`,
       ),
     );
   console.log(`  Found ${rows.length} fixture row(s):`, rows);

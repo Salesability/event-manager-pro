@@ -12,6 +12,7 @@ import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
+import { DealerForm } from '@/features/dealers/dealer-form';
 import {
   firstDraftQuoteForDealer,
   loadActiveOrPendingMsa,
@@ -99,6 +100,10 @@ export default async function DealerDetailPage({
         ]}
       />
 
+      <Section title="Details" variant="card">
+        <DealerForm mode="edit" dealer={dealer} autoFocus={false} />
+      </Section>
+
       <Section
         title="Master Service Agreement"
         actions={msa ? <MsaStatusBadge status={msa.status} /> : null}
@@ -137,7 +142,7 @@ export default async function DealerDetailPage({
                 </dd>
               </>
             )}
-            {msa.status === 'pending' && msa.dropboxSignDocumentId && (
+            {msa.status === 'pending' && msa.providerDocumentId && (
               <dd className="col-span-full mt-1 text-xs text-zinc-500">
                 Envelope sent — awaiting signer. Sign event arrives via Dropbox
                 Sign webhook.

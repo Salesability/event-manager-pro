@@ -568,13 +568,13 @@ describe('sendQuote', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('refuses re-send when the dealer\'s MSA envelope is in flight (status=pending + dropboxSignDocumentId set)', async () => {
+  it('refuses re-send when the dealer\'s MSA envelope is in flight (status=pending + providerDocumentId set)', async () => {
     // Pre-load row=sent, dealer; MSA-pending in-flight lookup returns a row
-    // with a dropboxSignDocumentId. Action aborts before render/recipient/UPDATE.
+    // with a providerDocumentId. Action aborts before render/recipient/UPDATE.
     mocks.dbResults.push(
       [SENT_ROW],
       [DEALER_ROW],
-      [{ status: 'pending', dropboxSignDocumentId: 'dbox-sign-123' }],
+      [{ status: 'pending', providerDocumentId: 'dbox-sign-123' }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({
@@ -586,14 +586,14 @@ describe('sendQuote', () => {
     expect(mocks.putObject).not.toHaveBeenCalled();
   });
 
-  it('re-sends successfully when an MSA is pending but the envelope has not been posted yet (dropboxSignDocumentId IS NULL)', async () => {
+  it('re-sends successfully when an MSA is pending but the envelope has not been posted yet (providerDocumentId IS NULL)', async () => {
     // Pre-load row=sent, dealer; MSA-pending lookup finds a row WITHOUT a
-    // dropboxSignDocumentId (sendMsaEnvelope hasn\'t fired yet). Re-send is
+    // providerDocumentId (sendMsaEnvelope hasn\'t fired yet). Re-send is
     // allowed — there\'s no in-flight envelope for the dealer to be confused by.
     mocks.dbResults.push(
       [SENT_ROW],
       [DEALER_ROW],
-      [{ status: 'pending', dropboxSignDocumentId: null }],
+      [{ status: 'pending', providerDocumentId: null }],
       [{ id: 42 }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));

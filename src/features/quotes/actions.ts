@@ -825,7 +825,7 @@ export const sendQuote = capabilityClient('quote:edit')
       const [pendingMsa] = await db
         .select({
           status: masterServiceAgreements.status,
-          dropboxSignDocumentId: masterServiceAgreements.dropboxSignDocumentId,
+          providerDocumentId: masterServiceAgreements.providerDocumentId,
         })
         .from(masterServiceAgreements)
         .where(
@@ -835,7 +835,7 @@ export const sendQuote = capabilityClient('quote:edit')
           ),
         )
         .limit(1);
-      if (pendingMsa && pendingMsa.dropboxSignDocumentId != null) {
+      if (pendingMsa && pendingMsa.providerDocumentId != null) {
         return {
           error:
             'MSA envelope is in flight — finish signing or terminate before re-sending this quote.',

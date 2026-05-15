@@ -105,7 +105,7 @@ async function handleSigned(
     })
     .from(masterServiceAgreements)
     .where(
-      eq(masterServiceAgreements.dropboxSignDocumentId, signatureRequestId),
+      eq(masterServiceAgreements.providerDocumentId, signatureRequestId),
     )
     .limit(1);
   if (!msa) {

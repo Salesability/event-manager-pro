@@ -33,13 +33,13 @@ export type MsaCreateDialogProps = {
 //      `msa.created` audit.
 //   2. `sendMsaEnvelope(msaId, firstDraftQuoteId)` renders both PDFs, uploads
 //      the draft to GCS, posts the envelope to Dropbox Sign, and persists
-//      the returned `dropboxSignDocumentId` + emits `msa.sent`.
+//      the returned `providerDocumentId` + emits `msa.sent`.
 //
 // On step-2 failure the `pending` row stays put — a follow-up "Resend" surface
 // would re-invoke `sendMsaEnvelope` against the same id (idempotency lives in
 // the action). That follow-up is out of scope for 0041 v1; for now a failed
 // send surfaces a toast and the operator can either re-open the dialog (the
-// `dropboxSignDocumentId IS NULL` guard makes the action safely re-runnable)
+// `providerDocumentId IS NULL` guard makes the action safely re-runnable)
 // or chase Dropbox-Sign creds out-of-band.
 export function MsaCreateDialog(props: MsaCreateDialogProps) {
   const router = useRouter();

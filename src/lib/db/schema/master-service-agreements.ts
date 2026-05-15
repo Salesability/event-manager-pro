@@ -20,7 +20,7 @@ export const masterServiceAgreements = pgTable(
     signedAt: timestamp('signed_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     signedPdfStorageKey: text('signed_pdf_storage_key'),
-    dropboxSignDocumentId: text('dropbox_sign_document_id'),
+    providerDocumentId: text('provider_document_id'),
     terminationNoticeDate: timestamp('termination_notice_date', { withTimezone: true }),
     terminationEffectiveDate: timestamp('termination_effective_date', { withTimezone: true }),
     templateVersion: text('template_version').notNull(),

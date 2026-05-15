@@ -35,7 +35,7 @@ const ROW_BASE = {
   signedAt: null,
   expiresAt: null,
   signedPdfStorageKey: null,
-  dropboxSignDocumentId: null,
+  providerDocumentId: null,
   terminationNoticeDate: null,
   terminationEffectiveDate: null,
   templateVersion: '2026-05-12',

@@ -27,13 +27,13 @@ import type { ComputedLine } from '@/lib/quotes/pricing';
 //      plan body); expired/terminated rows allow a renewal-style fresh draft.
 //   2. `sendMsaEnvelope(msaId, firstQuoteId)` — bundles the rendered MSA PDF
 //      with the dealer's first draft Quote PDF, posts the envelope to
-//      Dropbox Sign, persists the returned `dropboxSignDocumentId`, and
+//      Dropbox Sign, persists the returned `providerDocumentId`, and
 //      emits `msa.sent`.
 //
 // Atomic-transition shape mirrors `sendQuote`: pre-load the row, side-effect
-// the API call, atomically guard the UPDATE on `dropboxSignDocumentId IS
+// the API call, atomically guard the UPDATE on `providerDocumentId IS
 // NULL` so a concurrent re-send raced past the read-then-write can't double-
-// post. Idempotent on re-send when `dropboxSignDocumentId` is already set —
+// post. Idempotent on re-send when `providerDocumentId` is already set —
 // returns `{ ok: true }` without re-calling the API.
 
 type CreateMsaResult = { ok: true; msaId: number } | { error: string };
@@ -208,7 +208,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
         dealerId: masterServiceAgreements.dealerId,
         status: masterServiceAgreements.status,
         templateVersion: masterServiceAgreements.templateVersion,
-        dropboxSignDocumentId: masterServiceAgreements.dropboxSignDocumentId,
+        providerDocumentId: masterServiceAgreements.providerDocumentId,
       })
       .from(masterServiceAgreements)
       .where(eq(masterServiceAgreements.id, msaId))
@@ -216,8 +216,8 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     if (!msa) return { error: 'MSA not found.' };
 
     // Idempotent re-send: if the envelope was already posted, the row carries
-    // a `dropboxSignDocumentId`. Return ok without re-calling the API.
-    if (msa.dropboxSignDocumentId) return { ok: true };
+    // a `providerDocumentId`. Return ok without re-calling the API.
+    if (msa.providerDocumentId) return { ok: true };
 
     if (msa.status !== 'pending') {
       return { error: `MSA cannot be sent from status '${msa.status}'.` };
@@ -306,7 +306,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     }
 
     // Persist the draft MSA PDF to GCS before the envelope post — the row's
-    // `dropboxSignDocumentId` lookup at webhook time only needs the signed
+    // `providerDocumentId` lookup at webhook time only needs the signed
     // bytes, but archiving the draft makes "what did the signer see?" easy
     // to answer if a dispute lands.
     const draftKey = msaDraftPdfStorageKey(msaId);
@@ -344,14 +344,14 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     const updated = await db
       .update(masterServiceAgreements)
       .set({
-        dropboxSignDocumentId: sendResult.signatureRequestId,
+        providerDocumentId: sendResult.signatureRequestId,
         updatedById: userId,
       })
       .where(
         and(
           eq(masterServiceAgreements.id, msaId),
           eq(masterServiceAgreements.status, 'pending'),
-          isNull(masterServiceAgreements.dropboxSignDocumentId),
+          isNull(masterServiceAgreements.providerDocumentId),
         ),
       )
       .returning({ id: masterServiceAgreements.id });

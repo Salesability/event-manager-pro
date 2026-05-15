@@ -19,7 +19,7 @@ import { auditLog, masterServiceAgreements } from '@/lib/db/schema';
 // equivalent gate), not directly callable from any client.
 //
 // **Concurrency:** transitions are an atomic guarded UPDATE
-// (`WHERE id = X AND status = 'pending' AND dropbox_sign_document_id = $1
+// (`WHERE id = X AND status = 'pending' AND provider_document_id = $1
 // RETURNING id`). If the guard misses, we re-select to distinguish three
 // races: row gone, already in target status (idempotent), or sitting in an
 // unreachable source status (illegal). Mirrors the quotes/lifecycle.ts shape.
@@ -36,7 +36,7 @@ function plus12MonthsFrom(now: Date): Date {
 }
 
 export async function markMsaSigned(
-  dropboxSignDocumentId: string,
+  providerDocumentId: string,
   signedPdfStorageKey: string,
 ): Promise<TransitionResult> {
   const signedAt = new Date();
@@ -52,7 +52,7 @@ export async function markMsaSigned(
     })
     .where(
       and(
-        eq(masterServiceAgreements.dropboxSignDocumentId, dropboxSignDocumentId),
+        eq(masterServiceAgreements.providerDocumentId, providerDocumentId),
         eq(masterServiceAgreements.status, 'pending'),
       ),
     )
@@ -69,7 +69,7 @@ export async function markMsaSigned(
       action: 'msa.signed',
       targetTable: 'master_service_agreements',
       targetId: id,
-      payload: { dropboxSignDocumentId, signedPdfStorageKey },
+      payload: { providerDocumentId, signedPdfStorageKey },
     });
     return { ok: true, transitioned: true, msaId: id, dealerId };
   }
@@ -81,7 +81,7 @@ export async function markMsaSigned(
     })
     .from(masterServiceAgreements)
     .where(
-      eq(masterServiceAgreements.dropboxSignDocumentId, dropboxSignDocumentId),
+      eq(masterServiceAgreements.providerDocumentId, providerDocumentId),
     )
     .limit(1);
   if (!row) return { error: 'MSA not found for the supplied document id.' };
@@ -96,14 +96,14 @@ export async function markMsaSigned(
 }
 
 export async function markMsaDeclined(
-  dropboxSignDocumentId: string,
+  providerDocumentId: string,
 ): Promise<TransitionResult> {
   const updated = await db
     .update(masterServiceAgreements)
     .set({ status: 'terminated' })
     .where(
       and(
-        eq(masterServiceAgreements.dropboxSignDocumentId, dropboxSignDocumentId),
+        eq(masterServiceAgreements.providerDocumentId, providerDocumentId),
         eq(masterServiceAgreements.status, 'pending'),
       ),
     )
@@ -120,7 +120,7 @@ export async function markMsaDeclined(
       action: 'msa.declined',
       targetTable: 'master_service_agreements',
       targetId: id,
-      payload: { dropboxSignDocumentId },
+      payload: { providerDocumentId },
     });
     return { ok: true, transitioned: true, msaId: id, dealerId };
   }
@@ -132,7 +132,7 @@ export async function markMsaDeclined(
     })
     .from(masterServiceAgreements)
     .where(
-      eq(masterServiceAgreements.dropboxSignDocumentId, dropboxSignDocumentId),
+      eq(masterServiceAgreements.providerDocumentId, providerDocumentId),
     )
     .limit(1);
   if (!row) return { error: 'MSA not found for the supplied document id.' };

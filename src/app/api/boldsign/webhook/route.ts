@@ -77,7 +77,7 @@ async function handleSigned(
       status: masterServiceAgreements.status,
     })
     .from(masterServiceAgreements)
-    .where(eq(masterServiceAgreements.dropboxSignDocumentId, documentId))
+    .where(eq(masterServiceAgreements.providerDocumentId, documentId))
     .limit(1);
   if (!msa) {
     return new NextResponse('MSA not found for the supplied document id.', {

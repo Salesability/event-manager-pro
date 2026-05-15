@@ -16,7 +16,7 @@ export type Msa = {
   signedAt: Date | null;
   expiresAt: Date | null;
   signedPdfStorageKey: string | null;
-  dropboxSignDocumentId: string | null;
+  providerDocumentId: string | null;
   terminationNoticeDate: Date | null;
   terminationEffectiveDate: Date | null;
   templateVersion: string;
@@ -30,7 +30,7 @@ const projection = {
   signedAt: masterServiceAgreements.signedAt,
   expiresAt: masterServiceAgreements.expiresAt,
   signedPdfStorageKey: masterServiceAgreements.signedPdfStorageKey,
-  dropboxSignDocumentId: masterServiceAgreements.dropboxSignDocumentId,
+  providerDocumentId: masterServiceAgreements.providerDocumentId,
   terminationNoticeDate: masterServiceAgreements.terminationNoticeDate,
   terminationEffectiveDate: masterServiceAgreements.terminationEffectiveDate,
   templateVersion: masterServiceAgreements.templateVersion,

@@ -77,7 +77,7 @@ export default async function QuoteEditPage({
     loadActiveOrPendingMsa(quote.dealerId),
   ]);
   const msaEnvelopeInFlight =
-    msa != null && msa.status === 'pending' && msa.dropboxSignDocumentId != null;
+    msa != null && msa.status === 'pending' && msa.providerDocumentId != null;
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 

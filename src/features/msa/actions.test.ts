@@ -139,7 +139,7 @@ const MSA_PENDING = {
   dealerId: 7,
   status: 'pending' as const,
   templateVersion: '2026-05-12',
-  dropboxSignDocumentId: null as string | null,
+  providerDocumentId: null as string | null,
 };
 
 const DEALER_ROW = {
@@ -305,7 +305,7 @@ describe('sendMsaEnvelope', () => {
 
     expect(mocks.updates).toHaveLength(1);
     const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.dropboxSignDocumentId).toBe('sig-req-abc');
+    expect(patch.providerDocumentId).toBe('sig-req-abc');
 
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'msa.sent',
@@ -357,9 +357,9 @@ describe('sendMsaEnvelope', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('is idempotent when the MSA already has a dropboxSignDocumentId', async () => {
+  it('is idempotent when the MSA already has a providerDocumentId', async () => {
     mocks.dbResults.push([
-      { ...MSA_PENDING, dropboxSignDocumentId: 'sig-req-existing' },
+      { ...MSA_PENDING, providerDocumentId: 'sig-req-existing' },
     ]);
     const result = await call(
       sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
