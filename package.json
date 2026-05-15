@@ -25,6 +25,7 @@
     "@supabase/ssr": "0.10.2",
     "@supabase/supabase-js": "2.105.1",
     "@tanstack/react-table": "^8.21.3",
+    "boldsign": "^3.1.4",
     "clsx": "^2.1.1",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.14.0",

@@ -35,6 +35,9 @@ importers:
       '@tanstack/react-table':
         specifier: ^8.21.3
         version: 8.21.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      boldsign:
+        specifier: ^3.1.4
+        version: 3.1.4
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1924,6 +1927,9 @@ packages:
   bluebird@3.7.2:
     resolution: {integrity: sha512-XpNj6GDQzdfW+r2Wnn7xiSAd7TM3jzkxGXBGTtWKuSXv1xUV+azxAm8jdWZN06QTQk+2N2XB9jRDkvbmQmcRtg==}
 
+  boldsign@3.1.4:
+    resolution: {integrity: sha512-w1Afh8ybUbqRWg5SZ66qwQ9JjpC9pzb9EI/lJy+woUpbcyEW/yGj0Z8jI9swu4G5jfjOdbvv2jK+nlybuuqruw==}
+
   brace-expansion@1.1.14:
     resolution: {integrity: sha512-MWPGfDxnyzKU7rNOW9SP/c50vi3xrmrua/+6hfPbCS2ABNWfx24vPidzvC7krjU/RTo235sV776ymlsMtGKj8g==}
 
@@ -2091,6 +2097,10 @@ packages:
 
   domutils@3.2.2:
     resolution: {integrity: sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==}
+
+  dotenv@16.6.1:
+    resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
+    engines: {node: '>=12'}
 
   drizzle-kit@0.31.10:
     resolution: {integrity: sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw==}
@@ -5370,6 +5380,17 @@ snapshots:
 
   bluebird@3.7.2: {}
 
+  boldsign@3.1.4:
+    dependencies:
+      '@types/node': 20.19.39
+      axios: 1.16.0
+      bluebird: 3.7.2
+      dotenv: 16.6.1
+      form-data: 4.0.5
+      qs: 6.15.1
+    transitivePeerDependencies:
+      - debug
+
   brace-expansion@1.1.14:
     dependencies:
       balanced-match: 1.0.2
@@ -5532,6 +5553,8 @@ snapshots:
       dom-serializer: 2.0.0
       domelementtype: 2.3.0
       domhandler: 5.0.3
+
+  dotenv@16.6.1: {}
 
   drizzle-kit@0.31.10:
     dependencies:
