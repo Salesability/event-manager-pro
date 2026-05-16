@@ -14,6 +14,7 @@ import {
   MAX_DOLLARS,
   QuoteInputsError,
   quoteInputsSchema,
+  recomputeTotalsWithOverrides,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
 import type { ServiceItem } from '@/features/services/queries';
@@ -128,6 +129,41 @@ function parseQuoteInputs(
   return { ok: true, data: result.data };
 }
 
+// Per-line coach price overrides (0052). FormData carries an `overrides`
+// JSON payload — an object keyed by line code → dollar amount. Any line
+// code present in the map gets that value as `overrideUnitPrice` after
+// `computeQuote` produces fresh catalogue-priced lines; codes absent from
+// the map have no override. Empty `{}` (or omitted field) clears all
+// overrides — matches the model where the client sends the full intended
+// override set on every save. Strict on values: positive, finite,
+// numeric(10,2)-shaped, ≤ MAX_DOLLARS — same caps as `parseTax`.
+function parseOverrides(
+  formData: FormData,
+): { ok: true; data: Record<string, number> } | { ok: false; error: string } {
+  const raw = field(formData, 'overrides');
+  if (!raw) return { ok: true, data: {} };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'Overrides payload is not valid JSON.' };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, error: 'Overrides must be an object keyed by line code.' };
+  }
+  const out: Record<string, number> = {};
+  for (const [code, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_DOLLARS) {
+      return {
+        ok: false,
+        error: `Override for ${code} must be a non-negative number ≤ ${MAX_DOLLARS}.`,
+      };
+    }
+    out[code] = value;
+  }
+  return { ok: true, data: out };
+}
+
 // Reject more than 2 decimal places so the persisted tax value cannot diverge
 // between paths (`setQuoteTax` writes `tax.toFixed(2)`, `computeQuote` rounds
 // via `roundCents`; the two can drift on >2-decimal inputs like `2.675`).
@@ -217,6 +253,23 @@ export const createQuote = capabilityClient('quote:edit')
       } catch (err) {
         if (err instanceof QuoteInputsError) return { error: err.message };
         throw err;
+      }
+      // 0052: same override-application shape as `setQuoteInputs` so a
+      // first-save from /quotes/new with the override toggle on doesn't
+      // silently drop the coach's tuned prices.
+      const overridesResult = parseOverrides(formData);
+      if (!overridesResult.ok) return { error: overridesResult.error };
+      const overrides = overridesResult.data;
+      if (Object.keys(overrides).length > 0) {
+        const linesWithOverrides: ComputedLine[] = computed.lines.map((l) =>
+          overrides[l.code] != null ? { ...l, overrideUnitPrice: overrides[l.code] } : l,
+        );
+        try {
+          computed = recomputeTotalsWithOverrides(linesWithOverrides, taxResult);
+        } catch (err) {
+          if (err instanceof QuoteInputsError) return { error: err.message };
+          throw err;
+        }
       }
       inputsSnapshot = inputResult.data;
     }
@@ -308,6 +361,13 @@ export const setQuoteInputs = capabilityClient('quote:edit')
     const taxRequested = formData.has('tax') ? parseTax(formData) : null;
     if (taxRequested && typeof taxRequested === 'object') return taxRequested;
 
+    // 0052: per-line coach price overrides. Empty/absent → no overrides
+    // applied; the client always sends the full intended override set
+    // (same model as `tax`), so omitting a code clears any prior override.
+    const overridesResult = parseOverrides(formData);
+    if (!overridesResult.ok) return { error: overridesResult.error };
+    const overrides = overridesResult.data;
+
     type EditResult =
       | { ok: true; auditPayload: Record<string, unknown> | null }
       | { error: string; fieldErrors?: Record<string, string[] | undefined> };
@@ -347,7 +407,25 @@ export const setQuoteInputs = capabilityClient('quote:edit')
         throw err;
       }
 
-      const patch = persistComputationPatch(parsed, computed);
+      // 0052: apply per-line overrides on top of the freshly computed lines,
+      // then recompute subtotal/tax/total using `effectiveUnit()`. Lines the
+      // map doesn't mention stay as-is; codes in the map that don't match a
+      // computed line are silently ignored (e.g. coach toggled an input that
+      // dropped a conditional line — the orphan override is dropped too).
+      // Catalogue `unitPrice` is preserved on every line so the original is
+      // recoverable from the JSONB snapshot for audit / coach reference.
+      const linesWithOverrides: ComputedLine[] = computed.lines.map((l) =>
+        overrides[l.code] != null ? { ...l, overrideUnitPrice: overrides[l.code] } : l,
+      );
+      let final: ReturnType<typeof recomputeTotalsWithOverrides>;
+      try {
+        final = recomputeTotalsWithOverrides(linesWithOverrides, taxNumber);
+      } catch (err) {
+        if (err instanceof QuoteInputsError) return { error: err.message };
+        throw err;
+      }
+
+      const patch = persistComputationPatch(parsed, final);
       const updated = await tx
         .update(quotes)
         .set({
@@ -581,10 +659,15 @@ function validatePersistedLines(raw: unknown): ValidatedLines {
     ) {
       return { error: CORRUPTED_LINES_ERROR };
     }
+    // 0052: PDF + email render the prospect-facing tuned price. `lineTotal`
+    // is already override-aware on persist (recomputeTotalsWithOverrides
+    // sets it to effectiveUnit * qty), so only `unitPrice` needs the
+    // preference rule here. Catalogue `unitPrice` stays on the persisted
+    // JSONB row so the original is recoverable for audit / coach reference.
     lines.push({
       description: l.label,
       quantity: l.qty,
-      unitPrice: l.unitPrice,
+      unitPrice: l.overrideUnitPrice ?? l.unitPrice,
       total: l.lineTotal,
     });
   }

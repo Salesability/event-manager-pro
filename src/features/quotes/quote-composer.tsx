@@ -45,12 +45,15 @@ import type { ServiceItem } from '@/features/services/queries';
 import {
   computeQuote,
   DEFAULT_QUOTE_INPUTS,
+  effectiveUnit,
   MAX_DOLLARS,
   QuoteInputsError,
   quoteInputsSchema,
+  recomputeTotalsWithOverrides,
   type ComputedLine,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
+import { Checkbox, CheckboxField } from '@/components/catalyst/checkbox';
 
 // Quote composer — structured-input calculator (per 0035 plan Phase 3 OQ #2
 // resolution). Coach edits the small input set on the left; the computed
@@ -140,6 +143,13 @@ const RETRIEVAL_BRACKETS = [0, 100, 200, 300, 400] as const;
 const quoteFormSchema = quoteInputsSchema.extend({
   dealerId: z.number().int().positive().nullable(),
   taxOverride: z.number().min(0).max(MAX_DOLLARS),
+  // 0052: coach-driven per-line unit-price override. `pricesOverridden`
+  // gates whether the `overrides` map is applied at save time — turning the
+  // toggle off persists `overrides: {}` (catalogue totals restored), turning
+  // it on persists whatever's currently in the map. Map values are dollars,
+  // same caps as `taxOverride`.
+  pricesOverridden: z.boolean(),
+  overrides: z.record(z.string(), z.number().min(0).max(MAX_DOLLARS)),
 });
 type QuoteFormValues = z.infer<typeof quoteFormSchema>;
 
@@ -185,14 +195,26 @@ export function QuoteComposer({
     isEdit && initial.status !== 'accepted' && initial.status !== 'declined';
   const isResend = isEdit && initial.sentAt != null;
 
-  const defaultValues = useMemo<QuoteFormValues>(
-    () => ({
+  const defaultValues = useMemo<QuoteFormValues>(() => {
+    // 0052: rehydrate any persisted overrides from the JSONB snapshot. A line
+    // with `overrideUnitPrice != null` means the coach tuned that one last
+    // session; reading it back populates the form so editing-then-saving
+    // preserves the tuned value (without round-tripping through a "no
+    // overrides found, ship empty map" first save).
+    const persistedOverrides: Record<string, number> = {};
+    for (const l of initial?.lineItems ?? []) {
+      if (l.overrideUnitPrice != null) {
+        persistedOverrides[l.code] = l.overrideUnitPrice;
+      }
+    }
+    return {
       ...(initial?.inputs ?? DEFAULT_QUOTE_INPUTS),
       dealerId: initial?.dealerId ?? initialDealerId,
       taxOverride: initial?.tax ?? 0,
-    }),
-    [initial, initialDealerId],
-  );
+      pricesOverridden: Object.keys(persistedOverrides).length > 0,
+      overrides: persistedOverrides,
+    };
+  }, [initial, initialDealerId]);
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -229,14 +251,26 @@ export function QuoteComposer({
   // briefly out of range.
   const computed = useMemo(() => {
     try {
-      return {
-        ok: true as const,
-        out: computeQuote(
-          extractInputs(watched),
-          catalog,
-          watched.taxOverride ?? 0,
-        ),
-      };
+      const out = computeQuote(
+        extractInputs(watched as Partial<QuoteFormValues>),
+        catalog,
+        watched.taxOverride ?? 0,
+      );
+      // 0052: apply override map on top of catalogue lines when the toggle
+      // is on. Toggle off → catalogue totals shown live; map values stay in
+      // form state so flipping back on restores the in-progress tuning.
+      if (watched.pricesOverridden && watched.overrides) {
+        const overrides = watched.overrides as Record<string, number | undefined>;
+        const linesWithOverrides: ComputedLine[] = out.lines.map((l) => {
+          const v = overrides[l.code];
+          return v != null ? { ...l, overrideUnitPrice: v } : l;
+        });
+        return {
+          ok: true as const,
+          out: recomputeTotalsWithOverrides(linesWithOverrides, watched.taxOverride ?? 0),
+        };
+      }
+      return { ok: true as const, out };
     } catch (err) {
       const msg = err instanceof QuoteInputsError ? err.message : 'Invalid inputs.';
       return { ok: false as const, error: msg };
@@ -275,6 +309,9 @@ export function QuoteComposer({
         const fd = new FormData();
         fd.set('inputs', JSON.stringify(extractInputs(values)));
         fd.set('tax', String(values.taxOverride));
+        // 0052: send overrides map only when the toggle is on. Toggle-off
+        // ships `{}` so the server clears any prior overrides on this row.
+        fd.set('overrides', JSON.stringify(values.pricesOverridden ? values.overrides : {}));
         if (initial?.quoteId) {
           fd.set('quoteId', String(initial.quoteId));
           const result = toLegacyResult(await setQuoteInputs(fd));
@@ -606,7 +643,31 @@ export function QuoteComposer({
       </section>
 
       <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Summary</h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Summary</h2>
+          {/* 0052: toggle that flips the Unit column into editable inputs.
+              Read-only mode (terminal-status quote) hides the checkbox — the
+              persisted values still render via `effectiveUnit()`. */}
+          {!isReadOnly && (
+            <CheckboxField>
+              <Controller
+                name="pricesOverridden"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    name={field.name}
+                    checked={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <Label className="text-xs">Override unit prices for this prospect</Label>
+              <Description className="text-[11px]">
+                Catalogue prices stay on the house quote; the PDF sent to the prospect uses your tuned numbers.
+              </Description>
+            </CheckboxField>
+          )}
+        </div>
         {display.ok ? (
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             <table className="w-full text-sm">
@@ -626,21 +687,50 @@ export function QuoteComposer({
                     </td>
                   </tr>
                 ) : (
-                  display.lines.map((l) => (
-                    <tr key={l.code}>
-                      <td className="px-3 py-2 align-top text-zinc-900">
-                        <div className="font-medium">{l.label}</div>
-                        <div className="text-[10px] uppercase tracking-wide text-zinc-500/70">
-                          {l.code} <span className="ml-2">ⓘ auto</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">{l.qty}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(l.unitPrice)}</td>
-                      <td className="px-3 py-2 text-right font-medium tabular-nums">
-                        {fmtMoney(l.lineTotal)}
-                      </td>
-                    </tr>
-                  ))
+                  display.lines.map((l) => {
+                    const effective = effectiveUnit(l);
+                    const isOverridden = l.overrideUnitPrice != null;
+                    return (
+                      <tr key={l.code}>
+                        <td className="px-3 py-2 align-top text-zinc-900">
+                          <div className="font-medium">{l.label}</div>
+                          <div className="text-[10px] uppercase tracking-wide text-zinc-500/70">
+                            {l.code} <span className="ml-2">ⓘ auto</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums align-top">{l.qty}</td>
+                        <td className="px-3 py-2 text-right tabular-nums align-top">
+                          {!isReadOnly && watched.pricesOverridden ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                className="w-28 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                                defaultValue={watched.overrides?.[l.code] ?? l.unitPrice}
+                                {...register(`overrides.${l.code}` as const, { valueAsNumber: true })}
+                              />
+                              <span className="text-[10px] text-zinc-400">
+                                Catalogue: {fmtMoney(l.unitPrice)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end">
+                              <span>{fmtMoney(effective)}</span>
+                              {isOverridden && (
+                                <span className="text-[10px] text-zinc-400 line-through">
+                                  {fmtMoney(l.unitPrice)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-medium tabular-nums align-top">
+                          {fmtMoney(l.lineTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
               <tfoot>

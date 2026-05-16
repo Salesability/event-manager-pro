@@ -3,8 +3,11 @@ import type { ServiceItem } from '@/features/services/queries';
 import {
   computeQuote,
   DEFAULT_QUOTE_INPUTS,
+  effectiveUnit,
   QuoteInputsError,
+  recomputeTotalsWithOverrides,
   validateQuoteInputs,
+  type ComputedLine,
   type QuoteInputs,
 } from './pricing';
 
@@ -297,5 +300,119 @@ describe('computeQuote — range-bound enforcement on record-retrieval', () => {
   it('accepts travel amounts above the record-retrieval range (no catalog bound on travel)', () => {
     const out = computeQuote(inputs({ travelAmount: 1_000_000 }), CATALOG);
     expect(findLine(out, 'travel')).toMatchObject({ unitPrice: 1_000_000 });
+  });
+});
+
+describe('effectiveUnit — coach per-line override (0052)', () => {
+  const baseLine: ComputedLine = {
+    code: 'base-event',
+    label: 'Base Event',
+    unit: 'flat',
+    unitPrice: 6900,
+    qty: 1,
+    lineTotal: 6900,
+  };
+
+  it('returns the catalogue unitPrice when overrideUnitPrice is absent', () => {
+    expect(effectiveUnit(baseLine)).toBe(6900);
+  });
+
+  it('returns the catalogue unitPrice when overrideUnitPrice is explicitly undefined', () => {
+    expect(effectiveUnit({ ...baseLine, overrideUnitPrice: undefined })).toBe(6900);
+  });
+
+  it('returns the override when overrideUnitPrice is set', () => {
+    expect(effectiveUnit({ ...baseLine, overrideUnitPrice: 5500 })).toBe(5500);
+  });
+
+  it('returns the override even when it is 0 (a coach courtesy zero-out)', () => {
+    expect(effectiveUnit({ ...baseLine, overrideUnitPrice: 0 })).toBe(0);
+  });
+});
+
+describe('recomputeTotalsWithOverrides — totals honor per-line overrides', () => {
+  // A two-line snapshot mirroring what computeQuote would persist for a basic
+  // single-day, no-touches, no-travel quote with audience size 500. Lines
+  // come from the JSONB snapshot the composer round-trips on every save.
+  const baseLines: ComputedLine[] = [
+    {
+      code: 'base-event',
+      label: 'Base Event',
+      unit: 'flat',
+      unitPrice: 6900,
+      qty: 1,
+      lineTotal: 6900,
+    },
+    {
+      code: 'additional-contact',
+      label: 'Additional Contact',
+      unit: 'per-record',
+      unitPrice: 5,
+      qty: 100,
+      lineTotal: 500,
+    },
+  ];
+
+  it('produces the same totals as computeQuote when no overrides are present', () => {
+    const out = recomputeTotalsWithOverrides(baseLines, 0);
+    expect(out.subtotal).toBe(7400);
+    expect(out.tax).toBe(0);
+    expect(out.total).toBe(7400);
+    // Lines come back unchanged in shape (no override field added).
+    expect(out.lines[0].overrideUnitPrice).toBeUndefined();
+  });
+
+  it('subtotal drops by (unit - override) * qty when one line is overridden', () => {
+    // Override additional-contact from $5 → $4. qty=100 → lineTotal 500 → 400.
+    const overridden: ComputedLine[] = [
+      baseLines[0],
+      { ...baseLines[1], overrideUnitPrice: 4 },
+    ];
+    const out = recomputeTotalsWithOverrides(overridden, 0);
+    expect(out.lines[1].lineTotal).toBe(400);
+    expect(out.subtotal).toBe(7300);
+    expect(out.total).toBe(7300);
+  });
+
+  it('honors taxOverride dollar amount on top of override subtotal', () => {
+    const overridden: ComputedLine[] = [
+      baseLines[0],
+      { ...baseLines[1], overrideUnitPrice: 4 },
+    ];
+    const out = recomputeTotalsWithOverrides(overridden, 1000);
+    expect(out.subtotal).toBe(7300);
+    expect(out.tax).toBe(1000);
+    expect(out.total).toBe(8300);
+  });
+
+  it('preserves the catalogue unitPrice on each returned line (original stays recoverable)', () => {
+    const overridden: ComputedLine[] = [
+      { ...baseLines[0], overrideUnitPrice: 5500 },
+    ];
+    const out = recomputeTotalsWithOverrides(overridden, 0);
+    expect(out.lines[0].unitPrice).toBe(6900);
+    expect(out.lines[0].overrideUnitPrice).toBe(5500);
+    expect(out.lines[0].lineTotal).toBe(5500);
+  });
+
+  it('does NOT mutate the input lines (returns new objects)', () => {
+    const input: ComputedLine[] = [{ ...baseLines[0], overrideUnitPrice: 5500 }];
+    const snapshot = { ...input[0] };
+    recomputeTotalsWithOverrides(input, 0);
+    expect(input[0]).toEqual(snapshot);
+  });
+
+  it('throws on negative overrideUnitPrice', () => {
+    const bad: ComputedLine[] = [{ ...baseLines[0], overrideUnitPrice: -1 }];
+    expect(() => recomputeTotalsWithOverrides(bad, 0)).toThrow(QuoteInputsError);
+  });
+
+  it('throws on overrideUnitPrice exceeding MAX_DOLLARS', () => {
+    const bad: ComputedLine[] = [{ ...baseLines[0], overrideUnitPrice: 10_000_000 }];
+    expect(() => recomputeTotalsWithOverrides(bad, 0)).toThrow(QuoteInputsError);
+  });
+
+  it('throws on negative taxOverride', () => {
+    expect(() => recomputeTotalsWithOverrides(baseLines, -1)).toThrow(QuoteInputsError);
   });
 });

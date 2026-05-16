@@ -1243,6 +1243,106 @@ describe('setQuoteInputs', () => {
     const result = await call(setQuoteInputs(fd({ inputs: '{}' })));
     expect(result).toEqual({ error: 'Invalid quote id.' });
   });
+
+  // 0052: per-line coach price overrides
+  it('applies overrides to lineItems and recomputes subtotal/total', async () => {
+    // Audience=600 → base-event (1 × 6900) + additional-contact (100 × 3).
+    // Without override: subtotal 7200. Overriding additional-contact $3 → $2:
+    // base 6900 + 100 × 2 = 7100; line lineTotal flips to 200.
+    mocks.dbResults.push(
+      [SET_INPUTS_PRELOAD],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
+          overrides: JSON.stringify({ 'additional-contact': 2 }),
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(patch.subtotal).toBe('7100.00');
+    expect(patch.total).toBe('7100.00');
+    const lineItems = patch.lineItems as Array<{
+      code: string;
+      unitPrice: number;
+      overrideUnitPrice?: number;
+      lineTotal: number;
+    }>;
+    const overridden = lineItems.find((l) => l.code === 'additional-contact');
+    expect(overridden?.unitPrice).toBe(3);
+    expect(overridden?.overrideUnitPrice).toBe(2);
+    expect(overridden?.lineTotal).toBe(200);
+    // base-event has no override → stays $6900.
+    const base = lineItems.find((l) => l.code === 'base-event');
+    expect(base?.unitPrice).toBe(6900);
+    expect(base?.overrideUnitPrice).toBeUndefined();
+  });
+
+  it('clears overrides when an empty map is sent (toggle-off model)', async () => {
+    // Pre-load row already carries an override on additional-contact.
+    mocks.dbResults.push(
+      [
+        {
+          ...SET_INPUTS_PRELOAD,
+          subtotal: '7100.00',
+          total: '7100.00',
+          lineItems: [
+            { code: 'base-event', label: 'Base Event', unit: 'flat', unitPrice: 6900, qty: 1, lineTotal: 6900 },
+            { code: 'additional-contact', label: 'Additional Contact', unit: 'per-record', unitPrice: 3, overrideUnitPrice: 2, qty: 100, lineTotal: 200 },
+          ],
+        },
+      ],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
+          overrides: JSON.stringify({}),
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    // Catalogue totals restored (additional-contact back to $3 × 100 = 300).
+    expect(patch.subtotal).toBe('7200.00');
+    const lineItems = patch.lineItems as Array<{ code: string; overrideUnitPrice?: number }>;
+    expect(lineItems.find((l) => l.code === 'additional-contact')?.overrideUnitPrice).toBeUndefined();
+  });
+
+  it('rejects an override value > MAX_DOLLARS', async () => {
+    mocks.dbResults.push([SET_INPUTS_PRELOAD]);
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
+          overrides: JSON.stringify({ 'additional-contact': 99_999_999 }),
+        }),
+      ),
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining('additional-contact') });
+  });
+
+  it('rejects a non-JSON overrides payload', async () => {
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          inputs: JSON.stringify({ audienceSize: 600 }),
+          overrides: 'not-json',
+        }),
+      ),
+    );
+    expect(result).toEqual({ error: 'Overrides payload is not valid JSON.' });
+  });
 });
 
 describe('setQuoteTax', () => {

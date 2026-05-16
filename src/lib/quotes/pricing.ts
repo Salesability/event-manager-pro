@@ -50,6 +50,12 @@ export type ComputedLine = {
   /** Dollar amount per unit. For range items this is the bracket amount the
    *  coach chose; for `travel` it's the typed dollar amount. */
   unitPrice: number;
+  /** Optional per-quote coach override of `unitPrice` (0052). When present,
+   *  the prospect-facing PDF + totals use this value via `effectiveUnit()`;
+   *  `unitPrice` is preserved as the catalogue reference so the coach can
+   *  see both numbers in the composer. Absent on pre-feature rows and on
+   *  any line the coach hasn't tuned. */
+  overrideUnitPrice?: number;
   qty: number;
   lineTotal: number;
 };
@@ -242,6 +248,51 @@ export function computeQuote(
   const total = roundCents(subtotal + tax);
 
   return { lines, subtotal, tax, total };
+}
+
+/** Returns the per-unit dollar amount that drives line totals, PDF rendering,
+ *  and `subtotal`/`total`. Prefers the coach's per-line override (set on the
+ *  composer Summary in 0052) and falls back to the catalogue-derived
+ *  `unitPrice` snapshot. Pre-0052 lines + lines the coach hasn't tuned have
+ *  no `overrideUnitPrice`, so the fallback is the universal default. */
+export function effectiveUnit(line: ComputedLine): number {
+  return line.overrideUnitPrice ?? line.unitPrice;
+}
+
+/** Recompute `lineTotal` per line + roll-up totals using `effectiveUnit()` —
+ *  i.e. with per-line overrides honored. `tax` stays a coach-typed dollar
+ *  amount (matches `computeQuote`'s `taxOverride` contract): overrides do
+ *  NOT auto-recompute tax against the override subtotal, because tax has
+ *  never been a derived percentage in this codebase. The caller passes
+ *  whatever `taxOverride` the coach typed; null/undefined means 0.
+ *
+ *  Returns NEW `ComputedLine` objects (immutable shape) so callers can pass
+ *  the result straight into the JSONB persist path without mutating inputs.
+ *  Throws `QuoteInputsError` on the same range checks `computeQuote` uses
+ *  for overrides + taxes (positive, finite, ≤ MAX_DOLLARS). */
+export function recomputeTotalsWithOverrides(
+  lines: ComputedLine[],
+  taxOverride = 0,
+): QuoteComputation {
+  if (!Number.isFinite(taxOverride) || taxOverride < 0 || taxOverride > MAX_DOLLARS) {
+    throw new QuoteInputsError(`tax must be a non-negative number ≤ ${MAX_DOLLARS}.`);
+  }
+  const recomputed: ComputedLine[] = lines.map((l) => {
+    const override = l.overrideUnitPrice;
+    if (override != null) {
+      if (!Number.isFinite(override) || override < 0 || override > MAX_DOLLARS) {
+        throw new QuoteInputsError(
+          `overrideUnitPrice for ${l.code} must be a non-negative number ≤ ${MAX_DOLLARS}.`,
+        );
+      }
+    }
+    const unit = effectiveUnit(l);
+    return { ...l, lineTotal: roundCents(unit * l.qty) };
+  });
+  const subtotal = roundCents(recomputed.reduce((acc, l) => acc + l.lineTotal, 0));
+  const tax = roundCents(taxOverride);
+  const total = roundCents(subtotal + tax);
+  return { lines: recomputed, subtotal, tax, total };
 }
 
 /** Default inputs for a fresh draft quote. Matches the `DEFAULT_QUOTE_INPUTS`
