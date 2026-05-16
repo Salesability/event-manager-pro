@@ -38,7 +38,26 @@ export type MsaPdfData = {
   templateVersion: string;
 };
 
-export type RenderResult = { ok: true; body: Buffer } | { error: string };
+// Signature-field anchor returned alongside the PDF body so the BoldSign
+// envelope sender (`src/lib/boldsign/client.ts`) can pin a `FormField` of
+// type Signature at the same on-page location the prose's right-column
+// "For the Client" underline lives. Coordinates use BoldSign's coordinate
+// system (top-left origin, page is 1-indexed) rather than pdf-lib's
+// (bottom-left origin, page array 0-indexed) — the translation happens at
+// capture time so consumers don't need to know about pdf-lib's convention.
+export type SignatureAnchor = {
+  /** 1-indexed page number (BoldSign convention). */
+  pageNumber: number;
+  /** Top-left origin, page units (points). */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type RenderResult =
+  | { ok: true; body: Buffer; signatureAnchor: SignatureAnchor }
+  | { error: string };
 
 // Sender block, sourced from salesability.ca/terms-conditions (mirrors
 // render-quote.ts:41-48 — kept in sync by hand until either renderer pulls
@@ -164,6 +183,15 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
 
     let page = doc.addPage([pageWidth, pageHeight]);
     let y = pageHeight - margin;
+
+    // Captured at the signature-block draw site below (`page.drawLine(...)`
+    // for the right column's "For the Client" underline). Resolved to a
+    // `pageNumber` post-save by `doc.getPages().indexOf(sigPage) + 1`.
+    let sigPage: PDFPage | null = null;
+    let sigBoxY: number | null = null;
+    let sigBoxX: number | null = null;
+    let sigBoxWidth: number | null = null;
+    const SIG_BOX_HEIGHT = 22;
 
     // Header band on the first page only — mirrors render-quote.ts's layout
     // for visual consistency across the bundled envelope (MSA + Quote).
@@ -311,6 +339,16 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       thickness: 0.5,
       color: black,
     });
+    // Capture the BoldSign signature-field anchor. The visual underline sits
+    // at pdf-lib y (bottom-left origin); BoldSign expects a top-left-origin
+    // bounding box. The signer draws *into* the box with the underline as
+    // its visual baseline, so the box sits above the line in pdf-lib coords
+    // (y .. y + SIG_BOX_HEIGHT) — equivalently in BoldSign top-left coords
+    // its top edge is `pageHeight - (y + SIG_BOX_HEIGHT)`.
+    sigPage = page;
+    sigBoxX = rightColX;
+    sigBoxY = pageHeight - (y + SIG_BOX_HEIGHT);
+    sigBoxWidth = colWidth;
     y -= 12;
     page.drawText(sanitize('Shannon Hogan, President'), {
       x: leftColX,
@@ -334,8 +372,27 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       color: grey,
     });
 
+    if (sigPage == null || sigBoxX == null || sigBoxY == null || sigBoxWidth == null) {
+      // Should be unreachable — the signature block is unconditional in the
+      // render flow. Fail loud if a future refactor accidentally skips it,
+      // rather than ship a fieldless envelope that BoldSign would reject
+      // with the exact 400 this anchor was added to prevent.
+      return { error: 'renderMsaPdf failed: signature anchor was not captured.' };
+    }
+    const pageIndex = doc.getPages().indexOf(sigPage);
+    if (pageIndex < 0) {
+      return { error: 'renderMsaPdf failed: signature page is not in the document.' };
+    }
+    const signatureAnchor: SignatureAnchor = {
+      pageNumber: pageIndex + 1,
+      x: sigBoxX,
+      y: sigBoxY,
+      width: sigBoxWidth,
+      height: SIG_BOX_HEIGHT,
+    };
+
     const bytes = await doc.save();
-    return { ok: true, body: Buffer.from(bytes) };
+    return { ok: true, body: Buffer.from(bytes), signatureAnchor };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : 'renderMsaPdf failed.',

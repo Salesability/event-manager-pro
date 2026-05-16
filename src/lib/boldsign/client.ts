@@ -1,5 +1,6 @@
 import 'server-only';
-import { DocumentApi, DocumentSigner, SendForSign } from 'boldsign';
+import { DocumentApi, DocumentSigner, FormField, Rectangle, SendForSign } from 'boldsign';
+import type { SignatureAnchor } from '@/lib/pdf/render-msa';
 
 export type ClientResult =
   | { ok: true; documentApi: DocumentApi }
@@ -50,6 +51,13 @@ export type SendSignatureRequestInput = {
   message: string;
   signer: SignerInput;
   files: EnvelopeFile[];
+  /** Where the signer's Signature field is pinned on the rendered PDF.
+   *  Required — BoldSign rejects envelopes without `Signers.FormFields`
+   *  (HTTP 400 "Form fields cannot be null"). Produced by the in-repo PDF
+   *  renderer (e.g. `renderMsaPdf()` → `result.signatureAnchor`) so the
+   *  field tracks whatever page/coords the prose's visual signature line
+   *  actually landed on. */
+  signatureAnchor: SignatureAnchor;
   /** Optional BoldSign metadata pinned onto the document so the webhook
    *  can correlate back to the row without a separate lookup table. */
   metadata?: Record<string, string>;
@@ -117,6 +125,26 @@ export async function sendSignatureRequest(
   // who the envelope was meant for; only emailAddress is rewritten.
   signer.name = input.signer.name;
   signer.emailAddress = redirect.redirect ? redirect.to : input.signer.emailAddress;
+  signer.signerType = DocumentSigner.SignerTypeEnum.Signer;
+
+  // Pin a Signature form field at the anchor the renderer produced. Without
+  // this, BoldSign rejects with HTTP 400 (`Signers.FormFields: "Form fields
+  // cannot be null"` — chunk 0054 root cause). The anchor's coords are
+  // already in BoldSign's coordinate system (top-left origin, 1-indexed
+  // page) per `SignatureAnchor`'s contract — no translation here.
+  const bounds = new Rectangle();
+  bounds.x = input.signatureAnchor.x;
+  bounds.y = input.signatureAnchor.y;
+  bounds.width = input.signatureAnchor.width;
+  bounds.height = input.signatureAnchor.height;
+  const sigField = new FormField();
+  sigField.id = 'ClientSignature';
+  sigField.fieldType = FormField.FieldTypeEnum.Signature;
+  sigField.pageNumber = input.signatureAnchor.pageNumber;
+  sigField.bounds = bounds;
+  sigField.isRequired = true;
+  signer.formFields = [sigField];
+
   sendForSign.signers = [signer];
 
   sendForSign.files = input.files.map((f) => ({

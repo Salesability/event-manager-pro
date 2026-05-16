@@ -13,32 +13,42 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('boldsign', () => ({
-  DocumentApi: class MockDocumentApi {
-    basePath = '';
-    constructor(basePath?: string) {
-      mocks.ctorCalls += 1;
-      mocks.ctorBasePath = basePath ?? null;
-      this.basePath = basePath ?? '';
-    }
-    setApiKey(apiKey: string) {
-      mocks.setApiKeyCalls.push(apiKey);
-    }
-    setDefaultAuthentication() {}
-    async sendDocument(sendForSign: unknown) {
-      mocks.sendDocumentCalls.push(sendForSign);
-      if (mocks.sendDocumentError) throw mocks.sendDocumentError;
-      return mocks.sendDocumentResponse;
-    }
-    async downloadDocument(documentId: string) {
-      mocks.downloadDocumentCalls.push(documentId);
-      if (mocks.downloadDocumentError) throw mocks.downloadDocumentError;
-      return mocks.downloadDocumentResponse;
-    }
-  },
-  SendForSign: class MockSendForSign {},
-  DocumentSigner: class MockDocumentSigner {},
-}));
+vi.mock('boldsign', () => {
+  class MockDocumentSigner {
+    static SignerTypeEnum = { Signer: 'Signer' } as const;
+  }
+  class MockFormField {
+    static FieldTypeEnum = { Signature: 'Signature' } as const;
+  }
+  return {
+    DocumentApi: class MockDocumentApi {
+      basePath = '';
+      constructor(basePath?: string) {
+        mocks.ctorCalls += 1;
+        mocks.ctorBasePath = basePath ?? null;
+        this.basePath = basePath ?? '';
+      }
+      setApiKey(apiKey: string) {
+        mocks.setApiKeyCalls.push(apiKey);
+      }
+      setDefaultAuthentication() {}
+      async sendDocument(sendForSign: unknown) {
+        mocks.sendDocumentCalls.push(sendForSign);
+        if (mocks.sendDocumentError) throw mocks.sendDocumentError;
+        return mocks.sendDocumentResponse;
+      }
+      async downloadDocument(documentId: string) {
+        mocks.downloadDocumentCalls.push(documentId);
+        if (mocks.downloadDocumentError) throw mocks.downloadDocumentError;
+        return mocks.downloadDocumentResponse;
+      }
+    },
+    SendForSign: class MockSendForSign {},
+    DocumentSigner: MockDocumentSigner,
+    FormField: MockFormField,
+    Rectangle: class MockRectangle {},
+  };
+});
 
 import {
   __resetForTests,
@@ -119,6 +129,13 @@ describe('sendSignatureRequest', () => {
     message: 'Please sign',
     signer: { emailAddress: 'a@b.co', name: 'Alice' },
     files: [{ filename: 'msa.pdf', body: Buffer.from('pdf') }],
+    signatureAnchor: {
+      pageNumber: 2,
+      x: 321,
+      y: 600,
+      width: 241,
+      height: 22,
+    },
   };
 
   it('returns {error} when API key is unset', async () => {
@@ -218,6 +235,53 @@ describe('sendSignatureRequest', () => {
       signers?: Array<{ emailAddress?: string }>;
     };
     expect(sent.signers?.[0]?.emailAddress).toBe('a@b.co');
+  });
+
+  it('attaches a single Signature FormField on the signer built from signatureAnchor', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{
+        formFields?: Array<{
+          id?: string;
+          fieldType?: string;
+          pageNumber?: number;
+          isRequired?: boolean;
+          bounds?: { x?: number; y?: number; width?: number; height?: number };
+        }>;
+        signerType?: string;
+      }>;
+    };
+    const signer = sent.signers?.[0];
+    expect(signer?.signerType).toBe('Signer');
+    expect(signer?.formFields).toHaveLength(1);
+    const field = signer?.formFields?.[0];
+    expect(field?.id).toBe('ClientSignature');
+    expect(field?.fieldType).toBe('Signature');
+    expect(field?.pageNumber).toBe(2);
+    expect(field?.isRequired).toBe(true);
+    expect(field?.bounds).toEqual({ x: 321, y: 600, width: 241, height: 22 });
+  });
+
+  it('propagates each anchor coordinate independently (no x/y swap, no width/height swap)', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest({
+      ...sample,
+      signatureAnchor: { pageNumber: 5, x: 11, y: 22, width: 33, height: 44 },
+    });
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{
+        formFields?: Array<{
+          pageNumber?: number;
+          bounds?: { x?: number; y?: number; width?: number; height?: number };
+        }>;
+      }>;
+    };
+    const field = sent.signers?.[0]?.formFields?.[0];
+    expect(field?.pageNumber).toBe(5);
+    expect(field?.bounds).toEqual({ x: 11, y: 22, width: 33, height: 44 });
   });
 });
 

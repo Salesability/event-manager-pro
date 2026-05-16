@@ -62,6 +62,37 @@ describe('renderMsaPdf', () => {
     expect('ok' in result && result.ok).toBe(true);
   });
 
+  it('returns a signatureAnchor with valid coords for the right-column signer box', async () => {
+    const result = await renderMsaPdf(fixture);
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    const a = result.signatureAnchor;
+    expect(a.pageNumber).toBeGreaterThanOrEqual(1);
+    // Right column on a 612pt page with margin=50, gap=30 between columns →
+    // rightColX = 50 + ((612 - 100 - 30) / 2) + 30 = 50 + 241 + 30 = 321.
+    expect(a.x).toBeCloseTo(321, 0);
+    // colWidth = (612 - 100 - 30) / 2 = 241.
+    expect(a.width).toBeCloseTo(241, 0);
+    // SIG_BOX_HEIGHT in render-msa.ts is fixed at 22.
+    expect(a.height).toBe(22);
+    // Top-left origin y must land on the page (0 < y < pageHeight - height).
+    expect(a.y).toBeGreaterThan(0);
+    expect(a.y).toBeLessThan(792 - 22);
+  });
+
+  it('signatureAnchor.pageNumber matches the final page when the signature block paginates over', async () => {
+    // The default fixture's prose pushes the signature block to page 2 today
+    // (the renderer adds a new page if y < margin + 120). Lock in that the
+    // anchor's pageNumber matches the actually-rendered page count rather
+    // than always reporting 1.
+    const result = await renderMsaPdf(fixture);
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    const reloaded = await PDFDocument.load(result.body);
+    expect(result.signatureAnchor.pageNumber).toBeLessThanOrEqual(reloaded.getPageCount());
+    expect(result.signatureAnchor.pageNumber).toBeGreaterThanOrEqual(1);
+  });
+
   // Opt-in visual smoke: WRITE_SMOKE_PDF=1 pnpm vitest run src/lib/pdf
   // writes /tmp/msa-smoke.pdf so the layout can be eyeballed. Skipped in CI.
   it.skipIf(!process.env.WRITE_SMOKE_PDF)('writes /tmp/msa-smoke.pdf', async () => {

@@ -332,6 +332,13 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
         { filename: `msa-${msaId}.pdf`, body: msaPdf.body },
         { filename: quoteDownloadFilename(quote.createdAt), body: quotePdf.body },
       ],
+      // Pin the Signature field at the prose's right-column underline (chunk
+      // 0054). Without this, BoldSign 400s on `Signers.FormFields: "Form
+      // fields cannot be null"`. Two-file envelope sends both PDFs in
+      // declaration order; the anchor's `pageNumber` is relative to the
+      // first file (the MSA), which is correct because the signer applies
+      // to the MSA only — the Quote is a reference attachment.
+      signatureAnchor: msaPdf.signatureAnchor,
       metadata: { msaId: String(msaId), quoteId: String(quote.id) },
     });
     if ('error' in sendResult) {
