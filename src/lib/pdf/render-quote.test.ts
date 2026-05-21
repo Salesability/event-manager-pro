@@ -135,6 +135,29 @@ describe('renderQuotePdf', () => {
     expect(result.error).toContain(String(MAX_LINE_ITEMS));
   });
 
+  it('omits the initials anchor by default (standalone quote send)', async () => {
+    const result = await renderQuotePdf(fixture);
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    expect(result.initialsAnchor).toBeUndefined();
+  });
+
+  it('returns a footer initials anchor when withInitials is set', async () => {
+    const result = await renderQuotePdf(fixture, { withInitials: true });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    const a = result.initialsAnchor;
+    expect(a).toBeDefined();
+    if (!a) return;
+    expect(a.pageNumber).toBe(1); // quote is a single page
+    // bottom-right footer box: rightEdge(562) - 70 = 492
+    expect(a.x).toBe(492);
+    expect(a.width).toBe(70);
+    expect(a.height).toBe(22);
+    // top-left origin y = 792 - (underlineY 60 + height 22) = 710
+    expect(a.y).toBe(710);
+  });
+
   // Opt-in visual smoke: WRITE_SMOKE_PDF=1 pnpm vitest run src/lib/pdf
   // writes /tmp/quote-smoke.pdf so the layout can be eyeballed. Skipped in CI.
   it.skipIf(!process.env.WRITE_SMOKE_PDF)('writes /tmp/quote-smoke.pdf', async () => {

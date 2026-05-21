@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from 'pdf-lib';
 import { quoteDisplayName } from '@/features/quotes/display-name';
+import type { FieldAnchor } from './anchors';
 
 export type QuoteLineItem = {
   description: string;
@@ -26,7 +27,23 @@ export type QuoteData = {
   total: number;
 };
 
-export type RenderResult = { ok: true; body: Buffer } | { error: string };
+export type RenderResult =
+  | { ok: true; body: Buffer; initialsAnchor?: FieldAnchor }
+  | { error: string };
+
+// Options for the combined-document flow (chunk 0055). When `withInitials` is
+// set, the quote draws a "Client initials" box in its footer and returns the
+// anchor so the BoldSign envelope can pin an Initial field there. The standard
+// standalone-quote send (`sendQuote`) omits this — no stray initials line on a
+// quote that is emailed for acceptance rather than counter-signed.
+export type RenderQuoteOptions = {
+  withInitials?: boolean;
+};
+
+// Initials box geometry (footer, bottom-right). Fixed position well below the
+// content for a full MAX_LINE_ITEMS quote (terms end ~y198; this sits at ~y60).
+const INITIALS_BOX_WIDTH = 70;
+const INITIALS_BOX_HEIGHT = 22;
 
 // Hard cap on line-item count for the single-page layout. The current y-axis
 // math leaves the lowest text above the 50pt bottom margin at 12 items for
@@ -132,7 +149,10 @@ function drawRight(opts: DrawOpts, text: string, rightX: number, y: number) {
   });
 }
 
-export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
+export async function renderQuotePdf(
+  quote: QuoteData,
+  opts: RenderQuoteOptions = {},
+): Promise<RenderResult> {
   try {
     if (quote.lineItems.length > MAX_LINE_ITEMS) {
       return {
@@ -341,8 +361,37 @@ export async function renderQuotePdf(quote: QuoteData): Promise<RenderResult> {
       y -= 12;
     }
 
+    // Initials box (combined-document flow only). Fixed footer position,
+    // bottom-right, below the content for a full quote. The anchor is captured
+    // in BoldSign coords (top-left origin) — the box sits above the underline
+    // (pdf-lib y .. y + height), so its top edge is `792 - (underlineY + h)`.
+    let initialsAnchor: FieldAnchor | undefined;
+    if (opts.withInitials) {
+      const boxX = rightEdge - INITIALS_BOX_WIDTH;
+      const underlineY = 60;
+      drawRight(
+        { page, font: bold, size: 9, color: grey },
+        'Client initials:',
+        boxX - 8,
+        underlineY + 4,
+      );
+      page.drawLine({
+        start: { x: boxX, y: underlineY },
+        end: { x: rightEdge, y: underlineY },
+        thickness: 0.5,
+        color: black,
+      });
+      initialsAnchor = {
+        pageNumber: 1,
+        x: boxX,
+        y: 792 - (underlineY + INITIALS_BOX_HEIGHT),
+        width: INITIALS_BOX_WIDTH,
+        height: INITIALS_BOX_HEIGHT,
+      };
+    }
+
     const bytes = await doc.save();
-    return { ok: true, body: Buffer.from(bytes) };
+    return { ok: true, body: Buffer.from(bytes), initialsAnchor };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : 'renderQuotePdf failed.',

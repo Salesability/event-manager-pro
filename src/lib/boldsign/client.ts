@@ -1,6 +1,6 @@
 import 'server-only';
 import { DocumentApi, DocumentSigner, FormField, Rectangle, SendForSign } from 'boldsign';
-import type { SignatureAnchor } from '@/lib/pdf/render-msa';
+import type { FieldAnchor } from '@/lib/pdf/anchors';
 
 export type ClientResult =
   | { ok: true; documentApi: DocumentApi }
@@ -57,7 +57,11 @@ export type SendSignatureRequestInput = {
    *  renderer (e.g. `renderMsaPdf()` → `result.signatureAnchor`) so the
    *  field tracks whatever page/coords the prose's visual signature line
    *  actually landed on. */
-  signatureAnchor: SignatureAnchor;
+  signatureAnchor: FieldAnchor;
+  /** Optional Initial fields (chunk 0055) — e.g. the Client initialling the
+   *  Quote section of the combined document. Each becomes a required Initial
+   *  form field at its anchor; empty/omitted means signature-only. */
+  initialsAnchors?: FieldAnchor[];
   /** Optional BoldSign metadata pinned onto the document so the webhook
    *  can correlate back to the row without a separate lookup table. */
   metadata?: Record<string, string>;
@@ -96,6 +100,26 @@ function decideSignerRedirect(): SignerRedirectDecision {
   return { redirect: true, to: devTo };
 }
 
+// Build a required BoldSign form field (Signature, Initial, …) at an anchor.
+function buildFormField(
+  id: string,
+  fieldType: FormField.FieldTypeEnum,
+  anchor: FieldAnchor,
+): FormField {
+  const bounds = new Rectangle();
+  bounds.x = anchor.x;
+  bounds.y = anchor.y;
+  bounds.width = anchor.width;
+  bounds.height = anchor.height;
+  const field = new FormField();
+  field.id = id;
+  field.fieldType = fieldType;
+  field.pageNumber = anchor.pageNumber;
+  field.bounds = bounds;
+  field.isRequired = true;
+  return field;
+}
+
 // Wrapper around `DocumentApi.sendDocument` (inline-upload flow per D #2
 // 2026-05-15 — the MSA prose is rendered in-repo and uploaded with each
 // envelope, no BoldSign-side template). The signer receives an email
@@ -127,23 +151,21 @@ export async function sendSignatureRequest(
   signer.emailAddress = redirect.redirect ? redirect.to : input.signer.emailAddress;
   signer.signerType = DocumentSigner.SignerTypeEnum.Signer;
 
-  // Pin a Signature form field at the anchor the renderer produced. Without
-  // this, BoldSign rejects with HTTP 400 (`Signers.FormFields: "Form fields
-  // cannot be null"` — chunk 0054 root cause). The anchor's coords are
-  // already in BoldSign's coordinate system (top-left origin, 1-indexed
-  // page) per `SignatureAnchor`'s contract — no translation here.
-  const bounds = new Rectangle();
-  bounds.x = input.signatureAnchor.x;
-  bounds.y = input.signatureAnchor.y;
-  bounds.width = input.signatureAnchor.width;
-  bounds.height = input.signatureAnchor.height;
-  const sigField = new FormField();
-  sigField.id = 'ClientSignature';
-  sigField.fieldType = FormField.FieldTypeEnum.Signature;
-  sigField.pageNumber = input.signatureAnchor.pageNumber;
-  sigField.bounds = bounds;
-  sigField.isRequired = true;
-  signer.formFields = [sigField];
+  // Pin form fields at the anchors the renderer produced. Without at least one,
+  // BoldSign rejects with HTTP 400 (`Signers.FormFields: "Form fields cannot be
+  // null"` — chunk 0054 root cause). Anchor coords are already in BoldSign's
+  // coordinate system (top-left origin, 1-indexed page) per `FieldAnchor`'s
+  // contract — no translation here. Initial fields (the Client initialling the
+  // Quote section) come first, then the single Signature at the end (chunk 0055).
+  const initialFields = (input.initialsAnchors ?? []).map((anchor, i) =>
+    buildFormField(`ClientInitials${i + 1}`, FormField.FieldTypeEnum.Initial, anchor),
+  );
+  const sigField = buildFormField(
+    'ClientSignature',
+    FormField.FieldTypeEnum.Signature,
+    input.signatureAnchor,
+  );
+  signer.formFields = [...initialFields, sigField];
 
   sendForSign.signers = [signer];
 

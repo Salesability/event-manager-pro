@@ -2,6 +2,7 @@ import 'server-only';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import type { FieldAnchor } from './anchors';
 
 // Source-of-truth MSA prose lives in this file. The render-quote.ts sibling
 // uses the same convention: code over template files so the rendered output
@@ -46,19 +47,11 @@ export type MsaPdfData = {
 // Signature-field anchor returned alongside the PDF body so the BoldSign
 // envelope sender (`src/lib/boldsign/client.ts`) can pin a `FormField` of
 // type Signature at the same on-page location the prose's right-column
-// "For the Client" underline lives. Coordinates use BoldSign's coordinate
-// system (top-left origin, page is 1-indexed) rather than pdf-lib's
-// (bottom-left origin, page array 0-indexed) — the translation happens at
-// capture time so consumers don't need to know about pdf-lib's convention.
-export type SignatureAnchor = {
-  /** 1-indexed page number (BoldSign convention). */
-  pageNumber: number;
-  /** Top-left origin, page units (points). */
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+// "For the Client" underline lives. Shares the `FieldAnchor` shape with the
+// quote renderer's initials anchor (chunk 0055 Phase 3) — same BoldSign
+// top-left-origin, 1-indexed-page convention; the translation from pdf-lib's
+// bottom-left origin happens at capture time so consumers stay convention-free.
+export type SignatureAnchor = FieldAnchor;
 
 export type RenderResult =
   | { ok: true; body: Buffer; signatureAnchor: SignatureAnchor }

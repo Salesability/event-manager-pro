@@ -1,6 +1,6 @@
 import 'server-only';
 import { PDFDocument } from 'pdf-lib';
-import type { SignatureAnchor } from './render-msa';
+import type { FieldAnchor } from './anchors';
 
 // Combine the prospect-facing Quote and the MSA into a single signable PDF —
 // the "one whole document" the Client initials and signs once (chunk 0055).
@@ -15,23 +15,30 @@ import type { SignatureAnchor } from './render-msa';
 // + images), so neither the Quote nor the lawyer's clause text reflows — no
 // re-layout, no risk of altering the agreement's wording or pagination.
 //
-// The MSA's signature anchor is captured by `renderMsaPdf` relative to the
-// MSA's *own* pages (1-indexed). After the Quote pages are prepended, that
-// page number shifts by the Quote's page count; x/y/width/height are unchanged
-// because both renderers emit US-Letter (612×792) pages with the same origin
-// convention, so the box lands in the same spot on its (now-renumbered) page.
+// Anchor bookkeeping after the merge:
+//   - The Quote's initials anchor(s) keep their page numbers — the Quote is
+//     first, so its pages aren't renumbered.
+//   - The MSA's signature anchor is captured relative to the MSA's *own* pages
+//     (1-indexed); after the Quote pages are prepended it shifts by the Quote's
+//     page count. x/y/width/height are unchanged because both renderers emit
+//     US-Letter (612×792) pages with the same origin convention.
 
 export type CombineResult =
-  | { ok: true; body: Buffer; signatureAnchor: SignatureAnchor }
+  | {
+      ok: true;
+      body: Buffer;
+      signatureAnchor: FieldAnchor;
+      initialsAnchors: FieldAnchor[];
+    }
   | { error: string };
 
 export async function combineQuoteAndMsa(
-  quoteBody: Buffer,
-  msa: { body: Buffer; signatureAnchor: SignatureAnchor },
+  quote: { body: Buffer; initialsAnchor?: FieldAnchor },
+  msa: { body: Buffer; signatureAnchor: FieldAnchor },
 ): Promise<CombineResult> {
   try {
     const out = await PDFDocument.create();
-    const quoteDoc = await PDFDocument.load(quoteBody);
+    const quoteDoc = await PDFDocument.load(quote.body);
     const msaDoc = await PDFDocument.load(msa.body);
 
     const quotePages = await out.copyPages(quoteDoc, quoteDoc.getPageIndices());
@@ -49,6 +56,8 @@ export async function combineQuoteAndMsa(
         ...msa.signatureAnchor,
         pageNumber: quotePageCount + msa.signatureAnchor.pageNumber,
       },
+      // Quote-first → initials page numbers carry over unchanged.
+      initialsAnchors: quote.initialsAnchor ? [quote.initialsAnchor] : [],
     };
   } catch (err) {
     return {

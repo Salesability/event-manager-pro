@@ -11,7 +11,7 @@
 |-------|--------|--------|
 | 1: Replace MSA prose with the full verbatim lawyer agreement (§1–§10) | Done | `826c517` — awaiting owner/lawyer eyeball + `MSA_TEMPLATE_VERSION` env bump |
 | 2: Merge Quote + MSA into one PDF | Done | `src/lib/pdf/merge.ts` + 4 tests — Quote-first/Agreement-last; anchor shifted by quote page count |
-| 3: Initials field(s) + bottom-of-contract-page signature anchors | Pending | - |
+| 3: Initials field(s) + bottom-of-contract-page signature anchors | Done | quote initials anchor + `client.ts` Initial FormField; initials on Quote page, signature at end (owner's call) |
 | 4: Send path + webhook collapse to a single signed artifact | Pending | - |
 | 5: Drop in the resent quote statement (BLOCKED on owner) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -35,7 +35,7 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - `docs/wiki/data-model.md` — MSA pending→active gate + GCS paths (`msa/{msaId}/signed.pdf`).
 - `CLAUDE.md` → **Conventions** — mutations are Server Actions; the BoldSign webhook is a legit route handler (external caller).
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - The lawyer's Agreement prose must be **verbatim** — Phase 1 transcribes the `.docx` exactly; later phases must survive the merge byte-for-byte.
@@ -61,10 +61,13 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - [ ] (Phase 4) wire `sendMsaEnvelope` to call `combineQuoteAndMsa` and post a single file — deferred until initials land in Phase 3
 
 #### Phase 3: Initials + signature anchors
-- [ ] Capture initials anchor coord(s) at the chosen location(s) in the renderer (mirror the underline-capture pattern in `render-msa.ts`)
-- [ ] Add an Initials `FormField` type in `client.ts` alongside the existing Signature field
-- [ ] Place the signature `FormField` at the bottom of the contract page in merged-doc coords
-- [ ] Unit test: anchors resolve to expected page numbers + bounds in the merged doc
+- [x] **Decision:** initials on the Quote page (owner: "agreed-to quote with initials, sign the bottom of contract"). Signature stays at the bottom of the Agreement (= end of combined doc).
+- [x] Shared `FieldAnchor` type (`src/lib/pdf/anchors.ts`); `SignatureAnchor` aliased to it
+- [x] `render-quote.ts` draws a footer "Client initials" box behind `opts.withInitials` and returns `initialsAnchor` (standalone quote send unaffected — no opt = no box)
+- [x] `merge.ts` carries the Quote initials anchor through (page unchanged, Quote-first) → `initialsAnchors[]`
+- [x] `client.ts` builds an `Initial` FormField per anchor + the `Signature` field (`buildFormField` helper)
+- [x] Tests: render-quote (anchor coords + default-omit), merge (initials pass-through), client (Initial-before-Signature + signature-only) — full suite 876 pass
+- [x] Visual check: combined sample (`~/Downloads/Salesability-CombinedAgreement-SAMPLE-2026-05-21.pdf`) shows initials box on the quote + signature at the end
 
 #### Phase 4: Send path + webhook collapse
 - [ ] `sendMsaEnvelope` posts a single merged file (drop the two-file `files: [...]` array)

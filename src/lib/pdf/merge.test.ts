@@ -4,7 +4,7 @@ import { PDFDocument } from 'pdf-lib';
 vi.mock('server-only', () => ({}));
 
 import { combineQuoteAndMsa } from './merge';
-import type { SignatureAnchor } from './render-msa';
+import type { FieldAnchor } from './anchors';
 
 // Build a throwaway US-Letter PDF with `n` pages for deterministic page-math.
 async function makePdf(pages: number): Promise<Buffer> {
@@ -13,7 +13,7 @@ async function makePdf(pages: number): Promise<Buffer> {
   return Buffer.from(await doc.save());
 }
 
-const anchor = (pageNumber: number): SignatureAnchor => ({
+const anchor = (pageNumber: number): FieldAnchor => ({
   pageNumber,
   x: 321,
   y: 200,
@@ -22,14 +22,14 @@ const anchor = (pageNumber: number): SignatureAnchor => ({
 });
 
 describe('combineQuoteAndMsa', () => {
-  it('concatenates Quote then MSA and shifts the anchor by the Quote page count', async () => {
+  it('concatenates Quote then MSA and shifts the signature anchor by the Quote page count', async () => {
     const quote = await makePdf(2);
     const msa = await makePdf(3);
 
-    const result = await combineQuoteAndMsa(quote, {
-      body: msa,
-      signatureAnchor: anchor(2), // page 2 of the 3-page MSA
-    });
+    const result = await combineQuoteAndMsa(
+      { body: quote },
+      { body: msa, signatureAnchor: anchor(2) }, // page 2 of the 3-page MSA
+    );
     expect('ok' in result && result.ok).toBe(true);
     if (!('ok' in result) || !result.ok) return;
 
@@ -45,31 +45,36 @@ describe('combineQuoteAndMsa', () => {
     expect(result.signatureAnchor.height).toBe(22);
   });
 
-  it('handles a single-page quote + single-page msa', async () => {
-    const result = await combineQuoteAndMsa(await makePdf(1), {
-      body: await makePdf(1),
-      signatureAnchor: anchor(1),
-    });
-    expect('ok' in result && result.ok).toBe(true);
-    if (!('ok' in result) || !result.ok) return;
-    expect((await PDFDocument.load(result.body)).getPageCount()).toBe(2);
-    expect(result.signatureAnchor.pageNumber).toBe(2); // 1 quote + page 1 of msa
+  it('carries the Quote initials anchor through with its page number unchanged', async () => {
+    const result = await combineQuoteAndMsa(
+      { body: await makePdf(1), initialsAnchor: { ...anchor(1), x: 492, width: 70 } },
+      { body: await makePdf(2), signatureAnchor: anchor(2) },
+    );
+    if (!('ok' in result) || !result.ok) throw new Error('expected ok');
+    expect(result.initialsAnchors).toHaveLength(1);
+    // quote is first → its initials anchor keeps page 1
+    expect(result.initialsAnchors[0].pageNumber).toBe(1);
+    expect(result.initialsAnchors[0].x).toBe(492);
+    // signature anchor (page 2 of MSA) shifts past the single quote page → 3
+    expect(result.signatureAnchor.pageNumber).toBe(3);
   });
 
-  it('returns the magic %PDF header on success', async () => {
-    const result = await combineQuoteAndMsa(await makePdf(1), {
-      body: await makePdf(1),
-      signatureAnchor: anchor(1),
-    });
+  it('returns an empty initials list when the quote has no initials anchor', async () => {
+    const result = await combineQuoteAndMsa(
+      { body: await makePdf(1) },
+      { body: await makePdf(1), signatureAnchor: anchor(1) },
+    );
     if (!('ok' in result) || !result.ok) throw new Error('expected ok');
+    expect(result.initialsAnchors).toEqual([]);
+    expect(result.signatureAnchor.pageNumber).toBe(2);
     expect(result.body.subarray(0, 4).toString()).toBe('%PDF');
   });
 
   it('returns an error (not a throw) when given non-PDF bytes', async () => {
-    const result = await combineQuoteAndMsa(Buffer.from('not a pdf'), {
-      body: await makePdf(1),
-      signatureAnchor: anchor(1),
-    });
+    const result = await combineQuoteAndMsa(
+      { body: Buffer.from('not a pdf') },
+      { body: await makePdf(1), signatureAnchor: anchor(1) },
+    );
     expect('error' in result).toBe(true);
   });
 });

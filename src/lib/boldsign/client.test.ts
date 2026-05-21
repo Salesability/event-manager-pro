@@ -18,7 +18,7 @@ vi.mock('boldsign', () => {
     static SignerTypeEnum = { Signer: 'Signer' } as const;
   }
   class MockFormField {
-    static FieldTypeEnum = { Signature: 'Signature' } as const;
+    static FieldTypeEnum = { Signature: 'Signature', Initial: 'Initial' } as const;
   }
   return {
     DocumentApi: class MockDocumentApi {
@@ -191,6 +191,40 @@ describe('sendSignatureRequest', () => {
       metaData?: Record<string, string>;
     };
     expect(sent.metaData).toEqual({ msaId: '42' });
+  });
+
+  it('builds Initial fields before the Signature when initialsAnchors are supplied', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest({
+      ...sample,
+      initialsAnchors: [{ pageNumber: 1, x: 492, y: 700, width: 70, height: 22 }],
+    });
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{
+        formFields?: Array<{ id?: string; fieldType?: string; pageNumber?: number }>;
+      }>;
+    };
+    const fields = sent.signers?.[0]?.formFields ?? [];
+    expect(fields).toHaveLength(2);
+    expect(fields[0].fieldType).toBe('Initial');
+    expect(fields[0].id).toBe('ClientInitials1');
+    expect(fields[0].pageNumber).toBe(1);
+    expect(fields[1].fieldType).toBe('Signature');
+    expect(fields[1].id).toBe('ClientSignature');
+    expect(fields[1].pageNumber).toBe(2);
+  });
+
+  it('sends a single Signature field when no initialsAnchors are supplied', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{ formFields?: Array<{ fieldType?: string }> }>;
+    };
+    const fields = sent.signers?.[0]?.formFields ?? [];
+    expect(fields).toHaveLength(1);
+    expect(fields[0].fieldType).toBe('Signature');
   });
 
   it('refuses to send when APP_ENV is not production and EMAIL_DEV_TO is unset', async () => {
