@@ -103,6 +103,7 @@ export function BookingForm({
   // can be auto-selected) immediately, before `router.refresh()` repopulates the
   // `coaches` prop. Deduped against the prop list once the refresh lands.
   const [extraCoaches, setExtraCoaches] = useState<Coach[]>([]);
+  const [extraDealers, setExtraDealers] = useState<{ id: number; name: string }[]>([]);
   const endDate = useMemo(
     () => (startDate ? addDays(startDate, duration - 1) : ''),
     [startDate, duration],
@@ -120,6 +121,22 @@ export function BookingForm({
     }
     return out;
   }, [coaches, extraCoaches]);
+  // Dealer picker options as {id, name} so inline-created dealers can be added
+  // (and auto-selected) before router.refresh repopulates the `dealers` prop.
+  const dealerOptions = useMemo(() => {
+    const seen = new Set<number>();
+    const out: { id: number; name: string }[] = [];
+    for (const d of [
+      ...dealers.map((x) => ({ id: x.id, name: x.name })),
+      ...extraDealers,
+    ]) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        out.push(d);
+      }
+    }
+    return out;
+  }, [dealers, extraDealers]);
 
   const [dealerId, setDealerId] = useState<string>(campaign?.dealerId ? String(campaign.dealerId) : '');
   const [coachId, setCoachId] = useState<string>(campaign?.coachId ? String(campaign.coachId) : '');
@@ -142,6 +159,14 @@ export function BookingForm({
     if (!touched.contact && fullName) setContact(fullName);
     if (!touched.phone && dealer.primaryPhone) setPhone(dealer.primaryPhone);
     if (!touched.email && dealer.primaryEmail) setEmail(dealer.primaryEmail);
+  }
+
+  function onDealerCreated(created: { id: number; name: string }) {
+    setExtraDealers((prev) =>
+      prev.some((d) => d.id === created.id) ? prev : [...prev, created],
+    );
+    setDealerId(String(created.id));
+    setDealerAddOpen(false);
   }
 
   function onCoachCreated(coach: { id: number; firstName: string; lastName: string }) {
@@ -245,7 +270,7 @@ export function BookingForm({
           className={selectClass}
         >
           <option value="">Select a dealership…</option>
-          {dealers.map((d) => (
+          {dealerOptions.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
             </option>
@@ -470,7 +495,9 @@ export function BookingForm({
           <DealerForm
             mode="create"
             defaultStatus="prospect"
-            onSuccess={() => setDealerAddOpen(false)}
+            onSuccess={(created) =>
+              created ? onDealerCreated(created) : setDealerAddOpen(false)
+            }
             onCancel={() => setDealerAddOpen(false)}
           />
         )}

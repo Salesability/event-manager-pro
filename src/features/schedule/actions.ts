@@ -34,7 +34,10 @@ function firstFieldError(fieldErrors: FieldErrors): string | undefined {
 }
 
 type ActionResult =
-  | { ok: true }
+  // `dealerId` is set only by `createDealer` so inline-create callers (the
+  // booking dialog's "+ Add", chunk 0056) can auto-select the new dealer.
+  // Optional + ignored by every other action that returns this shape.
+  | { ok: true; dealerId?: number }
   | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 type AvailabilityKind = 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
 
@@ -124,8 +127,9 @@ export const createDealer = capabilityClient('dealer:create')
     const status: DealerStatus = v.status ?? 'active';
     const acquiredVia: string | null = v.acquiredVia ? v.acquiredVia : null;
 
+    let newDealerId: number;
     try {
-      await db.transaction(async (tx) => {
+      newDealerId = await db.transaction(async (tx) => {
         const [dealerRow] = await tx
           .insert(dealers)
           .values({
@@ -140,7 +144,7 @@ export const createDealer = capabilityClient('dealer:create')
           .returning({ id: dealers.id });
 
         const hasContact = contactFirst || contactLast;
-        if (!hasContact) return;
+        if (!hasContact) return dealerRow.id;
 
         const [contactRow] = await tx
           .insert(contacts)
@@ -173,6 +177,7 @@ export const createDealer = capabilityClient('dealer:create')
 
         await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
         await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
+        return dealerRow.id;
       });
     } catch (err) {
       return toActionResult(err);
@@ -180,7 +185,7 @@ export const createDealer = capabilityClient('dealer:create')
 
     revalidatePath('/dealerships');
     revalidatePath('/production');
-    return { ok: true };
+    return { ok: true, dealerId: newDealerId };
   });
 
 export const updateDealer = capabilityClient('dealer:edit')

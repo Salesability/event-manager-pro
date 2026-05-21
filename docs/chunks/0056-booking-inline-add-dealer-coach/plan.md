@@ -10,7 +10,7 @@
 | 1: Focused coach quick-add form (reuses `createPerson`) | Done | `coach-add-form.tsx` + pure `coach-add-schema.ts` + test (forces roles=coach + appAccess=1) |
 | 2: "+ Add" dealer button + dialog in booking form | Done | dealer Field gains "+ Add" → Dialog hosting `DealerForm` (`defaultStatus='prospect'`) |
 | 3: "+ Add" coach button + dialog in booking form | Done | coach Field gains "+ Add" → Dialog hosting `CoachAddForm` |
-| 4: Refresh + auto-select the new option without dropping the draft | Done | coach auto-selects (local `extraCoaches` + controlled `coachId`); dealer = refresh-only (follow-up) |
+| 4: Refresh + auto-select the new option without dropping the draft | Done | both dealer + coach auto-select (local extras + controlled value); `createDealer` now returns `dealerId` |
 | 5: Tests + smoke verification | Done | unit (886 pass) + browser smoke PASS; a11y fix: distinct `aria-label`s on the two "+ Add" buttons |
 
 This chunk wires inline create affordances into the booking dialog's dealer and coach pickers, reusing the existing create actions/forms. "Done" looks like: clicking "+ Add" opens a create dialog, saving inserts the record and selects it in the picker, and the in-progress booking is preserved.
@@ -33,7 +33,7 @@ This chunk wires inline create affordances into the booking dialog's dealer and 
 
 **Note:**
 - `DealerForm` reused as-is. Coach side uses the new focused `CoachAddForm` (Phase 1 decision) rather than extracting `PersonForm`.
-- **Follow-up — dealer inline auto-select:** the coach picker auto-selects the new coach (its form returns the id); the **dealer** picker doesn't, because `createDealer` returns `{ ok: true }` (no id) and `DealerForm.onSuccess` is argless. After an inline dealer create the dialog closes and `router.refresh()` repopulates the list, but the user re-picks the dealer manually. To match the coach UX, make `createDealer` return `dealerId` and thread it through `DealerForm.onSuccess(createdId?)` → booking-form auto-select. Out of scope here (touches a capability-gated action + the shared form); small additive change when picked up.
+- **Dealer inline auto-select — DONE (2026-05-21):** `createDealer` now returns `{ ok: true, dealerId }` (optional `dealerId?` added to the shared `ActionResult`); `DealerForm.onSuccess?(created?: { id; name })` passes the new dealer on create (argless callers like dealers-admin are unaffected — the arg is optional); the booking form appends to `extraDealers` + sets `dealerId`, mirroring the coach path. `createDealer` test updated to assert the returned id.
 
 ### Phase Checklist
 

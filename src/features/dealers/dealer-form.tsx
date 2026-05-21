@@ -63,8 +63,11 @@ export function DealerForm({
   mode: Mode;
   dealer?: Dealer;
   /** Fired after a successful save — dialog callers close themselves here.
-   *  Page-embedded use leaves this off; `router.refresh()` already runs. */
-  onSuccess?: () => void;
+   *  On create, receives the new dealer's `{ id, name }` so inline-create
+   *  callers (the booking dialog's "+ Add", chunk 0056) can auto-select it;
+   *  `undefined` on edit. Page-embedded use leaves this off entirely;
+   *  `router.refresh()` already runs. */
+  onSuccess?: (created?: { id: number; name: string }) => void;
   onCancel?: () => void;
   /** When set, hides the status select and submits this value. Used by the
    *  composer's inline "Add new prospect" flow (defaultStatus='prospect') so
@@ -109,11 +112,15 @@ export function DealerForm({
     startTransition(async () => {
       const action = mode === 'create' ? createDealer : updateDealer;
       const fd = valuesToFormData(values, mode === 'edit' ? dealer?.id : undefined);
-      const result = toLegacyResult(await action(fd));
+      const result = toLegacyResult<{ ok: true; dealerId?: number }>(await action(fd));
       if ('ok' in result) {
         toast.success(mode === 'create' ? 'Dealer added' : 'Dealer saved');
         router.refresh();
-        onSuccess?.();
+        onSuccess?.(
+          mode === 'create' && result.dealerId != null
+            ? { id: result.dealerId, name: values.name }
+            : undefined,
+        );
       } else {
         toast.error(result.error);
       }

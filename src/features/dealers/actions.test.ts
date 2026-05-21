@@ -123,7 +123,7 @@ beforeEach(() => {
 describe('createDealer', () => {
   it("defaults status='active' when no status submitted (back-office add)", async () => {
     const result = await call(createDealer(fd({ name: 'Acme Motors' })));
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, dealerId: 999 });
     const dealerInsert = mocks.inserts.find((i) => i.table === 'dealers');
     const values = dealerInsert!.values as Record<string, unknown>;
     expect(values.status).toBe('active');
