@@ -16,8 +16,8 @@ export default async function PeopleAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="People"
-        description="Everyone in the system — coaches, admins, and customer-side contacts."
+        title="Contacts"
+        description="Everyone with a person record — coaches, admins, and customer-side contacts."
       />
 
       <PeopleAdmin people={people} dealers={dealers} />

@@ -35,7 +35,7 @@ const OPERATIONAL_TABS: readonly Tab[] = [
 // them under one trigger means future pages (org settings, audit log,
 // integrations) drop in without bar-width pressure.
 const ADMIN_TABS: readonly Tab[] = [
-  { href: '/admin/people', label: 'People' },
+  { href: '/admin/people', label: 'Contacts' },
   { href: '/admin/lookups', label: 'Lookups' },
 ];
 
