@@ -13,7 +13,7 @@
 | 2: Server action — accept overrides in `setQuoteInputs`, persist into `lineItems` JSONB | Done | (this commit) |
 | 3: Composer UI — "Override unit prices" toggle + per-line editable Unit cells with original visible | Done | (this commit) |
 | 4: Send / PDF — render `overrideUnitPrice` when present, fall back to `unitPrice` | Done | (this commit) |
-| 5: Tests + smoke verification | In Progress | 143 unit tests PASS (`pricing.test.ts` +10, `actions.test.ts` +4, `client.test.ts`/`render-msa.test.ts`/etc. unchanged); awaiting live composer smoke + chunk-end /eval |
+| 5: Tests + smoke verification | Done | `5aff65f` — 143 unit tests PASS; closed 2026-05-21 by user direction (built + committed in `5aff65f`; formal `/eval` waived) |
 
 This chunk adds a per-quote, coach-controlled price-override layer on top of the existing catalogue-derived computation. The composer remains a calculator (no new line types); the change is a single optional `overrideUnitPrice` field per computed line, plus the UI affordances to set/clear it and the send path's preference rule. "Done" looks like: coach toggles override on, edits a unit cell, sees the original still rendered for reference; the persisted JSONB carries both numbers; `sendQuote` renders the tuned amount to the prospect; the totals across composer and PDF match.
 
@@ -33,7 +33,7 @@ This chunk adds a per-quote, coach-controlled price-override layer on top of the
 - `CLAUDE.md` → **Conventions** — mutations are Server Actions, not route handlers.
 - `db-conventions` skill — no schema migration is needed (JSONB shape only), so the change is type-only.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and any close-in unit tests; the wider smoke + integration pass is Phase 5.

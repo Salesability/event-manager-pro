@@ -2,7 +2,7 @@
 
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-05-15
-**Supersedes:** [`closed/0052-quote-coach-price-override`](../0052-quote-coach-price-override/plan.md) — JSONB-only override approach.
+**Supersedes:** [`closed/0052-quote-coach-price-override`](../closed/0052-quote-coach-price-override/plan.md) — JSONB-only override approach.
 
 ## Progress Tracker
 

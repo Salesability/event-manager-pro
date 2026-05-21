@@ -1,7 +1,7 @@
 # Quote Line Items Table (with Price Overrides) — Intent
 
 **Created:** 2026-05-15
-**Supersedes:** [`closed/0052-quote-coach-price-override`](../0052-quote-coach-price-override/plan.md) — the JSONB-only override approach. This chunk bakes the override columns into the relational schema instead, in one combined move.
+**Supersedes:** [`closed/0052-quote-coach-price-override`](../closed/0052-quote-coach-price-override/plan.md) — the JSONB-only override approach. This chunk bakes the override columns into the relational schema instead, in one combined move.
 
 ## Problem
 
