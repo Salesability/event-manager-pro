@@ -17,6 +17,8 @@ import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { createCampaign, updateCampaign } from '@/features/schedule/actions';
 import { LookupAdmin } from '@/features/schedule/lookup-admin';
+import { DealerForm } from '@/features/dealers/dealer-form';
+import { CoachAddForm } from '@/features/people/coach-add-form';
 import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/queries';
 
 // 0042 Phase 4 — partial port. Swapped raw primitives for shadcn (Input,
@@ -95,14 +97,32 @@ export function BookingForm({
   const [duration, setDuration] = useState(Math.min(Math.max(initialDuration, 1), 5));
   const [stylesOpen, setStylesOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [dealerAddOpen, setDealerAddOpen] = useState(false);
+  const [coachAddOpen, setCoachAddOpen] = useState(false);
+  // Coaches created inline are appended locally so the new option appears (and
+  // can be auto-selected) immediately, before `router.refresh()` repopulates the
+  // `coaches` prop. Deduped against the prop list once the refresh lands.
+  const [extraCoaches, setExtraCoaches] = useState<Coach[]>([]);
   const endDate = useMemo(
     () => (startDate ? addDays(startDate, duration - 1) : ''),
     [startDate, duration],
   );
 
   const dealersById = useMemo(() => new Map(dealers.map((d) => [d.id, d])), [dealers]);
+  const allCoaches = useMemo(() => {
+    const seen = new Set<number>();
+    const out: Coach[] = [];
+    for (const c of [...coaches, ...extraCoaches]) {
+      if (!seen.has(c.id)) {
+        seen.add(c.id);
+        out.push(c);
+      }
+    }
+    return out;
+  }, [coaches, extraCoaches]);
 
   const [dealerId, setDealerId] = useState<string>(campaign?.dealerId ? String(campaign.dealerId) : '');
+  const [coachId, setCoachId] = useState<string>(campaign?.coachId ? String(campaign.coachId) : '');
   const [contact, setContact] = useState(campaign?.contact ?? '');
   const [phone, setPhone] = useState(campaign?.phone ?? '');
   const [email, setEmail] = useState(campaign?.email ?? '');
@@ -122,6 +142,27 @@ export function BookingForm({
     if (!touched.contact && fullName) setContact(fullName);
     if (!touched.phone && dealer.primaryPhone) setPhone(dealer.primaryPhone);
     if (!touched.email && dealer.primaryEmail) setEmail(dealer.primaryEmail);
+  }
+
+  function onCoachCreated(coach: { id: number; firstName: string; lastName: string }) {
+    setExtraCoaches((prev) =>
+      prev.some((c) => c.id === coach.id)
+        ? prev
+        : [
+            ...prev,
+            {
+              id: coach.id,
+              firstName: coach.firstName,
+              lastName: coach.lastName,
+              displayName: `${coach.firstName} ${coach.lastName}`.trim(),
+              specialty: null,
+              primaryEmail: null,
+              primaryPhone: null,
+            },
+          ],
+    );
+    setCoachId(String(coach.id));
+    setCoachAddOpen(false);
   }
 
   useEffect(() => {
@@ -180,7 +221,20 @@ export function BookingForm({
         </Field>
       </div>
 
-      <Field label="Dealership" htmlFor="bk-dealer" required>
+      <Field
+        label="Dealership"
+        htmlFor="bk-dealer"
+        required
+        action={
+          <button
+            type="button"
+            onClick={() => setDealerAddOpen(true)}
+            className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
+          >
+            + Add
+          </button>
+        }
+      >
         <select
           id="bk-dealer"
           name="dealerId"
@@ -333,15 +387,28 @@ export function BookingForm({
         </Field>
       </div>
 
-      <Field label="Sales Coach" htmlFor="bk-coach">
+      <Field
+        label="Sales Coach"
+        htmlFor="bk-coach"
+        action={
+          <button
+            type="button"
+            onClick={() => setCoachAddOpen(true)}
+            className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
+          >
+            + Add
+          </button>
+        }
+      >
         <select
           id="bk-coach"
           name="coachId"
-          defaultValue={campaign?.coachId ?? ''}
+          value={coachId}
+          onChange={(e) => setCoachId(e.target.value)}
           className={selectClass}
         >
           <option value="">—</option>
-          {coaches.map((c) => (
+          {allCoaches.map((c) => (
             <option key={c.id} value={c.id}>
               {c.firstName} {c.lastName}
             </option>
@@ -391,6 +458,29 @@ export function BookingForm({
           Add, rename, or archive campaign data-source labels.
         </DialogDescription>
         {sourcesOpen && <LookupAdmin kind="sources" items={sources} compact />}
+      </Dialog>
+      <Dialog open={dealerAddOpen} onClose={setDealerAddOpen}>
+        <DialogTitle>Add Dealership</DialogTitle>
+        <DialogDescription>
+          Create a new prospect dealership without leaving this booking.
+        </DialogDescription>
+        {dealerAddOpen && (
+          <DealerForm
+            mode="create"
+            defaultStatus="prospect"
+            onSuccess={() => setDealerAddOpen(false)}
+            onCancel={() => setDealerAddOpen(false)}
+          />
+        )}
+      </Dialog>
+      <Dialog open={coachAddOpen} onClose={setCoachAddOpen}>
+        <DialogTitle>Add Sales Coach</DialogTitle>
+        <DialogDescription>
+          Create a new coach without leaving this booking.
+        </DialogDescription>
+        {coachAddOpen && (
+          <CoachAddForm onCreated={onCoachCreated} onCancel={() => setCoachAddOpen(false)} />
+        )}
       </Dialog>
     </>
   );

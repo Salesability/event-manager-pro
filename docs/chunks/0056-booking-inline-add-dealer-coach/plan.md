@@ -7,11 +7,11 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Extract `PersonForm` → exportable, coach-default | Pending | - |
-| 2: "+ Add" dealer button + dialog in booking form | Pending | - |
-| 3: "+ Add" coach button + dialog in booking form | Pending | - |
-| 4: Refresh + auto-select the new option without dropping the draft | Pending | - |
-| 5: Tests + smoke verification | Pending | - |
+| 1: Focused coach quick-add form (reuses `createPerson`) | Done | `coach-add-form.tsx` + pure `coach-add-schema.ts` + test (forces roles=coach + appAccess=1) |
+| 2: "+ Add" dealer button + dialog in booking form | Done | dealer Field gains "+ Add" → Dialog hosting `DealerForm` (`defaultStatus='prospect'`) |
+| 3: "+ Add" coach button + dialog in booking form | Done | coach Field gains "+ Add" → Dialog hosting `CoachAddForm` |
+| 4: Refresh + auto-select the new option without dropping the draft | Done | coach auto-selects (local `extraCoaches` + controlled `coachId`); dealer = refresh-only (follow-up) |
+| 5: Tests + smoke verification | In Progress | unit done (886 pass); browser smoke pending (dev server restart) |
 
 This chunk wires inline create affordances into the booking dialog's dealer and coach pickers, reusing the existing create actions/forms. "Done" looks like: clicking "+ Add" opens a create dialog, saving inserts the record and selects it in the picker, and the in-progress booking is preserved.
 
@@ -21,7 +21,7 @@ This chunk wires inline create affordances into the booking dialog's dealer and 
 |----------|---------------------|-----------------|
 | "+ Add" button + Dialog next to dealer/coach pickers | `src/app/(app)/calendar/booking-form.tsx:244-278` (Manage button + `<Dialog>` for Event Format / Data Source) | Same dialog pattern already in this file — match it exactly |
 | Dealer create dialog body | `src/features/dealers/dealer-form.tsx:55` (`DealerForm` — already reusable, `onSuccess`/`onCancel`/`defaultStatus`) | Drop-in; built in 0035 for exactly this |
-| Extracted `PersonForm` (coach default) | `src/features/people/people-admin.tsx:336` (local `PersonForm`) | Move out of the admin file, add `defaultRole='coach'`; keep RHF+Zod shape |
+| New `CoachAddForm` (`src/features/people/coach-add-form.tsx`) | `src/features/dealers/dealer-form.tsx:55` (`DealerForm` — `onSuccess`/`onCancel`, `useActionState`) | Focused quick-add; mirror DealerForm's callback shape rather than extract the heavy `PersonForm` (see Phase 1 decision) |
 | Picker option refresh/append | `src/features/schedule/queries.ts:166` (`loadDealers`), `:258` (`loadCoaches`) | Source of the prop lists; the create action returns the new row to append |
 | Create actions | `src/features/dealers/*` `createDealer`, `src/features/people/actions.ts` `createPerson` | Reuse — no new mutation surface |
 
@@ -29,18 +29,20 @@ This chunk wires inline create affordances into the booking dialog's dealer and 
 - `docs/wiki/data-model.md` — coaches are Contacts with `team_member_roles(role='coach')`; dealers carry the `prospect` lifecycle status.
 - `CLAUDE.md` → **Conventions** — creates go through the existing Server Actions.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 90% (4.5/5 phases — code complete; only the browser smoke remains)
 
 **Note:**
-- `DealerForm` is already reusable — Phase 2 is mostly the dialog wiring. The real work is Phase 1 (extracting `PersonForm`) + Phase 4 (preserving the booking draft on refresh).
+- `DealerForm` reused as-is. Coach side uses the new focused `CoachAddForm` (Phase 1 decision) rather than extracting `PersonForm`.
+- **Follow-up — dealer inline auto-select:** the coach picker auto-selects the new coach (its form returns the id); the **dealer** picker doesn't, because `createDealer` returns `{ ok: true }` (no id) and `DealerForm.onSuccess` is argless. After an inline dealer create the dialog closes and `router.refresh()` repopulates the list, but the user re-picks the dealer manually. To match the coach UX, make `createDealer` return `dealerId` and thread it through `DealerForm.onSuccess(createdId?)` → booking-form auto-select. Out of scope here (touches a capability-gated action + the shared form); small additive change when picked up.
 
 ### Phase Checklist
 
-#### Phase 1: Extract PersonForm
-- [ ] Move `PersonForm` from `people-admin.tsx` into `src/features/people/person-form.tsx`, exported
-- [ ] Add a `defaultRole='coach'` prop; in coach context, hide/force role selection to coach
-- [ ] Re-import into `people-admin.tsx` (no behavior change there)
-- [ ] Unit/render test: form renders coach-defaulted; admin usage unchanged
+#### Phase 1: Coach quick-add form
+> **Decision (2026-05-21):** build a focused coach quick-add form instead of extracting `PersonForm`. `PersonForm` (`people-admin.tsx:336-635`) is ~300 lines and security-sensitive (admin/dealer roles, app-access ban-confirm, dealer-links Combobox/Listbox) — overkill mid-booking. We only need name + email + phone; the real single source (the `createPerson` Server Action + its Zod validation) is reused either way. Lower blast radius on the people-admin surface, simpler booking UX.
+- [x] `src/features/people/coach-add-form.tsx` — client form: first/last name, email (required — coach implies app access), phone; hidden `roles=coach` + `appAccess=1`
+- [x] Submits to `createPerson`; on success calls `onCreated(contactId, label)` so the caller can append + select the new coach
+- [x] `onCancel` callback; mirrors `DealerForm`'s `onSuccess`/`onCancel` shape
+- [x] Unit/render test: renders fields; forces `roles=coach` + `appAccess=1` in the wire format
 
 #### Phase 2: "+ Add" dealer button + dialog
 - [ ] Add "+ Add" button next to the dealership picker (`booking-form.tsx:183`), matching the Manage-button style
