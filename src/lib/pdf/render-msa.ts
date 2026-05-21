@@ -10,10 +10,15 @@ import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from 'pdf
 // MSA_TEMPLATE_VERSION env value — bump it whenever this prose changes so
 // each row carries which revision the signed PDF was rendered against.
 //
-// Clause numbering matches `docs/wiki/commercial-spine.md`'s §-citations:
-// §1 (Services), §2 (Term + Termination), §3 (Payment), §5 (Cancellation),
-// §9 (Governing Law). The legal team owns these clauses; structural changes
-// here should be reviewed alongside any prose revision.
+// `buildSections` is a VERBATIM transcription of the lawyer's "MASTER SERVICES
+// AGREEMENT - March 25, 2026" (10 articles: §1 Services, §2 Term & Termination,
+// §3 Fees & Payment, §4 Liability & Indemnity, §5 Intellectual Property, §6
+// Personal Information / PIPEDA / CASL, §7 Confidentiality, §8 Independent
+// Contractor, §9 Governing Law, §10 General Provisions). The cancellation fee
+// is §2(iii); the late-payment charge is §3(iv) — `docs/wiki/commercial-spine.md`
+// §-citations track these. The legal team owns this text; do not paraphrase —
+// any edit must come from a revised source document, and bump
+// MSA_TEMPLATE_VERSION when it does.
 
 export type MsaPdfData = {
   /** Free-form short id printed in the header (e.g. "MSA-2026-0001"). */
@@ -107,44 +112,93 @@ const longDate = (iso: string) =>
 
 type Section = { heading: string; paragraphs: string[] };
 
+// Verbatim transcription of the lawyer's "MASTER SERVICES AGREEMENT - March
+// 25, 2026". The only interpolation is §2(ii)'s notice period, which the source
+// leaves blank ("XX days"); the caller passes `terminationNoticeDays` (30).
+// Article titles use the source's uppercase; sub-clauses use lowercase roman
+// numerals to match the source's internal cross-references (e.g. "section
+// 2(iii)"). Single unlabeled articles (§5, §7, §8, §9) render as one paragraph.
 function buildSections(d: MsaPdfData): Section[] {
   return [
     {
-      heading: '1. Services',
+      heading: '1. SERVICES',
       paragraphs: [
-        `This Master Service Agreement (the "Agreement") is entered into between Salesability Canada Inc. ("Salesability") and ${d.clientName} (the "Client").`,
-        'i. Salesability shall provide sales-event services to the Client from time to time, as agreed upon by the Parties in one or more Quotes issued by Salesability and accepted by the Client during the term of this Agreement.',
-        'ii. Each Quote shall describe the specific services to be provided, the fees payable, and any additional terms applicable to that engagement.',
-        'iii. Each Quote issued by Salesability and accepted by the Client shall constitute a separate, distinct, and independent agreement and contractual obligation of the Parties hereto, incorporating by reference the terms and provisions of this Agreement.',
+        'i. Services. The Client hereby retains Salesability to provide the Client with marketing and event services, as more particularly described in Quotes issued by Salesability and accepted by the Client from time to time (the "Services").',
+        'ii. Master Agreement. This Agreement is a master agreement that contemplates that Salesability and the Client may enter into one or more Quotes for the provision of Services as set out therein. When Salesability and the Client have agreed upon the nature and timing of a project for the provision of Services, Salesability shall issue a corresponding Quote and the Client shall accept the Quote, and that Quote shall contain the agreement of the Parties in relation to the specific project.',
+        'iii. Quote. Each Quote issued by Salesability and accepted by the Client is deemed to include all the terms and provisions of this Agreement. Each Quote issued by Salesability and accepted by the Client shall constitute a separate distinct and independent agreement and contractual obligation of the Parties hereto.',
+        'iv. Precedence. In the event of a conflict between the provisions of this Agreement and the provisions of a Quote issued by Salesability and accepted by the Client, the following shall be the order of precedence: (i) the applicable Quote for the provision of the Services; and (ii) this Agreement; provided that whenever the provisions of a Quote conflict with the provisions of this Agreement, the provisions of such Quote take precedence over the provisions of this Agreement only for the purposes of that Quote and the terms and provisions of this Agreement are not otherwise amended, modified, cancelled, waived or released.',
+        'v. Cooperation of Client. The Client agrees to provide all necessary information to Salesability in a timely manner for the proper execution of the Services.',
+        "vi. Sub-contractors. The Client acknowledges and agrees that Salesability may use subcontractors to perform some of the Services to be provided under this Agreement. The sub-contractors are solely responsible for their conduct while at the Client's premises.",
       ],
     },
     {
-      heading: '2. Term and Termination',
+      heading: '2. TERM & TERMINATION',
       paragraphs: [
-        `i. This Agreement shall commence on ${longDate(d.termStart)} and continue in full force and effect until ${longDate(d.termEnd)} (the "Term"), unless terminated earlier in accordance with §2.ii.`,
-        `ii. Either Party may terminate this Agreement by providing not less than ${d.terminationNoticeDays} days' written notice to the other Party. Termination shall not affect the obligations of the Parties with respect to any Quote accepted prior to the effective date of termination.`,
-        'iii. Upon expiration of the Term, this Agreement may be renewed by mutual written agreement of the Parties; any such renewal shall be evidenced by a new Master Service Agreement executed by both Parties.',
+        'i. Term. The term of this Agreement begins on the date that this Agreement is signed by the Client and shall continue for a period of twelve (12) months thereafter, unless the Agreement is terminated earlier in accordance with the provisions of this Agreement.',
+        `ii. Termination on Notice. Subject to section 2(iii) below, either Party may terminate this Agreement by providing the other party with ${d.terminationNoticeDays} days' advance written notice.`,
+        'iii. Cancellation Fee. If the Client terminates this Agreement within 21 days before the start date of an Event set out in a Quote that has been accepted by the Client, then the Client agrees to pay a cancellation fee equal to 50% of the total agreed upon fees set out in the applicable Quote, (the "Cancellation Fee").',
+        'iv. Termination for Non-Payment. Salesability reserves the right to cease Services if the Client does not make payments in accordance with this Agreement.',
       ],
     },
     {
-      heading: '3. Payment',
+      heading: '3. FEES & PAYMENT',
       paragraphs: [
-        'i. The Client shall pay Salesability the fees set forth in each accepted Quote, including any deposit required at acceptance.',
-        'ii. Invoices shall be issued upon completion of the services described in each accepted Quote and shall be payable in full upon receipt.',
-        'iii. Late payments shall incur a monthly interest charge of 1.5% (18% annually) on the outstanding balance.',
+        'i. Fees. The Client shall pay Salesability fees for the Services in the amounts set out in the applicable Quote.',
+        'ii. Invoices. Salesability shall prepare and submit invoice(s) to the Client.',
+        'iii. Payment. The Client must pay invoices in full upon receipt, unless otherwise specified in writing by Salesability.',
+        'iv. Late Payment. Late payments will incur a monthly interest charge of 1.5% (18% annually).',
       ],
     },
     {
-      heading: '5. Cancellation',
+      heading: '4. LIABILITY & INDEMNITY',
       paragraphs: [
-        'i. The Client may cancel an accepted Quote by providing written notice to Salesability.',
-        'ii. If the Client cancels an accepted Quote within twenty-one (21) days prior to the start of the Event described in that Quote, the Client shall pay Salesability a cancellation fee equal to fifty percent (50%) of the total fee set forth in the cancelled Quote.',
+        "i. Limitation of Liability. Salesability's entire aggregate liability for any claims relating to the Services or this Agreement shall not exceed the fees paid or payable by the Client to Salesability under this Agreement in the twelve (12) month period immediately preceding the events giving rise to such liability. In no event shall Salesability be liable under this Agreement to the Client for any incidental, consequential, indirect, statutory, special, exemplary or punitive damages, including, but not limited to, lost profits, loss of use, loss of time, inconvenience, lost business opportunities, damage to goodwill or reputation, and costs of cover, regardless of whether such liability is based on breach of contract, tort, strict liability or otherwise, and even if advised of the possibility of such damages or such damages could have been reasonably foreseen. Salesability outsources production and software services to third parties, including Vicimus Inc., who maintain their own terms of service and liabilities. The Client acknowledges and agrees that Salesability is not liable for any third-party service provider's actions or omissions. Salesability and the Client acknowledge and agree that the limitations of liability in this section present a fair allocation of risk and liability, and that this section is an essential part of the bargain between the Client and Salesability and a controlling factor in setting any fees or other charges.",
+        "ii. General Indemnity. The Client shall indemnify, defend and hold harmless Salesability from and against any and all losses, damages, costs, expenses (including legal fees), claims, complaints, demands, actions, suits, proceedings, obligations and liabilities (including settlement payments) arising from, connected with or relating to the Client's use of the Services, a breach of this Agreement by the Client or its employees, and/or any negligent act or omission by the Client or its employees in relation to this Agreement.",
+        'iii. Survival. This article shall survive the termination of this Agreement.',
       ],
     },
     {
-      heading: '9. Governing Law',
+      heading: '5. INTELLECTUAL PROPERTY',
       paragraphs: [
-        `This Agreement shall be governed by, and construed in accordance with, the laws of ${d.governingLaw}, without regard to its conflict-of-law principles.`,
+        "All intellectual property created by Salesability remains the exclusive property of Salesability unless otherwise agreed by the Parties in writing. The Client hereby grants Salesability a non-exclusive, royalty-free, transferable (to Salesability's subcontractors) license to use the Client's branding, logos, and other intellectual property strictly for the purposes of delivering the Services.",
+      ],
+    },
+    {
+      heading: '6. PERSONAL INFORMATION, DATA PROTECTION & COMPLIANCE',
+      paragraphs: [
+        'i. Compliance. Salesability and the Client agree to comply with all applicable Canadian privacy laws, including the Personal Information Protection and Electronic Documents Act ("PIPEDA") in the performance of this Agreement. Salesability shall not be liable for any non-compliance of PIPEDA by the Client. Salesability follows Canada\'s anti-spam legislation ("CASL") requirements regarding electronic communications. Salesability shall not be liable for any non-compliance of CASL by the Client.',
+        'ii. Legal Authorizations and Consents. The Client shall be solely responsible and liable for lawfully obtaining from its customers all legal authorizations and/or consents required pursuant to PIPEDA and CASL to provide the personal information of its customers to Salesability in order for Salesability to perform the Services, including but not limited to: (a) allowing Salesability to collect, use and disclose that information; and (b) allowing Salesability to contact the Client\'s customers by electronic communications for marketing purposes, (the "Purpose").',
+        'iii. Warranty. The Client hereby represents and warrants to Salesability that the Client has lawfully obtained from its customers all legal authorizations and/or consents required pursuant to PIPEDA and CASL to provide the personal information of its customers to Salesability in order for Salesability to carry out the Purpose. The Client acknowledges and understands that Salesability is relying upon all such representations and warranties made by the Client in entering into this Agreement.',
+        'iv. Warranty Indemnity. The Client shall indemnify, defend and hold harmless Salesability from and against any claims, liabilities, demands, actions, losses, damages, fines, penalties or expenses of any kind arising out of or in connection with any failure by the Client to obtain the required legal authorizations and/or consents warranted by the Client in this Agreement.',
+        'v. Data Security. Salesability will handle any personal information provided by the Client in a secure and responsible manner.',
+      ],
+    },
+    {
+      heading: '7. CONFIDENTIALITY',
+      paragraphs: [
+        'Both Parties agree to keep all proprietary and confidential information received from the other Party private and not disclose it to any third party without prior written consent, except as required by law.',
+      ],
+    },
+    {
+      heading: '8. INDEPENDENT CONTRACTOR',
+      paragraphs: [
+        'Salesability will perform the Services as an independent contractor. This Agreement does not constitute and shall not be construed as constituting or creating a partnership, joint venture, principal/agent relationship or a formal business organization between the Parties.',
+      ],
+    },
+    {
+      heading: '9. GOVERNING LAW',
+      paragraphs: [
+        'This Agreement shall be deemed to have been made in and shall be governed by, construed and interpreted in accordance with the laws of the Province of Nova Scotia and the laws of Canada, as applicable therein.',
+      ],
+    },
+    {
+      heading: '10. GENERAL PROVISIONS',
+      paragraphs: [
+        'i. Legally Binding Agreement. This Agreement shall be a binding, legal agreement between the Parties.',
+        'ii. Entire Agreement. This Agreement, together with any agreements and other documents to be delivered pursuant hereto, including any Quote, constitutes the entire agreement between the Parties pertaining to the subject matter hereof and supersedes all prior agreements, negotiations, discussions, and understandings, written or oral, between the Parties.',
+        'iii. Modification. Any modifications to this Agreement must be in writing and signed by both Parties.',
+        'iv. Severability. If any provision of this Agreement or of a Quote is deemed unenforceable, the remainder of the Agreement and/or Quote shall remain in full effect.',
+        'v. Signature. By signing this Agreement, the Client acknowledges and agrees that it has fully read, understood and agreed to be legally bound by this Master Services Agreement.',
       ],
     },
   ];
@@ -211,7 +265,7 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     const titleSize = 22;
     const titleAscent = bold.heightAtSize(titleSize, { descender: false });
     const titleBaseline = y - titleAscent;
-    page.drawText('MASTER SERVICE AGREEMENT', {
+    page.drawText('MASTER SERVICES AGREEMENT', {
       x: margin,
       y: titleBaseline,
       size: titleSize,
@@ -245,28 +299,25 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
 
     y = Math.min(yLeft, yRight) - 22;
 
-    // Parties block. Client name + address printed under "Between" header.
-    page.drawText('Between', { x: margin, y, size: 10, font: bold, color: black });
-    y -= 14;
-    page.drawText(sanitize(`${SENDER.name} ("Salesability")`), {
-      x: margin,
-      y,
-      size: 11,
-      font,
-      color: black,
-    });
-    y -= 14;
-    page.drawText(sanitize(`${data.clientName} (the "Client")`), {
-      x: margin,
-      y,
-      size: 11,
-      font,
-      color: black,
-    });
-    y -= 14;
+    // Recitals — verbatim opening paragraph of the lawyer's agreement, with
+    // the Client's legal name interpolated where the source reads "[insert
+    // client's legal name]". Rendered as wrapped prose, not a form, so the
+    // signed document reads as the agreement itself.
+    const recitals =
+      'This Master Services Agreement (the "Agreement") is made by and between ' +
+      'Salesability Canada Inc., a company incorporated under the laws of Canada ' +
+      `(hereinafter called "Salesability") and ${data.clientName} (hereinafter ` +
+      'called the "Client") (collectively, Salesability and the Client are ' +
+      'referred to herein as the "Parties", and each of them as a "Party").';
+    for (const line of wrap(sanitize(recitals), 95)) {
+      page.drawText(line, { x: margin, y, size: 9, font, color: black });
+      y -= 12;
+    }
+    // Client address (optional) printed beneath the recitals for identification.
     if (data.clientAddress) {
+      y -= 4;
       for (const line of data.clientAddress) {
-        page.drawText(sanitize(line), { x: margin, y, size: 10, font, color: grey });
+        page.drawText(sanitize(line), { x: margin, y, size: 9, font, color: grey });
         y -= 12;
       }
     }
@@ -350,7 +401,7 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     sigBoxY = pageHeight - (y + SIG_BOX_HEIGHT);
     sigBoxWidth = colWidth;
     y -= 12;
-    page.drawText(sanitize('Shannon Hogan, President'), {
+    page.drawText(sanitize('Shannon Tilley, President'), {
       x: leftColX,
       y,
       size: 9,
