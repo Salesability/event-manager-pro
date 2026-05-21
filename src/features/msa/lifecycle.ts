@@ -1,8 +1,14 @@
 import 'server-only';
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { auditLog, masterServiceAgreements } from '@/lib/db/schema';
+import {
+  auditLog,
+  dealers,
+  masterServiceAgreements,
+  quotes,
+} from '@/lib/db/schema';
+import { markQuoteAcceptedViaEnvelope } from '@/features/quotes/lifecycle';
 
 // Internal lifecycle-transition helpers for MSAs. Called by the BoldSign
 // webhook route handler at `/api/boldsign/webhook` (the rare legitimate
@@ -33,6 +39,58 @@ function plus12MonthsFrom(now: Date): Date {
   const next = new Date(now.getTime());
   next.setUTCFullYear(next.getUTCFullYear() + 1);
   return next;
+}
+
+// Combined-document auto-accept (chunk 0055). When the Client signs the
+// combined envelope, the bundled Quote is accepted in the same signing event.
+// The Quote is linked to this MSA via `quotes.msa_id` (set at send time by
+// `sendMsaEnvelope`). Mirrors the side effects of the `acceptQuote` Server
+// Action — quote draft→accepted + prospect dealer→active — but runs as the
+// system actor (no session). Best-effort and isolated: a missing/already-
+// accepted quote is a silent no-op so a replayed/edge webhook never errors the
+// MSA flip. `dealerId` is the MSA's dealer, already resolved by the caller.
+async function acceptBundledQuote(msaId: number, dealerId: number): Promise<void> {
+  const [quote] = await db
+    .select({ id: quotes.id })
+    .from(quotes)
+    .where(and(eq(quotes.msaId, msaId), eq(quotes.status, 'draft')))
+    .limit(1);
+  if (!quote) return;
+
+  const accepted = await markQuoteAcceptedViaEnvelope(quote.id);
+  if ('error' in accepted || !accepted.transitioned) return;
+
+  await db.insert(auditLog).values({
+    actorUserId: null,
+    actorRole: 'system',
+    action: 'quote.accepted',
+    targetTable: 'quotes',
+    targetId: quote.id,
+    payload: { via: 'msa-envelope', msaId },
+  });
+
+  // Promote a prospect dealer to active — same guarded UPDATE as acceptQuote.
+  const promoted = await db
+    .update(dealers)
+    .set({ status: 'active' })
+    .where(
+      and(
+        eq(dealers.id, dealerId),
+        eq(dealers.status, 'prospect'),
+        isNull(dealers.archivedAt),
+      ),
+    )
+    .returning({ id: dealers.id });
+  if (promoted.length) {
+    await db.insert(auditLog).values({
+      actorUserId: null,
+      actorRole: 'system',
+      action: 'dealer.activated',
+      targetTable: 'dealers',
+      targetId: dealerId,
+      payload: { from: 'prospect', via: 'quote.accepted' },
+    });
+  }
 }
 
 export async function markMsaSigned(
@@ -71,6 +129,8 @@ export async function markMsaSigned(
       targetId: id,
       payload: { providerDocumentId, signedPdfStorageKey },
     });
+    // Same signing event accepts the bundled Quote + promotes the dealer.
+    await acceptBundledQuote(id, dealerId);
     return { ok: true, transitioned: true, msaId: id, dealerId };
   }
 

@@ -9,7 +9,8 @@ import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import { renderMsaPdf, type MsaPdfData } from '@/lib/pdf/render-msa';
 import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
-import { quoteDisplayName, quoteDownloadFilename } from '@/features/quotes/display-name';
+import { combineQuoteAndMsa } from '@/lib/pdf/merge';
+import { quoteDisplayName } from '@/features/quotes/display-name';
 import { putObject } from '@/lib/storage/gcs';
 import { sendSignatureRequest } from '@/lib/boldsign/client';
 import { currentMsaTemplateVersion } from './template-version';
@@ -300,45 +301,50 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       tax: Number(quote.tax),
       total: Number(quote.total),
     };
-    const quotePdf = await renderQuotePdf(quoteData);
+    const quotePdf = await renderQuotePdf(quoteData, { withInitials: true });
     if ('error' in quotePdf) {
       return { error: `Quote PDF render failed: ${quotePdf.error}` };
     }
 
-    // Persist the draft MSA PDF to GCS before the envelope post — the row's
-    // `providerDocumentId` lookup at webhook time only needs the signed
-    // bytes, but archiving the draft makes "what did the signer see?" easy
-    // to answer if a dispute lands.
+    // Combine into ONE signable document (chunk 0055): Quote first (the Client
+    // initials it), Agreement last (signed at the very bottom — "one and
+    // done"). The signature anchor shifts past the Quote pages; the Quote's
+    // initials anchor carries over unchanged.
+    const combined = await combineQuoteAndMsa(
+      { body: quotePdf.body, initialsAnchor: quotePdf.initialsAnchor },
+      { body: msaPdf.body, signatureAnchor: msaPdf.signatureAnchor },
+    );
+    if ('error' in combined) {
+      return { error: `Combine failed: ${combined.error}` };
+    }
+
+    // Persist the combined draft to GCS before the envelope post — archiving
+    // the exact document the signer received makes "what did they sign?" easy
+    // to answer if a dispute lands. Single artifact now (no separate MSA file).
     const draftKey = msaDraftPdfStorageKey(msaId);
     const draftUpload = await putObject({
       bucket,
       key: draftKey,
-      body: msaPdf.body,
+      body: combined.body,
       contentType: 'application/pdf',
     });
     if ('error' in draftUpload) {
       return { error: `MSA draft upload failed: ${draftUpload.error}` };
     }
 
-    // Post the envelope to BoldSign.
+    // Post a single-file envelope to BoldSign: the combined document carries
+    // the Client's Initial field(s) on the Quote section and the Signature at
+    // the end. Anchors come from the merge step (already in merged-doc coords).
     const customMessage = field(formData, 'message');
     const sendResult = await sendSignatureRequest({
       subject: `Master Service Agreement — ${dealer.name}`,
       message:
         customMessage ||
-        `Please review and sign your Salesability Master Service Agreement (#${msaId}) and your first Quote (${quoteDisplayName(quote.createdAt)}).`,
+        `Please review and sign your Salesability Master Service Agreement (#${msaId}), which includes your Quote (${quoteDisplayName(quote.createdAt)}). Initial the Quote and sign at the end.`,
       signer: { emailAddress: recipient.email, name: recipient.firstName },
-      files: [
-        { filename: `msa-${msaId}.pdf`, body: msaPdf.body },
-        { filename: quoteDownloadFilename(quote.createdAt), body: quotePdf.body },
-      ],
-      // Pin the Signature field at the prose's right-column underline (chunk
-      // 0054). Without this, BoldSign 400s on `Signers.FormFields: "Form
-      // fields cannot be null"`. Two-file envelope sends both PDFs in
-      // declaration order; the anchor's `pageNumber` is relative to the
-      // first file (the MSA), which is correct because the signer applies
-      // to the MSA only — the Quote is a reference attachment.
-      signatureAnchor: msaPdf.signatureAnchor,
+      files: [{ filename: `agreement-${msaId}.pdf`, body: combined.body }],
+      signatureAnchor: combined.signatureAnchor,
+      initialsAnchors: combined.initialsAnchors,
       metadata: { msaId: String(msaId), quoteId: String(quote.id) },
     });
     if ('error' in sendResult) {
@@ -368,6 +374,20 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       revalidateMsaViews();
       return { ok: true };
     }
+
+    // Link the bundled Quote to this MSA so the signed-webhook can auto-accept
+    // it (chunk 0055). Guarded on draft + unset link, so a re-send or a quote
+    // that has since moved on is a no-op.
+    await db
+      .update(quotes)
+      .set({ msaId, updatedById: userId })
+      .where(
+        and(
+          eq(quotes.id, quote.id),
+          eq(quotes.status, 'draft'),
+          isNull(quotes.msaId),
+        ),
+      );
 
     await recordAudit({
       action: 'msa.sent',

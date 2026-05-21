@@ -12,7 +12,7 @@
 | 1: Replace MSA prose with the full verbatim lawyer agreement (§1–§10) | Done | `826c517` — awaiting owner/lawyer eyeball + `MSA_TEMPLATE_VERSION` env bump |
 | 2: Merge Quote + MSA into one PDF | Done | `src/lib/pdf/merge.ts` + 4 tests — Quote-first/Agreement-last; anchor shifted by quote page count |
 | 3: Initials field(s) + bottom-of-contract-page signature anchors | Done | quote initials anchor + `client.ts` Initial FormField; initials on Quote page, signature at end (owner's call) |
-| 4: Send path + webhook collapse to a single signed artifact | Pending | - |
+| 4: Send path + webhook collapse to a single signed artifact | Done | single-file envelope + initials/sig fields; sign auto-accepts quote (via `quotes.msa_id`, no migration) + promotes dealer |
 | 5: Drop in the resent quote statement (BLOCKED on owner) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -35,7 +35,7 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - `docs/wiki/data-model.md` — MSA pending→active gate + GCS paths (`msa/{msaId}/signed.pdf`).
 - `CLAUDE.md` → **Conventions** — mutations are Server Actions; the BoldSign webhook is a legit route handler (external caller).
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - The lawyer's Agreement prose must be **verbatim** — Phase 1 transcribes the `.docx` exactly; later phases must survive the merge byte-for-byte.
@@ -70,10 +70,12 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - [x] Visual check: combined sample (`~/Downloads/Salesability-CombinedAgreement-SAMPLE-2026-05-21.pdf`) shows initials box on the quote + signature at the end
 
 #### Phase 4: Send path + webhook collapse
-- [ ] `sendMsaEnvelope` posts a single merged file (drop the two-file `files: [...]` array)
-- [ ] Re-point the BoldSign field anchors to the merged file
-- [ ] Webhook flips MSA→`active` AND Quote→`accepted` from the one `Signed` event; persist the single signed PDF to GCS
-- [ ] Confirm idempotency on re-send still holds
+- [x] `sendMsaEnvelope` renders quote `{ withInitials: true }` + MSA, `combineQuoteAndMsa`, posts a **single-file** envelope (`agreement-<id>.pdf`) with `signatureAnchor` + `initialsAnchors`
+- [x] Field anchors come from the merge step (already in merged-doc coords)
+- [x] Quote↔MSA correlation via the **existing** `quotes.msa_id` column (set at send) — **no migration** (db-conventions confirmed nothing else writes it)
+- [x] Webhook (`markMsaSigned`) flips MSA→`active`, then auto-accepts the bundled quote (draft→accepted via `markQuoteAcceptedViaEnvelope`) + promotes prospect dealer→active, all as the `system` actor; persists the single signed PDF to GCS (unchanged)
+- [x] Idempotency preserved: re-send no-ops on `providerDocumentId` set; sign no-ops when no linked draft quote or already-accepted
+- [x] Tests: actions (single-file + quote-link), msa lifecycle (auto-accept + promote + no-op), quote lifecycle helper (4 branches) — full suite 882 pass
 
 #### Phase 5: Resent quote statement (BLOCKED on owner)
 - [ ] Replace `TERMS_AND_CONDITIONS` / `INVOICING_AND_PAYMENT` with the owner's resent text

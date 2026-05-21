@@ -148,3 +148,38 @@ export function markQuoteDeclined(
 ): Promise<TransitionResult> {
   return transition(quoteId, 'sent', 'declined', updatedById);
 }
+
+// Accept a quote that was delivered for signature INSIDE a combined MSA
+// envelope (chunk 0055), as opposed to the standalone quote-send flow.
+// Difference from markQuoteAccepted: the transition is draft→accepted, not
+// sent→accepted. The combined-envelope quote is never emailed through
+// sendQuote — it rides in the BoldSign envelope alongside the MSA and is
+// accepted when the Client signs — so it has no `sentAt`/validity window and
+// no per-quote GCS PDF (the signed combined PDF on the MSA is the artifact).
+// Guarded UPDATE draft→accepted; idempotent if already accepted; errors on any
+// other source status. Called by the MSA signed-webhook path (msa/lifecycle.ts)
+// with `updatedById = null` (system actor — no session).
+export async function markQuoteAcceptedViaEnvelope(
+  quoteId: number,
+  updatedById: string | null = null
+): Promise<TransitionResult> {
+  const updated = await db
+    .update(quotes)
+    .set({
+      status: 'accepted',
+      acceptedAt: new Date(),
+      ...(updatedById ? { updatedById } : {}),
+    })
+    .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+    .returning({ id: quotes.id });
+  if (updated.length) return { ok: true, transitioned: true };
+
+  const [row] = await db
+    .select({ status: quotes.status })
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!row) return { error: 'Quote not found.' };
+  if (row.status === 'accepted') return { ok: true, transitioned: false };
+  return { error: `Quote cannot be accepted from status '${row.status}'.` };
+}

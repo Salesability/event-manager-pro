@@ -91,6 +91,49 @@ describe('markMsaSigned', () => {
     expect(auditRow.targetId).toBe(1);
   });
 
+  it('also accepts the bundled draft quote and promotes a prospect dealer (combined-document flow)', async () => {
+    mocks.dbResults.push(
+      [{ id: 1, dealerId: 7 }], // MSA guarded UPDATE → active
+      [], // msa.signed audit insert (consumes a slot)
+      [{ id: 42 }], // bundled draft quote lookup (linked via msa_id)
+      [{ id: 42 }], // quote draft→accepted UPDATE
+      [], // quote.accepted audit insert
+      [{ id: 7 }], // dealer prospect→active UPDATE (promoted)
+      [], // dealer.activated audit insert
+    );
+
+    const result = await markMsaSigned('sig-req-abc', 'msa/1/signed.pdf');
+    expect(result).toEqual({ ok: true, transitioned: true, msaId: 1, dealerId: 7 });
+
+    // Three table updates in order: MSA, quote, dealer.
+    expect(mocks.updates.map((u) => u.table)).toEqual([
+      'master_service_agreements',
+      'quotes',
+      'dealers',
+    ]);
+    expect((mocks.updates[1].patch as Record<string, unknown>).status).toBe('accepted');
+    expect((mocks.updates[2].patch as Record<string, unknown>).status).toBe('active');
+
+    // Three audit rows: msa.signed, quote.accepted, dealer.activated.
+    expect(mocks.inserts.map((i) => (i.values as { action: string }).action)).toEqual([
+      'msa.signed',
+      'quote.accepted',
+      'dealer.activated',
+    ]);
+    const quoteAudit = mocks.inserts[1].values as Record<string, unknown>;
+    expect(quoteAudit.targetId).toBe(42);
+    expect(quoteAudit.payload).toEqual({ via: 'msa-envelope', msaId: 1 });
+  });
+
+  it('flips the MSA even when no bundled quote is linked (no-op auto-accept)', async () => {
+    // MSA UPDATE matches; quote lookup returns nothing → no quote/dealer ops.
+    mocks.dbResults.push([{ id: 1, dealerId: 7 }]);
+    const result = await markMsaSigned('sig-req-abc', 'msa/1/signed.pdf');
+    expect(result).toEqual({ ok: true, transitioned: true, msaId: 1, dealerId: 7 });
+    expect(mocks.updates).toHaveLength(1); // MSA only
+    expect(mocks.inserts).toHaveLength(1); // msa.signed only
+  });
+
   it('returns idempotent ok (transitioned=false) when the MSA is already active (replay)', async () => {
     // Guarded UPDATE misses (no pending row with that doc id) → re-select →
     // row exists with status='active'.

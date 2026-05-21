@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   renderMsaPdf: vi.fn(),
   renderQuotePdf: vi.fn(),
+  combineQuoteAndMsa: vi.fn(),
   putObject: vi.fn(),
   resolveQuoteRecipient: vi.fn(),
   sendSignatureRequest: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
 vi.mock('@/features/audit/actions', () => ({ recordAudit: mocks.recordAudit }));
 vi.mock('@/lib/pdf/render-msa', () => ({ renderMsaPdf: mocks.renderMsaPdf }));
 vi.mock('@/lib/pdf/render-quote', () => ({ renderQuotePdf: mocks.renderQuotePdf }));
+vi.mock('@/lib/pdf/merge', () => ({ combineQuoteAndMsa: mocks.combineQuoteAndMsa }));
 vi.mock('@/lib/storage/gcs', () => ({ putObject: mocks.putObject }));
 vi.mock('@/features/quotes/recipient', () => ({
   resolveQuoteRecipient: mocks.resolveQuoteRecipient,
@@ -189,6 +191,13 @@ beforeEach(() => {
   mocks.renderQuotePdf.mockResolvedValue({
     ok: true,
     body: Buffer.from('%PDF-quote-stub'),
+    initialsAnchor: { pageNumber: 1, x: 492, y: 710, width: 70, height: 22 },
+  });
+  mocks.combineQuoteAndMsa.mockResolvedValue({
+    ok: true,
+    body: Buffer.from('%PDF-combined-stub'),
+    signatureAnchor: { pageNumber: 2, x: 321, y: 600, width: 241, height: 22 },
+    initialsAnchors: [{ pageNumber: 1, x: 492, y: 710, width: 70, height: 22 }],
   });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'msa/1/draft.pdf' });
   mocks.resolveQuoteRecipient.mockResolvedValue({
@@ -262,8 +271,8 @@ describe('createMsaDraft', () => {
 });
 
 describe('sendMsaEnvelope', () => {
-  it('happy path: renders MSA + Quote PDFs, uploads draft, posts envelope, persists doc id, emits audit', async () => {
-    // MSA pre-load → dealer → quote → guarded UPDATE returns 1 row.
+  it('happy path: renders + combines Quote & MSA, uploads one draft, posts a single-file envelope, persists doc id, links the quote, emits audit', async () => {
+    // MSA pre-load → dealer → quote → guarded MSA UPDATE → quote-link UPDATE.
     mocks.dbResults.push(
       [MSA_PENDING],
       [DEALER_ROW],
@@ -284,7 +293,11 @@ describe('sendMsaEnvelope', () => {
     expect(msaData.terminationNoticeDays).toBe(30);
     expect(msaData.templateVersion).toBe('2026-05-12');
 
+    // Quote is rendered WITH the Client-initials field, then combined.
     expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
+    expect(mocks.renderQuotePdf.mock.calls[0][1]).toEqual({ withInitials: true });
+    expect(mocks.combineQuoteAndMsa).toHaveBeenCalledTimes(1);
+
     expect(mocks.putObject).toHaveBeenCalledTimes(1);
     const uploadArg = mocks.putObject.mock.calls[0][0] as Record<string, unknown>;
     expect(uploadArg.bucket).toBe('test-bucket');
@@ -296,16 +309,21 @@ describe('sendMsaEnvelope', () => {
       unknown
     >;
     const files = envelopeArg.files as Array<{ filename: string }>;
-    expect(files).toHaveLength(2);
-    expect(files[0].filename).toBe('msa-1.pdf');
-    expect(files[1].filename).toBe('saledayevents-Quote-20260512-0700.pdf');
+    expect(files).toHaveLength(1);
+    expect(files[0].filename).toBe('agreement-1.pdf');
+    expect(envelopeArg.initialsAnchors).toHaveLength(1);
+    expect((envelopeArg.signatureAnchor as { pageNumber: number }).pageNumber).toBe(2);
     expect((envelopeArg.signer as { emailAddress: string }).emailAddress).toBe(
       'buyer@dealer.test',
     );
 
-    expect(mocks.updates).toHaveLength(1);
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.providerDocumentId).toBe('doc-abc');
+    // Two updates: MSA providerDocumentId, then the quote→MSA link.
+    expect(mocks.updates).toHaveLength(2);
+    const msaPatch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(mocks.updates[0].table).toBe('master_service_agreements');
+    expect(msaPatch.providerDocumentId).toBe('doc-abc');
+    expect(mocks.updates[1].table).toBe('quotes');
+    expect((mocks.updates[1].patch as Record<string, unknown>).msaId).toBe(1);
 
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'msa.sent',
