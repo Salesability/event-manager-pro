@@ -4,15 +4,15 @@
 >
 > **What this is NOT.** Not an active plan. Not a chunk of work. Not the roadmap for `event-manager-pro` in isolation. The platform described here likely spans multiple deployments and integrations beyond this repo.
 >
-> **Why it lives here.** Lives in `docs/strategy/` (alongside [`roadmap.md`](roadmap.md)) because it's neither state-of-the-system reference (`docs/wiki/`) nor a per-chunk plan (`docs/designs/`) — it's the strategic anchor behind the long-horizon roadmap. When future chunks get scaffolded — especially around compliance (CASL/DNCL), AI-assisted features, multi-channel campaigns, real-time dashboards, or BDC/Traffic Cop integrations — refer back to this doc to confirm intent and scope. Pairs with [`roadmap.md`](roadmap.md) which covers the near-term phases.
+> **Why it lives here.** Lives in `docs/strategy/` (alongside [`roadmap.md`](roadmap.md)) because it's neither state-of-the-system reference (`docs/wiki/`) nor a per-chunk plan (`docs/chunks/`) — it's the strategic anchor behind the long-horizon roadmap. When future chunks get scaffolded — especially around compliance (CASL/DNCL), AI-assisted features, multi-channel campaigns, real-time dashboards, or BDC/Traffic Cop integrations — refer back to this doc to confirm intent and scope. Pairs with [`roadmap.md`](roadmap.md) which covers the near-term phases.
 >
 > **Source.** Imported verbatim from `SaleDay_Events_Production_Software_Plan.docx.md` on 2026-05-05. Markdown export artifacts (`\|`, `\+`, etc.) preserved as-is.
 >
 > **Relationship to current chunks:**
-> - `docs/designs/closed/0018-user-system/` (RBAC, contact-user linkage) — foundational for any role-aware module here (admin/coach/BDC/dealer per "Authentication" row in the stack table).
-> - `docs/designs/closed/0019-security-architecture/` (RLS defence-in-depth, audit log) — direct precondition for the multi-tenancy + PIPEDA-compliant data-isolation requirements called out in "Key Considerations."
-> - `docs/designs/future/0016-book-your-event-intake/` — early surface area for the "Event Created" workflow step described in Module 2's Campaign Workflow (deferred to v2 as of 2026-05-11; v1 uses an in-app manual form).
-> - `docs/designs/closed/0014-summary-reports/` — foreshadows the Module 3 "Post-Event Report" feature.
+> - `docs/chunks/closed/0018-user-system/` (RBAC, contact-user linkage) — foundational for any role-aware module here (admin/coach/BDC/dealer per "Authentication" row in the stack table).
+> - `docs/chunks/closed/0019-security-architecture/` (RLS defence-in-depth, audit log) — direct precondition for the multi-tenancy + PIPEDA-compliant data-isolation requirements called out in "Key Considerations."
+> - `docs/chunks/future/0016-book-your-event-intake/` — early surface area for the "Event Created" workflow step described in Module 2's Campaign Workflow (deferred to v2 as of 2026-05-11; v1 uses an in-app manual form).
+> - `docs/chunks/closed/0014-summary-reports/` — foreshadows the Module 3 "Post-Event Report" feature.
 
 ---
 

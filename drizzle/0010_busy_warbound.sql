@@ -64,7 +64,7 @@ CREATE INDEX "campaigns_accepted_quote_id_idx" ON "campaigns" USING btree ("acce
 -- through anon supabase-js (which would see zero rows). If a future JWT-
 -- bearing path (e.g. a dealer portal) needs to read quotes, add a scoped
 -- policy here keyed on the appropriate ownership predicate.
--- See docs/designs/0019-security-architecture/plan.md Phase 1.
+-- See docs/chunks/0019-security-architecture/plan.md Phase 1.
 -- ────────────────────────────────────────────────────────────────────────────
 
 alter table public.quotes enable row level security;

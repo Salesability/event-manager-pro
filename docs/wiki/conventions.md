@@ -1,6 +1,6 @@
 # Conventions
 
-Cross-cutting rules. The "what to do" reference; the "why" lives in [architecture.md](architecture.md), [data-model.md](data-model.md), and the relevant `docs/designs/` folders.
+Cross-cutting rules. The "what to do" reference; the "why" lives in [architecture.md](architecture.md), [data-model.md](data-model.md), and the relevant `docs/chunks/` folders.
 
 > Part of `docs/wiki/`. The `db-conventions` agent skill (`.claude/skills/db-conventions/SKILL.md`) covers the same ground for Claude in deeper detail; this page is the human-readable summary.
 
@@ -110,7 +110,7 @@ See [architecture.md](architecture.md) for a complete tree.
 ## Documentation
 
 - **`docs/wiki/`** — current state of the system. Edit pages in place when state changes.
-- **`docs/designs/YYYY-MM-DD-slug/`** — per-chunk working notes. Append-only after the work ships.
+- **`docs/chunks/YYYY-MM-DD-slug/`** — per-chunk working notes. Append-only after the work ships.
 - **`CLAUDE.md`** — schema for the wiki + project-wide agent rules. Local-only.
 
 The full ingest/query/lint pattern for `docs/wiki/` lives in `CLAUDE.md`.

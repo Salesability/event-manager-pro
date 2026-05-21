@@ -1,8 +1,8 @@
 # Commercial spine
 
-Reference for how a deal flows through the system: **Client → MSA → Quote → Event/Campaign → Invoice → Payment**. Anchors the legal layer (master agreement + per-deal contract) to the operational layer (the delivery campaign). Locked in 0037 (2026-05-11; shipped 2026-05-12); see [`docs/designs/closed/0037-commercial-spine-msa/plan.md`](../designs/closed/0037-commercial-spine-msa/plan.md) for the design history.
+Reference for how a deal flows through the system: **Client → MSA → Quote → Event/Campaign → Invoice → Payment**. Anchors the legal layer (master agreement + per-deal contract) to the operational layer (the delivery campaign). Locked in 0037 (2026-05-11; shipped 2026-05-12); see [`docs/chunks/closed/0037-commercial-spine-msa/plan.md`](../chunks/closed/0037-commercial-spine-msa/plan.md) for the design history.
 
-> Part of `docs/wiki/`. See [`docs/wiki/index.md`](index.md) for the full catalog and [`docs/wiki/log.md`](log.md) for the maintenance log. Per-chunk working notes (plans, decisions, research) live in `docs/designs/NNNN-slug/`.
+> Part of `docs/wiki/`. See [`docs/wiki/index.md`](index.md) for the full catalog and [`docs/wiki/log.md`](log.md) for the maintenance log. Per-chunk working notes (plans, decisions, research) live in `docs/chunks/NNNN-slug/`.
 
 > Source-of-truth contract document: the Salesability *Master Service Agreement* template (user-supplied 2026-05-11). Key clauses cited inline below: **§1.ii** (one or more Quotes per term), **§1.iii** (accepted Quote = the contract), **§2.i** (12-month term), **§2.ii** (30-day termination notice), **§2.iii** (50% cancellation fee within 21 days of Event start), **§3.i** (deposit), **§9** (NS governing law).
 
@@ -18,7 +18,7 @@ Reference for how a deal flows through the system: **Client → MSA → Quote �
 | Entity | Maps to | Lifecycle | Notes |
 |--------|---------|-----------|-------|
 | **Client** | `dealers` table | Persistent — once a Client, always a Client (archivable) | Schema-level still named `dealers` for legacy reasons; STAR vocab calls this *Dealer Profile* (BC 1). The MSA is signed at the Client level, not per-Quote. |
-| **MSA** | `master_service_agreements` (added in 0037 Phase 2) | `pending → active → expired \| terminated` | 12-month term per §2.i. One row per signed agreement; renewals create new rows (don't mutate). Tracks `signedAt`, `expiresAt`, `signedPdfStorageKey`, `dropboxSignDocumentId`, `templateVersion`, termination dates. |
+| **MSA** | `master_service_agreements` (added in 0037 Phase 2) | `pending → active → expired \| terminated` | 12-month term per §2.i. One row per signed agreement; renewals create new rows (don't mutate). Tracks `signedAt`, `expiresAt`, `signedPdfStorageKey`, `providerDocumentId`, `templateVersion`, termination dates. |
 | **Quote** | `quotes` (built in 0026 Phase 2) | `draft → sent → accepted \| declined` | Built per-project. Carries the commercial terms (`fee`, `travel`, `depositPct`, `taxPct`, `quoteValidDays`, `audienceSourceId`) + a structured `inputs` jsonb that the invoice recomputes against. Joins to its MSA via `quotes.msaId`. Default validity = 30 days (overridable per quote). |
 | **Event / Campaign** | `campaigns` table | `draft → booked → cancelled \| completed` | The delivery work — what gets scheduled on the calendar, who coaches, day-of contacts, channels used. After 0037 ships, `campaigns.acceptedQuoteId` (nullable) links back to the Quote that spawned it. Pre-0037 campaigns without a quote stay valid (the column is nullable). |
 | **Invoice** | (built in 0025 Phase 7.3) | Stripe-managed | One per accepted Quote. Issued at acceptance; the deposit collects per §3.i. Recomputes against `quotes.inputs` so totals can't drift from what was accepted. |
@@ -53,7 +53,7 @@ The accepted Quote *is* the binding agreement. There's no business event between
      ├── YES (active MSA on Client) ──▶ Quote.accepted
      │
      └── NO  ──▶ Bundled e-sig envelope (MSA + first Quote, both signed in
-                 Dropbox Sign per OQ #5 working assumption) ──▶ MSA.signed +
+                 BoldSign) ──▶ MSA.signed +
                  Quote.accepted in the webhook callback
      │
      ▼  Quote.accepted triggers:

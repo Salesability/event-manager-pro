@@ -8,7 +8,7 @@
 // here. New action lands → CI fails until a matrix row exists.
 //
 // Maintenance: when `auth.md`'s gate matrix moves, this file moves in lockstep.
-// See `docs/designs/0032-action-matrix-test/plan.md`.
+// See `docs/chunks/0032-action-matrix-test/plan.md`.
 
 import * as peopleActions from '@/features/people/actions';
 import * as scheduleActions from '@/features/schedule/actions';

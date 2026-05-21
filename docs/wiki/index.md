@@ -2,9 +2,9 @@
 
 Catalog of `docs/wiki/` pages. This is the entry point — start here, then follow links to the page you need.
 
-`docs/wiki/` is a persistent, LLM-maintained reference describing the **current state** of the system. It is not a journal. When something changes (schema, architecture, conventions), the affected wiki page gets edited; the change is noted in `log.md`. Per-chunk working notes (plans, decisions, research) live in `docs/designs/YYYY-MM-DD-slug/` instead.
+`docs/wiki/` is a persistent, LLM-maintained reference describing the **current state** of the system. It is not a journal. When something changes (schema, architecture, conventions), the affected wiki page gets edited; the change is noted in `log.md`. Per-chunk working notes (plans, decisions, research) live in `docs/chunks/YYYY-MM-DD-slug/` instead.
 
-Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — three-layer pattern: raw sources / wiki / schema. For this project: raw sources are the code, `docs/designs/`, and external references (Supabase, Postgres docs); the wiki is what you're reading; the schema is `CLAUDE.md`.
+Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — three-layer pattern: raw sources / wiki / schema. For this project: raw sources are the code, `docs/chunks/`, and external references (Supabase, Postgres docs); the wiki is what you're reading; the schema is `CLAUDE.md`.
 
 ## Reference pages
 

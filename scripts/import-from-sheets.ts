@@ -1,5 +1,5 @@
 // One-time import of legacy Google Sheets data into the new Drizzle/Supabase schema.
-// See docs/designs/2026-04-30-sheets-import/{notes,plan}.md.
+// See docs/chunks/2026-04-30-sheets-import/{notes,plan}.md.
 //
 // Run: set -a && source .env.local && set +a && pnpm dlx tsx scripts/import-from-sheets.ts
 

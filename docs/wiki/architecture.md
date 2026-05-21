@@ -16,18 +16,19 @@ Replaces a single-file legacy app (`deprecated/index.html`, ~2,300 lines) that u
 |---|---|---|
 | Framework | **Next.js 16** (App Router, TypeScript strict) | Largest hireable talent pool, cleanest growth path for the new surface area. Server Actions remove the need for most route handlers. |
 | Styling | **Tailwind CSS** | Standard. |
-| UI primitives | **Sonner** (toasts) + **Headless UI** (Dialog, Listbox/Combobox) | Sonner for the simple `toast.success(…)` API; Headless UI for accessible Tailwind-native dialog/listbox primitives. Tooltip is deferred — when needed, add Floating UI or Radix Tooltip à la carte. We tried Base UI (`@base-ui/react`) first and backed out: see [docs/designs/closed/0007-lists-crud/plan.md](../designs/closed/0007-lists-crud/plan.md) Decisions for the swap rationale (mui/base-ui#4234). |
+| UI primitives | **Sonner** (toasts) + **Headless UI** (Dialog, Listbox/Combobox) | Sonner for the simple `toast.success(…)` API; Headless UI for accessible Tailwind-native dialog/listbox primitives. Tooltip is deferred — when needed, add Floating UI or Radix Tooltip à la carte. We tried Base UI (`@base-ui/react`) first and backed out: see [docs/chunks/closed/0007-lists-crud/plan.md](../chunks/closed/0007-lists-crud/plan.md) Decisions for the swap rationale (mui/base-ui#4234). |
 | Package manager | **pnpm** | Strict by default, smaller `node_modules`. |
 | Persistence | **Supabase Postgres 17.6** | Real DB with money-grade integrity (transactions, FKs) — required for quote/invoice/contract immutability. Also rolls in Auth + Storage. |
 | ORM | **Drizzle** | Closer to SQL than Prisma; pairs well with Supabase migrations; lighter footprint. |
 | Auth | **Supabase Auth** (Google OAuth + magic link) | See [auth.md](auth.md). |
-| PDF generation | **`pdf-lib`** (server-rendered, code-built layout) | Picked over `@react-pdf/renderer` (2026-05-08, Phase 1 of [0026-quote-pdf](../designs/closed/0026-quote-pdf/plan.md)). Documents are built programmatically — code is the source of truth for layout (logo, fonts, margins, text); no template-fill, no designer-uploaded PDF asset to maintain. First renderer at `src/lib/pdf/render-quote.ts`. |
-| Blob storage | **Google Cloud Storage** (rendered Quote/Contract/Invoice PDFs) | Cloud Run is on GCP so workload identity in prod, optional inline `GCS_CREDENTIALS_JSON` for local dev. Picked over Supabase Storage (2026-05-08, Phase 1 of [0026-quote-pdf](../designs/closed/0026-quote-pdf/plan.md)). Adapter at `src/lib/storage/gcs.ts`. Bucket holds rendered output only (`quotes/{id}/{rev}.pdf`, `contracts/{id}.pdf`, etc.) — branded layout lives in code. |
+| PDF generation | **`pdf-lib`** (server-rendered, code-built layout) | Picked over `@react-pdf/renderer` (2026-05-08, Phase 1 of [0026-quote-pdf](../chunks/closed/0026-quote-pdf/plan.md)). Documents are built programmatically — code is the source of truth for layout (logo, fonts, margins, text); no template-fill, no designer-uploaded PDF asset to maintain. First renderer at `src/lib/pdf/render-quote.ts`. |
+| Blob storage | **Google Cloud Storage** (rendered Quote/Contract/Invoice PDFs) | Cloud Run is on GCP so workload identity in prod, optional inline `GCS_CREDENTIALS_JSON` for local dev. Picked over Supabase Storage (2026-05-08, Phase 1 of [0026-quote-pdf](../chunks/closed/0026-quote-pdf/plan.md)). Adapter at `src/lib/storage/gcs.ts`. Bucket holds rendered output only (`quotes/{id}/{rev}.pdf`, `contracts/{id}.pdf`, etc.) — branded layout lives in code. |
 | Outbound mail | **Resend + React Email** | Resend wired in 5.5; first React Email template (`src/lib/email/templates/quote.tsx`) shipped 0026 Phase 4. `sendEmail` (in `src/lib/email/send.ts`) accepts optional `html` body + `attachments` (Resend `attachments` shape: `filename` / `content` / `contentType`) — passes the buffered PDF straight through. |
-| Future integrations | Stripe (invoicing/payments), Dropbox Sign (e-sign) | Each lands in its own chunk per the migration order in `docs/designs/closed/0001-port-stack-analysis/notes.md`. |
+| E-signature | **BoldSign** (`boldsign` SDK, `DocumentApi`) | Bundled MSA + first-Quote envelopes (inline-uploaded PDFs; no provider-side template — MSA prose lives in `src/lib/pdf/render-msa.ts`). Sandbox vs production via `APP_ENV` (basePath swap). Webhook at `/api/boldsign/webhook` with `X-BoldSign-Signature` HMAC-SHA256 over `t + "." + body`. Migrated from Dropbox Sign in 0051. See [commercial-spine.md](commercial-spine.md) for the lifecycle. |
+| Future integrations | Stripe (invoicing/payments) | Each lands in its own chunk per the migration order in `docs/chunks/closed/0001-port-stack-analysis/notes.md`. |
 | Deploy | **Cloud Run** with "allow unauthenticated invocations" | Container is publicly reachable; access control is app-side via the auth middleware. Per-coach public share links (legacy `?coach=<id>`) stay un-gated. No Google LB / IAP — keeps things portable. |
 
-Decision rationale lives in `docs/designs/closed/0001-port-stack-analysis/notes.md` (the alternatives considered: SvelteKit + Supabase, Astro + islands, Rails/Django) and `docs/designs/closed/0002-nextjs-scaffold/decision.md` (ORM + cloud-vs-local picks).
+Decision rationale lives in `docs/chunks/closed/0001-port-stack-analysis/notes.md` (the alternatives considered: SvelteKit + Supabase, Astro + islands, Rails/Django) and `docs/chunks/closed/0002-nextjs-scaffold/decision.md` (ORM + cloud-vs-local picks).
 
 ## Folder layout
 
@@ -61,7 +62,7 @@ Top-level:
 - `drizzle/` — generated SQL migrations (and hand-written ones for triggers/RLS).
 - `drizzle.config.ts` — points at `src/lib/db/schema` and `DATABASE_URL`.
 - `docs/wiki/` — this folder. Persistent reference docs.
-- `docs/designs/` — per-chunk working notes (date-prefixed).
+- `docs/chunks/` — per-chunk working notes (date-prefixed).
 - `deprecated/` — legacy app. Local-only, gitignored.
 
 ## Patterns
@@ -70,7 +71,7 @@ Top-level:
 
 Anything triggered by **our own UI** is a Server Action (`'use server'`). Route handlers (`src/app/**/route.ts`) are for **external callers only** — webhooks, OAuth callbacks (`/auth/callback`), public APIs.
 
-This is enforced by convention, not code. When in doubt: if the caller is a Stripe webhook, Dropbox Sign callback, or another server, use a route handler. Otherwise, Server Action.
+This is enforced by convention, not code. When in doubt: if the caller is a Stripe webhook, BoldSign callback, or another server, use a route handler. Otherwise, Server Action.
 
 ### Feature folders
 
@@ -99,25 +100,25 @@ Three load-bearing pieces:
 
    Tax parsing on the composer setter is `TAX_RE` + `Number()`. The `quotes` row mixes precisions — `fee` / `travel` are `numeric(10,2)` (input-shape money) while `subtotal` / `tax` / `total` are `numeric(12,2)` (computed aggregates that need the wider band). The string-only `MONEY_RE` + `numeric(10,2)` discipline (and the un-archive-by-`code` behaviour, and the `MAX_PG_INTEGER`-capped `sortOrder`) belongs to the **service-item catalog actions** at `src/features/services/actions.ts`, not the composer setters.
 
-**Send-time MSA gate (planned — 0035 Phase 4 + 0025 Phase 7.2).** Draft editing requires no MSA today. The MSA gate is the **planned** posture for Send: when 0035 Phase 4 lands, `sendQuote` will check the Client's `master_service_agreements.status='active'` row; if present, fire the standard PDF-only flow (already wired); if absent, route into the bundled MSA + first-Quote e-sig envelope (0025 Phase 7.2, Dropbox Sign, two documents). The current `sendQuote` already renders the PDF (`renderQuotePdf`), persists `pdfStorageKey` inside the atomic `draft → sent` guarded UPDATE, uploads the buffer to GCS at `quotes/{id}/1.pdf` via `putObject`, renders the React Email template + plain-text fallback, sends with `sendEmail` (PDF attached), then emits a `quote.sent` audit row carrying `{ pdfStorageKey, emailId }` — all shipped 0026 Phase 3 + Phase 4. The MSA-gate check itself remains the Phase 4 add (not yet flagged in code). See [commercial-spine.md](commercial-spine.md) for the full lifecycle and [data-model.md](data-model.md) `### quotes` for the degraded-state semantics on partial-success.
+**Send-time MSA gate (planned — 0035 Phase 4 + 0025 Phase 7.2).** Draft editing requires no MSA today. The MSA gate is the **planned** posture for Send: when 0035 Phase 4 lands, `sendQuote` will check the Client's `master_service_agreements.status='active'` row; if present, fire the standard PDF-only flow (already wired); if absent, route into the bundled MSA + first-Quote e-sig envelope (0025 Phase 7.2, BoldSign envelope, two documents). The current `sendQuote` already renders the PDF (`renderQuotePdf`), persists `pdfStorageKey` inside the atomic `draft → sent` guarded UPDATE, uploads the buffer to GCS at `quotes/{id}/1.pdf` via `putObject`, renders the React Email template + plain-text fallback, sends with `sendEmail` (PDF attached), then emits a `quote.sent` audit row carrying `{ pdfStorageKey, emailId }` — all shipped 0026 Phase 3 + Phase 4. The MSA-gate check itself remains the Phase 4 add (not yet flagged in code). See [commercial-spine.md](commercial-spine.md) for the full lifecycle and [data-model.md](data-model.md) `### quotes` for the degraded-state semantics on partial-success.
 
 **Entry points.** Two surfaces link into the composer today: the per-row "Quote" action on `/dealerships` (hidden on archived rows, gated `quote:edit`) and the "Create Quote" button on the campaign-detail dialog inside `/calendar` — both pass `?dealerId=` (the campaign-detail variant also passes `?campaignId=`). The inline "Add new prospect" entry point inside the composer's dealer picker is **deferred** (the current Combobox primitive doesn't support an inline-add affordance cleanly); the DealerForm itself already accepts `defaultStatus='prospect'`, so wiring this up later is a small chunk. Until then, the dealer-creation path is `/dealerships` → `Add` (admin-only — coaches do not have `dealer:create`), and the composer picks up the new row with a `(prospect)` suffix on prospect dealers.
 
 ## Migration roadmap
 
-Per `docs/designs/closed/0001-port-stack-analysis/notes.md`, work is sequenced as:
+Per `docs/chunks/closed/0001-port-stack-analysis/notes.md`, work is sequenced as:
 
-1. ✅ **App shell + auth + Postgres tables** — scaffold (`docs/designs/closed/0002-nextjs-scaffold/`), auth (`docs/designs/closed/0003-supabase-auth/`), schema (in flight, see [data-model.md](data-model.md)).
+1. ✅ **App shell + auth + Postgres tables** — scaffold (`docs/chunks/closed/0002-nextjs-scaffold/`), auth (`docs/chunks/closed/0003-supabase-auth/`), schema (in flight, see [data-model.md](data-model.md)).
 2. **One-time Sheets → Postgres import** — TS script reading legacy ranges via existing API key, fanning out into `clients` + `contacts` etc.
 3. **Port the three views** — lists, production, calendar (calendar last; reuse the legacy ribbon-packing algorithm).
 4. **Cutover** — point `events.salesability.ca` at the new deploy; Sheets becomes read-only archive.
-5. **New surface** — Quote (PDF + email) → Contract (Dropbox Sign send + webhook → store signed PDF) → Invoice (Stripe Invoice from quote) → Payment-received webhook flips event to "Paid."
+5. **New surface** — Quote (PDF + email) → Contract (BoldSign send + webhook → store signed PDF) → Invoice (Stripe Invoice from quote) → Payment-received webhook flips event to "Paid."
 6. **Rotate compromised secrets** — `API_KEY`, `HELLOSIGN_API_KEY`; lock the legacy spreadsheet.
 
 ## What's deliberately out of scope (for now)
 
 - No AI / chat UI — was in the original Claude prompt for the scaffold; ruled out as copy-paste, not a real requirement.
-- No Stripe / Dropbox Sign / Resend until their respective chunks land.
+- No Stripe until its chunk lands. (Resend shipped in 0026 Phase 4; BoldSign shipped in 0041 + 0051.)
 - No RBAC beyond logged-in vs not — middleware gates routes uniformly. Per-route role checks come with the user-table chunk.
 - No password auth, no auto-provisioning on Google OAuth — see [auth.md](auth.md).
 

@@ -38,7 +38,7 @@ function client(): Resend | { error: string } {
 // opt-in redirect) had the inverse failure mode: a production deploy that
 // accidentally left EMAIL_FORCE_DEV_REDIRECT=true would silently route
 // customer email to a dev inbox. See plan Decision matrix in
-// `docs/designs/0019-security-architecture/plan.md` Phase 7.
+// `docs/chunks/0019-security-architecture/plan.md` Phase 7.
 type RedirectDecision =
   | { redirect: true; to: string }
   | { redirect: false; reason: 'production' | 'no-dev-target' };

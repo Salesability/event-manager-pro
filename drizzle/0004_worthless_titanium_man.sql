@@ -26,7 +26,7 @@ CREATE INDEX "audit_log_target_idx" ON "audit_log" USING btree ("target_table","
 --     writes audit rows via Drizzle/postgres; no JWT-bound writer should mint
 --     audit entries directly)
 --   - anon → no policy → default-deny
--- See docs/designs/0019-security-architecture/plan.md Phase 4.
+-- See docs/chunks/0019-security-architecture/plan.md Phase 4.
 -- ────────────────────────────────────────────────────────────────────────────
 
 alter table public.audit_log enable row level security;

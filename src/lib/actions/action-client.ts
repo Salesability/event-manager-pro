@@ -16,7 +16,7 @@ import { getUser } from '@/lib/supabase/session';
 // explicit opt-out (`baseClient`), the inverse of the older "remember to add
 // the gate" shape. Capability strings (0029) are unchanged.
 //
-// 0033 Phase 1. See docs/designs/0033-next-safe-action/plan.md.
+// 0033 Phase 1. See docs/chunks/0033-next-safe-action/plan.md.
 // 0036 Phase 3. Retired the legacy `roleListClient` factory once the last
 // availability-action call sites migrated to `capabilityClient('availability:edit')`.
 // All gated actions now flow through `capabilityClient`; multi-role admit-sets

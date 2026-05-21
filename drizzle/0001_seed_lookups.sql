@@ -1,5 +1,5 @@
 -- Seed lookup tables with values observed in the legacy Sheet (2026-04-30).
--- Idempotent: re-running is a no-op. See docs/designs/2026-04-30-sheets-import/notes.md.
+-- Idempotent: re-running is a no-op. See docs/chunks/2026-04-30-sheets-import/notes.md.
 
 INSERT INTO "campaign_styles" ("label", "sort_order") VALUES
   ('VIP Sales Event', 0)

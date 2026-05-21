@@ -22,7 +22,7 @@ const eslintConfig = defineConfig([
   // Action-gate enforcement: every Server Action in `src/features/**/actions.ts`
   // must call an allow-listed auth gate, or opt out per-function with
   // `// authz: public`. See `eslint-plugins/action-gate.mjs` and
-  // `docs/designs/0031-action-gate-lint/plan.md`.
+  // `docs/chunks/0031-action-gate-lint/plan.md`.
   {
     files: ["src/features/**/actions.ts"],
     plugins: { "action-gate": actionGatePlugin },
@@ -46,7 +46,7 @@ const eslintConfig = defineConfig([
   // schema, either directly or via a same-file wrapper that does. Per-export
   // opt-out via `// validation: skip` on the line before the `export`. See
   // `eslint-plugins/safeparse-required.mjs` and
-  // `docs/designs/0045-form-schema-as-contract/plan.md` → Phase 8.
+  // `docs/chunks/0045-form-schema-as-contract/plan.md` → Phase 8.
   {
     files: ["src/features/**/actions.ts"],
     plugins: { "safeparse-required": safeParseRequiredPlugin },

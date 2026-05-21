@@ -6,7 +6,7 @@ In House Event Schedule Software.
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS · Server Actions · Supabase (Postgres + Auth + Storage) · Drizzle ORM · pnpm.
 
-See `docs/designs/2026-04-29-port-stack-analysis/notes.md` for the rationale and migration plan.
+See `docs/chunks/2026-04-29-port-stack-analysis/notes.md` for the rationale and migration plan.
 
 ## Setup
 
@@ -42,4 +42,4 @@ src/
 
 ## Docs
 
-Per-chunk working notes live under `docs/designs/YYYY-MM-DD-kebab-slug/`; persistent reference docs live under `docs/wiki/`. See `CLAUDE.md` (local-only) for agent guidance.
+Per-chunk working notes live under `docs/chunks/YYYY-MM-DD-kebab-slug/`; persistent reference docs live under `docs/wiki/`. See `CLAUDE.md` (local-only) for agent guidance.

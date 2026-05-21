@@ -2,7 +2,7 @@
 -- existing `contact_identifiers` row of kind='email'. Lets a customer/portal
 -- self-signup find their pre-existing contact record without an admin manually
 -- linking it. For 0018 v1, signups are disabled — this is insurance for the
--- day a portal opens. See docs/designs/0018-user-system/plan.md Phase 3.
+-- day a portal opens. See docs/chunks/0018-user-system/plan.md Phase 3.
 --
 -- Idempotent: re-running drops + recreates the trigger and replaces the
 -- function. Safe to apply repeatedly. Drizzle doesn't model triggers, so this

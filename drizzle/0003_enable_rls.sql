@@ -22,7 +22,7 @@
 -- CREATE POLICY is preceded by DROP POLICY IF EXISTS; the helper function
 -- uses CREATE OR REPLACE.
 --
--- See docs/designs/0019-security-architecture/plan.md Phase 1.
+-- See docs/chunks/0019-security-architecture/plan.md Phase 1.
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- Helper: is the current authenticated user an active staff member?

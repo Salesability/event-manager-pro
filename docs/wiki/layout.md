@@ -100,7 +100,7 @@ Implications:
 - Detail pages must autosave or surface an unsaved-changes guard so stray row-clicks can't strand fields mid-edit.
 - Read-only display (future client-portal viewers, role-scoped users) renders the *same* page with fields disabled by role — not a separate `View` surface.
 - Edit-permission scoping to authored documents is acknowledged future work.
-- Surfaces today rendering read-only management pages (e.g. `/dealerships/[id]`) become editable detail pages over time; flag scope on each sweep.
+- Detail surfaces that today render only read-only fields become editable over time; flag scope on each sweep. The dialog-edit pattern still survives on `/admin/people` and `/production` — both are next in line for the `/<entity>/[id]` promotion.
 
 **Drift guard.** [`eslint-plugins/no-inline-row-action-label.mjs`](../../eslint-plugins/no-inline-row-action-label.mjs) lints `src/app/**/row-actions.tsx` and `src/features/**/*-columns.tsx` for inline literals matching the canonical vocabulary (`View` / `Edit` / `Archive` / `Activate` / `Open` / `Details` / `Manage` / `Show`). The constant is the single source. Per-line opt-out via `// row-label: ok`.
 
@@ -137,4 +137,4 @@ Nothing in 0043 touches *who sees what*. The capability checks in `app-nav.tsx` 
 ## Cross-references
 
 - [forms.md](forms.md) — page-level action slot vs. dialog footer. Save buttons in dialogs stay in `<DialogFooter>` (forms convention); page-level primary actions live in `<PageHeader actions>` (this page's convention). The two patterns don't collide; the dividing line is *which kind of submit it is*.
-- `CLAUDE.md` — three-folder rule (`docs/wiki/` vs `docs/designs/` vs `docs/strategy/`).
+- `CLAUDE.md` — three-folder rule (`docs/wiki/` vs `docs/chunks/` vs `docs/strategy/`).

@@ -1,6 +1,6 @@
 # Strategy
 
-Forward-looking artifacts that anchor the long-horizon and near-term roadmap. Sits alongside `docs/wiki/` (state-of-the-system reference) and `docs/designs/` (per-chunk plans) — strategy is neither, so it gets its own folder.
+Forward-looking artifacts that anchor the long-horizon and near-term roadmap. Sits alongside `docs/wiki/` (state-of-the-system reference) and `docs/chunks/` (per-chunk plans) — strategy is neither, so it gets its own folder.
 
 These are *aspirational* documents, not committed roadmap. Use them to confirm intent and sanity-check that current chunks fit the bigger picture, not as authority for what's been built.
 
