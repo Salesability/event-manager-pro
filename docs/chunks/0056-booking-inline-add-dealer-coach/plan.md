@@ -11,7 +11,7 @@
 | 2: "+ Add" dealer button + dialog in booking form | Done | dealer Field gains "+ Add" → Dialog hosting `DealerForm` (`defaultStatus='prospect'`) |
 | 3: "+ Add" coach button + dialog in booking form | Done | coach Field gains "+ Add" → Dialog hosting `CoachAddForm` |
 | 4: Refresh + auto-select the new option without dropping the draft | Done | coach auto-selects (local `extraCoaches` + controlled `coachId`); dealer = refresh-only (follow-up) |
-| 5: Tests + smoke verification | In Progress | unit done (886 pass); browser smoke pending (dev server restart) |
+| 5: Tests + smoke verification | Done | unit (886 pass) + browser smoke PASS; a11y fix: distinct `aria-label`s on the two "+ Add" buttons |
 
 This chunk wires inline create affordances into the booking dialog's dealer and coach pickers, reusing the existing create actions/forms. "Done" looks like: clicking "+ Add" opens a create dialog, saving inserts the record and selects it in the picker, and the in-progress booking is preserved.
 
@@ -29,7 +29,7 @@ This chunk wires inline create affordances into the booking dialog's dealer and 
 - `docs/wiki/data-model.md` — coaches are Contacts with `team_member_roles(role='coach')`; dealers carry the `prospect` lifecycle status.
 - `CLAUDE.md` → **Conventions** — creates go through the existing Server Actions.
 
-**Overall Progress:** 90% (4.5/5 phases — code complete; only the browser smoke remains)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - `DealerForm` reused as-is. Coach side uses the new focused `CoachAddForm` (Phase 1 decision) rather than extracting `PersonForm`.
@@ -58,7 +58,10 @@ This chunk wires inline create affordances into the booking dialog's dealer and 
 - [ ] Handle the dealer auto-fill path (`onDealerChange` contact/phone/email) for a freshly-created dealer
 
 #### Phase 5: Tests + smoke verification
-- [ ] Smoke (web-test): `goto /calendar`; click "Book Event"; dialog shows dealership + coach pickers each with a "+ Add" button
-- [ ] Smoke (web-test): click dealer "+ Add"; dialog with `DealerForm` fields appears (read-only traversal — do not submit)
-- [ ] Smoke (web-test): click coach "+ Add"; coach form dialog appears
-- [ ] Unit test: extracted `PersonForm` coach-default + admin reuse
+- [x] Smoke (web-test): `goto /calendar`; click "Book Event"; dialog shows Dealership + Sales Coach pickers each with a "+ Add" button (alongside the Manage buttons) — **PASS**
+- [x] Smoke (web-test): click dealer "+ Add"; "Add Dealership" dialog with `DealerForm` fields appears (read-only — not submitted) — **PASS**
+- [x] Smoke (web-test): click coach "+ Add"; "Add Sales Coach" dialog with First/Last/Email/Phone + "Add Coach" appears — **PASS**. Screenshot: `/tmp/web-test-booking-inline-add.png`
+- [x] Unit test: `coachValuesToFormData` forces `roles=coach` + `appAccess=1` (886 pass)
+- [x] **a11y fix (found via smoke):** both "+ Add" buttons shared the accessible name "+ Add" (strict-mode click collision + screen-reader ambiguity) → distinct `aria-label`s ("Add dealership" / "Add sales coach")
+
+**Smoke caveat:** the DealerForm "Cancel" and the booking form "Cancel" share the name "Cancel" (strict-mode collision in the browse tool) — worked around by re-navigating. Not a product bug; both Cancels work for real users. Not worth aria-labeling generic Cancel buttons.

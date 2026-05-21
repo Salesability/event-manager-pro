@@ -228,6 +228,7 @@ export function BookingForm({
         action={
           <button
             type="button"
+            aria-label="Add dealership"
             onClick={() => setDealerAddOpen(true)}
             className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
           >
@@ -393,6 +394,7 @@ export function BookingForm({
         action={
           <button
             type="button"
+            aria-label="Add sales coach"
             onClick={() => setCoachAddOpen(true)}
             className="text-xs font-semibold normal-case text-brand-700 transition hover:text-brand-700"
           >
