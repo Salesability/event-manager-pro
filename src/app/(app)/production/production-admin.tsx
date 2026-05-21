@@ -53,7 +53,8 @@ export function ProductionAdmin({
   const params = useSearchParams();
 
   const qFromUrl = params.get('q') ?? '';
-  const time = isTime(params.get('status') ?? '') ? (params.get('status') as '' | 'upcoming' | 'past') : '';
+  const statusParam = params.get('status') ?? '';
+  const time: '' | 'upcoming' | 'past' = isTime(statusParam) ? statusParam : '';
   const showCancelled = params.get('cancelled') === '1';
 
   const [globalFilter, setGlobalFilter] = useState(qFromUrl);
