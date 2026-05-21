@@ -58,15 +58,23 @@ export function DealerForm({
   onSuccess,
   onCancel,
   defaultStatus,
+  autoFocus = true,
 }: {
   mode: Mode;
   dealer?: Dealer;
-  onSuccess: () => void;
+  /** Fired after a successful save — dialog callers close themselves here.
+   *  Page-embedded use leaves this off; `router.refresh()` already runs. */
+  onSuccess?: () => void;
   onCancel?: () => void;
   /** When set, hides the status select and submits this value. Used by the
    *  composer's inline "Add new prospect" flow (defaultStatus='prospect') so
    *  the back-office UI choice doesn't pollute the prospect-create path. */
   defaultStatus?: 'prospect' | 'active';
+  /** Auto-focus the name input on mount. Defaults true (dialog UX — the
+   *  user opened the form to start typing). Page-embedded use sets false
+   *  so navigating to the detail page doesn't steal focus + scroll past
+   *  the page header. */
+  autoFocus?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -93,10 +101,9 @@ export function DealerForm({
   const { register, handleSubmit, formState, setFocus } = form;
   const { errors } = formState;
 
-  // Match the original auto-focus on the name input.
   useEffect(() => {
-    setFocus('name');
-  }, [setFocus]);
+    if (autoFocus) setFocus('name');
+  }, [autoFocus, setFocus]);
 
   const onSubmit = handleSubmit((values) => {
     startTransition(async () => {
@@ -106,7 +113,7 @@ export function DealerForm({
       if ('ok' in result) {
         toast.success(mode === 'create' ? 'Dealer added' : 'Dealer saved');
         router.refresh();
-        onSuccess();
+        onSuccess?.();
       } else {
         toast.error(result.error);
       }

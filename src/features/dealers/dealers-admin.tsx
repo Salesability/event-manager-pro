@@ -72,7 +72,6 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [addOpen, setAddOpen] = useState(false);
-  const [editing, setEditing] = useState<Dealer | null>(null);
 
   // URL-driven filter state so back-nav from a dealer detail page restores
   // the search term + status pill (per 0043 Phase 5). Local debounce mirrors
@@ -160,7 +159,6 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const columns = useMemo(
     () =>
       buildDealersColumns({
-        onEdit: setEditing,
         onArchive: archive,
         onActivate: activate,
       }),
@@ -266,18 +264,6 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
             mode="create"
             onSuccess={() => setAddOpen(false)}
             onCancel={() => setAddOpen(false)}
-          />
-        )}
-      </Dialog>
-
-      <Dialog open={editing != null} onClose={() => setEditing(null)}>
-        <DialogTitle>Edit Dealer — {editing?.name}</DialogTitle>
-        {editing && (
-          <DealerForm
-            mode="edit"
-            dealer={editing}
-            onSuccess={() => setEditing(null)}
-            onCancel={() => setEditing(null)}
           />
         )}
       </Dialog>

@@ -14,7 +14,6 @@ function composedContact(d: Dealer): string {
 }
 
 export type DealerColumnActions = {
-  onEdit: (dealer: Dealer) => void;
   onArchive: (dealer: Dealer) => void;
   /** Optional — admin "Mark active" affordance shown on prospect rows. */
   onActivate?: (dealer: Dealer) => void;
@@ -148,12 +147,10 @@ function DealerRowActions({
   const showActivate =
     !dealer.archivedAt && dealer.status === 'prospect' && actions.onActivate != null;
   const archived = dealer.archivedAt != null;
-  // Edit-default: row click → `/dealerships/[id]`; the View action has
-  // retired (the identity cell IS the click-through affordance). The
-  // overflow menu carries everything else: Quote (workflow-launch),
-  // Activate (state flip on prospects), Edit (canonical editor dialog
-  // for now — full editable-detail-page conversion is a follow-up),
-  // Archive (destructive).
+  // Edit-default: row click → `/dealerships/[id]` (the editable detail page).
+  // The identity cell IS the click-through affordance, so no separate `edit`
+  // overflow entry. The overflow carries the rest: Quote (workflow-launch),
+  // Activate (state flip on prospects), Archive (destructive).
   return (
     <RowOverflowMenu
       ariaSuffix={dealer.name}
@@ -167,11 +164,6 @@ function DealerRowActions({
           canEdit && {
             kind: 'activate',
             onClick: () => actions.onActivate!(dealer),
-          },
-        !archived &&
-          canEdit && {
-            kind: 'edit',
-            onClick: () => actions.onEdit(dealer),
           },
         !archived &&
           canArchive && {
