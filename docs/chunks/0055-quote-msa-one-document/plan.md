@@ -9,8 +9,8 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Replace MSA prose with the full verbatim lawyer agreement (§1–§10) | In Progress | uncommitted — code done, awaiting owner/lawyer eyeball + env bump |
-| 2: Merge Quote + MSA into one PDF | Pending | - |
+| 1: Replace MSA prose with the full verbatim lawyer agreement (§1–§10) | Done | `826c517` — awaiting owner/lawyer eyeball + `MSA_TEMPLATE_VERSION` env bump |
+| 2: Merge Quote + MSA into one PDF | Done | `src/lib/pdf/merge.ts` + 4 tests — Quote-first/Agreement-last; anchor shifted by quote page count |
 | 3: Initials field(s) + bottom-of-contract-page signature anchors | Pending | - |
 | 4: Send path + webhook collapse to a single signed artifact | Pending | - |
 | 5: Drop in the resent quote statement (BLOCKED on owner) | Pending | - |
@@ -35,7 +35,7 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - `docs/wiki/data-model.md` — MSA pending→active gate + GCS paths (`msa/{msaId}/signed.pdf`).
 - `CLAUDE.md` → **Conventions** — mutations are Server Actions; the BoldSign webhook is a legit route handler (external caller).
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - The lawyer's Agreement prose must be **verbatim** — Phase 1 transcribes the `.docx` exactly; later phases must survive the merge byte-for-byte.
@@ -54,10 +54,11 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - [ ] **Owner/lawyer eyeball** the rendered PDF (`/tmp/msa-smoke.pdf`) against the `.docx` before merge work begins
 
 #### Phase 2: Merge Quote + MSA into one PDF
-- [ ] Decide order with the owner (Quote-first vs Agreement-first) — see intent Open Questions
-- [ ] Build a merge step that concatenates `renderQuotePdf` + `renderMsaPdf` bytes (pdf-lib `copyPages`), returning combined bytes + the page offset where the Agreement begins
-- [ ] Recompute the Agreement's `signatureAnchor.pageNumber` against the merged page layout
-- [ ] Verify the lawyer's clause text renders identically pre/post-merge (no reflow)
+- [x] Order decided by inference from owner's wording: **Quote-first, Agreement-last** (signature = bottom of the combined doc). Flagged for confirmation; flip is a one-line swap in `merge.ts`.
+- [x] `combineQuoteAndMsa(quoteBody, msa)` in `src/lib/pdf/merge.ts` concatenates via pdf-lib `copyPages`, returns combined bytes + shifted `signatureAnchor`
+- [x] Anchor `pageNumber` recomputed as `quotePageCount + msaAnchor.pageNumber`; x/y/width/height unchanged (shared US-Letter geometry)
+- [x] No reflow by construction — `copyPages` clones page content streams verbatim; covered by `merge.test.ts` (page-count + anchor-shift + error-path, 4 cases)
+- [ ] (Phase 4) wire `sendMsaEnvelope` to call `combineQuoteAndMsa` and post a single file — deferred until initials land in Phase 3
 
 #### Phase 3: Initials + signature anchors
 - [ ] Capture initials anchor coord(s) at the chosen location(s) in the renderer (mirror the underline-capture pattern in `render-msa.ts`)
