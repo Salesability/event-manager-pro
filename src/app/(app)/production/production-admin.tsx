@@ -18,6 +18,7 @@ import {
   buildProductionColumns,
   type ProductionStatusFilter,
 } from './production-columns';
+import { type ProductionRange, isProductionRange } from './filter';
 
 type Props = {
   campaigns: Campaign[];
@@ -36,8 +37,10 @@ const campaignsGlobalFilterFn = makeNeedleFilter<Campaign>((c) => [
   c.contact,
 ]);
 
-function isTime(v: string): v is '' | 'upcoming' | 'past' {
-  return v === '' || v === 'upcoming' || v === 'past';
+type TimeWindow = '' | 'upcoming' | 'past' | ProductionRange;
+
+function isTime(v: string): v is TimeWindow {
+  return v === '' || v === 'upcoming' || v === 'past' || isProductionRange(v);
 }
 
 export function ProductionAdmin({
@@ -54,7 +57,7 @@ export function ProductionAdmin({
 
   const qFromUrl = params.get('q') ?? '';
   const statusParam = params.get('status') ?? '';
-  const time: '' | 'upcoming' | 'past' = isTime(statusParam) ? statusParam : '';
+  const time: TimeWindow = isTime(statusParam) ? statusParam : '';
   const showCancelled = params.get('cancelled') === '1';
 
   const [globalFilter, setGlobalFilter] = useState(qFromUrl);
@@ -69,7 +72,7 @@ export function ProductionAdmin({
 
   function pushParams(next: {
     q?: string;
-    status?: '' | 'upcoming' | 'past';
+    status?: TimeWindow;
     cancelled?: boolean;
   }) {
     const sp = new URLSearchParams(params.toString());
@@ -128,7 +131,7 @@ export function ProductionAdmin({
               <select
                 value={time}
                 onChange={(e) =>
-                  pushParams({ status: (e.target.value as '' | 'upcoming' | 'past') || '' })
+                  pushParams({ status: (e.target.value as TimeWindow) || '' })
                 }
                 className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500"
                 aria-label="Time window"
@@ -136,6 +139,9 @@ export function ProductionAdmin({
                 <option value="">All campaigns</option>
                 <option value="upcoming">Upcoming</option>
                 <option value="past">Past</option>
+                <option value="1m">Next 1 month</option>
+                <option value="2m">Next 2 months</option>
+                <option value="3m">Next 3 months</option>
               </select>
               <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-500">
                 <input

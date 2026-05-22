@@ -6,6 +6,7 @@ import { Badge } from '@/components/catalyst/badge';
 import { CampaignStatusBadge } from '@/components/app/status-badge';
 import { RowIdentityCell } from '@/components/app/row-identity-cell';
 import type { Campaign } from '@/features/schedule/queries';
+import { type ProductionRange, isProductionRange, rangeWindowEndIso } from './filter';
 
 function fmtDate(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -43,12 +44,24 @@ export function buildProductionColumns(
   // UI pill drift from the badge / CSV near midnight or when the
   // browser timezone differs from the deploy server's (Codex Medium
   // surfaced this — Toronto-server vs. ET-client at 23:55).
+  // The forward-window ends are likewise precomputed off the same
+  // `todayIso` so the `1m`/`2m`/`3m` ranges can't drift per row.
+  const rangeWindowEnds: Record<ProductionRange, string> = {
+    '1m': rangeWindowEndIso(todayIso, '1m'),
+    '2m': rangeWindowEndIso(todayIso, '2m'),
+    '3m': rangeWindowEndIso(todayIso, '3m'),
+  };
   const filterTimeStatus: FilterFn<Campaign> = (row, _columnId, filterValue: unknown) => {
     if (!filterValue || typeof filterValue !== 'object') return true;
     const { time, showCancelled } = filterValue as ProductionStatusFilter;
     if (!showCancelled && row.original.status === 'cancelled') return false;
     if (time === 'upcoming') return row.original.endDate >= todayIso;
     if (time === 'past') return row.original.endDate < todayIso;
+    // Forward window: live/upcoming campaigns (endDate >= today) that begin
+    // on or before the window closes.
+    if (isProductionRange(time)) {
+      return row.original.endDate >= todayIso && row.original.startDate <= rangeWindowEnds[time];
+    }
     return true;
   };
 
@@ -201,8 +214,10 @@ export function buildProductionColumns(
 
 export type ProductionStatusFilter = {
   /** Time-window pill: `''` matches every non-cancelled row, `upcoming`
-   *  is `endDate >= today`, `past` is `endDate < today`. */
-  time: '' | 'upcoming' | 'past';
+   *  is `endDate >= today`, `past` is `endDate < today`. `1m`/`2m`/`3m`
+   *  are forward windows — campaigns running within the next N months
+   *  (see `rangeWindowEndIso` in `./filter`). */
+  time: '' | 'upcoming' | 'past' | ProductionRange;
   /** When `false` (default), `status === 'cancelled'` rows are hidden
    *  regardless of the time window — matches the legacy show-cancelled
    *  checkbox behavior. */

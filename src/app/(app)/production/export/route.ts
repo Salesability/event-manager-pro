@@ -3,7 +3,7 @@ import { type NextRequest } from 'next/server';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
-import { todayIso } from '../filter';
+import { todayIso, isProductionRange, rangeWindowEndIso } from '../filter';
 
 const HEADERS = [
   'Date Range',
@@ -36,15 +36,20 @@ export async function GET(request: NextRequest) {
   const all = await loadCampaigns();
   // Inline the same predicate the client-side `<ProductionAdmin>`
   // applies (search needle across dealer/coach/style/notes/contact +
-  // upcoming/past time-window + show-cancelled toggle). Server-side
+  // upcoming/past/range time-window + show-cancelled toggle). Server-side
   // copy is intentional — the previous shared helper crossed the
   // client/server boundary, and the new TanStack pipeline doesn't
-  // export a server-runnable function.
+  // export a server-runnable function. Only the date-window math is
+  // shared (`rangeWindowEndIso`), so the range can't drift from the table.
   const needle = q.trim().toLowerCase();
+  const rangeWindowEnd = isProductionRange(status) ? rangeWindowEndIso(today, status) : null;
   const rows = all.filter((c) => {
     if (!showCancelled && c.status === 'cancelled') return false;
     if (status === 'upcoming' && !(c.endDate >= today)) return false;
     if (status === 'past' && !(c.endDate < today)) return false;
+    if (rangeWindowEnd !== null && !(c.endDate >= today && c.startDate <= rangeWindowEnd)) {
+      return false;
+    }
     if (needle) {
       const hit =
         c.dealerName.toLowerCase().includes(needle) ||
