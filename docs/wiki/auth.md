@@ -109,6 +109,7 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 | Lookup admin (campaign styles, sales lead sources × create/update/archive) | `assertCan('lookup:edit')` |
 | Production CSV export Route Handler | `assertCan('production:export')` |
 | Reports page + reports/export Route Handler | `assertCan('reports:view')` — admin || coach (coach can pull the field-side aggregates) |
+| Report billing-figure edit (`setBillingAdjustment`) | `capabilityClient('reports:edit-billing')` — **admin-only** (0059). Coaches view reports but can't adjust invoice figures; the editable cells aren't rendered for them (`useCan('reports:edit-billing')` in `<ReportsTabs>`). |
 | Availability blocks (create / update / archive) | `capabilityClient('availability:edit')` — admin || coach. Row-level `ensureAvailabilityOwnership` still runs inside the action body (delegates the predicate to `can('coach-availability:edit-own', facet)` so a coach can only touch their own `coach_unavailable` rows). |
 | Auth flow (`signIn*`, `signOut`) | none — these IS the auth flow |
 
@@ -121,6 +122,7 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 | `app:access` | ✅ | ✅ | ❌ | Mirrors `STAFF_APP_ROLES = {admin, staff, coach, viewer}`; `dealer` excluded. Predicate of `requireStaffAccess()` in `(app)/layout.tsx`; `<Can>` opt-out (`// expected: server-only`) — gate is server-only by design. |
 | `admin:access` | ✅ | ❌ | ❌ | `/admin/lookups`, `/admin/people`, `/production`, `/dealerships` page gate. Server-only. |
 | `reports:view` | ✅ | ✅ | ❌ | `/reports` page + `/reports/export` Route Handler. Server-only (the page itself is the affordance). |
+| `reports:edit-billing` | ✅ | ❌ | ❌ | Admin-only inline edit of billing figures on the `/reports` Full Production Report (0059, `setBillingAdjustment`). Paired with `useCan('reports:edit-billing')` in `<ReportsTabs>` (the editable cell renders only for admins) — coaches see read-only effective values. |
 | `availability:edit` | ✅ | ✅ | ❌ | 3 availability-block Server Actions (create / update / archive). Paired with `<Can capability="availability:edit">` on the `Block Date` button. Row-level ownership still enforced via `availability-authz.ts` (delegates to `coach-availability:edit-own`). |
 | `production:view`, `production:export` | ✅ | ❌ | ❌ | 0028 page-gate already excludes coach |
 | `dealer:view`, `dealer:edit`, `dealer:create`, `dealer:archive` | ✅ | ❌ | ❌ | Same |

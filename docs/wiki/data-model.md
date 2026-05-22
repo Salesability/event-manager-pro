@@ -149,6 +149,7 @@ Edges left out of the diagrams for clarity:
 | `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK — slated to move to `quotes` once the booking-form/composer flow is reconciled), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `accepted_quote_id` (FK `quotes`, nullable; the contract that spawned this delivery), plus inline day-of contact fields and service flags (see `campaigns` section below). Commercial columns (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) live on `quotes` per [`commercial-spine.md`](commercial-spine.md) — dropped from `campaigns` in 0037 Phase 4. |
 | `campaign_styles` | `id` bigint | `label` (UNIQUE), `sort_order` |
 | `audience_sources` | `id` bigint | `label` (UNIQUE), `sort_order` |
+| `billing_adjustments` | `id` bigint | `campaign_id` (FK campaigns, cascade), `field` text (CHECK in `qty_records\|sms_email\|letters\|bdc`), `value` integer (CHECK ≥ 0), UNIQUE(`campaign_id`,`field`) — per-campaign billing override layer for `/reports`; the campaign column stays the source of truth (clear = delete = revert). See `billing_adjustments` section below + [`auth.md`](auth.md) (`reports:edit-billing`). |
 | `master_service_agreements` | `id` bigint | `dealer_id` (FK dealers), `status` enum (`pending\|active\|expired\|terminated`), `signed_at`, `expires_at`, `signed_pdf_storage_key`, `provider_document_id`, `termination_notice_date`, `termination_effective_date`, `template_version` — per-Client 12-month commercial frame; see [`commercial-spine.md`](commercial-spine.md) |
 | `quotes` | `id` bigint | `dealer_id` (FK dealers), `msa_id` (FK MSA, nullable), `status` enum (`draft\|sent\|accepted\|declined`), `accept_token` (uuid UNIQUE), `pdf_storage_key`, `inputs` jsonb, `fee` / `travel` / `deposit_pct` / `tax_pct` / `quote_valid_days`, `audience_source_id` (FK), `subtotal` / `tax` / `total` numeric(12,2), `line_items` jsonb, `previous_quote_id` (self-FK), `sent_at` / `accepted_at` / `declined_at` — per [`commercial-spine.md`](commercial-spine.md); the accepted Quote IS the contract per MSA §1.iii |
 | `availability_blocks` | `id` bigint | `start_date`, `end_date` (inclusive), `kind` enum (`statutory_holiday\|company_closure\|coach_unavailable`), `coach_id` (FK contacts, nullable; required when `kind='coach_unavailable'`), `region` (nullable, e.g. `CA-ON`), `reason`, `source` |
@@ -177,6 +178,7 @@ Domain edges:
 - `audience_sources` 0..1:* `quotes` via `quotes.audience_source_id` — the consumer-audience source the Quote priced against; nullable for v1.
 - `quotes` 0..1:* `quotes` via `quotes.previous_quote_id` — revision chain (self-FK, nullable). `ON DELETE SET NULL`. New revisions are new rows; the prior row is pinned by its rendered PDF.
 - `quotes` 0..1:1 `campaigns` via `campaigns.accepted_quote_id` — **FK lives on `campaigns`, not `quotes`.** Populated when an accepted Quote spawns its operational delivery campaign; the Quote is the commercial record, the campaign is the Event being run. See [`commercial-spine.md`](commercial-spine.md).
+- `campaigns` 1:* `billing_adjustments` via `billing_adjustments.campaign_id` — per-campaign billing overrides for `/reports` (0059). `ON DELETE CASCADE`. At most one row per (`campaign_id`, `field`) (UNIQUE). The campaign column is the source of truth; the adjustment is an additive overlay (`coalesce(override, campaign.value)`), and clearing it deletes the row.
 
 Contact edges:
 
@@ -185,7 +187,7 @@ Contact edges:
 
 Audit edges (every editable domain table):
 
-- `created_by_id`, `updated_by_id` → `auth.users` — `ON DELETE SET NULL`. Applied to `contacts`, `team_member_roles`, `dealer_contacts`, `contact_identifiers`, `dealers`, `vehicles`, `vehicle_ownerships`, `campaigns`, `master_service_agreements` via the `actors` mixin. Lookup tables skip this.
+- `created_by_id`, `updated_by_id` → `auth.users` — `ON DELETE SET NULL`. Applied to `contacts`, `team_member_roles`, `dealer_contacts`, `contact_identifiers`, `dealers`, `vehicles`, `vehicle_ownerships`, `campaigns`, `master_service_agreements`, `billing_adjustments` via the `actors` mixin. Lookup tables skip this.
 
 ## Identity & people
 
@@ -360,6 +362,22 @@ Every campaign references one `dealer` (`ON DELETE RESTRICT` — never orphan a 
 `campaigns.contact` / `campaigns.phone` / `campaigns.email` are inline text fields holding the day-of contact — likely to migrate to a `contact_id` FK to `contacts` (open question; see below).
 
 > Naming note: the STAR Standard's *Marketing Campaign* (BC 6) is what this table represents. Internally we still talk about "events" because the user's company runs event-marketing campaigns at dealerships — `campaigns` is the schema-level term, "event" is the day-to-day vocabulary. They mean the same thing.
+
+### `billing_adjustments` — per-campaign report overrides
+
+The `/reports` views are derived from `campaigns` (the four tabs aggregate `qty_records` / `sms_email` / `letters` and the Full Production Report lists each campaign). At invoice time an admin sometimes needs a billing-relevant figure to differ from what the campaign recorded. `billing_adjustments` is the persisted overlay that lets them tune those figures **without mutating the campaign source-of-truth** (shipped 0059).
+
+EAV-by-field shape, one row per (`campaign_id`, `field`):
+
+- `campaign_id` (FK `campaigns`, `ON DELETE CASCADE`) — the campaign this overrides. NOT NULL.
+- `field` text, CHECK `in ('qty_records','sms_email','letters','bdc')` — mirrors the campaign column it overrides. (The four owner-chosen invoice figures; a future dollar-amount adjustment would extend the set + revisit `value`'s type.)
+- `value` integer, CHECK `>= 0` — the overriding quantity; same `integer` domain as the campaign columns.
+- UNIQUE(`campaign_id`, `field`) — the upsert target and "is this field overridden?" key.
+- mixins: `timestamps`, `actors` (no `archivable` — clearing an override deletes the row).
+
+**Effective value = `coalesce(override, campaign.value)`.** Reports read it two ways: the Full Production Report attaches a `billing` overlay per row (`loadFullProductionReport` → `FullReportCampaign`), and the By-Dealer/Coach/Month aggregates LEFT-join a per-campaign pivot of this table and `sum(coalesce(override, campaign.value))` (`billingPivotSubquery` in `queries.ts`). The CSV export emits effective values too. The original campaign value is never lost — it stays on the campaign row and is shown beneath the editable cell; **clearing the cell DELETEs the adjustment**, reverting to the campaign value.
+
+Writes go through the admin-only `setBillingAdjustment` Server Action (`reports:edit-billing` — see [`auth.md`](auth.md)); coaches can view reports (`reports:view`) and see an "adj" marker on overridden figures but get no editable input. Per-cell upsert is last-write-wins (admin-only, low contention). The By-Dealer/Coach/Month aggregates have no BDC total, so a `bdc` adjustment shows on the Full report row + CSV but not in an aggregate sum.
 
 ### `master_service_agreements` — per-Client commercial frame
 

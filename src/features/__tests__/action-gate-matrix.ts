@@ -14,6 +14,7 @@ import * as peopleActions from '@/features/people/actions';
 import * as scheduleActions from '@/features/schedule/actions';
 import * as emailActions from '@/features/email/actions';
 import * as quotesActions from '@/features/quotes/actions';
+import * as reportsActions from '@/features/reports/actions';
 import * as servicesActions from '@/features/services/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
@@ -325,5 +326,11 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => reportsExportGET(fakeRequest('http://localhost/x?tab=dealer') as never),
     expectedByRole: ADMIN_OR_COACH,
     note: 'reports:view — admin || coach (coach can pull aggregates for the field)',
+  },
+  {
+    label: 'setBillingAdjustment',
+    invoke: () => reportsActions.setBillingAdjustment(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'reports:edit-billing — admin only (coaches can view reports but not adjust billing figures)',
   },
 ];

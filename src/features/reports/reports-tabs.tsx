@@ -8,6 +8,7 @@ import type {
   SortingState,
 } from '@tanstack/react-table';
 import { DataTable } from '@/components/ui/data-table';
+import { useCan } from '@/components/auth/can';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/catalyst/tabs';
 import {
   buildClientColumns,
@@ -49,15 +50,18 @@ export function ReportsTabs({
   byCoach,
   byMonth,
   full,
-  canEditBilling = false,
 }: {
   byDealer: CampaignAggregateRow<number>[];
   byCoach: CampaignAggregateRow<number | null>[];
   byMonth: CampaignAggregateRow<string>[];
   full: FullReportCampaign[];
-  canEditBilling?: boolean;
 }) {
   const [tab, setTab] = useState<ReportTabKey>('dealer');
+
+  // Billing-figure edits are admin-only (0059). Enforced server-side by
+  // `setBillingAdjustment`'s `capabilityClient`; this just decides whether the
+  // editable cell renders. Coaches see read-only effective values.
+  const canEditBilling = useCan('reports:edit-billing');
 
   const dealerColumns = useMemo(() => buildClientColumns(), []);
   const coachColumns = useMemo(() => buildCoachColumns(), []);
