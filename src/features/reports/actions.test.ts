@@ -104,16 +104,16 @@ describe('setBillingAdjustment', () => {
     expect(mocks.deletes).toHaveLength(1);
   });
 
-  it('rejects an unknown field without touching the db', async () => {
+  it('rejects an unknown field without touching the db (zod enum)', async () => {
     const result = await callData(fd({ campaignId: '42', field: 'qty_widgets', value: '5' }));
-    expect(result).toEqual({ error: 'Unknown billing field.' });
+    expect(result).toEqual({ error: 'Invalid billing adjustment.' });
     expect(mocks.inserts).toHaveLength(0);
     expect(mocks.deletes).toHaveLength(0);
   });
 
-  it('rejects an invalid campaign id', async () => {
+  it('rejects an invalid campaign id (zod positive int)', async () => {
     const result = await callData(fd({ campaignId: '0', field: 'qty_records', value: '5' }));
-    expect(result).toEqual({ error: 'Invalid campaign id.' });
+    expect(result).toEqual({ error: 'Invalid billing adjustment.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 

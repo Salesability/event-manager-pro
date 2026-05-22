@@ -2,20 +2,25 @@
 
 import { revalidatePath } from 'next/cache';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '@/lib/db';
-import { billingAdjustments, BILLING_ADJUSTMENT_FIELDS } from '@/lib/db/schema';
+import { billingAdjustments } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
-import { field, parseId } from '@/features/schedule/validators';
 
 type ActionResult = { ok: true } | { error: string };
 
 // `value` is an integer quantity. Cap well under int4 max (2_147_483_647) so a
-// fat-fingered figure is rejected here rather than blowing up at the DB.
+// fat-fingered figure is rejected here rather than blowing up at the DB. The
+// raw string is validated by zod (presence/shape); the empty-vs-number split
+// happens after, since '' is a meaningful "clear" signal, not an error.
 const MAX_BILLING_VALUE = 1_000_000_000;
 
-function isBillingField(v: string): v is (typeof BILLING_ADJUSTMENT_FIELDS)[number] {
-  return (BILLING_ADJUSTMENT_FIELDS as readonly string[]).includes(v);
-}
+const billingAdjustmentSchema = z.object({
+  campaignId: z.coerce.number().int().positive(),
+  // Mirrors the campaign columns + the table's CHECK constraint.
+  field: z.enum(['qty_records', 'sms_email', 'letters', 'bdc']),
+  value: z.string(),
+});
 
 /** Set or clear one billing adjustment cell on the /reports Full Production
  *  Report. Admin-only (`reports:edit-billing`). An empty `value` DELETEs the
@@ -29,13 +34,10 @@ export const setBillingAdjustment = capabilityClient('reports:edit-billing')
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
     const userId = ctx.user.id;
 
-    const campaignId = parseId(formData, 'campaignId');
-    if (campaignId == null) return { error: 'Invalid campaign id.' };
-
-    const fieldKey = field(formData, 'field');
-    if (!isBillingField(fieldKey)) return { error: 'Unknown billing field.' };
-
-    const rawValue = field(formData, 'value').trim();
+    const parsed = billingAdjustmentSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) return { error: 'Invalid billing adjustment.' };
+    const { campaignId, field: fieldKey } = parsed.data;
+    const rawValue = parsed.data.value.trim();
 
     try {
       if (rawValue === '') {

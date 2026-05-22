@@ -3,7 +3,6 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import type {
   BillingField,
-  Campaign,
   CampaignAggregateRow,
   FullReportCampaign,
 } from '@/features/schedule/queries';
