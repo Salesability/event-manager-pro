@@ -52,9 +52,10 @@ The accepted Quote *is* the binding agreement. There's no business event between
      │
      ├── YES (active MSA on Client) ──▶ Quote.accepted
      │
-     └── NO  ──▶ Bundled e-sig envelope (MSA + first Quote, both signed in
-                 BoldSign) ──▶ MSA.signed +
-                 Quote.accepted in the webhook callback
+     └── NO  ──▶ Bundled e-sig envelope — ONE merged PDF (Quote first,
+                 Agreement last); Client initials the Quote page + signs once
+                 at the end (BoldSign) ──▶ a single Signed webhook flips
+                 MSA.signed + Quote.accepted (0055)
      │
      ▼  Quote.accepted triggers:
    1. campaigns.acceptedQuoteId = quote.id (link back)
@@ -67,6 +68,19 @@ The accepted Quote *is* the binding agreement. There's no business event between
      ▼  Event runs, coach completes day-of work
    campaigns.status = 'completed'
 ```
+
+### The bundled first-deal envelope (single artifact)
+
+When a Client has no active MSA, their first Quote ships as **one merged PDF**, not two separate documents. 0055 collapsed the prior two-file (MSA + Quote) BoldSign envelope into a single signable artifact:
+
+- **Composition** — `combineQuoteAndMsa` (`src/lib/pdf/merge.ts`) concatenates the rendered Quote (first) and the verbatim Agreement (last) via pdf-lib `copyPages`. Page content streams are cloned byte-for-byte, so neither half reflows.
+- **Signing fields** — the Client **initials** the Quote page and applies **one signature** at the bottom of the Agreement (the end of the combined doc). Anchors are computed in merged-doc coordinates: the signature anchor's page number shifts by the Quote's page count; the Quote initials anchor keeps its (Quote-first) page. `sendMsaEnvelope` (`src/features/msa/actions.ts`) renders the Quote with `{ withInitials: true }`, combines, then posts the single file `agreement-<msaId>.pdf` carrying both field types.
+- **Coordinate gotcha (BoldSign).** The PDF renderers emit field anchors in **72-DPI PDF points, top-left origin** (`FieldAnchor` in `src/lib/pdf/anchors.ts`). BoldSign positions field bounds in **96-DPI pixels**, so `buildFormField` in `src/lib/boldsign/client.ts` scales anchors by `96/72` before sending. Without the scale, fields render at `0.75×` (too high and too far left). Verified by the 0055 live smoke (2026-05-22); see `d06082b`.
+- **Correlation** — the Quote links to its MSA via the existing `quotes.msaId` column, set at send time (no migration; nothing else writes that column).
+- **One signed artifact → cascading flips** — the BoldSign `Signed` webhook (`src/app/api/boldsign/webhook/route.ts`) downloads the single signed PDF to GCS (`msa/{msaId}/signed.pdf`), then `markMsaSigned` (`src/features/msa/lifecycle.ts`) runs the transitions **sequentially, not in one DB transaction**: the MSA `pending → active` flip is the atomic guarded-UPDATE pivot; the bundled-quote accept (`draft → accepted`, audit `payload.via = 'msa-envelope'`) and prospect-dealer promote (`prospect → active`) run **best-effort and isolated** afterward (a missing/already-accepted quote is a silent no-op so a replayed webhook never errors the MSA flip). All side effects are written as the `system` actor (`actor_user_id = null`, `actor_role = 'system'`).
+- **Statement vs. Agreement** — the Quote half carries a short *Terms and Conditions* / *Invoicing & Payment* statement (`render-quote.ts` constants) that incorporates the Master Agreement by reference; the Agreement half is the lawyer's verbatim §1–§10 (`render-msa.ts`, restored to verbatim in 0055 Phase 1). Each signed MSA row records which revision it used via `templateVersion` (env-driven `MSA_TEMPLATE_VERSION`).
+
+Design history: [`docs/chunks/closed/0055-quote-msa-one-document/plan.md`](../chunks/closed/0055-quote-msa-one-document/plan.md).
 
 ### Less-happy paths
 
@@ -82,7 +96,7 @@ The MSA is signed at the **Client (dealer) level**, not per-Quote. Implications:
 
 - A Client with an active MSA can accept any number of Quotes under that term without re-signing (§1.ii, OQ #8 working assumption).
 - A Client whose MSA expired or terminated cannot accept new Quotes until they sign a new MSA.
-- A Client without an MSA who is sent their first Quote signs both at once via the bundled envelope.
+- A Client without an MSA who is sent their first Quote signs both at once via the bundled envelope — a single merged document (Quote + Agreement) they initial and sign once (0055; see [The bundled first-deal envelope](#the-bundled-first-deal-envelope-single-artifact)).
 - Coaches are scoped per-Client: a coach can build/send Quotes for any Client they own (per `project_coach_owned_business` memory), but the MSA exists at the dealership level regardless of which coach handles the relationship.
 
 The "find active MSA for this Client" query is the hot path — supported by an index on `(dealer_id, status)` per the schema plan.

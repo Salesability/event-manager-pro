@@ -363,7 +363,7 @@ Every campaign references one `dealer` (`ON DELETE RESTRICT` — never orphan a 
 
 ### `master_service_agreements` — per-Client commercial frame
 
-The 12-month master agreement signed once per Dealer (Client) — the legal frame under which any number of Quotes can be accepted during the term. Shipped 0037 Phase 2; sign / status-transition Server Actions land via the BoldSign envelope flow (0041 + 0051 cutover from Dropbox Sign). See [`commercial-spine.md`](commercial-spine.md) for the full lifecycle and the reasoning behind one-MSA-per-Client + accepted-Quote-as-contract.
+The 12-month master agreement signed once per Dealer (Client) — the legal frame under which any number of Quotes can be accepted during the term. Shipped 0037 Phase 2; sign / status-transition flow lands via the BoldSign envelope (0041 bundled send + 0051 Dropbox Sign→BoldSign cutover + 0055 collapse to a single merged MSA+Quote artifact). See [`commercial-spine.md`](commercial-spine.md) for the full lifecycle and the reasoning behind one-MSA-per-Client + accepted-Quote-as-contract.
 
 Columns:
 
@@ -371,7 +371,7 @@ Columns:
 - `status` enum (`pending | active | expired | terminated`, default `pending`) — lifecycle. Created `pending`; flips to `active` when BoldSign reports the signed envelope; `expired` on the day `expires_at` passes; `terminated` when either party gives §2.ii notice and the effective date arrives.
 - `signed_at` (nullable until signed) — when BoldSign returns the completed envelope.
 - `expires_at` (nullable until signed) — populated as `signed_at + 12 months` per MSA §2.i.
-- `signed_pdf_storage_key` (nullable) — pointer to the signed PDF in object storage; written by 7.2 on sign completion.
+- `signed_pdf_storage_key` (nullable) — pointer to the signed PDF in object storage at `msa/{msa_id}/signed.pdf`; written by the BoldSign `Signed` webhook (`markMsaSigned`) on sign completion. For a first-deal envelope this single artifact is the merged Quote + Agreement (0055).
 - `provider_document_id` (nullable) — external id from the e-signature provider (BoldSign); written by the send-side flow. Column renamed from `dropbox_sign_document_id` to be provider-agnostic in 0051 Phase 4.
 - `termination_notice_date` (nullable) — set when either party gives notice per §2.ii.
 - `termination_effective_date` (nullable) — must be ≥ 30 days after `termination_notice_date` (the MSA's `XX days` placeholder, resolved to 30 in 0037 Open Question #1; app-enforced).
@@ -381,12 +381,12 @@ Columns:
 Indexes:
 
 - `(dealer_id)` — FK lookup.
-- `(dealer_id, status)` — the "find active MSA for this Client" gate used by the Quote-Send action (composer must check `status='active'` before allowing Send; absence routes through the bundled MSA + first-Quote e-sig envelope).
+- `(dealer_id, status)` — the "find active MSA for this Client" gate used by the Quote-Send action (composer must check `status='active'` before allowing Send; absence routes through the bundled first-deal e-sig envelope — one merged MSA + first-Quote PDF, initialed + signed once, 0055).
 - `(expires_at)` — for the future nightly expiry-sweep job that rolls `status='active'` rows to `'expired'` once their term ends.
 
 RLS: enabled in `drizzle/0009_msa_rls.sql` matching the baseline (`service_role` permit-all + `authenticated` staff-only via `is_staff_member()`).
 
-Out of scope here: the sign envelope itself (7.2), the cancellation-fee math (50% within 21 days of Event start per §2.iii; deferred), and the renewal UX (manual v1 — coach clicks "Renew MSA" on the Client).
+The sign envelope itself shipped (0041 bundled send + 0055 single merged artifact) — see [`commercial-spine.md`](commercial-spine.md) → "The bundled first-deal envelope." Still out of scope here: the cancellation-fee math (50% within 21 days of Event start per §2.iii; deferred) and the renewal UX (manual v1 — coach clicks "Renew MSA" on the Client).
 
 ### `quotes` — the commercial record (and, when accepted, the contract)
 
@@ -395,7 +395,7 @@ The Quote row IS the contract per MSA §1.iii. Shipped 0026 Phases 2–4 (data m
 Columns:
 
 - `dealer_id` (FK `dealers`, NOT NULL, `ON DELETE RESTRICT`) — the Client this Quote is for. Quote always knows its Dealer; no nullable case.
-- `msa_id` (FK `master_service_agreements`, nullable, `ON DELETE RESTRICT`) — the MSA term this Quote is accepted under. Null while the Quote is `draft`/`sent`/`declined`; populated when accepted (or when planned 7.2 MSA-gate wiring binds the row earlier).
+- `msa_id` (FK `master_service_agreements`, nullable, `ON DELETE RESTRICT`) — the MSA term this Quote is bound to. For the bundled first-deal envelope, `sendMsaEnvelope` sets it at **send time** (while the Quote is still `draft`) so the BoldSign `Signed` webhook can correlate the signed artifact back to the Quote and auto-accept it in the same signing event (0055). Quotes accepted under an already-active MSA bind at accept time. Null otherwise.
 - `status` enum (`draft | sent | accepted | declined`, default `draft`) — lifecycle. Transitions are atomic-guarded UPDATEs (`UPDATE … WHERE id = ? AND status = ? RETURNING id`) in `src/features/quotes/actions.ts` + `src/features/quotes/lifecycle.ts`, classifying race misses as `gone | idempotent | illegal`. Mirrors `cancelCampaign`.
 - `sent_at` / `accepted_at` / `declined_at` (timestamps, nullable) — lifecycle stamps written by the same guarded UPDATE that flips `status`. Added in `drizzle/0011`.
 - `accept_token` (uuid NOT NULL UNIQUE, default `gen_random_uuid()`) — reserved for a future v2 public confirmation page; **no public surface in v1**. The Phase 4 reshape (2026-05-12) dropped the original token-validated GET route after Codex flagged that corporate email security scanners auto-prefetch URLs (Microsoft Safe Links / Mimecast / Proofpoint), which would auto-accept the Quote before the human read the mail. Staff Server Actions `acceptQuote` / `declineQuote` cover v1; the column stays for forward-compat.

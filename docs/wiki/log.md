@@ -13,6 +13,18 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-22 — 0055 live BoldSign smoke GREEN on Cloud Run + two prod bugs fixed
+
+- Live round-trip verified on Cloud Run (`nnwweb`/`event-manager-pro`, sandbox): combined envelope sent → signed → webhook flipped MSA #7 active, auto-accepted quote #3, persisted `gs://event-pro/msa/7/signed.pdf`. The smoke caught two bugs the mocked tests couldn't:
+- [commercial-spine.md](commercial-spine.md) — added a **BoldSign coordinate gotcha** bullet under "The bundled first-deal envelope": anchors are 72-DPI PDF points (top-left), BoldSign wants 96-DPI px, so `buildFormField` scales by `96/72` (`d06082b`). Without it, fields render at 0.75× (too high/left).
+- Code (committed): `fix(proxy): allow BoldSign webhook through the auth gate` (`097893c`) — `PUBLIC_PATHS` now allowlists `/api/boldsign/webhook`; the auth proxy was 307-redirecting BoldSign's POST to `/login` so the webhook never reached the handler (mocked route tests bypassed middleware, missing it). `fix(boldsign): scale form-field anchors from PDF points to 96-DPI px` (`d06082b`). Both deployed.
+
+## 2026-05-22 — Bundled first-deal envelope collapsed to a single merged artifact (0055)
+
+- [commercial-spine.md](commercial-spine.md) — new "The bundled first-deal envelope (single artifact)" subsection documents the 0055 model: `combineQuoteAndMsa` (`src/lib/pdf/merge.ts`) merges Quote-first + Agreement-last via pdf-lib `copyPages`; Client initials the Quote page + signs once at the end; `sendMsaEnvelope` posts one file `agreement-<msaId>.pdf` with both field types; one `Signed` webhook flips MSA→active then best-effort (not one DB transaction) accepts the bundled draft Quote + promotes the prospect dealer, all as the `system` actor. Happy-path ASCII diagram + "Per-Client" bullet updated from the old two-PDF wording.
+- [data-model.md](data-model.md) — corrected the stale `quotes.msa_id` claim (now set at **send time** by `sendMsaEnvelope` for bundled deals, not only at accept); `master_service_agreements` intro adds 0055; `signed_pdf_storage_key` now names the `msa/{msa_id}/signed.pdf` path + webhook writer; "out of scope: sign envelope (7.2)" line corrected (envelope shipped); `(dealer_id, status)` index note updated to the single-merged-artifact wording.
+- Code: no change in this pass — 0055 Phases 1–4 already shipped on `main` (verbatim MSA `826c517`, merge, initials, single-envelope send + auto-accept). Phase 5 (resent quote statement) was a no-op: the owner's resent `TERMS_AND_CONDITIONS`/`INVOICING_AND_PAYMENT` text matched the in-code constants at `render-quote.ts:73-84` byte-for-byte. Phase 6 unit/integration coverage was confirmed already-landed (`merge.test.ts`, `client.test.ts`, `actions.test.ts`, `route.test.ts`, `lifecycle.test.ts`); the live BoldSign sandbox smoke remains blocked on a deployed round-trip.
+
 ## 2026-05-15 — MSA e-signature provider migrated Dropbox Sign → BoldSign (0051)
 
 - [data-model.md](data-model.md) — `master_service_agreements` column renamed `dropbox_sign_document_id` → `provider_document_id` (provider-agnostic); column-list table + dedicated section updated; "written by 7.2" copy retained as historical context, "external id from Dropbox Sign" replaced with "external id from the e-signature provider (BoldSign)."

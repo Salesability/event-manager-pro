@@ -13,8 +13,8 @@
 | 2: Merge Quote + MSA into one PDF | Done | `src/lib/pdf/merge.ts` + 4 tests — Quote-first/Agreement-last; anchor shifted by quote page count |
 | 3: Initials field(s) + bottom-of-contract-page signature anchors | Done | quote initials anchor + `client.ts` Initial FormField; initials on Quote page, signature at end (owner's call) |
 | 4: Send path + webhook collapse to a single signed artifact | Done | single-file envelope + initials/sig fields; sign auto-accepts quote (via `quotes.msa_id`, no migration) + promotes dealer |
-| 5: Drop in the resent quote statement (BLOCKED on owner) | Pending | - |
-| 6: Tests + smoke verification | Pending | - |
+| 5: Drop in the resent quote statement | Done | no code change — owner's resent text (2026-05-22) matches the shipped `TERMS_AND_CONDITIONS`/`INVOICING_AND_PAYMENT` verbatim |
+| 6: Tests + smoke verification | Done | live BoldSign smoke GREEN on Cloud Run 2026-05-22 (MSA #7→active, quote #3→accepted, `msa/7/signed.pdf` in GCS). Surfaced + fixed 2 prod bugs: webhook auth-gate 307 (`097893c`) + field-anchor DPI scaling (`d06082b`) |
 
 This chunk first restores the MSA to the lawyer's verbatim agreement, then collapses the current two-PDF BoldSign envelope (separate MSA + Quote, signature on the MSA only) into a single merged document the Client initials and signs once. "Done" looks like: the full 10-article agreement rendered verbatim, one envelope file, initials + a contract-page signature anchored to the right page, and one `Signed` webhook flipping both MSA→`active` and Quote→`accepted`.
 
@@ -35,7 +35,7 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - `docs/wiki/data-model.md` — MSA pending→active gate + GCS paths (`msa/{msaId}/signed.pdf`).
 - `CLAUDE.md` → **Conventions** — mutations are Server Actions; the BoldSign webhook is a legit route handler (external caller).
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 100% (6/6 phases complete)
 
 **Note:**
 - The lawyer's Agreement prose must be **verbatim** — Phase 1 transcribes the `.docx` exactly; later phases must survive the merge byte-for-byte.
@@ -77,12 +77,12 @@ This chunk first restores the MSA to the lawyer's verbatim agreement, then colla
 - [x] Idempotency preserved: re-send no-ops on `providerDocumentId` set; sign no-ops when no linked draft quote or already-accepted
 - [x] Tests: actions (single-file + quote-link), msa lifecycle (auto-accept + promote + no-op), quote lifecycle helper (4 branches) — full suite 882 pass
 
-#### Phase 5: Resent quote statement (BLOCKED on owner)
-- [ ] Replace `TERMS_AND_CONDITIONS` / `INVOICING_AND_PAYMENT` with the owner's resent text
-- [ ] Confirm the Agreement (lawyer) text is unchanged — only the quote statement moved
+#### Phase 5: Resent quote statement
+- [x] ~~Replace `TERMS_AND_CONDITIONS` / `INVOICING_AND_PAYMENT` with the owner's resent text~~ — owner resent the statement 2026-05-22; it is **byte-for-byte identical** to the constants already at `render-quote.ts:73-84`. No code change needed.
+- [x] Confirm the Agreement (lawyer) text is unchanged — only the quote statement moved. Confirmed: `render-msa.ts` (verbatim §1–§10 from Phase 1) untouched; the resent text concerns only the quote statement, which already matches.
 
 #### Phase 6: Tests + smoke verification
-- [ ] Unit tests: merged-PDF page count, anchor page numbers, field types
-- [ ] Integration: send envelope (mocked BoldSign), simulate `Signed` webhook, assert MSA active + Quote accepted + GCS write
-- [ ] Live BoldSign sandbox smoke (pairs with parked `0041 follow-up (e)`): one merged doc shows initials + signature in the BoldSign UI at the right spots
-- [ ] Update `docs/wiki/commercial-spine.md` + `data-model.md` for the single-artifact envelope
+- [x] Unit tests: merged-PDF page count, anchor page numbers, field types — already covered by Phases 2–4: `merge.test.ts:37` (page count), `:40/56/59/69` (anchor page numbers), `client.test.ts:196-228` (Initial-before-Signature + single-Signature field types). No new tests needed.
+- [x] Integration: send envelope (mocked BoldSign), simulate `Signed` webhook, assert MSA active + Quote accepted + GCS write — covered by `actions.test.ts:273-417` (single-file `agreement-1.pdf` + quote-link + idempotency + reject paths), `route.test.ts:149-165` (Signed webhook → GCS write + dispatch), `lifecycle.test.ts:57,94` (MSA→active + auto-accept quote + promote dealer). Audited 2026-05-22; full suite 884 pass / 2 skip.
+- [x] **Live BoldSign sandbox smoke — GREEN** (2026-05-22, on Cloud Run `nnwweb` / `event-manager-pro`). Real round-trip on dealer #1: combined envelope sent → signed in BoldSign → webhook flipped MSA #7 `pending→active`, auto-accepted quote #3 `draft→accepted` (`via: msa-envelope`), persisted `gs://event-pro/msa/7/signed.pdf`, template_version `2026-05-21`. Full audit chain confirmed. **Surfaced + fixed two prod bugs the mocked tests missed:** (a) the auth proxy 307-redirected the BoldSign webhook to `/login` (route never reached the handler) — `src/lib/supabase/middleware.ts` PUBLIC_PATHS now allowlists `/api/boldsign/webhook` (`097893c`); (b) BoldSign positions field bounds in 96-DPI px, not 72-DPI PDF points — fields rendered at 0.75× (too high/left); `src/lib/boldsign/client.ts` scales anchors by 96/72 (`d06082b`, confirmed via ruler calibration). Pairs with parked `0041 follow-up (e)`, now resolved.
+- [x] Update `docs/wiki/commercial-spine.md` + `data-model.md` for the single-artifact envelope — done 2026-05-22 (new "bundled first-deal envelope" subsection in commercial-spine; data-model `msa_id`/`signed_pdf_storage_key`/index/scope corrections; `log.md` entry).
