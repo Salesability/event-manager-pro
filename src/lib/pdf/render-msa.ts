@@ -384,11 +384,11 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       color: black,
     });
     // Capture the BoldSign signature-field anchor. The visual underline sits
-    // at pdf-lib y (bottom-left origin); BoldSign expects a top-left-origin
-    // bounding box. The signer draws *into* the box with the underline as
-    // its visual baseline, so the box sits above the line in pdf-lib coords
-    // (y .. y + SIG_BOX_HEIGHT) — equivalently in BoldSign top-left coords
-    // its top edge is `pageHeight - (y + SIG_BOX_HEIGHT)`.
+    // at pdf-lib y (bottom-left origin); BoldSign uses a TOP-left origin
+    // (confirmed by the 0055 live smoke — a field sent at the underline's
+    // pdf-lib y rendered far below the line). The box sits above the line in
+    // pdf-lib coords (y .. y + SIG_BOX_HEIGHT), so in BoldSign's top-left
+    // coords its top edge is `pageHeight - (y + SIG_BOX_HEIGHT)`.
     sigPage = page;
     sigBoxX = rightColX;
     sigBoxY = pageHeight - (y + SIG_BOX_HEIGHT);

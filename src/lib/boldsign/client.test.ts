@@ -295,7 +295,12 @@ describe('sendSignatureRequest', () => {
     expect(field?.fieldType).toBe('Signature');
     expect(field?.pageNumber).toBe(2);
     expect(field?.isRequired).toBe(true);
-    expect(field?.bounds).toEqual({ x: 321, y: 600, width: 241, height: 22 });
+    // Bounds are scaled from PDF points to BoldSign's 96-DPI px (× 96/72).
+    const k = 96 / 72;
+    expect(field?.bounds?.x).toBeCloseTo(321 * k, 5);
+    expect(field?.bounds?.y).toBeCloseTo(600 * k, 5);
+    expect(field?.bounds?.width).toBeCloseTo(241 * k, 5);
+    expect(field?.bounds?.height).toBeCloseTo(22 * k, 5);
   });
 
   it('propagates each anchor coordinate independently (no x/y swap, no width/height swap)', async () => {
@@ -315,7 +320,12 @@ describe('sendSignatureRequest', () => {
     };
     const field = sent.signers?.[0]?.formFields?.[0];
     expect(field?.pageNumber).toBe(5);
-    expect(field?.bounds).toEqual({ x: 11, y: 22, width: 33, height: 44 });
+    // Each axis scaled independently by 96/72; no swap.
+    const k = 96 / 72;
+    expect(field?.bounds?.x).toBeCloseTo(11 * k, 5);
+    expect(field?.bounds?.y).toBeCloseTo(22 * k, 5);
+    expect(field?.bounds?.width).toBeCloseTo(33 * k, 5);
+    expect(field?.bounds?.height).toBeCloseTo(44 * k, 5);
   });
 });
 

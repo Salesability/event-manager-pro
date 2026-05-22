@@ -100,6 +100,14 @@ function decideSignerRedirect(): SignerRedirectDecision {
   return { redirect: true, to: devTo };
 }
 
+// BoldSign positions form-field bounds in 96-DPI pixels, while the renderers
+// emit anchors in 72-DPI PDF points (top-left origin). A field sent in raw
+// points therefore lands at 72/96 = 0.75× of the intended position — too high
+// AND too far left, proportionally on both axes. Confirmed by the 0055 ruler
+// calibration (a field sent at pt x=320,y=300 rendered at ~0.75×). Scale
+// points → BoldSign px by 96/72 at the API boundary.
+const PT_TO_BOLDSIGN_PX = 96 / 72;
+
 // Build a required BoldSign form field (Signature, Initial, …) at an anchor.
 function buildFormField(
   id: string,
@@ -107,10 +115,10 @@ function buildFormField(
   anchor: FieldAnchor,
 ): FormField {
   const bounds = new Rectangle();
-  bounds.x = anchor.x;
-  bounds.y = anchor.y;
-  bounds.width = anchor.width;
-  bounds.height = anchor.height;
+  bounds.x = anchor.x * PT_TO_BOLDSIGN_PX;
+  bounds.y = anchor.y * PT_TO_BOLDSIGN_PX;
+  bounds.width = anchor.width * PT_TO_BOLDSIGN_PX;
+  bounds.height = anchor.height * PT_TO_BOLDSIGN_PX;
   const field = new FormField();
   field.id = id;
   field.fieldType = fieldType;
@@ -153,9 +161,9 @@ export async function sendSignatureRequest(
 
   // Pin form fields at the anchors the renderer produced. Without at least one,
   // BoldSign rejects with HTTP 400 (`Signers.FormFields: "Form fields cannot be
-  // null"` — chunk 0054 root cause). Anchor coords are already in BoldSign's
-  // coordinate system (top-left origin, 1-indexed page) per `FieldAnchor`'s
-  // contract — no translation here. Initial fields (the Client initialling the
+  // null"` — chunk 0054 root cause). Anchor coords are top-left, 1-indexed
+  // page per `FieldAnchor`'s contract; `buildFormField` scales points → 96-DPI
+  // px for BoldSign. Initial fields (the Client initialling the
   // Quote section) come first, then the single Signature at the end (chunk 0055).
   const initialFields = (input.initialsAnchors ?? []).map((anchor, i) =>
     buildFormField(`ClientInitials${i + 1}`, FormField.FieldTypeEnum.Initial, anchor),
