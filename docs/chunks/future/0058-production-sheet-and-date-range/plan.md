@@ -1,15 +1,17 @@
 # Production List: Shareable Google Sheet + Date-Range View — Plan
 
 **Intent:** [`intent.md`](intent.md)
-**Started:** _Not started — scaffolded 2026-05-21_
+**Started:** _Phase 1 shipped 2026-05-22; Phases 2–4 deferred._
 
-> Two loosely-coupled deliverables in one chunk: the **date-range filter** (small, Phase 1) and the **Google Sheet link** (larger — new Sheets API integration, Phases 2–3). Split into two chunks if the Sheets auth work balloons.
+> **⏸ DEFERRED to `future/` 2026-05-22 (owner: "park 0058").** Phase 1 (the 1/2/3-month forward date-range filter) **shipped to `main` at `9b15e29`** — that code is live and stays merged; only the chunk *tracking* moved here. Phases 2–4 (the shareable Google Sheet) are deferred because they need (a) an owner decision on Google auth (service account vs user OAuth) and (b) Google Cloud setup only the owner can do (enable the Sheets/Drive API + provision credentials). **Un-defer trigger:** owner is ready to set up Google Cloud and has chosen the auth approach. When un-deferred, `mv` back to top level and resume at Phase 2.
+
+> Two loosely-coupled deliverables in one chunk: the **date-range filter** (small, Phase 1 — DONE) and the **Google Sheet link** (larger — new Sheets API integration, Phases 2–3 — deferred). Split into two chunks if the Sheets auth work balloons.
 
 ## Progress Tracker
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: 1/2/3-month date-range option in the production filter | Pending | - |
+| 1: 1/2/3-month date-range option in the production filter | Done | `9b15e29` |
 | 2: Google Sheets client + auth wiring (new) | Pending | - |
 | 3: Export-to-Sheet action + shareable link on the production page | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
@@ -31,19 +33,24 @@ This chunk adds a near-horizon date-range scope to the production list and a pat
 - `db-conventions` — only if a `production_sheet_url` / sync-metadata column is added (decide in Phase 2).
 - `docs/wiki/runbook.md` — document the Google service-account secret + API enablement once wired.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
-- Phase 1 ships value on its own and has no external dependency — do it first.
-- Phases 2–3 need a Google Cloud decision (service account vs user OAuth) + Sheets/Drive API enablement; resolve the intent Open Questions with the owner before Phase 2.
+- Phase 1 ships value on its own and has no external dependency — do it first. **✅ Shipped 2026-05-22.**
+- Phases 2–3 need a Google Cloud decision (service account vs user OAuth) + Sheets/Drive API enablement; resolve the intent Open Questions with the owner before Phase 2. **⏸ PAUSED here — awaiting owner input (see Decisions needed).**
+
+**Phase 1 decisions (2026-05-22):**
+- **Client-side filter, not server-side** (deviates from the original checklist). The existing upcoming/past filter is client-side (TanStack `filterFn` closing over `todayIso`, mirrored in the CSV export route). `loadCampaigns()` already loads every row; adding a server-side scope for just the range would create a split filtering model. Matched the established pattern instead — extended the client `filterFn` + the export-route mirror, sharing only the date-window math (`rangeWindowEndIso` in `filter.ts`).
+- **Reused the `?status=` URL param** (not a new `?range=`). `1m`/`2m`/`3m` join `''`/`upcoming`/`past` in the single Time-window dropdown, so one param drives one control. The intent's lean — *forward window from today, replacing the upcoming/past selection* — is exactly a single mutually-exclusive dropdown.
+- **Forward-window semantics:** in-window = live/upcoming (`endDate >= today`) AND begins on or before the window closes (`startDate <= today + N months`). Month overflow rolls forward per `Date.setMonth` (documented + tested).
 
 ### Phase Checklist
 
-#### Phase 1: Date-range filter
-- [ ] Add 1/2/3-month options to the production filter dropdown (URL param, e.g. `?range=1m|2m|3m`)
-- [ ] Apply the range as a server-side scope over campaign event date relative to today
-- [ ] Decide interaction with upcoming/past (replace vs combine) per intent
-- [ ] Unit test: range scoping returns only in-window rows
+#### Phase 1: Date-range filter ✅
+- [x] Add 1/2/3-month options to the production filter dropdown — joined the existing `?status=` param (`1m|2m|3m`) in the single Time-window `<select>` (`production-admin.tsx`)
+- [x] ~~server-side scope~~ **Client-side** `filterFn` (`production-columns.tsx`) + mirrored in the CSV export route (`export/route.ts`) — matches the established upcoming/past pattern; only `rangeWindowEndIso` date-math is shared (`filter.ts`)
+- [x] Decide interaction with upcoming/past (replace vs combine) — **replace** (single dropdown, forward-window per intent lean)
+- [x] Unit test: range scoping returns only in-window rows (`filter.test.ts`, 11 cases)
 
 #### Phase 2: Google Sheets client + auth
 - [ ] Decide service-account vs user-OAuth (intent Open Questions) with the owner
