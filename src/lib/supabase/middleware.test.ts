@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { isAdminPath, isAdminUser } from './middleware';
+import { isAdminPath, isAdminUser, isPublicPath } from './middleware';
+
+describe('isPublicPath', () => {
+  it('treats the BoldSign webhook as public (external HMAC-gated caller, no session cookie)', () => {
+    // Regression: without this the auth gate 307-redirects BoldSign's POST to
+    // /login and the signed-envelope webhook never reaches its handler.
+    expect(isPublicPath('/api/boldsign/webhook')).toBe(true);
+  });
+
+  it('matches the other public paths and their subpaths', () => {
+    expect(isPublicPath('/login')).toBe(true);
+    expect(isPublicPath('/auth/callback')).toBe(true);
+    expect(isPublicPath('/auth/auth-error')).toBe(true);
+    expect(isPublicPath('/share/coach/abc123')).toBe(true);
+  });
+
+  it('does not treat gated app paths as public', () => {
+    expect(isPublicPath('/')).toBe(false);
+    expect(isPublicPath('/calendar')).toBe(false);
+    expect(isPublicPath('/reports/export')).toBe(false);
+    expect(isPublicPath('/production/export')).toBe(false);
+  });
+});
 
 describe('isAdminPath', () => {
   it('matches the bare /admin root', () => {

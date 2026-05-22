@@ -1,10 +1,19 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/auth-error', '/share/coach'];
+// `/api/boldsign/webhook` is an external caller (BoldSign POSTs here with no
+// session cookie); it has its own HMAC gate inside the handler, so it must
+// bypass the session-auth redirect or every webhook 307s to /login.
+const PUBLIC_PATHS = [
+  '/login',
+  '/auth/callback',
+  '/auth/auth-error',
+  '/share/coach',
+  '/api/boldsign/webhook',
+];
 const ADMIN_PATHS = ['/admin', '/production', '/dealerships'];
 
-function isPublicPath(pathname: string) {
+export function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
