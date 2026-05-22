@@ -155,6 +155,13 @@
       "when": 1779984000000,
       "tag": "0021_rename_provider_document_id",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1779464350761,
+      "tag": "0022_update_travel_label_estimated",
+      "breakpoints": true
     }
   ]
 }

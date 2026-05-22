@@ -95,7 +95,7 @@ const CATALOG: ServiceItem[] = [
   {
     id: 8,
     code: 'travel',
-    label: 'Travel (Hotel / Mileage / Air)',
+    label: 'Estimated Travel (Hotel / Mileage / Air)',
     unit: 'flat',
     unitPrice: null,
     unitPriceMin: null,

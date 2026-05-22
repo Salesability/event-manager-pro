@@ -618,7 +618,7 @@ export function QuoteComposer({
           />
 
           <NumberField
-            label="Travel ($)"
+            label="Estimated Travel ($)"
             min={0}
             step="0.01"
             registration={register('travelAmount', { valueAsNumber: true })}

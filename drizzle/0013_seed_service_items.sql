@@ -13,5 +13,5 @@ INSERT INTO "service_items" ("code", "label", "unit", "unit_price", "unit_price_
   ('digital-record',      'Digital (SMS / Email)',              'per-touch',   '0.59',    NULL,     NULL,     'SMS or email touch.',                                                          4),
   ('additional-day',      'Additional Day with Trainer',        'per-day',     '995.00',  NULL,     NULL,     'Each additional event day beyond day one.',                                    5),
   ('record-retrieval',    'Record Retrieval and Preparation',   'range',       NULL,      '100.00', '400.00', 'Catalog menu: $100 / $200 / $300 / $400 (coach picks at quote time).',         6),
-  ('travel',              'Travel (Hotel / Mileage / Air)',     'flat',        NULL,      NULL,     NULL,     'Variable; coach types actual cost at quote time, breakdown in travel notes.',  7)
+  ('travel',              'Estimated Travel (Hotel / Mileage / Air)', 'flat',  NULL,      NULL,     NULL,     'Variable; coach types actual cost at quote time, breakdown in travel notes.',  7)
 ON CONFLICT ("code") DO NOTHING;
