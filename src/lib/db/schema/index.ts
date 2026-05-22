@@ -2,6 +2,7 @@ export * from './audience-sources';
 export * from './audit-log';
 export * from './auth';
 export * from './availability-blocks';
+export * from './billing-adjustments';
 export * from './campaign-styles';
 export * from './campaigns';
 export * from './contact-identifiers';

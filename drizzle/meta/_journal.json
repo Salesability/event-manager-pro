@@ -162,6 +162,13 @@
       "when": 1780070400000,
       "tag": "0022_update_travel_label_estimated",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1780156800000,
+      "tag": "0023_volatile_killer_shrike",
+      "breakpoints": true
     }
   ]
 }
