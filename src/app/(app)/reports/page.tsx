@@ -1,4 +1,6 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { can } from '@/lib/auth/capabilities';
+import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { PageHeader } from '@/components/app/page-header';
 import {
   loadCampaignsByCoach,
@@ -9,7 +11,16 @@ import {
 import { ReportsTabs } from '@/features/reports/reports-tabs';
 
 export default async function ReportsPage() {
-  await assertCan('reports:view'); // expected: server-only
+  const user = await assertCan('reports:view'); // expected: server-only
+
+  // Reports are viewable by admin + coach; billing-figure edits are admin-only
+  // (0059). `loadCurrentMembership` is request-cached, so this reuses the
+  // round-trip `assertCan` already made.
+  const membership = await loadCurrentMembership();
+  const canEditBilling = can(
+    { user, roles: membership?.roles ?? [], coachContactId: membership?.coachContactId ?? null },
+    'reports:edit-billing',
+  );
 
   const [byDealer, byCoach, byMonth, full] = await Promise.all([
     loadCampaignsByDealer(),
@@ -26,7 +37,13 @@ export default async function ReportsPage() {
       />
 
       <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
-        <ReportsTabs byDealer={byDealer} byCoach={byCoach} byMonth={byMonth} full={full} />
+        <ReportsTabs
+          byDealer={byDealer}
+          byCoach={byCoach}
+          byMonth={byMonth}
+          full={full}
+          canEditBilling={canEditBilling}
+        />
       </section>
     </div>
   );

@@ -2,9 +2,12 @@
 
 import type { ColumnDef } from '@tanstack/react-table';
 import type {
+  BillingField,
   Campaign,
   CampaignAggregateRow,
+  FullReportCampaign,
 } from '@/features/schedule/queries';
+import { BillingCell } from './billing-cell';
 
 // Column factories for the four /reports tabs. Mirrors the
 // `buildPeopleColumns(...)` shape from `people-columns.tsx` — pure functions
@@ -114,10 +117,71 @@ export function buildMonthColumns(): ColumnDef<CampaignAggregateRow<string>>[] {
   return buildAggregateColumns<string>('Month', /* sortByKey */ true);
 }
 
-// Full Production Report — flat campaign list. Mirrors `/production` columns
-// (the legacy "Full Production Report" tab was an alternate render of the
-// same data). Sortable headers + tabular-nums on the integer columns.
-export function buildFullColumns(): ColumnDef<Campaign>[] {
+// 0059: the four adjustable billing figures, paired with the `Campaign` key
+// holding the original value. `effectiveBilling` is `override ?? original` —
+// what the report sums and what sorting keys off.
+const BILLING_ORIGINAL_KEY: Record<BillingField, 'qtyRecords' | 'smsEmail' | 'letters' | 'bdc'> = {
+  qty_records: 'qtyRecords',
+  sms_email: 'smsEmail',
+  letters: 'letters',
+  bdc: 'bdc',
+};
+
+function effectiveBilling(c: FullReportCampaign, field: BillingField): number | null {
+  return c.billing[field] ?? c[BILLING_ORIGINAL_KEY[field]] ?? null;
+}
+
+// Render one billing figure: an editable cell for admins (`canEditBilling`),
+// otherwise the effective value with an "adj" marker when it's been overridden
+// so coaches can see a figure was tuned without being able to change it.
+function renderBilling(
+  c: FullReportCampaign,
+  field: BillingField,
+  canEditBilling: boolean,
+) {
+  const original = c[BILLING_ORIGINAL_KEY[field]] ?? null;
+  const override = c.billing[field];
+  if (canEditBilling) {
+    return (
+      <BillingCell campaignId={c.id} field={field} original={original} override={override} />
+    );
+  }
+  return (
+    <span className="text-right tabular-nums">
+      {fmtNum(override ?? original ?? null)}
+      {override != null && (
+        <span className="ml-1 text-[10px] text-amber-600" title={`Original: ${fmtNum(original)}`}>
+          adj
+        </span>
+      )}
+    </span>
+  );
+}
+
+function billingColumn(
+  id: BillingField,
+  header: string,
+  canEditBilling: boolean,
+): ColumnDef<FullReportCampaign> {
+  return {
+    id,
+    accessorFn: (c) => effectiveBilling(c, id) ?? 0,
+    header,
+    cell: ({ row }) => renderBilling(row.original, id, canEditBilling),
+    enableSorting: true,
+    meta: { align: 'right' },
+  };
+}
+
+// Full Production Report — flat campaign list + the 0059 billing overlay.
+// Mirrors `/production` columns (the legacy "Full Production Report" tab was
+// an alternate render of the same data) with the four quantity columns made
+// effective (override ?? original) and inline-editable for admins. Sortable
+// headers + tabular-nums on the integer columns.
+export function buildFullColumns(
+  opts: { canEditBilling: boolean } = { canEditBilling: false },
+): ColumnDef<FullReportCampaign>[] {
+  const { canEditBilling } = opts;
   return [
     {
       id: 'startDate',
@@ -161,36 +225,10 @@ export function buildFullColumns(): ColumnDef<Campaign>[] {
         row.original.audienceSourceLabel ?? <span className="text-zinc-500/70">—</span>,
       enableSorting: true,
     },
-    {
-      id: 'qtyRecords',
-      accessorFn: (c) => c.qtyRecords ?? 0,
-      header: 'Records',
-      cell: ({ row }) => (
-        <span className="text-right tabular-nums">{fmtNum(row.original.qtyRecords)}</span>
-      ),
-      enableSorting: true,
-      meta: { align: 'right' },
-    },
-    {
-      id: 'smsEmail',
-      accessorFn: (c) => c.smsEmail ?? 0,
-      header: 'SMS / Email',
-      cell: ({ row }) => (
-        <span className="text-right tabular-nums">{fmtNum(row.original.smsEmail)}</span>
-      ),
-      enableSorting: true,
-      meta: { align: 'right' },
-    },
-    {
-      id: 'letters',
-      accessorFn: (c) => c.letters ?? 0,
-      header: 'Letters',
-      cell: ({ row }) => (
-        <span className="text-right tabular-nums">{fmtNum(row.original.letters)}</span>
-      ),
-      enableSorting: true,
-      meta: { align: 'right' },
-    },
+    billingColumn('qty_records', 'Records', canEditBilling),
+    billingColumn('sms_email', 'SMS / Email', canEditBilling),
+    billingColumn('letters', 'Letters', canEditBilling),
+    billingColumn('bdc', 'BDC', canEditBilling),
     {
       id: 'coachName',
       accessorFn: (c) => c.coachName ?? '',

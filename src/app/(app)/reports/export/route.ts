@@ -7,6 +7,7 @@ import {
   loadCampaignsByMonth,
   loadFullProductionReport,
   type Campaign,
+  type FullReportCampaign,
 } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
 import { formatYearMonth } from '@/lib/dates';
@@ -103,17 +104,23 @@ function toAggregateRow(r: {
   ];
 }
 
-function toFullRow(c: Campaign): string[] {
+// 0059: the CSV reflects effective (billing-adjusted) values, matching the
+// on-screen report. `billing[field] ?? original` per quantity column.
+function toFullRow(c: FullReportCampaign): string[] {
+  const eff = (override: number | undefined, original: number | null): string => {
+    const v = override ?? original ?? null;
+    return v != null ? String(v) : '';
+  };
   return [
     `${c.startDate} → ${c.endDate}`,
     c.dealerName,
     [c.contact, c.phone, c.email].filter(Boolean).join(' / '),
     c.styleLabel ?? '',
     c.audienceSourceLabel ?? '',
-    c.qtyRecords != null ? String(c.qtyRecords) : '',
-    c.smsEmail != null ? String(c.smsEmail) : '',
-    c.letters != null ? String(c.letters) : '',
-    c.bdc != null ? String(c.bdc) : '',
+    eff(c.billing.qty_records, c.qtyRecords),
+    eff(c.billing.sms_email, c.smsEmail),
+    eff(c.billing.letters, c.letters),
+    eff(c.billing.bdc, c.bdc),
     c.coachName ?? '',
     c.notes ?? '',
     statusLabel(c),

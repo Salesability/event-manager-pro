@@ -13,19 +13,29 @@ vi.mock('@/lib/db', () => ({
     select: () => ({
       from: () => {
         const result = () => Promise.resolve(mocks.selectResults.shift() ?? []);
+        // 0059: each aggregate loader first builds a pivot subquery
+        // (`db.select(...).from(billingAdjustments).groupBy(...).as('billing_adj')`)
+        // then LEFT-joins it. The subquery's aliased columns are referenced in
+        // `eq()` / `sql` fragments — plain-object stand-ins are enough since
+        // the mock never builds real SQL.
+        const subquery = { campaignId: {}, records: {}, sms: {}, letters: {} };
         const terminal = {
           orderBy: () => result(),
           then: (onFulfilled: (v: unknown[]) => unknown) => result().then(onFulfilled),
+          as: () => subquery,
         };
-        const groupable = { groupBy: () => terminal };
-        return {
-          // `.from(...).groupBy(...).orderBy(...)` (loadCampaignsByDealer hits
-          // this shape after the innerJoin step below).
-          groupBy: groupable.groupBy,
+        // Chain object: supports any sequence of inner/left joins followed by
+        // groupBy → terminal. Covers `from().innerJoin().leftJoin().groupBy().orderBy()`
+        // (by-dealer), `from().leftJoin().groupBy().orderBy()` (by-coach/month),
+        // and the subquery's `from().groupBy().as()`.
+        const chain = {
+          groupBy: () => terminal,
           orderBy: terminal.orderBy,
-          innerJoin: () => groupable,
-          leftJoin: () => groupable,
+          innerJoin: () => chain,
+          leftJoin: () => chain,
+          as: () => subquery,
         };
+        return chain;
       },
     }),
   },

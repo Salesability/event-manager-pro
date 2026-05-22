@@ -18,6 +18,7 @@ export type Capability =
   | 'app:access'
   | 'admin:access'
   | 'reports:view'
+  | 'reports:edit-billing'
   | 'availability:edit'
   | 'production:view'
   | 'production:export'
@@ -97,6 +98,7 @@ export function can(
       );
     }
     case 'admin:access':
+    case 'reports:edit-billing':
     case 'production:view':
     case 'production:export':
     case 'dealer:view':

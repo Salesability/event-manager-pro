@@ -16,8 +16,8 @@ import {
   buildMonthColumns,
 } from '@/features/reports/reports-columns';
 import type {
-  Campaign,
   CampaignAggregateRow,
+  FullReportCampaign,
 } from '@/features/schedule/queries';
 import { formatYearMonth } from '@/lib/dates';
 
@@ -33,7 +33,7 @@ const TAB_LABELS: Record<ReportTabKey, string> = {
 // Cross-column search for the Full tab — hits dealer name, coach name, and
 // notes so a single textbox covers the muscle-memory queries from the
 // legacy Summary modal.
-const fullGlobalFilterFn: FilterFn<Campaign> = (row, _columnId, filterValue) => {
+const fullGlobalFilterFn: FilterFn<FullReportCampaign> = (row, _columnId, filterValue) => {
   const q = String(filterValue ?? '').toLowerCase().trim();
   if (!q) return true;
   const c = row.original;
@@ -49,18 +49,20 @@ export function ReportsTabs({
   byCoach,
   byMonth,
   full,
+  canEditBilling = false,
 }: {
   byDealer: CampaignAggregateRow<number>[];
   byCoach: CampaignAggregateRow<number | null>[];
   byMonth: CampaignAggregateRow<string>[];
-  full: Campaign[];
+  full: FullReportCampaign[];
+  canEditBilling?: boolean;
 }) {
   const [tab, setTab] = useState<ReportTabKey>('dealer');
 
   const dealerColumns = useMemo(() => buildClientColumns(), []);
   const coachColumns = useMemo(() => buildCoachColumns(), []);
   const monthColumns = useMemo(() => buildMonthColumns(), []);
-  const fullColumns = useMemo(() => buildFullColumns(), []);
+  const fullColumns = useMemo(() => buildFullColumns({ canEditBilling }), [canEditBilling]);
 
   // Sort + pagination lifted per tab so they survive Radix Tabs' default
   // unmount-on-switch (Codex 0014 Phase 2 Low #3). Without this, sorting the

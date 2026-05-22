@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { formatYearMonth } from '@/lib/dates';
 import {
   availabilityBlocks,
+  billingAdjustments,
   campaigns,
   campaignStyles,
   contactIdentifiers,
@@ -66,6 +67,34 @@ export type Campaign = {
   email: string | null;
   notes: string | null;
 };
+
+// 0059: billing-adjustment overlay on the /reports surface. `BillingField`
+// values mirror the campaign columns they override; `CAMPAIGN_FIELD_BY_BILLING`
+// maps each back to its `Campaign` key so callers can read the original value.
+export type BillingField = 'qty_records' | 'sms_email' | 'letters' | 'bdc';
+
+export const BILLING_FIELDS: readonly BillingField[] = [
+  'qty_records',
+  'sms_email',
+  'letters',
+  'bdc',
+] as const;
+
+export const CAMPAIGN_FIELD_BY_BILLING: Record<BillingField, keyof Campaign> = {
+  qty_records: 'qtyRecords',
+  sms_email: 'smsEmail',
+  letters: 'letters',
+  bdc: 'bdc',
+};
+
+/** Persisted billing overrides for one campaign, keyed by field. An absent
+ *  key means "no override — use the campaign's own value." */
+export type CampaignBillingOverrides = Partial<Record<BillingField, number>>;
+
+/** A Full-Production-Report row: a campaign plus its billing overlay. The
+ *  original campaign columns stay on the row (recoverable); `billing` carries
+ *  the admin's adjustments so the UI can show effective + original together. */
+export type FullReportCampaign = Campaign & { billing: CampaignBillingOverrides };
 
 export type LookupOption = {
   id: number;
@@ -514,18 +543,50 @@ export type CampaignAggregateRow<K = number | null | string> = {
   totalLetters: number;
 };
 
+// 0059: per-campaign pivot of billing_adjustments — one row per campaign with
+// the effective override (or NULL) for each summed field. LEFT-joined into the
+// three aggregate loaders so totals read `coalesce(override, campaign.value)`.
+// Each campaign has at most one adjustment per field (unique constraint), so
+// `max(value) filter (...)` collapses to that field's override or NULL.
+function billingPivotSubquery() {
+  return db
+    .select({
+      campaignId: billingAdjustments.campaignId,
+      records: sql<
+        number | null
+      >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'qty_records')`.as(
+        'records',
+      ),
+      sms: sql<
+        number | null
+      >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'sms_email')`.as(
+        'sms',
+      ),
+      letters: sql<
+        number | null
+      >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'letters')`.as(
+        'letters',
+      ),
+    })
+    .from(billingAdjustments)
+    .groupBy(billingAdjustments.campaignId)
+    .as('billing_adj');
+}
+
 export async function loadCampaignsByDealer(): Promise<CampaignAggregateRow<number>[]> {
+  const adj = billingPivotSubquery();
   const rows = await db
     .select({
       dealerId: campaigns.dealerId,
       dealerName: dealers.name,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .leftJoin(adj, eq(adj.campaignId, campaigns.id))
     .groupBy(campaigns.dealerId, dealers.name)
     .orderBy(dealers.name);
 
@@ -540,18 +601,20 @@ export async function loadCampaignsByDealer(): Promise<CampaignAggregateRow<numb
 }
 
 export async function loadCampaignsByCoach(): Promise<CampaignAggregateRow<number | null>[]> {
+  const adj = billingPivotSubquery();
   const rows = await db
     .select({
       coachId: campaigns.coachId,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
     .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
+    .leftJoin(adj, eq(adj.campaignId, campaigns.id))
     .groupBy(campaigns.coachId, contacts.firstName, contacts.lastName)
     .orderBy(contacts.firstName, contacts.lastName);
 
@@ -574,15 +637,17 @@ export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<strin
   // A campaign that crosses a month boundary shows up under its start month
   // only; that's the legacy semantics and the simplest mental model.
   const monthKey = sql<string>`to_char(${campaigns.startDate}, 'YYYY-MM')`;
+  const adj = billingPivotSubquery();
   const rows = await db
     .select({
       monthKey,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(${campaigns.qtyRecords}), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(${campaigns.smsEmail}), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(${campaigns.letters}), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
+    .leftJoin(adj, eq(adj.campaignId, campaigns.id))
     .groupBy(monthKey)
     .orderBy(monthKey);
 
@@ -596,11 +661,38 @@ export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<strin
   }));
 }
 
-// Full Production Report tab is the same flat list `/production` already
-// renders — re-export the existing loader so the four-tab page can fetch
-// all four datasets via a single `Promise.all`.
-export async function loadFullProductionReport(): Promise<Campaign[]> {
-  return loadCampaigns();
+/** All persisted billing adjustments, grouped by campaign id. Small table
+ *  (one row per adjusted field per campaign); a single scan + in-TS group is
+ *  simpler than a per-campaign join here. */
+export async function loadBillingOverridesByCampaign(): Promise<
+  Map<number, CampaignBillingOverrides>
+> {
+  const rows = await db
+    .select({
+      campaignId: billingAdjustments.campaignId,
+      field: billingAdjustments.field,
+      value: billingAdjustments.value,
+    })
+    .from(billingAdjustments);
+  const byCampaign = new Map<number, CampaignBillingOverrides>();
+  for (const r of rows) {
+    const overrides = byCampaign.get(r.campaignId) ?? {};
+    overrides[r.field as BillingField] = r.value;
+    byCampaign.set(r.campaignId, overrides);
+  }
+  return byCampaign;
+}
+
+// Full Production Report tab is the `/production` flat list plus the billing
+// overlay (0059). The original campaign columns stay on each row; `billing`
+// carries the admin's per-field overrides so the report can render effective
+// values while keeping the original recoverable.
+export async function loadFullProductionReport(): Promise<FullReportCampaign[]> {
+  const [list, overridesByCampaign] = await Promise.all([
+    loadCampaigns(),
+    loadBillingOverridesByCampaign(),
+  ]);
+  return list.map((c) => ({ ...c, billing: overridesByCampaign.get(c.id) ?? {} }));
 }
 
 export async function loadAvailabilityBlocks(

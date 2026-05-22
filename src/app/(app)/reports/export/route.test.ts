@@ -167,6 +167,7 @@ describe('GET /reports/export', () => {
         phone: '555-0100',
         email: 'jane@example.test',
         notes: null,
+        billing: {},
       },
     ]);
     const body = await csvBody(await GET(makeRequest({ tab: 'full' })));
