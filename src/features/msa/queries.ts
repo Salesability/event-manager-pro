@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { masterServiceAgreements, quotes } from '@/lib/db/schema';
+import { masterServiceAgreements } from '@/lib/db/schema';
 
 export type MsaStatus = 'pending' | 'active' | 'expired' | 'terminated';
 
@@ -79,20 +79,4 @@ export async function loadActiveOrPendingMsa(
     .orderBy(desc(masterServiceAgreements.createdAt))
     .limit(1);
   return pending ?? null;
-}
-
-// Returns the dealer's first draft Quote (id + createdAt) so the Phase 5 MSA
-// panel can decide whether to enable the "Create MSA + send" button (requires
-// a draft Quote in the envelope per the bundled-send v1 contract). `createdAt`
-// drives the `quote-<timestamp>` display name in the create-MSA dialog.
-export async function firstDraftQuoteForDealer(
-  dealerId: number,
-): Promise<{ id: number; createdAt: Date } | null> {
-  const [row] = await db
-    .select({ id: quotes.id, createdAt: quotes.createdAt })
-    .from(quotes)
-    .where(and(eq(quotes.dealerId, dealerId), eq(quotes.status, 'draft')))
-    .orderBy(quotes.id)
-    .limit(1);
-  return row ?? null;
 }

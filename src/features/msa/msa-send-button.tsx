@@ -15,10 +15,11 @@ export type MsaSendForSignatureButtonProps = {
 };
 
 // Primary toolbar CTA on the quote composer when the dealer has no usable MSA
-// (0061). Mirrors the dealer-page `MsaCreateTrigger` shape (button + dialog)
-// but bundles the open quote instead of the dealer's first draft. Clicking
-// opens the bundled-envelope confirm dialog, which runs the two-step
-// createMsaDraft → sendMsaEnvelope flow against THIS quote.
+// (0061). Clicking opens the bundled-envelope confirm dialog (MsaCreateDialog),
+// which runs the two-step createMsaDraft → sendMsaEnvelope flow against THIS
+// quote — the one open in the composer, not a dealer-wide "first draft" guess.
+// 0061 moved this action off the (admin-only) dealer page onto the
+// (admin+coach) quote page; the old dealer-page trigger was retired.
 export function MsaSendForSignatureButton(props: MsaSendForSignatureButtonProps) {
   const [open, setOpen] = useState(false);
   return (

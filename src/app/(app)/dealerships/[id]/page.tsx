@@ -11,13 +11,8 @@ import {
 import { loadDealer } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
-import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { DealerForm } from '@/features/dealers/dealer-form';
-import {
-  firstDraftQuoteForDealer,
-  loadActiveOrPendingMsa,
-} from '@/features/msa/queries';
-import { MsaCreateTrigger } from '@/features/msa/msa-panel';
+import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { signedUrl } from '@/lib/storage/gcs';
 
 // Per-dealer detail. Gated `admin:access` to match the `/dealerships` index;
@@ -40,16 +35,10 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const [quotes, msa, firstDraftQuote, recipientResult] = await Promise.all([
+  const [quotes, msa] = await Promise.all([
     loadQuotesByDealer(id),
     loadActiveOrPendingMsa(id),
-    firstDraftQuoteForDealer(id),
-    resolveQuoteRecipient(id),
   ]);
-  const recipient =
-    'ok' in recipientResult
-      ? recipientResult.recipient
-      : { error: recipientResult.error };
 
   let signedMsaPdfUrl: string | null = null;
   if (msa?.status === 'active' && msa.signedPdfStorageKey) {
@@ -150,20 +139,11 @@ export default async function DealerDetailPage({
             )}
           </dl>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm text-zinc-500">
-              No MSA on file yet. The first envelope bundles the MSA with the
-              dealer&apos;s first draft Quote.
-            </p>
-            {!dealer.archivedAt && (
-              <MsaCreateTrigger
-                dealerId={dealer.id}
-                dealerName={dealer.name}
-                recipient={recipient}
-                firstDraftQuote={firstDraftQuote}
-              />
-            )}
-          </div>
+          <p className="text-sm text-zinc-500">
+            No MSA on file yet. The MSA bundles with the dealer&apos;s first
+            Quote and is sent for signature from that quote — open or create one
+            in <span className="font-medium text-zinc-700">Quotes</span> below.
+          </p>
         )}
       </Section>
 
