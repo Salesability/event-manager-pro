@@ -39,6 +39,7 @@ import {
   sendQuote,
   setQuoteInputs,
 } from '@/features/quotes/actions';
+import { MsaSendForSignatureButton } from '@/features/msa/msa-send-button';
 import type { Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
@@ -186,6 +187,8 @@ export function QuoteComposer({
   initial,
   recipient,
   msaEnvelopeInFlight = false,
+  msaState,
+  quoteCreatedAt,
   pageTitle,
   pageDescription,
   pageStatusBadge,
@@ -208,6 +211,13 @@ export function QuoteComposer({
   const canSend =
     isEdit && initial.status !== 'accepted' && initial.status !== 'declined';
   const isResend = isEdit && initial.sentAt != null;
+  // 0061: MSA-aware send. `bundleEligible` (no usable MSA — page-computed from
+  // none/expired/terminated) means this first/renewal deal must ship as the
+  // signed MSA+Quote bundle, so "Send for signature" becomes the primary CTA
+  // and plain "Send Quote" demotes to a secondary review-email button.
+  // `canSend` already gates to non-terminal (draft|sent) quotes.
+  const showBundle = canSend && (msaState?.bundleEligible ?? false);
+  const hasActiveMsa = msaState?.active ?? false;
 
   const defaultValues = useMemo<QuoteFormValues>(() => {
     // 0052: rehydrate any persisted overrides from the JSONB snapshot. A line
@@ -439,7 +449,10 @@ export function QuoteComposer({
       {canSend && (
         <Button
           type="button"
-          color="green"
+          // 0061: when the bundle is the primary CTA, the plain quote email
+          // demotes to a secondary (outline) review-send; otherwise it stays
+          // the green primary.
+          {...(showBundle ? ({ outline: true } as const) : ({ color: 'green' } as const))}
           onClick={() => setConfirmSendOpen(true)}
           disabled={
             !recipientEmail ||
@@ -461,6 +474,14 @@ export function QuoteComposer({
         >
           {isResend ? 'Re-send Quote' : 'Send Quote'}
         </Button>
+      )}
+      {showBundle && initial && quoteCreatedAt && (
+        <MsaSendForSignatureButton
+          dealerId={initial.dealerId}
+          dealerName={initial.dealerName}
+          recipient={recipient ?? { error: 'No recipient resolved for this dealer.' }}
+          quote={{ id: initial.quoteId, createdAt: quoteCreatedAt }}
+        />
       )}
     </>
   );
@@ -498,6 +519,21 @@ export function QuoteComposer({
       {canSend && isResend && msaEnvelopeInFlight && (
         <p className="text-right text-[11px] text-amber-700">
           Re-send disabled: MSA envelope awaiting signature.
+        </p>
+      )}
+      {showBundle && (
+        <p className="text-right text-[11px] text-amber-700">
+          No active MSA — acceptance requires the signed MSA&nbsp;+&nbsp;Quote
+          bundle (&ldquo;Send for signature&rdquo;).
+        </p>
+      )}
+      {canSend && hasActiveMsa && (
+        <p className="text-right text-[11px] text-zinc-500">
+          MSA active
+          {msaState?.expiresAt
+            ? ` — expires ${msaState.expiresAt.toISOString().slice(0, 10)}`
+            : ''}
+          .
         </p>
       )}
       {isReadOnly && initial && (

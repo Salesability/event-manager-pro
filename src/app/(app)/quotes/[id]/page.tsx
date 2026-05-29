@@ -6,6 +6,7 @@ import { Section } from '@/components/app/section';
 import { QuoteStatusBadge } from '@/components/app/status-badge';
 import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
+import { deriveQuoteMsaState } from '@/features/msa/send-state';
 import { displayStatusKey } from '@/features/quotes/status-display';
 import { quoteDisplayName } from '@/features/quotes/display-name';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
@@ -76,19 +77,15 @@ export default async function QuoteEditPage({
     // than firing then surfacing the server-side error.
     loadActiveOrPendingMsa(quote.dealerId),
   ]);
-  const msaEnvelopeInFlight =
-    msa != null && msa.status === 'pending' && msa.providerDocumentId != null;
-  // 0061: drive the composer toolbar's MSA-aware send action. `bundleEligible`
-  // is exactly the set of states where `createMsaDraft` won't collide with an
-  // existing pending/active row — no MSA at all, or an expired/terminated one
-  // (a renewal). An `active` MSA means the quote sends plain (no signing); a
-  // pending-but-unsent MSA falls through to plain send (rare; owned by the
-  // 0041 resend-envelope follow-up).
+  // 0061: drive the composer toolbar's MSA-aware send action. The four flags
+  // (active / expiresAt / bundleEligible / envelopeInFlight) are derived in one
+  // tested helper so the lifecycle rules aren't re-encoded in the page.
+  const sendState = deriveQuoteMsaState(msa);
+  const msaEnvelopeInFlight = sendState.envelopeInFlight;
   const msaState = {
-    active: msa?.status === 'active',
-    expiresAt: msa?.status === 'active' ? msa.expiresAt : null,
-    bundleEligible:
-      msa == null || msa.status === 'expired' || msa.status === 'terminated',
+    active: sendState.active,
+    expiresAt: sendState.expiresAt,
+    bundleEligible: sendState.bundleEligible,
   };
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
