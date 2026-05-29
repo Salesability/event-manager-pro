@@ -552,20 +552,23 @@ function billingPivotSubquery() {
   return db
     .select({
       campaignId: billingAdjustments.campaignId,
-      records: sql<
+      // 0061: alias these `adj_*` so they don't collide with the same-named
+      // `campaigns` columns (`letters`) when interpolated unqualified into the
+      // outer `coalesce(...)` — a bare `letters` is ambiguous (Postgres 42702).
+      adjRecords: sql<
         number | null
       >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'qty_records')`.as(
-        'records',
+        'adj_records',
       ),
-      sms: sql<
+      adjSms: sql<
         number | null
       >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'sms_email')`.as(
-        'sms',
+        'adj_sms',
       ),
-      letters: sql<
+      adjLetters: sql<
         number | null
       >`max(${billingAdjustments.value}) filter (where ${billingAdjustments.field} = 'letters')`.as(
-        'letters',
+        'adj_letters',
       ),
     })
     .from(billingAdjustments)
@@ -580,9 +583,9 @@ export async function loadCampaignsByDealer(): Promise<CampaignAggregateRow<numb
       dealerId: campaigns.dealerId,
       dealerName: dealers.name,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.adjRecords}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.adjSms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.adjLetters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
@@ -608,9 +611,9 @@ export async function loadCampaignsByCoach(): Promise<CampaignAggregateRow<numbe
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.adjRecords}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.adjSms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.adjLetters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
     .leftJoin(contacts, eq(contacts.id, campaigns.coachId))
@@ -642,9 +645,9 @@ export async function loadCampaignsByMonth(): Promise<CampaignAggregateRow<strin
     .select({
       monthKey,
       count: sql<number>`count(${campaigns.id})::int`,
-      totalQty: sql<number>`coalesce(sum(coalesce(${adj.records}, ${campaigns.qtyRecords})), 0)::int`,
-      totalSms: sql<number>`coalesce(sum(coalesce(${adj.sms}, ${campaigns.smsEmail})), 0)::int`,
-      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.letters}, ${campaigns.letters})), 0)::int`,
+      totalQty: sql<number>`coalesce(sum(coalesce(${adj.adjRecords}, ${campaigns.qtyRecords})), 0)::int`,
+      totalSms: sql<number>`coalesce(sum(coalesce(${adj.adjSms}, ${campaigns.smsEmail})), 0)::int`,
+      totalLetters: sql<number>`coalesce(sum(coalesce(${adj.adjLetters}, ${campaigns.letters})), 0)::int`,
     })
     .from(campaigns)
     .leftJoin(adj, eq(adj.campaignId, campaigns.id))
