@@ -404,16 +404,18 @@ describe('sendMsaEnvelope', () => {
     expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
   });
 
-  it('rejects when the Quote is not in draft', async () => {
+  it('rejects when the Quote is in a terminal status (0061 — draft|sent only)', async () => {
     mocks.dbResults.push(
       [MSA_PENDING],
       [DEALER_ROW],
-      [{ ...DRAFT_QUOTE_ROW, status: 'sent' }],
+      [{ ...DRAFT_QUOTE_ROW, status: 'accepted' }],
     );
     const result = await call(
       sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
     );
-    expect((result as { error: string }).error).toContain('must be in draft');
+    expect((result as { error: string }).error).toContain(
+      'must be in draft or sent',
+    );
     expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
   });
 });

@@ -254,8 +254,8 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     if (quote.dealerId !== msa.dealerId) {
       return { error: 'Quote does not belong to the MSA dealer.' };
     }
-    if (quote.status !== 'draft') {
-      return { error: `Quote must be in draft (got '${quote.status}').` };
+    if (quote.status !== 'draft' && quote.status !== 'sent') {
+      return { error: `Quote must be in draft or sent (got '${quote.status}').` };
     }
 
     const recipientResult = await resolveQuoteRecipient(msa.dealerId);
@@ -285,10 +285,11 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     // Render the Quote PDF from the persisted snapshot.
     const linesResult = validatePersistedLines(quote.lineItems);
     if ('error' in linesResult) return linesResult;
-    // Quote is still a draft here (MSA bundles include the first draft quote
-    // alongside the agreement). Anchor "Valid until" on today since the row
-    // isn't sent yet — the date will continue to render this way when
-    // sendQuote eventually flips the row.
+    // The bundled quote may be draft OR sent (0061 — the coach can email it
+    // for review first, then send the same quote for signature). Anchor
+    // "Valid until" on today; a quote that was already sent may render a
+    // slightly different deadline in this envelope PDF than in its review
+    // email (parked 0044 follow-up (a) — out of scope here).
     const quoteData: QuoteData = {
       createdAt: quote.createdAt,
       issuedDate,
@@ -376,15 +377,16 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
     }
 
     // Link the bundled Quote to this MSA so the signed-webhook can auto-accept
-    // it (chunk 0055). Guarded on draft + unset link, so a re-send or a quote
-    // that has since moved on is a no-op.
+    // it (chunk 0055). Guarded on draft|sent + unset link (0061), so a quote
+    // that has since reached a terminal status, or is already linked, is a
+    // no-op.
     await db
       .update(quotes)
       .set({ msaId, updatedById: userId })
       .where(
         and(
           eq(quotes.id, quote.id),
-          eq(quotes.status, 'draft'),
+          inArray(quotes.status, ['draft', 'sent']),
           isNull(quotes.msaId),
         ),
       );

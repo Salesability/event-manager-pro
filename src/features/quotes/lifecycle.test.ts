@@ -51,12 +51,21 @@ describe('markQuoteAcceptedViaEnvelope', () => {
     expect(result).toEqual({ ok: true, transitioned: false });
   });
 
-  it('errors when the quote is in a non-draft, non-accepted status', async () => {
+  it('flips sent → accepted (0061 — bundle sent after a review email)', async () => {
+    mocks.dbResults.push([{ id: 42 }]); // guarded UPDATE matches (draft|sent)
+    const result = await markQuoteAcceptedViaEnvelope(42);
+    expect(result).toEqual({ ok: true, transitioned: true });
+    expect((mocks.updates[0].patch as Record<string, unknown>).status).toBe(
+      'accepted',
+    );
+  });
+
+  it('errors when the quote is in a terminal (declined) status', async () => {
     mocks.dbResults.push([]); // UPDATE miss
-    mocks.dbResults.push([{ status: 'sent' }]); // re-select
+    mocks.dbResults.push([{ status: 'declined' }]); // re-select
     const result = await markQuoteAcceptedViaEnvelope(42);
     expect((result as { error: string }).error).toContain(
-      "cannot be accepted from status 'sent'",
+      "cannot be accepted from status 'declined'",
     );
   });
 

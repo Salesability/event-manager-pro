@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   auditLog,
@@ -45,15 +45,18 @@ function plus12MonthsFrom(now: Date): Date {
 // combined envelope, the bundled Quote is accepted in the same signing event.
 // The Quote is linked to this MSA via `quotes.msa_id` (set at send time by
 // `sendMsaEnvelope`). Mirrors the side effects of the `acceptQuote` Server
-// Action — quote draft→accepted + prospect dealer→active — but runs as the
-// system actor (no session). Best-effort and isolated: a missing/already-
+// Action — quote draft|sent→accepted + prospect dealer→active — but runs as
+// the system actor (no session). Best-effort and isolated: a missing/already-
 // accepted quote is a silent no-op so a replayed/edge webhook never errors the
 // MSA flip. `dealerId` is the MSA's dealer, already resolved by the caller.
 async function acceptBundledQuote(msaId: number, dealerId: number): Promise<void> {
+  // draft|sent (0061): the bundled quote may have been emailed for review
+  // before its envelope was sent, so the linked row can sit in either status
+  // when the signing webhook fires.
   const [quote] = await db
     .select({ id: quotes.id })
     .from(quotes)
-    .where(and(eq(quotes.msaId, msaId), eq(quotes.status, 'draft')))
+    .where(and(eq(quotes.msaId, msaId), inArray(quotes.status, ['draft', 'sent'])))
     .limit(1);
   if (!quote) return;
 

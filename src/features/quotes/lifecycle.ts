@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { quotes } from '@/lib/db/schema';
 
@@ -151,14 +151,15 @@ export function markQuoteDeclined(
 
 // Accept a quote that was delivered for signature INSIDE a combined MSA
 // envelope (chunk 0055), as opposed to the standalone quote-send flow.
-// Difference from markQuoteAccepted: the transition is draft→accepted, not
-// sent→accepted. The combined-envelope quote is never emailed through
-// sendQuote — it rides in the BoldSign envelope alongside the MSA and is
-// accepted when the Client signs — so it has no `sentAt`/validity window and
-// no per-quote GCS PDF (the signed combined PDF on the MSA is the artifact).
-// Guarded UPDATE draft→accepted; idempotent if already accepted; errors on any
-// other source status. Called by the MSA signed-webhook path (msa/lifecycle.ts)
-// with `updatedById = null` (system actor — no session).
+// Difference from markQuoteAccepted: no `sentAt`/validity-window expiry check.
+// As of 0061 the bundled quote may be draft OR sent — a coach can email it for
+// review (→ sent) and then send the same quote for signature — so this accepts
+// from either source status. Signing the combined BoldSign document is a
+// definitive accept that supersedes any email "valid until" window, so the
+// expiry guard markQuoteAccepted applies is deliberately omitted here.
+// Guarded UPDATE draft|sent→accepted; idempotent if already accepted; errors on
+// any other source status. Called by the MSA signed-webhook path
+// (msa/lifecycle.ts) with `updatedById = null` (system actor — no session).
 export async function markQuoteAcceptedViaEnvelope(
   quoteId: number,
   updatedById: string | null = null
@@ -170,7 +171,7 @@ export async function markQuoteAcceptedViaEnvelope(
       acceptedAt: new Date(),
       ...(updatedById ? { updatedById } : {}),
     })
-    .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
+    .where(and(eq(quotes.id, quoteId), inArray(quotes.status, ['draft', 'sent'])))
     .returning({ id: quotes.id });
   if (updated.length) return { ok: true, transitioned: true };
 
