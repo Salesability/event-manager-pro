@@ -481,6 +481,15 @@ export function QuoteComposer({
           dealerName={initial.dealerName}
           recipient={recipient ?? { error: 'No recipient resolved for this dealer.' }}
           quote={{ id: initial.quoteId, createdAt: quoteCreatedAt }}
+          // Same guard as Send Quote: the envelope renders the SAVED snapshot,
+          // so block on unsaved edits (else the signed bundle carries stale
+          // pricing) or an in-flight action.
+          disabled={isDirty || pending || sendPending}
+          title={
+            isDirty
+              ? 'Save changes before sending for signature — the envelope renders the saved quote, not the unsaved edits.'
+              : undefined
+          }
         />
       )}
     </>

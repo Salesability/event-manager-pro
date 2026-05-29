@@ -12,6 +12,13 @@ export type MsaSendForSignatureButtonProps = {
    *  open in the composer (0061). Replaces the dealer-page flow's "first draft
    *  quote" guess: the bundle is anchored to the quote the coach is looking at. */
   quote: { id: number; createdAt: Date };
+  /** Mirror the Send-Quote button's guard. The envelope renders the *persisted*
+   *  quote snapshot (`sendMsaEnvelope` reads `quote.lineItems` from the DB), so
+   *  block sending while the composer has unsaved edits — otherwise the signed
+   *  bundle would carry stale pricing — or while another action is in flight. */
+  disabled?: boolean;
+  /** Tooltip explaining the disabled state (e.g. "save first"). */
+  title?: string;
 };
 
 // Primary toolbar CTA on the quote composer when the dealer has no usable MSA
@@ -24,7 +31,13 @@ export function MsaSendForSignatureButton(props: MsaSendForSignatureButtonProps)
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button type="button" color="green" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        color="green"
+        onClick={() => setOpen(true)}
+        disabled={props.disabled}
+        title={props.title}
+      >
         Send for signature
       </Button>
       <MsaCreateDialog
