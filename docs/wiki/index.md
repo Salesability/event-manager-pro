@@ -15,6 +15,7 @@ Inspired by [Karpathy's LLM Wiki gist](https://gist.github.com/karpathy/442a6bf5
 - [forms.md](forms.md) — RHF + zod + shadcn `<Field>` primitives, Server Action submission, full-RHF vs partial-RHF shapes, in-house vs shadcn primitive decision matrix.
 - [layout.md](layout.md) — portal shell + page-shape conventions: `<PageHeader>` with sticky parking, detail-page `<KeyValueStrip>` + `<Section>`, list-page `<ListToolbar>`, canonical row-action vocabulary (`View`/`Edit`/`Archive`/`Activate`/`Quote` + lint guard), status `<Badge>` wrappers, `<RelativeTime>` vs absolute dates.
 - [security.md](security.md) — five-layer defence-in-depth map: edge / layout / action / RLS / forensic audit log. Threat models for staff app vs future portal. What to grep when investigating.
+- [go-live-accounts.md](go-live-accounts.md) — production provisioning runbook: the external accounts the business must own (Supabase, Resend, BoldSign, Google Cloud, domain/DNS), what each is for, who-does-what split, and the credential hand-back checklist.
 
 ## Concept pages
 
