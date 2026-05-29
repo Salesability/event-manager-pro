@@ -338,6 +338,29 @@ describe('sendMsaEnvelope', () => {
     });
   });
 
+  it('accepts a SENT quote (0061) — sends the envelope and still links it to the MSA', async () => {
+    // MSA pre-load → dealer → quote(SENT) → guarded MSA UPDATE → quote-link UPDATE.
+    mocks.dbResults.push(
+      [MSA_PENDING],
+      [DEALER_ROW],
+      [{ ...DRAFT_QUOTE_ROW, status: 'sent' }],
+      [{ id: 1 }],
+    );
+
+    const result = await call(
+      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(mocks.sendSignatureRequest).toHaveBeenCalledTimes(1);
+    // The quote→MSA link UPDATE must still fire for a SENT quote — otherwise the
+    // signed-webhook auto-accept can't correlate the row (Phase 1 actions.ts:387
+    // widened the link guard from draft-only to draft|sent).
+    expect(mocks.updates).toHaveLength(2);
+    expect(mocks.updates[1].table).toBe('quotes');
+    expect((mocks.updates[1].patch as Record<string, unknown>).msaId).toBe(1);
+  });
+
   it('rejects when the Quote does not exist', async () => {
     mocks.dbResults.push([MSA_PENDING], [DEALER_ROW], []); // quote lookup empty
     const result = await call(
