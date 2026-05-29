@@ -13,6 +13,16 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-05-29 — MSA send action moved to the quote page + draft|sent eligibility (0061)
+
+- [commercial-spine.md](commercial-spine.md) — "The bundled first-deal envelope" section gains a **"Where it's triggered (0061)"** bullet: the bundle is launched from the **quote composer** (`/quotes/[id]`, admin+coach), not the (admin-only) dealer page. Toolbar is state-aware — no usable MSA → "Send for signature" is the primary CTA (bundles the *open* quote), "Send Quote" demotes to secondary; active MSA → plain "Send Quote" + an "MSA active — expires …" note. The bundled quote may now be **`draft` or `sent`** (was draft-only), so a coach can email it for review first then send the same quote for signature. Also fixed the cascading-flip wording: the webhook auto-accept is now `draft|sent → accepted`.
+- Code: `sendMsaEnvelope` relaxed at the status guard **and** the `quotes.msa_id` link UPDATE, plus the two auto-accept guards (`acceptBundledQuote` SELECT, `markQuoteAcceptedViaEnvelope` UPDATE) — all four widened draft→draft|sent (`96c75eb`). New `MsaSendForSignatureButton` + `deriveQuoteMsaState` helper (`7b7eadd`). Dealer-page trigger (`msa-panel.tsx`) + dead `firstDraftQuoteForDealer` query deleted (`8dd5493`). Fixes a latent gap: coaches hold `msa:edit` but the action sat behind `admin:access`.
+
+## 2026-05-29 — new page: go-live-accounts.md (production provisioning runbook)
+
+- Created [go-live-accounts.md](go-live-accounts.md) — a customer-facing checklist of the external accounts the business must create/own to move to production. Derived the service set from `.env.example` + [architecture.md](architecture.md): Supabase (DB + auth), Resend (email), BoldSign (e-sign), Google Cloud (Cloud Run hosting + GCS + Google OAuth login), domain/DNS (`events.salesability.ca`). Each section split **You do** (business: account + billing + 2FA) vs **Developer does** (technical wiring), with an env-var hand-back checklist. Flags the BoldSign **Canada region** gotcha (`api-ca.boldsign.com`) and the Resend **domain-verification-before-launch** requirement. Notes QuickBooks (0060) + Google Sheet (0058) as **not needed for launch** (deferred).
+- Linked from [index.md](index.md) under Reference pages.
+
 ## 2026-05-22 — 0055 live BoldSign smoke GREEN on Cloud Run + two prod bugs fixed
 
 - Live round-trip verified on Cloud Run (`nnwweb`/`event-manager-pro`, sandbox): combined envelope sent → signed → webhook flipped MSA #7 active, auto-accepted quote #3, persisted `gs://event-pro/msa/7/signed.pdf`. The smoke caught two bugs the mocked tests couldn't:
