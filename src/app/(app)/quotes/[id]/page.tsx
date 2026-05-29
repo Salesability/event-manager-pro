@@ -78,6 +78,18 @@ export default async function QuoteEditPage({
   ]);
   const msaEnvelopeInFlight =
     msa != null && msa.status === 'pending' && msa.providerDocumentId != null;
+  // 0061: drive the composer toolbar's MSA-aware send action. `bundleEligible`
+  // is exactly the set of states where `createMsaDraft` won't collide with an
+  // existing pending/active row — no MSA at all, or an expired/terminated one
+  // (a renewal). An `active` MSA means the quote sends plain (no signing); a
+  // pending-but-unsent MSA falls through to plain send (rare; owned by the
+  // 0041 resend-envelope follow-up).
+  const msaState = {
+    active: msa?.status === 'active',
+    expiresAt: msa?.status === 'active' ? msa.expiresAt : null,
+    bundleEligible:
+      msa == null || msa.status === 'expired' || msa.status === 'terminated',
+  };
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 
@@ -180,6 +192,8 @@ export default async function QuoteEditPage({
         }}
         recipient={recipient}
         msaEnvelopeInFlight={msaEnvelopeInFlight}
+        msaState={msaState}
+        quoteCreatedAt={quote.createdAt}
         pageTitle={quoteDisplayName(quote.createdAt)}
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
         keyValueItems={[

@@ -108,6 +108,20 @@ type Props = {
    *  envelope resolves. The UI gates the button to match the server.
    *  Always false on first-send (the MSA gate only fires on re-send). */
   msaEnvelopeInFlight?: boolean;
+  /** Dealer's MSA standing for the bundled-envelope action (0061). Drives the
+   *  toolbar: `bundleEligible` (no usable MSA — none/expired/terminated, the
+   *  states where `createMsaDraft` succeeds) → "Send for signature" is the
+   *  primary CTA and "Send Quote" demotes to secondary; `active` → plain
+   *  "Send Quote" + an "MSA active — expires …" indicator. Omitted on
+   *  create-mode (no dealer/quote yet). */
+  msaState?: {
+    active: boolean;
+    expiresAt: Date | null;
+    bundleEligible: boolean;
+  };
+  /** The quote's `createdAt` — drives the bundled-envelope dialog's
+   *  `quote-<timestamp>` display name. Edit-mode only. */
+  quoteCreatedAt?: Date;
   /** Page-level title rendered inside the sticky `<PageHeader>` the composer
    *  owns. Owned by the composer (not the page) so the composer's action
    *  buttons can ride in the same actions slot as the status badge — one
