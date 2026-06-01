@@ -1,7 +1,9 @@
 # Quote Line Items Table (with Price Overrides) — Intent
 
 **Created:** 2026-05-15
-**Supersedes:** [`closed/0052-quote-coach-price-override`](../closed/0052-quote-coach-price-override/plan.md) — the JSONB-only override approach. This chunk bakes the override columns into the relational schema instead, in one combined move.
+**Supersedes:** [`0052-quote-coach-price-override`](../0052-quote-coach-price-override/plan.md) — the JSONB-only override approach.
+
+> **Superseded + closed 2026-06-01** — folded into [`0062-quote-line-item-picker`](../../0062-quote-line-item-picker/intent.md). See the plan for context. This chunk bakes the override columns into the relational schema instead, in one combined move.
 
 ## Problem
 

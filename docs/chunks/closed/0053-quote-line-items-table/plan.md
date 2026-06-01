@@ -2,7 +2,9 @@
 
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-05-15
-**Supersedes:** [`closed/0052-quote-coach-price-override`](../closed/0052-quote-coach-price-override/plan.md) — JSONB-only override approach.
+**Supersedes:** [`0052-quote-coach-price-override`](../0052-quote-coach-price-override/plan.md) — JSONB-only override approach.
+
+> **Superseded + closed 2026-06-01** — never started (0/7 phases, no commits). Folded into [`0062-quote-line-item-picker`](../../0062-quote-line-item-picker/plan.md), which absorbs this chunk's `quote_line_items` table migration as the backing store for the new SKU **picker** composer (this chunk kept the calculator; 0062 reverses that). Body below is kept as the relational-normalization design history; the live work continues in 0062.
 
 ## Progress Tracker
 
