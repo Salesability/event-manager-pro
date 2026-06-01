@@ -10,10 +10,14 @@
 -- The CREATE TABLE block below is drizzle-kit generated. The trailing
 -- INSERT … SELECT is hand-added: it explodes each quote's `line_items` jsonb
 -- array into rows (preserving order via WITH ORDINALITY), so every existing
--- quote survives the pivot as ordinary picked lines. `description` and
--- `service_item_id` are left null on backfill — old jsonb lines never carried
--- them. `coalesce(line_items, '[]')` makes the backfill safe against null /
--- empty arrays and idempotent against a freshly-created (empty) table.
+-- quote survives the pivot as ordinary picked lines. It carries the per-line
+-- coach override (`overrideUnitPrice` — NULL when the key is absent, i.e. an
+-- untuned line) so 0052 price overrides aren't lost, and resolves
+-- `service_item_id` by matching the snapshot `code` to the live catalogue
+-- (NULL if the code was archived/renamed). `description` stays NULL — the old
+-- calculator jsonb never carried it; it self-heals on the next composer save.
+-- `coalesce(line_items, '[]')` makes the backfill safe against null / empty
+-- arrays and idempotent against a freshly-created (empty) table.
 --
 -- The `quotes.line_items` column is NOT dropped here — it stays as a safety net
 -- through Phases 2–6 and is removed by 0025_drop_quotes_line_items_jsonb.sql.
@@ -44,13 +48,15 @@ CREATE INDEX "quote_line_items_quote_id_idx" ON "quote_line_items" USING btree (
 CREATE INDEX "quote_line_items_service_item_id_idx" ON "quote_line_items" USING btree ("service_item_id");--> statement-breakpoint
 CREATE INDEX "quote_line_items_created_by_id_idx" ON "quote_line_items" USING btree ("created_by_id");--> statement-breakpoint
 CREATE INDEX "quote_line_items_updated_by_id_idx" ON "quote_line_items" USING btree ("updated_by_id");--> statement-breakpoint
-INSERT INTO "quote_line_items" ("quote_id", "code", "label", "qty", "unit_price", "line_total", "display_order", "created_at", "updated_at")
+INSERT INTO "quote_line_items" ("quote_id", "service_item_id", "code", "label", "qty", "unit_price", "override_unit_price", "line_total", "display_order", "created_at", "updated_at")
 SELECT
 	q."id",
+	(SELECT si."id" FROM "service_items" si WHERE si."code" = elem->>'code'),
 	elem->>'code',
 	elem->>'label',
 	(elem->>'qty')::int,
 	(elem->>'unitPrice')::numeric,
+	(elem->>'overrideUnitPrice')::numeric,
 	(elem->>'lineTotal')::numeric,
 	ord,
 	now(),
