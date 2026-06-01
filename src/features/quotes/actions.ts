@@ -324,13 +324,18 @@ function buildPickedLines(
   return { ok: true, lines };
 }
 
-// Legacy-shaped JSONB mirror of the picked lines so the JSONB-reading render
-// paths keep rendering until Phase 6. `unit: 'flat'` is a non-load-bearing
-// placeholder (neither the renderer nor `validatePersistedLines` read it).
-function pickedLinesToJsonbMirror(lines: PickedLine[]): ComputedLine[] {
+// JSONB mirror of the picked lines so the JSONB-reading render paths keep
+// rendering until the column drops in Phase 7. `unit: 'flat'` is a
+// non-load-bearing placeholder. `description` carries the SKU catalogue
+// description so the PDF can render it as a sub-line (`validatePersistedLines`
+// reads it through to `QuoteLineItem.subDescription`).
+function pickedLinesToJsonbMirror(
+  lines: PickedLine[],
+): Array<ComputedLine & { description?: string }> {
   return lines.map((l) => ({
     code: l.code,
     label: l.label,
+    description: l.description,
     unit: 'flat',
     unitPrice: l.unitPrice,
     overrideUnitPrice: l.overrideUnitPrice,
@@ -983,8 +988,16 @@ function validatePersistedLines(raw: unknown): ValidatedLines {
     // sets it to effectiveUnit * qty), so only `unitPrice` needs the
     // preference rule here. Catalogue `unitPrice` stays on the persisted
     // JSONB row so the original is recoverable for audit / coach reference.
+    // 0062: the picker mirror carries the SKU `description` → render it as a
+    // sub-line. Legacy calculator lines have no `description` (undefined).
+    const rawDescription = (item as { description?: unknown }).description;
+    const subDescription =
+      typeof rawDescription === 'string' && rawDescription.trim().length > 0
+        ? rawDescription
+        : undefined;
     lines.push({
       description: l.label,
+      ...(subDescription ? { subDescription } : {}),
       quantity: l.qty,
       unitPrice: l.overrideUnitPrice ?? l.unitPrice,
       total: l.lineTotal,
@@ -1254,6 +1267,11 @@ export const sendQuote = capabilityClient('quote:edit')
 
     const lineResult = validatePersistedLines(draft.lineItems);
     if ('error' in lineResult) return lineResult;
+    // 0062: refuse to send an empty quote — fail closed before any side
+    // effects (render / GCS / email / status flip).
+    if (lineResult.lines.length === 0) {
+      return { error: 'Add at least one line item before sending this quote.' };
+    }
 
     // Anchor both timestamps to the same `now` so the row's `sentAt` and the
     // rendered "Issued"/"Valid until" strings line up to the millisecond.

@@ -38,6 +38,28 @@ describe('renderQuotePdf', () => {
     expect('ok' in result && result.ok).toBe(true);
   });
 
+  // 0062: SKU line with a catalogue description sub-line.
+  it('renders a line item carrying a sub-description', async () => {
+    const result = await renderQuotePdf({
+      ...fixture,
+      lineItems: [
+        {
+          description: 'VIP Event',
+          subDescription: 'Premium on-site activation with concierge',
+          quantity: 1,
+          unitPrice: 2500,
+          total: 2500,
+        },
+      ],
+      subtotal: 2500,
+      tax: 0,
+      total: 2500,
+    });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    expect(result.body.subarray(0, 4).toString()).toBe('%PDF');
+  });
+
   it('round-trips through pdf-lib as a single US-Letter page', async () => {
     const result = await renderQuotePdf(fixture);
     expect('ok' in result && result.ok).toBe(true);

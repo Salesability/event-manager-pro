@@ -7,6 +7,9 @@ import type { FieldAnchor } from './anchors';
 
 export type QuoteLineItem = {
   description: string;
+  /** 0062: the SKU's catalogue description, rendered as a small grey sub-line
+   *  beneath the line label. Absent on legacy calculator lines. */
+  subDescription?: string;
   quantity: number;
   unitPrice: number;
   total: number;
@@ -292,6 +295,9 @@ export async function renderQuotePdf(
     });
     y -= 8;
 
+    // Width available for the description column before it would collide with
+    // the right-aligned Qty column.
+    const descMaxWidth = colQtyR - 40 - colDescX;
     for (const item of quote.lineItems) {
       page.drawText(item.description, { x: colDescX, y, size: 10, font, color: black });
       drawRight({ page, font, size: 10, color: black }, String(item.quantity), colQtyR, y);
@@ -302,7 +308,19 @@ export async function renderQuotePdf(
         y,
       );
       drawRight({ page, font, size: 10, color: black }, formatCurrency(item.total), colTotalR, y);
-      y -= 16;
+      // 0062: optional SKU description as a small grey sub-line.
+      if (item.subDescription) {
+        page.drawText(truncateToWidth(item.subDescription, font, 8, descMaxWidth), {
+          x: colDescX,
+          y: y - 9,
+          size: 8,
+          font,
+          color: grey,
+        });
+        y -= 25;
+      } else {
+        y -= 16;
+      }
     }
 
     y -= 8;

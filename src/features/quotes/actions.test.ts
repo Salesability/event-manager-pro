@@ -698,6 +698,18 @@ describe('sendQuote', () => {
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
   });
+
+  // 0062: empty-quote guard — a picker quote with zero lines can't be sent.
+  it('refuses to send an empty quote (no line items) before any side effect', async () => {
+    mocks.dbResults.push([{ ...DRAFT_ROW, lineItems: [] }], [DEALER_ROW]);
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error: 'Add at least one line item before sending this quote.',
+    });
+    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.putObject).not.toHaveBeenCalled();
+  });
 });
 
 describe('declineQuote (staff-side)', () => {
