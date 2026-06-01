@@ -6,9 +6,9 @@ import { KeyValueStrip, type KeyValueItem } from '@/components/app/key-value-str
 import { PageHeader } from '@/components/app/page-header';
 import {
   Controller,
+  useFieldArray,
   useForm,
   useWatch,
-  type UseFormRegisterReturn,
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,17 +20,11 @@ import {
 } from '@/components/catalyst/dialog';
 import {
   Field,
-  FieldGroup,
   Label,
-  Description,
-  Legend,
-  Fieldset,
 } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
-import { Input } from '@/components/catalyst/input';
 import { Textarea } from '@/components/catalyst/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/catalyst/toggle-group';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -44,35 +38,34 @@ import type { Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
 import {
-  computeQuote,
-  DEFAULT_QUOTE_INPUTS,
+  computePickedTotals,
   effectiveUnit,
   MAX_DOLLARS,
   QuoteInputsError,
-  quoteInputsSchema,
-  recomputeTotalsWithOverrides,
-  type ComputedLine,
-  type QuoteInputs,
+  type PickedLine,
 } from '@/lib/quotes/pricing';
-import { Checkbox, CheckboxField } from '@/components/catalyst/checkbox';
 
-// Quote composer — structured-input calculator (per 0035 plan Phase 3 OQ #2
-// resolution). Coach edits the small input set on the left; the computed
-// line-items table is read-only output on the right. Saving a fresh quote
-// creates a draft row and routes to `/quotes/<id>` (edit-mode home); saving
-// from edit-mode hits `setQuoteInputs` (draft-only, atomic guarded UPDATE
-// per actions.ts:281-289) and stays put. Non-draft statuses render
-// read-only — server-side guard is the real defence.
+// Quote composer — SKU line-item picker (0062, reversing the 0035 calculator).
+// The coach assembles the quote by picking services from the catalogue, each
+// with a quantity and a per-quote price (catalogue-seeded, editable). Saving a
+// fresh quote creates a draft row and routes to `/quotes/<id>` (edit-mode
+// home); saving from edit-mode hits `setQuoteInputs` (atomic guarded UPDATE)
+// and stays put. Terminal statuses (accepted/declined) render read-only —
+// the server-side guard is the real defence.
 
 export type InitialQuote = {
   quoteId: number;
   dealerId: number;
   dealerName: string;
-  inputs: QuoteInputs;
-  lineItems: ComputedLine[];
+  /** Free-text notes rendered on the PDF. The one structured field the picker
+   *  composer still owns. */
+  quoteNotes: string;
+  /** Persisted line rows (0062). Rehydrates the picker; read-only mode renders
+   *  these directly. */
+  pickedLines: PickedLine[];
   subtotal: number;
-  /** Tax dollar amount (not %). Matches `computeQuote`'s `taxOverride` and
-   *  the FormData `tax` field consumed by `setQuoteInputs`. */
+  /** Tax dollar amount (not %). Matches the `tax` FormData field consumed by
+   *  `setQuoteInputs`/`createQuote`. */
   tax: number;
   total: number;
   status: QuoteStatus;
@@ -129,8 +122,8 @@ type Props = {
    *  row, sticky at `top-16`. */
   pageTitle: ReactNode;
   /** Optional `<PageHeader>` description (1-line summary under the title).
-   *  Used on create-mode to surface the "Build a quote against the service
-   *  catalog…" copy. */
+   *  Used on create-mode to surface the "Build a quote from the catalogue…"
+   *  copy. */
   pageDescription?: ReactNode;
   /** Status badge rendered after the action buttons inside the PageHeader
    *  actions slot. Omitted on create-mode (no row, no status yet). */
@@ -147,24 +140,22 @@ type Props = {
 const labelClass = 'text-xs font-medium text-zinc-500';
 const fieldClass = 'flex flex-col gap-1';
 
-const RETRIEVAL_BRACKETS = [0, 100, 200, 300, 400] as const;
+// Form schema. `lines` is the picked-SKU array (RHF field array); `dealerId`
+// is create-mode chrome; `taxOverride` + `quoteNotes` ride alongside. The
+// server (`setQuoteInputs`/`createQuote`) receives `lines` as a JSON string +
+// `tax` / `quoteNotes` / `dealerId` as separate FormData entries.
+const lineFieldSchema = z.object({
+  serviceItemId: z.number().int().positive(),
+  qty: z.number().int().min(1).max(1_000_000),
+  price: z.number().min(0).max(MAX_DOLLARS),
+});
+type LineFieldValue = z.infer<typeof lineFieldSchema>;
 
-// Form-only schema: wraps the persisted `quoteInputsSchema` with the two
-// fields that exist only in the composer (`dealerId` for create-mode, plus
-// the tax override). Server-side `setQuoteInputs` / `createQuote` still
-// receive `inputs` as a JSON string and `tax` / `dealerId` as separate
-// FormData entries — the schema split here just keeps RHF honest about
-// what's a Quote field vs. what's composer chrome.
-const quoteFormSchema = quoteInputsSchema.extend({
+const quoteFormSchema = z.object({
   dealerId: z.number().int().positive().nullable(),
   taxOverride: z.number().min(0).max(MAX_DOLLARS),
-  // 0052: coach-driven per-line unit-price override. `pricesOverridden`
-  // gates whether the `overrides` map is applied at save time — turning the
-  // toggle off persists `overrides: {}` (catalogue totals restored), turning
-  // it on persists whatever's currently in the map. Map values are dollars,
-  // same caps as `taxOverride`.
-  pricesOverridden: z.boolean(),
-  overrides: z.record(z.string(), z.number().min(0).max(MAX_DOLLARS)),
+  quoteNotes: z.string().max(1000),
+  lines: z.array(lineFieldSchema),
 });
 type QuoteFormValues = z.infer<typeof quoteFormSchema>;
 
@@ -177,6 +168,35 @@ const currency = new Intl.NumberFormat('en-CA', {
 
 function fmtMoney(n: number): string {
   return currency.format(Number.isFinite(n) ? n : 0);
+}
+
+// Catalogue seed price for a SKU (numeric string → number; null → 0).
+function seedPrice(item: ServiceItem | undefined): number {
+  return item && item.unitPrice != null ? Number(item.unitPrice) : 0;
+}
+
+// Map editable form lines → `PickedLine[]` for live totals + display, resolving
+// each `serviceItemId` against the catalogue. Mirrors the server's
+// `buildPickedLines` so the on-screen totals match what gets persisted.
+function toPickedLines(
+  lines: LineFieldValue[],
+  catalogById: Map<number, ServiceItem>,
+): PickedLine[] {
+  return lines.map((l) => {
+    const item = catalogById.get(l.serviceItemId);
+    const seed = seedPrice(item);
+    const price = Number.isFinite(l.price) ? l.price : seed;
+    return {
+      serviceItemId: l.serviceItemId,
+      code: item?.code ?? String(l.serviceItemId),
+      label: item?.label ?? 'Unknown item',
+      description: item?.description ?? undefined,
+      qty: l.qty,
+      unitPrice: seed,
+      overrideUnitPrice: price !== seed ? price : undefined,
+      lineTotal: 0,
+    };
+  });
 }
 
 export function QuoteComposer({
@@ -219,26 +239,32 @@ export function QuoteComposer({
   const showBundle = canSend && (msaState?.bundleEligible ?? false);
   const hasActiveMsa = msaState?.active ?? false;
 
+  const catalogById = useMemo(
+    () => new Map(catalog.map((c) => [c.id, c])),
+    [catalog],
+  );
+  const catalogByCode = useMemo(
+    () => new Map(catalog.map((c) => [c.code, c])),
+    [catalog],
+  );
+
   const defaultValues = useMemo<QuoteFormValues>(() => {
-    // 0052: rehydrate any persisted overrides from the JSONB snapshot. A line
-    // with `overrideUnitPrice != null` means the coach tuned that one last
-    // session; reading it back populates the form so editing-then-saving
-    // preserves the tuned value (without round-tripping through a "no
-    // overrides found, ship empty map" first save).
-    const persistedOverrides: Record<string, number> = {};
-    for (const l of initial?.lineItems ?? []) {
-      if (l.overrideUnitPrice != null) {
-        persistedOverrides[l.code] = l.overrideUnitPrice;
-      }
-    }
+    // Rehydrate the field array from the persisted picked lines. The price is
+    // the effective (override-or-catalogue) value. `serviceItemId` falls back
+    // to a catalogue code-match for legacy lines backfilled from the old JSONB
+    // snapshot (which carry no service-item id).
+    const lines = (initial?.pickedLines ?? []).map((l) => ({
+      serviceItemId: l.serviceItemId ?? catalogByCode.get(l.code)?.id ?? 0,
+      qty: l.qty,
+      price: effectiveUnit(l),
+    }));
     return {
-      ...(initial?.inputs ?? DEFAULT_QUOTE_INPUTS),
       dealerId: initial?.dealerId ?? initialDealerId,
       taxOverride: initial?.tax ?? 0,
-      pricesOverridden: Object.keys(persistedOverrides).length > 0,
-      overrides: persistedOverrides,
+      quoteNotes: initial?.quoteNotes ?? '',
+      lines,
     };
-  }, [initial, initialDealerId]);
+  }, [initial, initialDealerId, catalogByCode]);
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -247,6 +273,14 @@ export function QuoteComposer({
   });
   const { register, control, handleSubmit, formState, reset } = form;
   const { errors, isDirty } = formState;
+  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+
+  // Local (non-form) state for the add-line picker so it resets to empty after
+  // each append.
+  const [addSelection, setAddSelection] = useState<{
+    value: string;
+    label: string;
+  } | null>(null);
 
   // Preview state. `pdfUrl` cleared on every open so the user always sees the
   // latest persisted snapshot — stale state would be worse than a half-second
@@ -260,50 +294,32 @@ export function QuoteComposer({
     () => dealers.map((d) => ({ value: String(d.id), label: dealerLabel(d) })),
     [dealers],
   );
+  const catalogOptions = useMemo(
+    () => catalog.map((c) => ({ value: String(c.id), label: c.label })),
+    [catalog],
+  );
 
-  // Subscribe to all form values so the computed table updates live as the
-  // coach edits. `useWatch` (not `watch()`) is the subscription-based variant
-  // — it plays well with the React Compiler and only re-renders this hook's
-  // scope, not the entire form tree.
+  // Subscribe to all form values so the totals update live as the coach edits.
   const watched = useWatch({ control, defaultValue: defaultValues });
 
-  // Live computation — uses the same pure function the server runs at
-  // setQuoteInputs / createQuote time, so the UI never drifts from what
-  // gets persisted. Catches validation errors so adversarial input doesn't
-  // crash the render. `quoteFormSchema` already validates inputs at submit
-  // time; this catch handles the keystroke window where the form value is
-  // briefly out of range.
+  // Live totals — uses the same pure function the server runs at save time, so
+  // the on-screen subtotal/total never drift from what gets persisted. Catches
+  // validation errors so a mid-keystroke out-of-range value doesn't crash the
+  // render.
   const computed = useMemo(() => {
     try {
-      const out = computeQuote(
-        extractInputs(watched as Partial<QuoteFormValues>),
-        catalog,
-        watched.taxOverride ?? 0,
-      );
-      // 0052: apply override map on top of catalogue lines when the toggle
-      // is on. Toggle off → catalogue totals shown live; map values stay in
-      // form state so flipping back on restores the in-progress tuning.
-      if (watched.pricesOverridden && watched.overrides) {
-        const overrides = watched.overrides as Record<string, number | undefined>;
-        const linesWithOverrides: ComputedLine[] = out.lines.map((l) => {
-          const v = overrides[l.code];
-          return v != null ? { ...l, overrideUnitPrice: v } : l;
-        });
-        return {
-          ok: true as const,
-          out: recomputeTotalsWithOverrides(linesWithOverrides, watched.taxOverride ?? 0),
-        };
-      }
-      return { ok: true as const, out };
+      const picked = toPickedLines((watched.lines ?? []) as LineFieldValue[], catalogById);
+      return { ok: true as const, out: computePickedTotals(picked, watched.taxOverride ?? 0) };
     } catch (err) {
-      const msg = err instanceof QuoteInputsError ? err.message : 'Invalid inputs.';
+      const msg = err instanceof QuoteInputsError ? err.message : 'Invalid lines.';
       return { ok: false as const, error: msg };
     }
-  }, [watched, catalog]);
+  }, [watched, catalogById]);
+
   const display = isReadOnly && initial
     ? {
         ok: true as const,
-        lines: initial.lineItems,
+        lines: initial.pickedLines,
         subtotal: initial.subtotal,
         tax: initial.tax,
         total: initial.total,
@@ -331,11 +347,18 @@ export function QuoteComposer({
       }
       startTransition(async () => {
         const fd = new FormData();
-        fd.set('inputs', JSON.stringify(extractInputs(values)));
+        fd.set(
+          'lines',
+          JSON.stringify(
+            (values.lines ?? []).map((l) => ({
+              serviceItemId: l.serviceItemId,
+              qty: l.qty,
+              price: l.price,
+            })),
+          ),
+        );
         fd.set('tax', String(values.taxOverride));
-        // 0052: send overrides map only when the toggle is on. Toggle-off
-        // ships `{}` so the server clears any prior overrides on this row.
-        fd.set('overrides', JSON.stringify(values.pricesOverridden ? values.overrides : {}));
+        fd.set('quoteNotes', values.quoteNotes ?? '');
         if (initial?.quoteId) {
           fd.set('quoteId', String(initial.quoteId));
           const result = toLegacyResult(await setQuoteInputs(fd));
@@ -363,11 +386,9 @@ export function QuoteComposer({
       });
     },
     () => {
-      // Resolver-rejected submit — surface the first field error as a toast
-      // so a user who tabs past inline errors still sees feedback. Inline
-      // per-field messages stay visible alongside.
-      const firstError = Object.values(errors).find((e) => e?.message)?.message;
-      toast.error(typeof firstError === 'string' ? firstError : 'Fix the highlighted fields.');
+      // Resolver-rejected submit — surface a toast so a user who tabs past
+      // inline errors still sees feedback.
+      toast.error('Fix the highlighted fields before saving.');
     },
   );
 
@@ -411,9 +432,9 @@ export function QuoteComposer({
   const recipientErrorMessage =
     recipient && 'error' in recipient ? recipient.error : null;
   // Confirm dialog must show the persisted-snapshot numbers, not the live
-  // computed ones — `sendQuote` emits from the saved jsonb, so live numbers
+  // computed ones — `sendQuote` emits from the saved snapshot, so live numbers
   // would lie to the coach when the form is dirty.
-  const persistedLineCount = initial?.lineItems.length ?? 0;
+  const persistedLineCount = initial?.pickedLines.length ?? 0;
   const persistedTotal = initial?.total ?? 0;
 
   // 0043 follow-up (a): composer renders the page header itself so the
@@ -563,7 +584,7 @@ export function QuoteComposer({
       )}
 
       <fieldset disabled={isReadOnly} className="contents">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex flex-col gap-3">
           <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Quote header</h2>
@@ -615,118 +636,70 @@ export function QuoteComposer({
         </div>
 
         <div className="flex flex-col gap-3">
-          <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Inputs</h2>
-
-          <FieldGroup>
-          <NumberField
-            label="Audience size"
-            min={0}
-            registration={register('audienceSize', { valueAsNumber: true })}
-            error={errors.audienceSize?.message}
-            help="Default 500. Each record over 500 adds an additional-contact line."
-          />
-          <NumberField
-            label="Event days"
-            min={1}
-            registration={register('eventDays', { valueAsNumber: true })}
-            error={errors.eventDays?.message}
-            help="Each day beyond day one adds an additional-day line."
-            spinner
-          />
-
-          <div className="grid grid-cols-3 gap-2">
-            <NumberField
-              label="BDC calls"
-              min={0}
-              registration={register('bdcCallCount', { valueAsNumber: true })}
-              error={errors.bdcCallCount?.message}
+          <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Notes &amp; tax</h2>
+          <Field>
+            <Label htmlFor="qf-quoteNotes">Quote notes (rendered on PDF)</Label>
+            <Textarea
+              id="qf-quoteNotes"
+              placeholder="Anything the dealer should see in the quote PDF."
+              rows={3}
+              className="resize-y"
+              aria-invalid={!!errors.quoteNotes?.message || undefined}
+              {...register('quoteNotes')}
             />
-            <NumberField
-              label="Letters"
+            {errors.quoteNotes?.message ? (
+              <FieldError>{errors.quoteNotes.message}</FieldError>
+            ) : null}
+          </Field>
+          <Field>
+            <Label htmlFor="qf-tax">Tax ($)</Label>
+            <input
+              id="qf-tax"
+              type="number"
               min={0}
-              registration={register('letterCount', { valueAsNumber: true })}
-              error={errors.letterCount?.message}
+              step="0.01"
+              className="w-40 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+              {...register('taxOverride', { valueAsNumber: true })}
             />
-            <NumberField
-              label="Digital"
-              min={0}
-              registration={register('digitalCount', { valueAsNumber: true })}
-              error={errors.digitalCount?.message}
-            />
-          </div>
-
-          <Controller
-            control={control}
-            name="recordRetrievalAmount"
-            render={({ field }) => (
-              <Fieldset>
-                <Legend>Record retrieval bracket</Legend>
-                <ToggleGroup
-                  value={String(field.value)}
-                  onValueChange={(v) => field.onChange(Number(v))}
-                  className="flex-wrap"
-                >
-                  {RETRIEVAL_BRACKETS.map((amount) => (
-                    <ToggleGroupItem key={amount} value={String(amount)}>
-                      {amount === 0 ? 'None' : `$${amount}`}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </Fieldset>
-            )}
-          />
-
-          <NumberField
-            label="Estimated Travel ($)"
-            min={0}
-            step="0.01"
-            registration={register('travelAmount', { valueAsNumber: true })}
-            error={errors.travelAmount?.message}
-            help="Hotel + mileage + air. Coach-typed dollar amount."
-          />
-          <TextAreaField
-            label="Travel notes"
-            registration={register('travelNotes')}
-            error={errors.travelNotes?.message}
-            placeholder="Hotel 2 nights + flight + mileage"
-          />
-
-          <TextAreaField
-            label="Quote notes (rendered on PDF)"
-            registration={register('quoteNotes')}
-            error={errors.quoteNotes?.message}
-            placeholder="Anything the dealer should see in the quote PDF."
-          />
-          </FieldGroup>
+            {errors.taxOverride?.message ? (
+              <FieldError>{errors.taxOverride.message}</FieldError>
+            ) : null}
+          </Field>
         </div>
       </section>
 
       <section className="flex flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Summary</h2>
-          {/* 0052: toggle that flips the Unit column into editable inputs.
-              Read-only mode (terminal-status quote) hides the checkbox — the
-              persisted values still render via `effectiveUnit()`. */}
-          {!isReadOnly && (
-            <CheckboxField>
-              <Controller
-                name="pricesOverridden"
-                control={control}
-                render={({ field }) => (
-                  <Checkbox
-                    name={field.name}
-                    checked={field.value}
-                    onChange={field.onChange}
-                  />
-                )}
-              />
-              <Label className="text-xs">Override unit prices for this prospect</Label>
-              <Description className="text-[11px]">
-                Catalogue prices stay on the house quote; the PDF sent to the prospect uses your tuned numbers.
-              </Description>
-            </CheckboxField>
-          )}
+          <h2 className="font-sans font-bold tracking-tight text-xl text-brand-700">Line items</h2>
         </div>
+
+        {!isReadOnly && (
+          // Add-line picker — choosing a SKU appends a line prefilled with the
+          // catalogue price, then resets the picker to empty.
+          <div className={fieldClass}>
+            <span className={labelClass}>Add a service from the catalogue</span>
+            <Combobox
+              options={catalogOptions}
+              displayValue={(item) => item?.label ?? ''}
+              value={addSelection}
+              onChange={(item) => {
+                if (!item) return;
+                const id = Number(item.value);
+                append({ serviceItemId: id, qty: 1, price: seedPrice(catalogById.get(id)) });
+                setAddSelection(null);
+              }}
+              placeholder="Pick a service to add…"
+              aria-label="Add line item"
+            >
+              {(item) => (
+                <ComboboxOption value={item}>
+                  <ComboboxLabel>{item.label}</ComboboxLabel>
+                </ComboboxOption>
+              )}
+            </Combobox>
+          </div>
+        )}
+
         {display.ok ? (
           <div className="overflow-hidden rounded-xl border border-zinc-200">
             <table className="w-full text-sm">
@@ -734,97 +707,108 @@ export function QuoteComposer({
                 <tr>
                   <th className="px-3 py-2 text-left">Item</th>
                   <th className="px-3 py-2 text-right">Qty</th>
-                  <th className="px-3 py-2 text-right">Unit</th>
+                  <th className="px-3 py-2 text-right">Unit price</th>
                   <th className="px-3 py-2 text-right">Line total</th>
+                  {!isReadOnly && <th className="px-2 py-2" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200">
-                {display.lines.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-6 text-center text-xs text-zinc-500">
-                      No lines yet. Set inputs on the left.
-                    </td>
-                  </tr>
-                ) : (
-                  display.lines.map((l) => {
-                    const effective = effectiveUnit(l);
-                    const isOverridden = l.overrideUnitPrice != null;
-                    return (
-                      <tr key={l.code}>
-                        <td className="px-3 py-2 align-top text-zinc-900">
-                          <div className="font-medium">{l.label}</div>
-                          <div className="text-[10px] uppercase tracking-wide text-zinc-500/70">
-                            {l.code} <span className="ml-2">ⓘ auto</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums align-top">{l.qty}</td>
-                        <td className="px-3 py-2 text-right tabular-nums align-top">
-                          {!isReadOnly && watched.pricesOverridden ? (
-                            <div className="flex flex-col items-end gap-1">
-                              <input
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                className="w-28 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                                defaultValue={watched.overrides?.[l.code] ?? l.unitPrice}
-                                {...register(`overrides.${l.code}` as const, { valueAsNumber: true })}
-                              />
-                              <span className="text-[10px] text-zinc-400">
-                                Catalogue: {fmtMoney(l.unitPrice)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-end">
-                              <span>{fmtMoney(effective)}</span>
-                              {isOverridden && (
-                                <span className="text-[10px] text-zinc-400 line-through">
-                                  {fmtMoney(l.unitPrice)}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right font-medium tabular-nums align-top">
-                          {fmtMoney(l.lineTotal)}
+                {isReadOnly
+                  ? renderReadOnlyRows(display.lines)
+                  : fields.length === 0
+                    ? (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-6 text-center text-xs text-zinc-500">
+                          No lines yet. Add a service from the catalogue above.
                         </td>
                       </tr>
-                    );
-                  })
-                )}
+                    )
+                    : fields.map((fieldRow, index) => {
+                        const line = (watched.lines ?? [])[index] as LineFieldValue | undefined;
+                        const sid = line?.serviceItemId ?? fieldRow.serviceItemId;
+                        const item = catalogById.get(sid);
+                        const qty = line?.qty ?? fieldRow.qty;
+                        const price = line?.price ?? fieldRow.price;
+                        const lineTotal =
+                          Number.isFinite(price * qty) ? price * qty : 0;
+                        const seed = seedPrice(item);
+                        const isTuned = Number.isFinite(price) && price !== seed;
+                        return (
+                          <tr key={fieldRow.id}>
+                            <td className="px-3 py-2 align-top text-zinc-900">
+                              <div className="font-medium">{item?.label ?? 'Removed item'}</div>
+                              {item?.description ? (
+                                <div className="text-[11px] text-zinc-500">{item.description}</div>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 text-right align-top">
+                              <input
+                                type="number"
+                                min={1}
+                                step="1"
+                                aria-label="Quantity"
+                                className="w-20 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                                {...register(`lines.${index}.qty` as const, { valueAsNumber: true })}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right align-top">
+                              <div className="flex flex-col items-end gap-1">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  aria-label="Unit price"
+                                  className="w-28 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                                  {...register(`lines.${index}.price` as const, { valueAsNumber: true })}
+                                />
+                                {isTuned ? (
+                                  <span className="text-[10px] text-zinc-400">
+                                    Catalogue: {fmtMoney(seed)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium tabular-nums align-top">
+                              {fmtMoney(lineTotal)}
+                            </td>
+                            <td className="px-2 py-2 text-right align-top">
+                              <button
+                                type="button"
+                                onClick={() => remove(index)}
+                                aria-label="Remove line"
+                                className="rounded px-2 py-1 text-xs text-zinc-400 transition hover:bg-red-50 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
               </tbody>
               <tfoot>
                 <tr className="border-t border-zinc-200 bg-zinc-100/60 text-sm">
-                  <td colSpan={3} className="px-3 py-2 text-right text-zinc-500">
+                  <td colSpan={isReadOnly ? 3 : 3} className="px-3 py-2 text-right text-zinc-500">
                     Subtotal
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums">
                     {fmtMoney(display.subtotal)}
                   </td>
+                  {!isReadOnly && <td />}
                 </tr>
                 <tr className="text-sm">
-                  <td colSpan={2} />
-                  <td className="px-3 py-2 text-right text-zinc-500">Tax override</td>
-                  <td className="px-3 py-2 text-right">
-                    {isReadOnly && initial ? (
-                      <span className="tabular-nums">{fmtMoney(initial.tax)}</span>
-                    ) : (
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className="w-28 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                        {...register('taxOverride', { valueAsNumber: true })}
-                      />
-                    )}
-                  </td>
+                  <td colSpan={isReadOnly ? 2 : 2} />
+                  <td className="px-3 py-2 text-right text-zinc-500">Tax</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(display.tax)}</td>
+                  {!isReadOnly && <td />}
                 </tr>
                 <tr className="border-t border-zinc-200 bg-brand-600 text-sm text-white">
-                  <td colSpan={3} className="px-3 py-2 text-right">
+                  <td colSpan={isReadOnly ? 3 : 3} className="px-3 py-2 text-right">
                     Total
                   </td>
                   <td className="px-3 py-2 text-right font-bold tabular-nums">
                     {fmtMoney(display.total)}
                   </td>
+                  {!isReadOnly && <td />}
                 </tr>
               </tfoot>
             </table>
@@ -861,6 +845,37 @@ export function QuoteComposer({
       />
     </>
   );
+}
+
+// Read-only line rows (terminal-status quote): the persisted picked lines as
+// plain text, no inputs.
+function renderReadOnlyRows(lines: PickedLine[]) {
+  if (lines.length === 0) {
+    return (
+      <tr>
+        <td colSpan={4} className="px-3 py-6 text-center text-xs text-zinc-500">
+          No line items.
+        </td>
+      </tr>
+    );
+  }
+  return lines.map((l) => (
+    <tr key={l.code}>
+      <td className="px-3 py-2 align-top text-zinc-900">
+        <div className="font-medium">{l.label}</div>
+        {l.description ? (
+          <div className="text-[11px] text-zinc-500">{l.description}</div>
+        ) : null}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums align-top">{l.qty}</td>
+      <td className="px-3 py-2 text-right tabular-nums align-top">
+        {fmtMoney(effectiveUnit(l))}
+      </td>
+      <td className="px-3 py-2 text-right font-medium tabular-nums align-top">
+        {fmtMoney(l.lineTotal)}
+      </td>
+    </tr>
+  ));
 }
 
 function PreviewDialog({
@@ -994,93 +1009,4 @@ function formatSentRelative(sentAt: Date): string {
 function dealerLabel(d: Dealer): string {
   if (d.status === 'prospect') return `${d.name} (prospect)`;
   return d.name;
-}
-
-/** Project the form's `QuoteInputs` subset — drops the composer-only
- *  `dealerId` and `taxOverride` fields so the result lines up with the
- *  jsonb shape `setQuoteInputs` / `createQuote` persist. Tolerates the
- *  `Partial` shape RHF's `useWatch` returns mid-reset by falling back to
- *  `DEFAULT_QUOTE_INPUTS` per-field — the next render resolves. */
-function extractInputs(values: Partial<QuoteFormValues>): QuoteInputs {
-  return {
-    audienceSize: values.audienceSize ?? DEFAULT_QUOTE_INPUTS.audienceSize,
-    eventDays: values.eventDays ?? DEFAULT_QUOTE_INPUTS.eventDays,
-    bdcCallCount: values.bdcCallCount ?? DEFAULT_QUOTE_INPUTS.bdcCallCount,
-    letterCount: values.letterCount ?? DEFAULT_QUOTE_INPUTS.letterCount,
-    digitalCount: values.digitalCount ?? DEFAULT_QUOTE_INPUTS.digitalCount,
-    recordRetrievalAmount:
-      values.recordRetrievalAmount ?? DEFAULT_QUOTE_INPUTS.recordRetrievalAmount,
-    travelAmount: values.travelAmount ?? DEFAULT_QUOTE_INPUTS.travelAmount,
-    travelNotes: values.travelNotes ?? DEFAULT_QUOTE_INPUTS.travelNotes,
-    quoteNotes: values.quoteNotes ?? DEFAULT_QUOTE_INPUTS.quoteNotes,
-  };
-}
-
-function NumberField({
-  label,
-  registration,
-  min,
-  step,
-  help,
-  error,
-  spinner,
-}: {
-  label: string;
-  registration: UseFormRegisterReturn;
-  min?: number;
-  step?: string;
-  help?: string;
-  error?: string;
-  /** Opt back into native +/- spin buttons. Off everywhere by default (see
-   *  globals.css); flip on for small-range day-count style fields. */
-  spinner?: boolean;
-}) {
-  const id = `qf-${registration.name}`;
-  return (
-    <Field>
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        min={min ?? 0}
-        step={step ?? '1'}
-        aria-invalid={!!error || undefined}
-        {...(spinner ? { 'data-spinner': '' } : {})}
-        {...registration}
-      />
-      {error ? (
-        <FieldError>{error}</FieldError>
-      ) : help ? (
-        <Description>{help}</Description>
-      ) : null}
-    </Field>
-  );
-}
-
-function TextAreaField({
-  label,
-  registration,
-  placeholder,
-  error,
-}: {
-  label: string;
-  registration: UseFormRegisterReturn;
-  placeholder?: string;
-  error?: string;
-}) {
-  const id = `qf-${registration.name}`;
-  return (
-    <Field>
-      <Label htmlFor={id}>{label}</Label>
-      <Textarea
-        id={id}
-        placeholder={placeholder}
-        rows={2}
-        className="resize-y"
-        aria-invalid={!!error || undefined}
-        {...registration}
-      />
-      {error ? <FieldError>{error}</FieldError> : null}
-    </Field>
-  );
 }

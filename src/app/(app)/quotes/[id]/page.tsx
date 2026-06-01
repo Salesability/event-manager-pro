@@ -13,7 +13,6 @@ import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
-import { type QuoteInputs } from '@/lib/quotes/pricing';
 import { signedUrl } from '@/lib/storage/gcs';
 
 // Edit-mode quote page. Mirrors `/quotes/new` but hydrates the composer from
@@ -177,8 +176,8 @@ export default async function QuoteEditPage({
           quoteId: quote.id,
           dealerId: quote.dealerId,
           dealerName: quote.dealerName,
-          inputs: quote.inputs as QuoteInputs,
-          lineItems: quote.lineItems,
+          quoteNotes: quote.inputs.quoteNotes ?? '',
+          pickedLines: quote.pickedLines,
           subtotal: Number(quote.subtotal) || 0,
           tax: Number(quote.tax) || 0,
           total: Number(quote.total) || 0,
@@ -202,8 +201,7 @@ export default async function QuoteEditPage({
             label: 'Dealer',
             value: `${quote.dealerName}${quote.dealerArchivedAt ? ' (archived)' : ''}`,
           },
-          { label: 'Audience', value: quote.inputs.audienceSize.toLocaleString() },
-          { label: 'Event days', value: quote.inputs.eventDays.toLocaleString() },
+          { label: 'Line items', value: String(quote.pickedLines.length) },
           { label: 'Total', value: totalMoney },
         ]}
         sendHistorySlot={sendHistoryNode}
