@@ -17,7 +17,9 @@
     "db:test:reset": "bash scripts/test-db/reset.sh",
     "db:test:up": "docker compose up -d",
     "db:test:down": "docker compose down -v",
-    "db:test:psql": "docker compose exec db psql -U postgres -d event_manager_test"
+    "db:test:seed": "docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U postgres -d event_manager_test < scripts/test-db/seed-dev.sql",
+    "db:test:psql": "docker compose exec db psql -U postgres -d event_manager_test",
+    "dev:local-db": "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/event_manager_test next dev"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

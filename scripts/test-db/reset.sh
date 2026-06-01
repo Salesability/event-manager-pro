@@ -52,4 +52,12 @@ docker compose exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d event_manager_t
 echo "==> Replaying migrations 0000 -> latest (drizzle.test.config.ts)"
 pnpm exec drizzle-kit migrate --config drizzle.test.config.ts
 
+# Dev fixtures (dealers / contacts / draft quotes with picked lines) so the DB
+# is ready to exercise. Skip with TEST_DB_SEED=0 for a clean integration-test DB.
+if [ "${TEST_DB_SEED:-1}" != "0" ]; then
+  echo "==> Seeding dev fixtures (scripts/test-db/seed-dev.sql)"
+  docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U postgres -d event_manager_test \
+    < scripts/test-db/seed-dev.sql
+fi
+
 echo "==> Test DB ready at ${TEST_DATABASE_URL}"
