@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-01 — Quote composer: calculator → SKU line-item picker (0062)
+
+- [architecture.md](architecture.md) — rewrote "Quote composer" from **calculator** to **SKU line-item picker**: the coach picks SKUs from `service_items`, sets qty + per-quote price (catalogue-seeded, editable); picked lines are the source of truth. New pricing surface (`computePickedTotals`/`validatePickedLines`/`effectiveUnit`), the `lines`-payload write path (delete-and-insert `quote_line_items`), and the `render-lines.ts` subquery the PDF paths read from. History blockquote records the reversal of the 0035 calculator decision.
+- [data-model.md](data-model.md) — new **`quote_line_items`** table section (one row per picked line: catalogue snapshot + per-quote `override_unit_price` + `display_order`); `quotes.line_items` jsonb **dropped** (0062 Phase 7, migration `0025`; created+backfilled in `0024`); `inputs` now only carries `quoteNotes` from the composer; `service_items` reframed as the picker's SKU catalogue.
+- [commercial-spine.md](commercial-spine.md) — happy-path composer line updated to "picks SKUs from the catalogue."
+- Why: owner feedback — the calculator's auto-derive (8 hardcoded codes) was "too complicated and buggy", and a SKU added in `services-admin` could never reach a quote. The picker closes that gap. Migrations rehearsed against the 0063 test-DB container before ship.
+
 ## 2026-06-01 — new: containerized test DB harness (0063)
 
 - [conventions.md](conventions.md) — added a **Test DB harness (0063)** subsection under Database: `pnpm db:test:reset` rebuilds a disposable `postgres:17` container from migration 0, isolated from the shared Supabase DB (targets `TEST_DATABASE_URL`, localhost-guarded in both `drizzle.test.config.ts` and `reset.sh`).

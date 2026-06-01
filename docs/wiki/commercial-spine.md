@@ -37,7 +37,7 @@ The accepted Quote *is* the binding agreement. There's no business event between
 ```
    Lead (in-app entry today; web intake = v2 — see 0016)
      │
-     ▼  composer (0035) — coach builds Quote with audience inputs + pricing
+     ▼  composer — coach builds Quote by picking SKUs from the catalogue (0062 picker; was a calculator pre-0062)
    Quote.draft  (composer fully editable; setQuoteInputs accepts saves)
      │
      ▼  Send (0035 Phase 4)

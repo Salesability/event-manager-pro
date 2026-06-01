@@ -14,8 +14,8 @@
 | 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Done | `ba27ef4` |
 | 5: Composer UI — replace Inputs panel with the add-line picker | Done | `beca36e` |
 | 6: Send / PDF — render picked lines + description; empty-quote guard | Done | `6f2dd8f` |
-| 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Pending | - |
-| 8: Tests + smoke verification + wiki update | Pending | - |
+| 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Done | `a4259ae` |
+| 8: Tests + smoke verification + wiki update | In Progress | - |
 
 This chunk pivots the quote composer from a parametric calculator to a SKU line-item picker. "Done" looks like: a coach opens a draft quote, clicks **Add line**, picks a SKU from the catalogue (the owner's library, including new ones like "VIP EVENT"), the catalogue price prefills and stays editable, qty is set per line, and the assembled lines persist to `quote_line_items`, render on the PDF (label + description + qty + effective price + line total), and roll up to subtotal/tax/total. The structured-input calculator is gone from the UI and the `computeQuote()` derivation is retired; `quotes.inputs` / `audience_source_id` columns stay on the schema so production/reports/calendar are untouched.
 
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 75% (6/8 phases complete)
+**Overall Progress:** 88% (7/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -108,13 +108,15 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [ ] ~~Manually inspect a generated PDF~~ → covered by Phase 8 browser smoke (Preview PDF on a picker quote).
 
 #### Phase 7: Drop JSONB + retire dead calculator
-- [ ] Invoke `db-conventions` before the drop migration.
-- [ ] `drizzle/0025_drop_quotes_line_items_jsonb.sql` — `ALTER TABLE quotes DROP COLUMN line_items;`
-- [ ] Remove `lineItems` column from `src/lib/db/schema/quotes.ts`; update the table comment block (`:28-39`) to point at `quote_line_items` and drop the "deferred to 7.3" note
-- [ ] Delete `computeQuote()` + the structured-input derivation from `pricing.ts`; keep `effectiveUnit`/`computePickedTotals`/money helpers. Remove now-unused `QuoteInputs` *pricing* fields from the composer-facing schema (the DB `quotes.inputs` column + its `quoteNotes`/`audienceSourceId` semantics stay)
-- [ ] Remove the JSONB fallback branch from `queries.ts` (Phase 3 safety net)
-- [ ] `grep -rn "computeQuote\|lineItems\b" src/` → only in-memory `PickedLine[]`/test references remain; no DB column refs
-- [ ] Run migration; `\d quotes` no longer shows `line_items`
+- [x] `drizzle/0025_drop_quotes_line_items_jsonb.sql` — `ALTER TABLE quotes DROP COLUMN line_items;` (generated; journal `when` `1780334030204` > `0024`'s ✓).
+- [x] Removed `lineItems` column from `src/lib/db/schema/quotes.ts` + rewrote the table comment.
+- [x] **Render cutover (the load-bearing piece):** new `src/lib/quotes/render-lines.ts` exports `renderLinesColumn` (a correlated `jsonb_agg` subquery over `quote_line_items`), `mapRenderLines`, and `lineFingerprint`. `sendQuote` / `previewQuotePdf` / `applyPickerSave` / `msa.sendMsaEnvelope` read lines **inline on the existing quote `select`** (no new round-trip → fixtures just rename `lineItems`→`renderLines`, ~no test FIFO churn). Deleted both copies of `validatePersistedLines`.
+- [x] Write path stops writing the (now-gone) jsonb mirror; `pickedLinesToJsonbMirror` deleted; `hashLineItems` re-rooted to `lineFingerprint`.
+- [x] Deleted `computeQuote()` + `recomputeTotalsWithOverrides` + `quoteInputsSchema` + `validateQuoteInputs` + `ComputedLine`/`QuoteComputation` + the old `inputs`/`overrides` path in `createQuote`/`setQuoteInputs` (+ their ~30 tests). Kept `effectiveUnit`/`computePickedTotals`/`validatePickedLines`/money helpers + `QuoteInputs`/`DEFAULT_QUOTE_INPUTS` (the `quotes.inputs` column stays).
+- [x] Removed the JSONB fallback from `queries.ts` (`loadPickedLines` reads the table only).
+- [x] Grep gate: `computeQuote`/`quotes.lineItems` appear only in historical comments — no code refs.
+- [x] **Rehearsed against the 0063 container:** `pnpm db:test:reset` replays `0000→0025` clean; `quotes.line_items` gone, `quote_line_items` present. tsc clean; 901 tests pass.
+- [x] **Latent bug found + fixed:** `quote-line-items.test.ts` lived in `src/lib/db/schema/` — `drizzle-kit generate` imports every file there and choked on the `vitest` import. Moved to `src/lib/db/quote-line-items.schema.test.ts`.
 
 #### Phase 8: Tests + smoke verification + wiki update
 - [ ] Service integration test: create draft → save picked lines (one with an edited price) → reload → assert `quote_line_items` rows + `override_unit_price` + `quotes.subtotal/tax/total`
