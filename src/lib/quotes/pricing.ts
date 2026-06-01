@@ -67,6 +67,39 @@ export type QuoteComputation = {
   total: number;
 };
 
+/** A line on the 0062 SKU picker. Superset of the persisted fields the
+ *  `quote_line_items` table carries. The coach picks a catalogue SKU (which
+ *  seeds `serviceItemId`/`code`/`label`/`description`/`unitPrice`), sets `qty`,
+ *  and may tune the price per quote via `overrideUnitPrice`. Unlike the
+ *  calculator's `ComputedLine`, there is no `unit` discriminator — a picked
+ *  line is just label + qty + price. */
+export type PickedLine = {
+  /** Catalogue row the coach picked. Optional only for legacy rows backfilled
+   *  from the pre-0062 jsonb snapshot (those carried no service-item id). */
+  serviceItemId?: number;
+  code: string;
+  label: string;
+  description?: string;
+  qty: number;
+  /** Catalogue seed price, snapshotted at pick time. */
+  unitPrice: number;
+  /** Coach's per-quote price when changed off the catalogue seed (0062
+   *  "seed-then-editable"). Absent on lines the coach hasn't tuned. */
+  overrideUnitPrice?: number;
+  lineTotal: number;
+};
+
+export type PickedQuoteComputation = {
+  lines: PickedLine[];
+  subtotal: number;
+  tax: number;
+  total: number;
+};
+
+/** Upper bound on a single line's quantity — rejects fat-finger / adversarial
+ *  inputs before the numeric(12,2) line total can overflow. */
+const MAX_QTY = 1_000_000;
+
 /** Reasonable upper bounds — rejects adversarial / fat-finger inputs without
  *  the server having to wait for a numeric(10,2) overflow. */
 const MAX_AUDIENCE = 1_000_000;
@@ -156,6 +189,12 @@ function findCode(catalog: ServiceItem[], code: string): ServiceItem | undefined
 }
 
 /** Compute the line items + totals for a draft quote.
+ *
+ *  @deprecated 0062 pivots the composer to a SKU picker (`computePickedTotals`).
+ *  This parametric calculator — structured inputs auto-derived into the 8
+ *  hardcoded catalogue codes — is retired from the UI in Phase 5 and deleted in
+ *  Phase 7. Kept compiling in between so the old composer/actions/tests stay
+ *  green during the cutover. Do not wire new callers to it.
  *
  *  Rules (locked 2026-05-08 in 0035 plan Phase 3):
  *  - `base-event` always present, qty 1.
@@ -254,9 +293,59 @@ export function computeQuote(
  *  and `subtotal`/`total`. Prefers the coach's per-line override (set on the
  *  composer Summary in 0052) and falls back to the catalogue-derived
  *  `unitPrice` snapshot. Pre-0052 lines + lines the coach hasn't tuned have
- *  no `overrideUnitPrice`, so the fallback is the universal default. */
-export function effectiveUnit(line: ComputedLine): number {
+ *  no `overrideUnitPrice`, so the fallback is the universal default. Structural
+ *  param so it serves both the calculator `ComputedLine` and the 0062
+ *  `PickedLine`. */
+export function effectiveUnit(line: { unitPrice: number; overrideUnitPrice?: number }): number {
   return line.overrideUnitPrice ?? line.unitPrice;
+}
+
+/** Validate a candidate set of picked lines (0062). Throws `QuoteInputsError`
+ *  on the first line that fails: non-empty `code`/`label`, integer qty in
+ *  `[1, MAX_QTY]`, finite non-negative `unitPrice`/`overrideUnitPrice` ≤
+ *  MAX_DOLLARS. The composer enforces these client-side; this lives here so a
+ *  direct Server Action call can't bypass. */
+export function validatePickedLines(lines: PickedLine[]): void {
+  for (const line of lines) {
+    if (typeof line.code !== 'string' || line.code.trim() === '') {
+      throw new QuoteInputsError('Each line needs a catalogue code.');
+    }
+    if (typeof line.label !== 'string' || line.label.trim() === '') {
+      throw new QuoteInputsError(`Line ${line.code} needs a label.`);
+    }
+    assertNonNegInt(line.qty, `qty for ${line.code}`, MAX_QTY);
+    if (line.qty < 1) {
+      throw new QuoteInputsError(`qty for ${line.code} must be at least 1.`);
+    }
+    assertNonNegMoney(line.unitPrice, `unitPrice for ${line.code}`);
+    if (line.overrideUnitPrice != null) {
+      assertNonNegMoney(line.overrideUnitPrice, `overrideUnitPrice for ${line.code}`);
+    }
+  }
+}
+
+/** Recompute line totals + roll-ups for a set of picked lines (0062). The
+ *  picker has no derivation step — totals are just `effectiveUnit(line) × qty`
+ *  summed, plus the coach-typed `tax` dollar amount (same contract as
+ *  `computeQuote`/`recomputeTotalsWithOverrides`: tax is a typed amount, never
+ *  a derived percentage). Returns NEW `PickedLine` objects (immutable) so the
+ *  caller can hand the result straight to the persist path. */
+export function computePickedTotals(
+  lines: PickedLine[],
+  taxOverride = 0,
+): PickedQuoteComputation {
+  validatePickedLines(lines);
+  if (!Number.isFinite(taxOverride) || taxOverride < 0 || taxOverride > MAX_DOLLARS) {
+    throw new QuoteInputsError(`tax must be a non-negative number ≤ ${MAX_DOLLARS}.`);
+  }
+  const recomputed: PickedLine[] = lines.map((line) => ({
+    ...line,
+    lineTotal: roundCents(effectiveUnit(line) * line.qty),
+  }));
+  const subtotal = roundCents(recomputed.reduce((acc, l) => acc + l.lineTotal, 0));
+  const tax = roundCents(taxOverride);
+  const total = roundCents(subtotal + tax);
+  return { lines: recomputed, subtotal, tax, total };
 }
 
 /** Recompute `lineTotal` per line + roll-up totals using `effectiveUnit()` —
