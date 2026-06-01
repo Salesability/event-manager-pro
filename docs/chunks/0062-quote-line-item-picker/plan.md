@@ -13,7 +13,7 @@
 | 3: Read path — rehydrate picked lines + expose catalogue to the picker | Done | `ad62e89` |
 | 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Done | `ba27ef4` |
 | 5: Composer UI — replace Inputs panel with the add-line picker | Done | `beca36e` |
-| 6: Send / PDF — render picked lines + description; empty-quote guard | Pending | - |
+| 6: Send / PDF — render picked lines + description; empty-quote guard | Done | `6f2dd8f` |
 | 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Pending | - |
 | 8: Tests + smoke verification + wiki update | Pending | - |
 
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 63% (5/8 phases complete)
+**Overall Progress:** 75% (6/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -100,10 +100,12 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [x] Page wiring: `[id]/page.tsx` feeds `quoteNotes`/`pickedLines` into `initial` (dropped `inputs`/`lineItems` + the unused `QuoteInputs` import); KeyValueStrip drops "Audience"/"Event days", adds "Line items". `new/page.tsx` unchanged (already passes `catalog`). tsc clean; 951 tests pass (composer has no unit tests — Phase 8 browser smoke covers it).
 
 #### Phase 6: Send / PDF — render picked lines + guard
-- [ ] In `src/lib/pdf/render-quote.ts`, render each line: label, **description sub-line** (new), qty, `effectiveUnit(line)`, line total; subtotal/tax/total from `quotes.*`
-- [ ] Add an **empty-quote guard** to `sendQuote` (`actions.ts:~745-851`): refuse to send a quote with zero lines / $0 total (friendly `{ error }`)
-- [ ] Audit other `ComputedLine[]`/`lineItems` consumers (email body, share page, receipt) → apply `effectiveUnit` + description
-- [ ] Manually inspect a generated PDF for a picked quote with an overridden price → only the tuned price + description visible to the prospect
+- [x] `render-quote.ts`: `QuoteLineItem` gains optional `subDescription`; the line loop renders it as a small grey sub-line (dynamic row height, truncated to the description column width). `effectiveUnit` already applied via `validatePersistedLines` (`unitPrice = overrideUnitPrice ?? unitPrice`).
+- [x] **Render feed cutover (deviation):** rather than add a `quote_line_items` table read to every `sendQuote`/`previewQuotePdf` path (which would churn ~15 mocked FIFO tests), `pickedLinesToJsonbMirror` now carries `description`, and `validatePersistedLines` reads it through to `subDescription`. The render path stays on the (enriched) JSONB mirror; **Phase 7** cuts it over to the table when the column drops. Same user-visible result (description on the PDF) with far less churn.
+- [x] **Empty-quote guard** in `sendQuote`: `validatePersistedLines` → if `lines.length === 0`, fail closed with "Add at least one line item before sending this quote." before render/GCS/email/status-flip.
+- [x] Other consumers audited: `previewQuotePdf` shares `validatePersistedLines` (gets the sub-line for free); the email body (`quoteEmail`) uses the total only (no line list); no quote share page exists (public accept route was dropped in 0026). No other `lineItems` consumer.
+- [x] Tests: `render-quote.test.ts` renders a line with `subDescription`; `actions.test.ts` refuses an empty quote. 953 tests pass (+2).
+- [ ] ~~Manually inspect a generated PDF~~ → covered by Phase 8 browser smoke (Preview PDF on a picker quote).
 
 #### Phase 7: Drop JSONB + retire dead calculator
 - [ ] Invoke `db-conventions` before the drop migration.
