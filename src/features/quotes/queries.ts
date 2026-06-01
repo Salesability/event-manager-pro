@@ -1,8 +1,8 @@
 import 'server-only';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { audienceSources, auditLog, dealers, quotes } from '@/lib/db/schema';
-import type { ComputedLine, QuoteInputs } from '@/lib/quotes/pricing';
+import { audienceSources, auditLog, dealers, quoteLineItems, quotes } from '@/lib/db/schema';
+import type { ComputedLine, PickedLine, QuoteInputs } from '@/lib/quotes/pricing';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined';
 
@@ -23,7 +23,16 @@ export type Quote = {
   total: string;
   taxPct: string;
   inputs: QuoteInputs;
+  /** @deprecated 0062 — legacy JSONB line snapshot. Read from `pickedLines`
+   *  instead; this field is sourced from `quotes.line_items`, dropped in
+   *  Phase 6. Populated only on the single-quote load path. */
   lineItems: ComputedLine[];
+  /** 0062 — the SKU picker's line rows, from `quote_line_items` ordered by
+   *  `display_order`. Populated only by `loadQuote` (the composer path); list
+   *  loaders leave it `[]` to avoid an N+1 (the list views show totals, not
+   *  lines). Falls back to JSONB-derived lines while the table is empty
+   *  mid-cutover (Phase 3 safety net, removed in Phase 6). */
+  pickedLines: PickedLine[];
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
   sentAt: Date | null;
@@ -114,6 +123,8 @@ function mapRow(row: QuoteRow): Quote {
     taxPct: row.taxPct,
     inputs: row.inputs as QuoteInputs,
     lineItems: row.lineItems as unknown as ComputedLine[],
+    // List loaders leave this empty; `loadQuote` populates it from the table.
+    pickedLines: [],
     audienceSourceId: row.audienceSourceId,
     audienceSourceLabel: row.audienceSourceLabel,
     sentAt: row.sentAt,
@@ -139,6 +150,71 @@ export async function loadQuotes(): Promise<Quote[]> {
   return rows.map(mapRow);
 }
 
+const lineItemProjection = {
+  serviceItemId: quoteLineItems.serviceItemId,
+  code: quoteLineItems.code,
+  label: quoteLineItems.label,
+  description: quoteLineItems.description,
+  qty: quoteLineItems.qty,
+  unitPrice: quoteLineItems.unitPrice,
+  overrideUnitPrice: quoteLineItems.overrideUnitPrice,
+  lineTotal: quoteLineItems.lineTotal,
+};
+
+type LineItemRow = {
+  serviceItemId: number | null;
+  code: string;
+  label: string;
+  description: string | null;
+  qty: number;
+  unitPrice: string;
+  overrideUnitPrice: string | null;
+  lineTotal: string;
+};
+
+function mapLineRow(row: LineItemRow): PickedLine {
+  return {
+    serviceItemId: row.serviceItemId ?? undefined,
+    code: row.code,
+    label: row.label,
+    description: row.description ?? undefined,
+    qty: row.qty,
+    unitPrice: Number(row.unitPrice),
+    overrideUnitPrice: row.overrideUnitPrice != null ? Number(row.overrideUnitPrice) : undefined,
+    lineTotal: Number(row.lineTotal),
+  };
+}
+
+// Phase 3 safety net (removed in Phase 6): project a legacy JSONB `ComputedLine`
+// onto the `PickedLine` shape so a quote whose `quote_line_items` rows haven't
+// landed yet (pre-backfill / mid-cutover) still rehydrates the composer. Old
+// JSONB lines carry no `serviceItemId`/`description`.
+function computedLineToPicked(line: ComputedLine): PickedLine {
+  return {
+    code: line.code,
+    label: line.label,
+    qty: line.qty,
+    unitPrice: line.unitPrice,
+    overrideUnitPrice: line.overrideUnitPrice,
+    lineTotal: line.lineTotal,
+  };
+}
+
+// The picker's lines for one quote: the `quote_line_items` rows ordered by
+// `display_order`, with the JSONB fallback while the table is empty.
+async function loadPickedLines(
+  quoteId: number,
+  jsonbFallback: ComputedLine[],
+): Promise<PickedLine[]> {
+  const rows = (await db
+    .select(lineItemProjection)
+    .from(quoteLineItems)
+    .where(eq(quoteLineItems.quoteId, quoteId))
+    .orderBy(asc(quoteLineItems.displayOrder))) as LineItemRow[];
+  if (rows.length > 0) return rows.map(mapLineRow);
+  return jsonbFallback.map(computedLineToPicked);
+}
+
 export async function loadQuote(id: number): Promise<Quote | null> {
   const [row] = await db
     .select(projection)
@@ -147,7 +223,10 @@ export async function loadQuote(id: number): Promise<Quote | null> {
     .leftJoin(audienceSources, eq(audienceSources.id, quotes.audienceSourceId))
     .where(eq(quotes.id, id))
     .limit(1);
-  return row ? mapRow(row) : null;
+  if (!row) return null;
+  const quote = mapRow(row);
+  const pickedLines = await loadPickedLines(id, quote.lineItems);
+  return { ...quote, pickedLines };
 }
 
 export type QuoteSendReceipt = {
