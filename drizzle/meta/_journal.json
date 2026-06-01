@@ -169,6 +169,13 @@
       "when": 1780156800000,
       "tag": "0023_volatile_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1780328402209,
+      "tag": "0024_quote_line_items_table",
+      "breakpoints": true
     }
   ]
 }

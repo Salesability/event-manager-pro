@@ -10,6 +10,7 @@ export * from './contacts';
 export * from './dealer-contacts';
 export * from './dealers';
 export * from './master-service-agreements';
+export * from './quote-line-items';
 export * from './quotes';
 export * from './service-items';
 export * from './team-member-roles';
