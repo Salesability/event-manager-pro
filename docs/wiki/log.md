@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-01 — new: containerized test DB harness (0063)
+
+- [conventions.md](conventions.md) — added a **Test DB harness (0063)** subsection under Database: `pnpm db:test:reset` rebuilds a disposable `postgres:17` container from migration 0, isolated from the shared Supabase DB (targets `TEST_DATABASE_URL`, localhost-guarded in both `drizzle.test.config.ts` and `reset.sh`).
+- Bootstrap insight worth keeping: replaying migrations from zero against a vanilla Postgres needs `scripts/test-db/bootstrap-auth.sql` to stub the Supabase-managed bits the migrations reference but never create — `auth.users`, `auth.uid()` (returns NULL), and roles `anon`/`authenticated`/`service_role`. Discovered by applying `0000→0024` one at a time (failures surfaced at `0003_enable_rls.sql`).
+- Verified: full chain `0000→0024` replays clean; `0024` backfill extraction (`jsonb_array_elements … WITH ORDINALITY`) proven on synthetic data; teardown leaves no volume. Unblocks rehearsing 0062's destructive `DROP COLUMN`.
+
 ## 2026-05-29 — MSA send action moved to the quote page + draft|sent eligibility (0061)
 
 - [commercial-spine.md](commercial-spine.md) — "The bundled first-deal envelope" section gains a **"Where it's triggered (0061)"** bullet: the bundle is launched from the **quote composer** (`/quotes/[id]`, admin+coach), not the (admin-only) dealer page. Toolbar is state-aware — no usable MSA → "Send for signature" is the primary CTA (bundles the *open* quote), "Send Quote" demotes to secondary; active MSA → plain "Send Quote" + an "MSA active — expires …" note. The bundled quote may now be **`draft` or `sent`** (was draft-only), so a coach can email it for review first then send the same quote for signature. Also fixed the cascading-flip wording: the webhook auto-accept is now `draft|sent → accepted`.

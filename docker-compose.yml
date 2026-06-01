@@ -1,0 +1,24 @@
+# Disposable Postgres for migration + integration testing (chunk 0063).
+# Fully isolated from the shared Supabase DB — rebuild from migration 0 with
+# `pnpm db:test:reset`. postgres:17 matches Supabase's Postgres 17.6.
+#
+# Host port 55432 avoids any local Postgres on the default 5432.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: event_manager_test
+    ports:
+      - "55432:5432"
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d event_manager_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  test_db_data:

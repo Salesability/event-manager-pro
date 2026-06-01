@@ -68,6 +68,17 @@ A `current_setting('request.jwt.claim.sub')` trigger doesn't help here.
 - Until a migration has been applied to a database, prefer editing the schema and regenerating over the same migration file rather than stacking rename/alter migrations on top. Once applied (anywhere), migrations are append-only.
 - RLS policies, triggers, `SECURITY DEFINER` functions, and other Supabase-native concerns live as **hand-written `.sql` files** in `./drizzle/`, not from the generator.
 
+### Test DB harness (0063)
+
+A disposable, containerized Postgres for migration + integration testing, fully isolated from the shared Supabase DB. Rehearse any migration (especially destructive ones) here before it touches the shared DB.
+
+- **`pnpm db:test:reset`** — tears down + rebuilds a fresh `postgres:17` container (matches Supabase 17.6) and replays **every** migration `0000 → latest` from zero. Other scripts: `db:test:up`, `db:test:down`, `db:test:psql`.
+- **`auth.users` bootstrap.** Migrations FK-reference Supabase's managed `auth.users` (and call `auth.uid()`, GRANT to `authenticated`/`service_role`) but never create them. `scripts/test-db/bootstrap-auth.sql` stubs the `auth` schema + `auth.users(id uuid pk)` + a NULL-returning `auth.uid()` + the three Supabase roles before migrate runs.
+- **Shared-DB safety.** The harness targets `TEST_DATABASE_URL` (default `…@127.0.0.1:55432/event_manager_test`), never `DATABASE_URL`. Both `drizzle.test.config.ts` and `scripts/test-db/reset.sh` refuse any non-localhost host, so the shared DB is unreachable from the harness.
+- This is also the home for **real-DB integration tests** the mocked unit suite can't cover (e.g. backfill row-count assertions).
+
+See [`docs/chunks/closed/0063-test-db-harness/`](../chunks/closed/0063-test-db-harness/plan.md).
+
 ### Rollbacks
 
 Drizzle is forward-only. Three patterns:

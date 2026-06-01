@@ -13,7 +13,11 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:test:reset": "bash scripts/test-db/reset.sh",
+    "db:test:up": "docker compose up -d",
+    "db:test:down": "docker compose down -v",
+    "db:test:psql": "docker compose exec db psql -U postgres -d event_manager_test"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

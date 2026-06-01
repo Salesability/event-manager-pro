@@ -7,9 +7,11 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Compose service + auth bootstrap SQL | Pending | - |
-| 2: Reset script + npm scripts (localhost guard) | Pending | - |
-| 3: Verify replay-from-zero + wiki note | Pending | - |
+| 1: Compose service + auth bootstrap SQL | Done | _pending commit_ |
+| 2: Reset script + npm scripts (localhost guard) | Done | _pending commit_ |
+| 3: Verify replay-from-zero + wiki note | Done | _pending commit_ |
+
+**Verified 2026-06-01:** `pnpm db:test:reset` exits 0 — all 25 migrations (`0000→0024`) apply from zero; `quote_line_items` present with its 4 indexes + pkey; backfill ran (0 rows on empty, correct); the `0024` extraction (`jsonb_array_elements … WITH ORDINALITY`) proven on synthetic data; localhost guard aborts on a remote host; `down -v` leaves no volume; tsc clean + 953 tests pass. **Bootstrap discovery:** replay-from-zero needs `bootstrap-auth.sql` to stub not just `auth.users` but also `auth.uid()` (NULL stub) and roles `anon`/`authenticated`/`service_role` — surfaced at `0003_enable_rls.sql` by applying migrations one at a time (drizzle-kit runs the batch in one transaction and rolls back silently, hiding the real error). Added `drizzle.test.config.ts` (keyed on `TEST_DATABASE_URL`, never `DATABASE_URL`) for belt-and-suspenders shared-DB isolation.
 
 A disposable `postgres:17` container, rebuilt from migration 0 with one command, isolated from the shared Supabase DB. "Done" looks like: `pnpm db:test:reset` stands up a fresh container, stubs `auth.users`, replays `0000 → 0024` cleanly, and the script refuses to run against any non-localhost `DATABASE_URL`. Becomes the rehearsal stage for 0062's `DROP COLUMN` and the home for deferred real-DB integration tests.
 
@@ -29,7 +31,7 @@ Greenfield infra — no existing docker/compose in the repo. Anchors are convent
 - `db-conventions` skill — PG 17.6 (→ `postgres:17`), direct-vs-pooled (the container is a direct connection on 5432), the `auth.users` "managed by Supabase, not migrated" gotcha (→ the bootstrap stub), forward-only migrations (→ reset = rebuild from zero).
 - `docs/wiki/architecture.md` / `data-model.md` — Phase 3 adds a short "Test DB harness" note pointing at the scripts.
 
-**Overall Progress:** 0% (0/3 phases complete)
+**Overall Progress:** 100% (3/3 phases complete)
 
 **Note:**
 - The container is a *direct* 5432 connection (inside the container), exposed on host `55432` — DDL-transaction-safe, unlike the shared pooler.
