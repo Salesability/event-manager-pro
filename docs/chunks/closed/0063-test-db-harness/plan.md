@@ -7,9 +7,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Compose service + auth bootstrap SQL | Done | _pending commit_ |
-| 2: Reset script + npm scripts (localhost guard) | Done | _pending commit_ |
-| 3: Verify replay-from-zero + wiki note | Done | _pending commit_ |
+| 1: Compose service + auth bootstrap SQL | Done | `b2357f8` |
+| 2: Reset script + npm scripts (localhost guard) | Done | `b2357f8` |
+| 3: Verify replay-from-zero + wiki note | Done | `b2357f8` |
 
 **Verified 2026-06-01:** `pnpm db:test:reset` exits 0 — all 25 migrations (`0000→0024`) apply from zero; `quote_line_items` present with its 4 indexes + pkey; backfill ran (0 rows on empty, correct); the `0024` extraction (`jsonb_array_elements … WITH ORDINALITY`) proven on synthetic data; localhost guard aborts on a remote host; `down -v` leaves no volume; tsc clean + 953 tests pass. **Bootstrap discovery:** replay-from-zero needs `bootstrap-auth.sql` to stub not just `auth.users` but also `auth.uid()` (NULL stub) and roles `anon`/`authenticated`/`service_role` — surfaced at `0003_enable_rls.sql` by applying migrations one at a time (drizzle-kit runs the batch in one transaction and rolls back silently, hiding the real error). Added `drizzle.test.config.ts` (keyed on `TEST_DATABASE_URL`, never `DATABASE_URL`) for belt-and-suspenders shared-DB isolation.
 
