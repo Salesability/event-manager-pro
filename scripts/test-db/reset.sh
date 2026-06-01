@@ -58,6 +58,13 @@ if [ "${TEST_DB_SEED:-1}" != "0" ]; then
   echo "==> Seeding dev fixtures (scripts/test-db/seed-dev.sql)"
   docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U postgres -d event_manager_test \
     < scripts/test-db/seed-dev.sql
+
+  # Mirror the dev auth user into the stub auth.users so app writes that stamp
+  # created_by_id/updated_by_id (the session uuid) satisfy the FK. Best-effort:
+  # needs Supabase creds in .env.local + BROWSE_AUTH_EMAIL. Non-fatal.
+  echo "==> Mirroring dev auth user into auth.users (so writes pass the actor FK)"
+  TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm exec tsx scripts/test-db/seed-auth-user.ts \
+    || echo "   (skipped — run 'pnpm db:test:seed:auth' once you have Supabase creds in .env.local)"
 fi
 
 echo "==> Test DB ready at ${TEST_DATABASE_URL}"
