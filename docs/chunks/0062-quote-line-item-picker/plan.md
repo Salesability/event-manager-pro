@@ -12,7 +12,7 @@
 | 2: Pricing module — retire calculator derivation, add picked-line totals | Done | `16a057a` |
 | 3: Read path — rehydrate picked lines + expose catalogue to the picker | Done | `ad62e89` |
 | 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Done | `ba27ef4` |
-| 5: Composer UI — replace Inputs panel with the add-line picker | Pending | - |
+| 5: Composer UI — replace Inputs panel with the add-line picker | Done | `beca36e` |
 | 6: Send / PDF — render picked lines + description; empty-quote guard | Pending | - |
 | 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Pending | - |
 | 8: Tests + smoke verification + wiki update | Pending | - |
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 50% (4/8 phases complete)
+**Overall Progress:** 63% (5/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -88,16 +88,16 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [ ] ~~Integration test (real DB)~~ **Deferred to Phase 8 / deploy** — no local DB in the build loop (see Phase 1 note); the mocked-db unit tests cover the row/total/override logic.
 
 #### Phase 5: Composer UI — the add-line picker
-- [ ] Replace the form schema's structured-input fields with `lines: Array<{ serviceItemId, qty, price }>` + keep `quoteNotes` + `taxOverride` (RHF `useFieldArray`)
-- [ ] Remove the "Inputs" `<Section>` (`quote-composer.tsx:~618-700`) and the computed read-only line table
-- [ ] Render an **Add line** control: a SKU Combobox over the catalogue (mirror the dealer Combobox at `:~596`); on select, append a row prefilled with the catalogue `unitPrice` and `label`/`description`
-- [ ] Each row: SKU label + description (read-only context) · qty number input · price number input (prefilled, editable — mirror the 0052 override input at `:~760-770`) · remove-line button
-- [ ] Show the catalogue price as a dim "Catalogue: $X.XX" beside the editable price when the coach has changed it (so they see the original)
-- [ ] Live totals panel: `computePickedTotals(currentLines, taxOverride)` — subtotal/tax/total update inline
-- [ ] On submit, post `lines` (+ `quoteNotes`, `taxOverride`) to `setQuoteInputs`
-- [ ] Read-only mode (`isReadOnly`, sent/accepted/declined): lines render as plain text, no inputs
-- [ ] Composer load: rehydrate `lines` from the persisted `PickedLine[]` (price = `effectiveUnit`, with override flagged)
-- [ ] Empty state: a fresh draft shows the picker with zero lines + a hint to add one
+- [x] Form schema now `{ dealerId, taxOverride, quoteNotes, lines: Array<{ serviceItemId, qty, price }> }` via RHF `useFieldArray`. Dropped `quoteInputsSchema`/`computeQuote`/`recomputeTotalsWithOverrides`/`pricesOverridden`/`overrides`/`ToggleGroup`/`Checkbox` imports.
+- [x] Removed the "Inputs" section (audience/days/counts/retrieval-bracket/travel/travel-notes) + the computed read-only table. Left section is now "Quote header" (dealer) + "Notes & tax" (quoteNotes textarea + tax input).
+- [x] **Add line** control: a SKU `<Combobox>` over the catalogue (mirrors the dealer Combobox); on select, `append({ serviceItemId, qty: 1, price: catalogue seed })` and reset the picker to empty.
+- [x] Each row: SKU label + description (from catalogue) · qty input (`lines.N.qty`) · price input (`lines.N.price`, prefilled) · ✕ remove (`useFieldArray.remove`). "Catalogue: $X.XX" dim line shows when the price is tuned off the seed.
+- [x] Live totals via `computePickedTotals(toPickedLines(watched.lines, catalogById), taxOverride)` — subtotal/tax/total update inline; mid-keystroke invalid input caught → error panel.
+- [x] On submit, posts `lines` (JSON) + `quoteNotes` + `tax` (+ `dealerId` on create) to `setQuoteInputs`/`createQuote`.
+- [x] Read-only mode renders `initial.pickedLines` as plain text (`renderReadOnlyRows`), no inputs.
+- [x] Composer load rehydrates the field array from `initial.pickedLines` (price = `effectiveUnit`; `serviceItemId` falls back to a **catalogue code-match** for legacy lines backfilled without a service-item id — all 8 legacy seed codes exist in the catalogue, so they map).
+- [x] Empty state: fresh draft shows the picker with zero lines + "Add a service from the catalogue above" hint.
+- [x] Page wiring: `[id]/page.tsx` feeds `quoteNotes`/`pickedLines` into `initial` (dropped `inputs`/`lineItems` + the unused `QuoteInputs` import); KeyValueStrip drops "Audience"/"Event days", adds "Line items". `new/page.tsx` unchanged (already passes `catalog`). tsc clean; 951 tests pass (composer has no unit tests — Phase 8 browser smoke covers it).
 
 #### Phase 6: Send / PDF — render picked lines + guard
 - [ ] In `src/lib/pdf/render-quote.ts`, render each line: label, **description sub-line** (new), qty, `effectiveUnit(line)`, line total; subtotal/tax/total from `quotes.*`
