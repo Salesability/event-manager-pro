@@ -9,7 +9,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema + backfill migration — `quote_line_items` table from JSONB | Done | `2b735dd` |
-| 2: Pricing module — retire calculator derivation, add picked-line totals | Pending | - |
+| 2: Pricing module — retire calculator derivation, add picked-line totals | Done | `16a057a` |
 | 3: Read path — rehydrate picked lines + expose catalogue to the picker | Pending | - |
 | 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Pending | - |
 | 5: Composer UI — replace Inputs panel with the add-line picker | Pending | - |
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 13% (1/8 phases complete)
+**Overall Progress:** 25% (2/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -64,11 +64,11 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [x] Unit test (schema introspection): `src/lib/db/schema/quote-line-items.test.ts` — columns, money-column types/nullability, index set, FK targets (cascade/set-null). 5 tests pass (no DB needed; `getTableConfig`).
 
 #### Phase 2: Pricing module — retire derivation, add picked-line totals
-- [ ] Add `PickedLine` type to `pricing.ts` (`{ serviceItemId?: number; code: string; label: string; description?: string; qty: number; unitPrice: number; overrideUnitPrice?: number; lineTotal: number }`) — superset of `ComputedLine`'s persisted fields
-- [ ] Add `computePickedTotals(lines: PickedLine[], taxOverride): QuoteComputation` — `lineTotal = roundCents(effectiveUnit(line) * qty)`, `subtotal = Σ`, `tax`, `total` (mirror `recomputeTotalsWithOverrides`, no catalogue derivation)
-- [ ] Add `validatePickedLines()` — qty ≥ 1 integer, prices finite/non-negative ≤ `MAX_DOLLARS`, label non-empty, code present
-- [ ] Mark `computeQuote()` + `QuoteInputs` derivation as deprecated (kept compiling for now; deleted in Phase 7). Keep `effectiveUnit`, `roundCents`, `MAX_DOLLARS`, money helpers.
-- [ ] Unit tests: `computePickedTotals` (override honored, multi-line, empty → 0), `validatePickedLines` rejects qty 0 / negative price / over-max
+- [x] Add `PickedLine` type to `pricing.ts` (`{ serviceItemId?, code, label, description?, qty, unitPrice, overrideUnitPrice?, lineTotal }`) + `PickedQuoteComputation`
+- [x] Add `computePickedTotals(lines, taxOverride): PickedQuoteComputation` — `lineTotal = roundCents(effectiveUnit(line) * qty)`, `subtotal = Σ`, typed `tax`, `total`; returns NEW objects (no mutation). (Returns `PickedQuoteComputation`, not `QuoteComputation`, since lines are `PickedLine[]`.)
+- [x] Add `validatePickedLines()` — qty integer in `[1, MAX_QTY]`, prices finite/non-negative ≤ `MAX_DOLLARS`, code + label non-empty. Generalized `effectiveUnit()` to a structural `{ unitPrice, overrideUnitPrice? }` param so it serves both `ComputedLine` and `PickedLine`.
+- [x] Mark `computeQuote()` `@deprecated` (kept compiling for now; deleted in Phase 7). Kept `effectiveUnit`, `roundCents`, `MAX_DOLLARS`, money helpers.
+- [x] Unit tests: `computePickedTotals` (override honored, multi-line + tax, empty → 0, rounding, no-mutation, neg-tax throw), `validatePickedLines` (qty 0 / non-int / negative price / negative override / over-max / empty code+label). 14 new tests; pricing suite 51 pass.
 
 #### Phase 3: Read path — rehydrate picked lines + catalogue
 - [ ] In `src/features/quotes/queries.ts`, after the `quotes` select, sibling-select `quote_line_items` ordered by `display_order` → map to `PickedLine[]`
