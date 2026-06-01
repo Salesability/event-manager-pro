@@ -4,17 +4,20 @@ import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealers, masterServiceAgreements, quotes, serviceItems } from '@/lib/db/schema';
+import { dealers, masterServiceAgreements, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import {
+  computePickedTotals,
   computeQuote,
   DEFAULT_QUOTE_INPUTS,
   MAX_DOLLARS,
   QuoteInputsError,
   quoteInputsSchema,
   recomputeTotalsWithOverrides,
+  type PickedLine,
+  type PickedQuoteComputation,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
 import type { ServiceItem } from '@/features/services/queries';
@@ -225,6 +228,147 @@ function persistComputationPatch(
   };
 }
 
+// === 0062: SKU line-item picker write path ================================
+// The composer (Phase 5) submits a `lines` JSON payload — picked SKUs with a
+// per-line quantity and (effective) price — instead of the calculator's
+// structured `inputs`. The server resolves each line against the live
+// catalogue to snapshot code/label/description/unitPrice, derives the
+// per-quote override from the typed price, recomputes totals, and
+// delete-and-inserts the `quote_line_items` rows. A JSONB mirror is still
+// written to `quotes.line_items` so the legacy render paths (sendQuote /
+// previewQuotePdf) keep working until Phase 6 cuts them over to the table;
+// Phase 7 drops the column. `quoteNotes` is the one input the composer still
+// owns — it's merged onto the preserved `inputs` snapshot.
+
+type PickedLineInput = { serviceItemId: number; qty: number; price: number };
+
+const MAX_QTY = 1_000_000;
+
+// Parse the `lines` payload. Empty/absent → [] (a picker quote may be empty at
+// save time; the send path guards emptiness). Fails closed on malformed shape.
+function parsePickedLineInputs(
+  formData: FormData,
+): { ok: true; data: PickedLineInput[] } | { ok: false; error: string } {
+  const raw = field(formData, 'lines');
+  if (!raw) return { ok: true, data: [] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, error: 'Lines payload is not valid JSON.' };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: 'Lines must be an array.' };
+  }
+  const out: PickedLineInput[] = [];
+  for (const item of parsed) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      return { ok: false, error: 'Each line must be an object.' };
+    }
+    const o = item as Record<string, unknown>;
+    if (
+      typeof o.serviceItemId !== 'number' ||
+      !Number.isInteger(o.serviceItemId) ||
+      o.serviceItemId <= 0
+    ) {
+      return { ok: false, error: 'Each line needs a valid serviceItemId.' };
+    }
+    if (
+      typeof o.qty !== 'number' ||
+      !Number.isInteger(o.qty) ||
+      o.qty < 1 ||
+      o.qty > MAX_QTY
+    ) {
+      return { ok: false, error: 'Each line needs an integer quantity between 1 and 1,000,000.' };
+    }
+    if (typeof o.price !== 'number' || !Number.isFinite(o.price) || o.price < 0 || o.price > MAX_DOLLARS) {
+      return { ok: false, error: `Each line price must be between 0 and ${MAX_DOLLARS}.` };
+    }
+    out.push({ serviceItemId: o.serviceItemId, qty: o.qty, price: o.price });
+  }
+  return { ok: true, data: out };
+}
+
+// Resolve picked-line inputs against the live catalogue → `PickedLine[]`. The
+// catalogue row seeds `code`/`label`/`description`/`unitPrice` (snapshotted so
+// the line survives a later catalogue edit); the coach's typed price becomes
+// `overrideUnitPrice` only when it differs from the seed. `lineTotal` is zeroed
+// here — `computePickedTotals` fills it.
+function buildPickedLines(
+  inputs: PickedLineInput[],
+  catalog: ServiceItem[],
+): { ok: true; lines: PickedLine[] } | { ok: false; error: string } {
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  const lines: PickedLine[] = [];
+  for (const input of inputs) {
+    const item = byId.get(input.serviceItemId);
+    if (!item) {
+      return {
+        ok: false,
+        error: `A picked item is no longer in the catalogue; refresh the page and re-pick.`,
+      };
+    }
+    const seed = item.unitPrice != null ? Number(item.unitPrice) : 0;
+    const override = input.price !== seed ? input.price : undefined;
+    lines.push({
+      serviceItemId: item.id,
+      code: item.code,
+      label: item.label,
+      description: item.description ?? undefined,
+      qty: input.qty,
+      unitPrice: seed,
+      overrideUnitPrice: override,
+      lineTotal: 0,
+    });
+  }
+  return { ok: true, lines };
+}
+
+// Legacy-shaped JSONB mirror of the picked lines so the JSONB-reading render
+// paths keep rendering until Phase 6. `unit: 'flat'` is a non-load-bearing
+// placeholder (neither the renderer nor `validatePersistedLines` read it).
+function pickedLinesToJsonbMirror(lines: PickedLine[]): ComputedLine[] {
+  return lines.map((l) => ({
+    code: l.code,
+    label: l.label,
+    unit: 'flat',
+    unitPrice: l.unitPrice,
+    overrideUnitPrice: l.overrideUnitPrice,
+    qty: l.qty,
+    lineTotal: l.lineTotal,
+  }));
+}
+
+// Map a computed `PickedLine` to a `quote_line_items` insert row (money → fixed
+// strings; nullable fields normalized). `displayOrder` is the array index.
+function pickedLineInsertValues(
+  lines: PickedLine[],
+  quoteId: number,
+  userId: string,
+) {
+  return lines.map((l, i) => ({
+    quoteId,
+    serviceItemId: l.serviceItemId ?? null,
+    code: l.code,
+    label: l.label,
+    description: l.description ?? null,
+    qty: l.qty,
+    unitPrice: moneyString(l.unitPrice),
+    overrideUnitPrice: l.overrideUnitPrice != null ? moneyString(l.overrideUnitPrice) : null,
+    lineTotal: moneyString(l.lineTotal),
+    displayOrder: i,
+    createdById: userId,
+    updatedById: userId,
+  }));
+}
+
+// `quoteNotes` is the one structured input the picker composer still owns (it
+// renders on the PDF). Capped to the pricing module's NOTES_MAX (1000).
+function parseQuoteNotes(formData: FormData): string {
+  const raw = field(formData, 'quoteNotes');
+  return raw ? raw.slice(0, 1000) : '';
+}
+
 export const createQuote = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<CreateQuoteResult> => {
@@ -239,7 +383,26 @@ export const createQuote = capabilityClient('quote:edit')
     // (existing 0026 P2 behavior).
     let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
     let computed: ReturnType<typeof computeQuote> | null = null;
-    if (formData.has('inputs')) {
+    // 0062 picker path: `lines` present → resolve picked SKUs against the
+    // catalogue, compute totals, seed the row with the JSONB mirror + the
+    // quote_line_items rows (inserted inside the tx below once we have the id).
+    let pickedComputed: PickedQuoteComputation | null = null;
+    if (formData.has('lines')) {
+      const linesResult = parsePickedLineInputs(formData);
+      if (!linesResult.ok) return { error: linesResult.error };
+      const taxResult = parseTax(formData);
+      if (typeof taxResult === 'object') return taxResult;
+      const catalog = await loadActiveCatalog();
+      const built = buildPickedLines(linesResult.data, catalog);
+      if (!built.ok) return { error: built.error };
+      try {
+        pickedComputed = computePickedTotals(built.lines, taxResult);
+      } catch (err) {
+        if (err instanceof QuoteInputsError) return { error: err.message };
+        throw err;
+      }
+      inputsSnapshot = { ...DEFAULT_QUOTE_INPUTS, quoteNotes: parseQuoteNotes(formData) };
+    } else if (formData.has('inputs')) {
       const inputResult = parseQuoteInputs(formData);
       if (!inputResult.ok) {
         return { error: inputResult.error, ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}) };
@@ -280,20 +443,28 @@ export const createQuote = capabilityClient('quote:edit')
       createdById: userId,
       updatedById: userId,
     };
-    const insertValues = computed
+    const insertValues = pickedComputed
       ? {
           ...baseInsert,
-          ...(() => {
-            const patch = persistComputationPatch(inputsSnapshot, computed);
-            return {
-              lineItems: patch.lineItems,
-              subtotal: patch.subtotal,
-              tax: patch.tax,
-              total: patch.total,
-            };
-          })(),
+          lineItems: pickedLinesToJsonbMirror(pickedComputed.lines),
+          subtotal: moneyString(pickedComputed.subtotal),
+          tax: moneyString(pickedComputed.tax),
+          total: moneyString(pickedComputed.total),
         }
-      : baseInsert;
+      : computed
+        ? {
+            ...baseInsert,
+            ...(() => {
+              const patch = persistComputationPatch(inputsSnapshot, computed);
+              return {
+                lineItems: patch.lineItems,
+                subtotal: patch.subtotal,
+                tax: patch.tax,
+                total: patch.total,
+              };
+            })(),
+          }
+        : baseInsert;
 
     // Verify dealer is active **inside the transaction with a row lock** so a
     // concurrent `archiveDealer` between our SELECT and the INSERT cannot
@@ -314,6 +485,14 @@ export const createQuote = capabilityClient('quote:edit')
         .insert(quotes)
         .values(insertValues)
         .returning({ id: quotes.id });
+      // 0062: persist the picked lines as relational rows now that we have the
+      // quote id. The JSONB mirror (in insertValues) stays the legacy read
+      // source until Phase 6.
+      if (pickedComputed && pickedComputed.lines.length > 0) {
+        await tx
+          .insert(quoteLineItems)
+          .values(pickedLineInsertValues(pickedComputed.lines, inserted.id, userId));
+      }
       return { ok: true as const, quoteId: inserted.id };
     });
 
@@ -329,6 +508,140 @@ export const createQuote = capabilityClient('quote:edit')
     revalidateQuoteViews();
     return { ok: true, quoteId: result.quoteId };
   });
+
+// 0062 picker save: resolve the submitted `lines` against the catalogue,
+// recompute totals, delete-and-insert the `quote_line_items` rows, write the
+// totals + JSONB mirror + merged `quoteNotes`. Same optimistic-lock + audit-
+// diff discipline as the legacy `setQuoteInputs` body. Module-private (not a
+// Server Action) so the action-gate lint doesn't flag it.
+async function applyPickerSave(
+  formData: FormData,
+  quoteId: number,
+  userId: string,
+): Promise<ActionResult> {
+  const linesResult = parsePickedLineInputs(formData);
+  if (!linesResult.ok) return { error: linesResult.error };
+
+  const taxRequested = formData.has('tax') ? parseTax(formData) : null;
+  if (taxRequested && typeof taxRequested === 'object') return taxRequested;
+
+  const quoteNotes = parseQuoteNotes(formData);
+
+  type EditResult =
+    | { ok: true; auditPayload: Record<string, unknown> | null }
+    | { error: string };
+
+  const txResult: EditResult = await db.transaction(async (tx): Promise<EditResult> => {
+    const [row] = await tx
+      .select({
+        status: quotes.status,
+        tax: quotes.tax,
+        subtotal: quotes.subtotal,
+        total: quotes.total,
+        lineItems: quotes.lineItems,
+        inputs: quotes.inputs,
+        updatedAt: quotes.updatedAt,
+      })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!row) return { error: 'Quote not found.' };
+    if (row.status === 'accepted' || row.status === 'declined') {
+      return { error: `This quote has been ${row.status} — make a new quote to revise it.` };
+    }
+
+    const taxNumber = taxRequested != null ? (taxRequested as number) : Number(row.tax) || 0;
+    const catalog = await loadActiveCatalog();
+    const built = buildPickedLines(linesResult.data, catalog);
+    if (!built.ok) return { error: built.error };
+    let computed: PickedQuoteComputation;
+    try {
+      computed = computePickedTotals(built.lines, taxNumber);
+    } catch (err) {
+      if (err instanceof QuoteInputsError) return { error: err.message };
+      throw err;
+    }
+
+    const mirror = pickedLinesToJsonbMirror(computed.lines);
+    const mergedInputs: QuoteInputs = { ...(row.inputs as QuoteInputs), quoteNotes };
+
+    // Replace the relational rows (delete-and-insert), then the guarded UPDATE.
+    await tx.delete(quoteLineItems).where(eq(quoteLineItems.quoteId, quoteId));
+    if (computed.lines.length > 0) {
+      await tx
+        .insert(quoteLineItems)
+        .values(pickedLineInsertValues(computed.lines, quoteId, userId));
+    }
+
+    const updated = await tx
+      .update(quotes)
+      .set({
+        inputs: mergedInputs,
+        lineItems: mirror,
+        subtotal: moneyString(computed.subtotal),
+        tax: moneyString(computed.tax),
+        total: moneyString(computed.total),
+        updatedById: userId,
+      })
+      .where(
+        and(
+          eq(quotes.id, quoteId),
+          sql`${quotes.status} NOT IN ('accepted', 'declined')`,
+          sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${row.updatedAt.toISOString()}::timestamptz`,
+        ),
+      )
+      .returning({ id: quotes.id });
+    if (!updated.length) {
+      const [latest] = await tx
+        .select({ status: quotes.status })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+      if (!latest) return { error: 'Quote not found.' };
+      if (latest.status === 'accepted' || latest.status === 'declined') {
+        return { error: `This quote has been ${latest.status} — make a new quote to revise it.` };
+      }
+      return { error: 'Quote was edited concurrently; please retry.' };
+    }
+
+    const beforePriced = { subtotal: row.subtotal, tax: row.tax, total: row.total };
+    const afterPriced = {
+      subtotal: moneyString(computed.subtotal),
+      tax: moneyString(computed.tax),
+      total: moneyString(computed.total),
+    };
+    const beforeLinesHash = hashLineItems(row.lineItems);
+    const afterLinesHash = hashLineItems(mirror);
+    const dirtyFields: string[] = [];
+    if (beforePriced.subtotal !== afterPriced.subtotal) dirtyFields.push('subtotal');
+    if (beforePriced.tax !== afterPriced.tax) dirtyFields.push('tax');
+    if (beforePriced.total !== afterPriced.total) dirtyFields.push('total');
+    if (beforeLinesHash !== afterLinesHash) dirtyFields.push('lineItems');
+    const auditPayload = dirtyFields.length
+      ? {
+          before: { ...beforePriced, lineItemsHash: beforeLinesHash },
+          after: { ...afterPriced, lineItemsHash: afterLinesHash },
+          dirtyFields,
+        }
+      : null;
+
+    return { ok: true, auditPayload };
+  });
+
+  if ('error' in txResult) return txResult;
+
+  if (txResult.auditPayload) {
+    await recordAudit({
+      action: 'quote.edited',
+      targetTable: 'quotes',
+      targetId: quoteId,
+      payload: txResult.auditPayload,
+    });
+  }
+
+  revalidateQuoteViews();
+  return { ok: true };
+}
 
 /** Composer-side setter: replace the input snapshot, recompute lines + totals
  *  against the live catalog, persist atomically. 0046 flipped the lifecycle
@@ -350,6 +663,12 @@ export const setQuoteInputs = capabilityClient('quote:edit')
 
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    // 0062: the picker composer submits `lines`; the legacy calculator path
+    // (below) is retired in Phase 7. Branch early so the two never interleave.
+    if (formData.has('lines')) {
+      return applyPickerSave(formData, quoteId, userId);
+    }
 
     const inputResult = parseQuoteInputs(formData);
     if (!inputResult.ok) {

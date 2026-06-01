@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   dbResults: [] as unknown[][],
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ table: string; patch: unknown }>,
+  deletes: [] as Array<{ table: string }>,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -75,6 +76,15 @@ vi.mock('@/lib/db', () => {
         return {
           returning: async () => mocks.dbResults.shift() ?? [{ id: 999 }],
         };
+      },
+    }),
+    // 0062: the picker write path delete-and-inserts quote_line_items. The
+    // delete is awaited without `.returning()`; record it + resolve empty so it
+    // doesn't consume a dbResults entry (keeps the test FIFO aligned).
+    delete: (table: unknown) => ({
+      where: () => {
+        mocks.deletes.push({ table: tableName(table) });
+        return Promise.resolve([]);
       },
     }),
     update: (table: unknown) => ({
@@ -183,6 +193,7 @@ beforeEach(() => {
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
+  mocks.deletes = [];
   // sendQuote requires GCS_BUCKET — the dev .env carries it, but vitest
   // doesn't pull dotenv. Set it explicitly per-test so the action doesn't
   // bail before the render/upload path is exercised.
@@ -1407,5 +1418,165 @@ describe('setQuoteDealer', () => {
     mocks.dbResults.push([{ id: 9 }], [], [{ status: 'sent' }]);
     const result = await call(setQuoteDealer(fd({ quoteId: '42', dealerId: '9' })));
     expect(result).toEqual({ error: "Quote cannot be edited in status 'sent'." });
+  });
+});
+
+// === 0062: SKU line-item picker write path ===============================
+// Pre-load shape for the picker save path. applyPickerSave selects `inputs`
+// (to merge quoteNotes) in addition to the priced-output snapshot.
+const PICKER_PRELOAD = {
+  status: 'draft',
+  tax: '0.00',
+  subtotal: '0.00',
+  total: '0.00',
+  lineItems: [],
+  inputs: { audienceSize: 500, eventDays: 1, quoteNotes: '' },
+  updatedAt: new Date('2026-05-12T12:00:00.000Z'),
+};
+
+describe('setQuoteInputs (0062 picker path)', () => {
+  it('persists picked lines as quote_line_items rows + JSONB mirror + totals', async () => {
+    // pre-load SELECT, catalog SELECT, UPDATE returns one row.
+    mocks.dbResults.push([PICKER_PRELOAD], CATALOG_FIXTURE, [{ id: 42 }]);
+    const result = await call(
+      setQuoteInputs(
+        fd({
+          quoteId: '42',
+          lines: JSON.stringify([
+            { serviceItemId: 1, qty: 1, price: 6900 }, // base-event seed 6900 → no override
+            { serviceItemId: 2, qty: 2, price: 5 }, // additional-contact seed 3 → override 5
+          ]),
+          tax: '0',
+          quoteNotes: 'VIP setup',
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true });
+
+    // Relational rows: delete-then-insert into quote_line_items.
+    expect(mocks.deletes).toEqual([{ table: 'quote_line_items' }]);
+    expect(mocks.inserts).toHaveLength(1);
+    expect(mocks.inserts[0].table).toBe('quote_line_items');
+    const rows = mocks.inserts[0].values as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      quoteId: 42,
+      serviceItemId: 1,
+      code: 'base-event',
+      qty: 1,
+      unitPrice: '6900.00',
+      overrideUnitPrice: null,
+      lineTotal: '6900.00',
+      displayOrder: 0,
+    });
+    expect(rows[1]).toMatchObject({
+      serviceItemId: 2,
+      code: 'additional-contact',
+      qty: 2,
+      unitPrice: '3.00',
+      overrideUnitPrice: '5.00',
+      lineTotal: '10.00',
+      displayOrder: 1,
+    });
+
+    // quotes UPDATE: totals + JSONB mirror + merged quoteNotes (audienceSize
+    // preserved from the pre-loaded inputs — the picker doesn't touch it).
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(patch.subtotal).toBe('6910.00');
+    expect(patch.total).toBe('6910.00');
+    expect((patch.inputs as Record<string, unknown>).quoteNotes).toBe('VIP setup');
+    expect((patch.inputs as Record<string, unknown>).audienceSize).toBe(500);
+    expect((patch.lineItems as unknown[]).length).toBe(2);
+  });
+
+  it('clears the rows and zeroes totals on an empty lines payload', async () => {
+    mocks.dbResults.push(
+      [{ ...PICKER_PRELOAD, subtotal: '6900.00', total: '6900.00' }],
+      CATALOG_FIXTURE,
+      [{ id: 42 }],
+    );
+    const result = await call(
+      setQuoteInputs(fd({ quoteId: '42', lines: '[]' })),
+    );
+    expect(result).toEqual({ ok: true });
+    // Delete fired; no insert (no lines to write).
+    expect(mocks.deletes).toEqual([{ table: 'quote_line_items' }]);
+    expect(mocks.inserts).toHaveLength(0);
+    const patch = mocks.updates[0].patch as Record<string, unknown>;
+    expect(patch.subtotal).toBe('0.00');
+    expect(patch.total).toBe('0.00');
+    expect((patch.lineItems as unknown[]).length).toBe(0);
+  });
+
+  it('rejects a malformed lines payload before any db round-trip', async () => {
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', lines: JSON.stringify([{ serviceItemId: 1, qty: 0, price: 10 }]) }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('quantity');
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.deletes).toHaveLength(0);
+  });
+
+  it('rejects a line whose catalogue item no longer exists', async () => {
+    mocks.dbResults.push([PICKER_PRELOAD], CATALOG_FIXTURE);
+    const result = await call(
+      setQuoteInputs(
+        fd({ quoteId: '42', lines: JSON.stringify([{ serviceItemId: 999, qty: 1, price: 10 }]) }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('catalogue');
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('rejects the picker save on a terminal (accepted) quote', async () => {
+    mocks.dbResults.push([{ ...PICKER_PRELOAD, status: 'accepted' }]);
+    const result = await call(
+      setQuoteInputs(fd({ quoteId: '42', lines: JSON.stringify([{ serviceItemId: 1, qty: 1, price: 6900 }]) })),
+    );
+    expect(result).toEqual({
+      error: 'This quote has been accepted — make a new quote to revise it.',
+    });
+    expect(mocks.deletes).toHaveLength(0);
+    expect(mocks.updates).toHaveLength(0);
+  });
+});
+
+describe('createQuote (0062 picker path)', () => {
+  it('persists a picked-line draft: quotes insert + quote_line_items insert', async () => {
+    // catalog SELECT (before tx), dealer FOR-UPDATE SELECT, quotes insert id.
+    mocks.dbResults.push(CATALOG_FIXTURE, [{ id: 7 }], [{ id: 99 }]);
+    const result = await call(
+      createQuote(
+        fd({
+          dealerId: '7',
+          lines: JSON.stringify([{ serviceItemId: 1, qty: 1, price: 6900 }]),
+          tax: '0',
+          quoteNotes: 'VIP setup',
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true, quoteId: 99 });
+    expect(mocks.inserts).toHaveLength(2);
+    expect(mocks.inserts[0].table).toBe('quotes');
+    const quoteValues = mocks.inserts[0].values as Record<string, unknown>;
+    expect(quoteValues.subtotal).toBe('6900.00');
+    expect((quoteValues.inputs as Record<string, unknown>).quoteNotes).toBe('VIP setup');
+    expect((quoteValues.lineItems as unknown[]).length).toBe(1);
+    expect(mocks.inserts[1].table).toBe('quote_line_items');
+    const rows = mocks.inserts[1].values as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ quoteId: 99, code: 'base-event', displayOrder: 0 });
+  });
+
+  it('rejects a picked line for an unknown catalogue id (no insert)', async () => {
+    mocks.dbResults.push(CATALOG_FIXTURE);
+    const result = await call(
+      createQuote(
+        fd({ dealerId: '7', lines: JSON.stringify([{ serviceItemId: 999, qty: 1, price: 10 }]) }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('catalogue');
+    expect(mocks.inserts).toHaveLength(0);
   });
 });
