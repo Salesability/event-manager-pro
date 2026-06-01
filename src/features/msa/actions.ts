@@ -8,7 +8,7 @@ import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import { renderMsaPdf, type MsaPdfData } from '@/lib/pdf/render-msa';
-import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
+import { renderQuotePdf, type QuoteData } from '@/lib/pdf/render-quote';
 import { combineQuoteAndMsa } from '@/lib/pdf/merge';
 import { quoteDisplayName } from '@/features/quotes/display-name';
 import { putObject } from '@/lib/storage/gcs';
@@ -16,7 +16,7 @@ import { sendSignatureRequest } from '@/lib/boldsign/client';
 import { currentMsaTemplateVersion } from './template-version';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { MAX_ADDRESS_LINES } from '@/features/quotes/constants';
-import type { ComputedLine } from '@/lib/quotes/pricing';
+import { mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
 
 // 0041 Phase 3 — MSA send-side Server Actions. Companion to closed/0037
 // Phase 2's `master_service_agreements` schema; this file is the first
@@ -74,41 +74,6 @@ function splitClientAddress(address: string | null): string[] | undefined {
     .filter(Boolean)
     .slice(0, MAX_ADDRESS_LINES);
   return lines.length ? lines : undefined;
-}
-
-const CORRUPTED_LINES_ERROR = 'Quote line items are corrupted; cannot render.';
-
-function isFiniteNonNegative(n: unknown): n is number {
-  return typeof n === 'number' && Number.isFinite(n) && n >= 0;
-}
-
-type ValidatedLines = { ok: true; lines: QuoteLineItem[] } | { error: string };
-
-function validatePersistedLines(raw: unknown): ValidatedLines {
-  if (!Array.isArray(raw)) return { error: CORRUPTED_LINES_ERROR };
-  const lines: QuoteLineItem[] = [];
-  for (const item of raw) {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return { error: CORRUPTED_LINES_ERROR };
-    }
-    const l = item as Partial<ComputedLine>;
-    if (
-      typeof l.label !== 'string' ||
-      l.label.trim().length === 0 ||
-      !isFiniteNonNegative(l.qty) ||
-      !isFiniteNonNegative(l.unitPrice) ||
-      !isFiniteNonNegative(l.lineTotal)
-    ) {
-      return { error: CORRUPTED_LINES_ERROR };
-    }
-    lines.push({
-      description: l.label,
-      quantity: l.qty,
-      unitPrice: l.unitPrice,
-      total: l.lineTotal,
-    });
-  }
-  return { ok: true, lines };
 }
 
 // V1: blocks new draft creation when a pending/active MSA already exists for
@@ -242,7 +207,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
         status: quotes.status,
         createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
-        lineItems: quotes.lineItems,
+        renderLines: renderLinesColumn,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
         total: quotes.total,
@@ -282,9 +247,9 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       return { error: `MSA PDF render failed: ${msaPdf.error}` };
     }
 
-    // Render the Quote PDF from the persisted snapshot.
-    const linesResult = validatePersistedLines(quote.lineItems);
-    if ('error' in linesResult) return linesResult;
+    // Render the Quote PDF from the persisted line rows (0062 — read inline
+    // from quote_line_items via the renderLines subquery on the quote select).
+    const renderLines = mapRenderLines(quote.renderLines);
     // The bundled quote may be draft OR sent (0061 — the coach can email it
     // for review first, then send the same quote for signature). Anchor
     // "Valid until" on today; a quote that was already sent may render a
@@ -297,7 +262,7 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       eventName: 'Sales Event',
-      lineItems: linesResult.lines,
+      lineItems: renderLines,
       subtotal: Number(quote.subtotal),
       tax: Number(quote.tax),
       total: Number(quote.total),

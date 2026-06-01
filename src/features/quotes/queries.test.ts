@@ -46,7 +46,6 @@ const baseRow = {
   total: '7935.00',
   taxPct: '15.00',
   inputs: { audienceSize: 500, eventDays: 3 },
-  lineItems: [],
   audienceSourceId: null,
   audienceSourceLabel: null,
   sentAt: null,
@@ -85,7 +84,6 @@ describe('loadQuotes', () => {
       total: '7935.00',
       taxPct: '15.00',
       inputs: { audienceSize: 500, eventDays: 3 },
-      lineItems: [],
       pickedLines: [],
       audienceSourceId: null,
       audienceSourceLabel: null,
@@ -142,24 +140,13 @@ describe('loadQuote', () => {
   });
 
   it('returns the mapped Quote when the id resolves', async () => {
-    const lineItems = [
-      {
-        code: 'event-package',
-        label: 'Event package',
-        unit: 'flat',
-        unitPrice: 5000,
-        qty: 1,
-        lineTotal: 5000,
-      },
-    ];
-    // Second select (quote_line_items) drains the next FIFO entry; empty here,
-    // so pickedLines falls back to the JSONB lineItems.
-    mocks.selectResults = [[{ ...baseRow, lineItems }], []];
+    // FIFO: [0] the quote row, [1] the quote_line_items rows (empty here).
+    mocks.selectResults = [[{ ...baseRow }], []];
     const q = await loadQuote(7);
     expect(q?.id).toBe(7);
     expect(q?.dealerName).toBe('Capital Ford');
     expect(q?.inputs).toEqual({ audienceSize: 500, eventDays: 3 });
-    expect(q?.lineItems).toEqual(lineItems);
+    expect(q?.pickedLines).toEqual([]);
   });
 
   // 0062 Phase 3 — picker rehydration from the quote_line_items table.
@@ -193,15 +180,10 @@ describe('loadQuote', () => {
     ]);
   });
 
-  it('falls back to JSONB lineItems for pickedLines when the table is empty', async () => {
-    const lineItems = [
-      { code: 'base-event', label: 'Base Event', unit: 'flat', unitPrice: 6900, qty: 1, lineTotal: 6900 },
-    ];
-    mocks.selectResults = [[{ ...baseRow, lineItems }], []];
+  it('returns empty pickedLines when the table has no rows', async () => {
+    mocks.selectResults = [[{ ...baseRow }], []];
     const q = await loadQuote(7);
-    expect(q?.pickedLines).toEqual([
-      { code: 'base-event', label: 'Base Event', qty: 1, unitPrice: 6900, lineTotal: 6900 },
-    ]);
+    expect(q?.pickedLines).toEqual([]);
   });
 
   // 0044 Phase 3 — derived isExpired projection (Option B: no enum extension,

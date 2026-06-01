@@ -15,7 +15,6 @@ function makeQuote(overrides: Partial<Quote>): Quote {
     total: '0.00',
     taxPct: '15.00',
     inputs: DEFAULT_QUOTE_INPUTS,
-    lineItems: [],
     pickedLines: [],
     audienceSourceId: null,
     audienceSourceLabel: null,

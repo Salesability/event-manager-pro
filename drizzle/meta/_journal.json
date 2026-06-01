@@ -176,6 +176,13 @@
       "when": 1780328402209,
       "tag": "0024_quote_line_items_table",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1780334030204,
+      "tag": "0025_drop_quotes_line_items_jsonb",
+      "breakpoints": true
     }
   ]
 }

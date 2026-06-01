@@ -1,6 +1,5 @@
 'use server';
 
-import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
@@ -10,20 +9,17 @@ import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import {
   computePickedTotals,
-  computeQuote,
   DEFAULT_QUOTE_INPUTS,
   MAX_DOLLARS,
   QuoteInputsError,
-  quoteInputsSchema,
-  recomputeTotalsWithOverrides,
   type PickedLine,
   type PickedQuoteComputation,
   type QuoteInputs,
 } from '@/lib/quotes/pricing';
+import { lineFingerprint, mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
 import type { ServiceItem } from '@/features/services/queries';
-import { renderQuotePdf, type QuoteData, type QuoteLineItem } from '@/lib/pdf/render-quote';
+import { renderQuotePdf, type QuoteData } from '@/lib/pdf/render-quote';
 import { putObject, signedUrl } from '@/lib/storage/gcs';
-import type { ComputedLine } from '@/lib/quotes/pricing';
 import { sendEmail } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
@@ -86,91 +82,10 @@ async function loadActiveCatalog(): Promise<ServiceItem[]> {
     .where(isNull(serviceItems.archivedAt));
 }
 
-/** Parse a `QuoteInputs` payload from FormData. The composer submits it as a
- *  single `inputs` JSON string; the action JSON.parses it and `safeParse`s
- *  against the shared `quoteInputsSchema` (defined in `@/lib/quotes/pricing`
- *  and also consumed by the composer's `zodResolver`). Zod's default `.strip`
- *  mode discards unknown keys, so an attacker-supplied `__proto__` / `blob`
- *  field never reaches the `quotes.inputs` jsonb column. Per-field
- *  `.default(...)` calls in the schema fill in missing fields with the
- *  `DEFAULT_QUOTE_INPUTS` shape.
- */
-function parseQuoteInputs(
-  formData: FormData,
-): { ok: true; data: QuoteInputs; fieldErrors?: undefined }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[] | undefined> } {
-  const raw = field(formData, 'inputs');
-  if (!raw) return { ok: false, error: 'Quote inputs are required.' };
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ok: false, error: 'Quote inputs payload is not valid JSON.' };
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, error: 'Quote inputs must be an object.' };
-  }
-
-  // Merge user-supplied keys over the canonical defaults before safeParse so
-  // missing fields are filled in (legacy `pickNumber(p.x, DEFAULT_QUOTE_INPUTS.x)`
-  // semantics). Zod's default `.strip` mode still drops unknown keys — an
-  // attacker-supplied `__proto__` / `blob` field never reaches the
-  // `quotes.inputs` jsonb column.
-  const merged = { ...DEFAULT_QUOTE_INPUTS, ...(parsed as Record<string, unknown>) };
-  const result = quoteInputsSchema.safeParse(merged);
-  if (!result.success) {
-    const issue = result.error.issues[0];
-    const path = issue.path.join('.');
-    const message = path ? `${path}: ${issue.message}` : issue.message;
-    return {
-      ok: false,
-      error: message,
-      fieldErrors: result.error.flatten().fieldErrors,
-    };
-  }
-  return { ok: true, data: result.data };
-}
-
-// Per-line coach price overrides (0052). FormData carries an `overrides`
-// JSON payload — an object keyed by line code → dollar amount. Any line
-// code present in the map gets that value as `overrideUnitPrice` after
-// `computeQuote` produces fresh catalogue-priced lines; codes absent from
-// the map have no override. Empty `{}` (or omitted field) clears all
-// overrides — matches the model where the client sends the full intended
-// override set on every save. Strict on values: positive, finite,
-// numeric(10,2)-shaped, ≤ MAX_DOLLARS — same caps as `parseTax`.
-function parseOverrides(
-  formData: FormData,
-): { ok: true; data: Record<string, number> } | { ok: false; error: string } {
-  const raw = field(formData, 'overrides');
-  if (!raw) return { ok: true, data: {} };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { ok: false, error: 'Overrides payload is not valid JSON.' };
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { ok: false, error: 'Overrides must be an object keyed by line code.' };
-  }
-  const out: Record<string, number> = {};
-  for (const [code, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > MAX_DOLLARS) {
-      return {
-        ok: false,
-        error: `Override for ${code} must be a non-negative number ≤ ${MAX_DOLLARS}.`,
-      };
-    }
-    out[code] = value;
-  }
-  return { ok: true, data: out };
-}
-
 // Reject more than 2 decimal places so the persisted tax value cannot diverge
-// between paths (`setQuoteTax` writes `tax.toFixed(2)`, `computeQuote` rounds
-// via `roundCents`; the two can drift on >2-decimal inputs like `2.675`).
-// Canonicalizing here means every call site sees the same cents.
+// between paths (`setQuoteTax` writes `tax.toFixed(2)`, `computePickedTotals`
+// rounds via `roundCents`; the two can drift on >2-decimal inputs like
+// `2.675`). Canonicalizing here means every call site sees the same cents.
 const TAX_RE = /^\d+(\.\d{1,2})?$/;
 
 function parseTax(formData: FormData): number | { error: string } {
@@ -183,9 +98,8 @@ function parseTax(formData: FormData): number | { error: string } {
   if (!Number.isFinite(n) || n < 0) {
     return { error: 'Tax must be a non-negative number.' };
   }
-  // Match `computeQuote`'s tax cap so the `setQuoteTax` standalone path can't
-  // bypass the same guard that `setQuoteInputs` / `createQuote` enforce
-  // through the pricing module.
+  // Cap matches `computePickedTotals` so the `setQuoteTax` standalone path
+  // can't bypass the guard the picker save enforces through the pricing module.
   if (n > MAX_DOLLARS) {
     return { error: `Tax must be ≤ ${MAX_DOLLARS}.` };
   }
@@ -196,49 +110,17 @@ function moneyString(n: number): string {
   return n.toFixed(2);
 }
 
-// Short stable digest used by the `quote.edited` audit payload to mark which
-// line-items snapshot a save came from without bloating the row with the full
-// array. 16 hex chars of SHA-256 — collision-resistant enough for forensic
-// "this edit changed lines vs. this one didn't" reads.
-function hashLineItems(lineItems: unknown): string {
-  return createHash('sha256')
-    .update(JSON.stringify(lineItems ?? null))
-    .digest('hex')
-    .slice(0, 16);
-}
-
-/** Apply a freshly-computed `QuoteComputation` + `inputs` snapshot to a row.
- *  Used by the create path (in-flight insert) and the setter actions. */
-function persistComputationPatch(
-  inputs: QuoteInputs,
-  out: ReturnType<typeof computeQuote>,
-): {
-  inputs: QuoteInputs;
-  lineItems: ReturnType<typeof computeQuote>['lines'];
-  subtotal: string;
-  tax: string;
-  total: string;
-} {
-  return {
-    inputs,
-    lineItems: out.lines,
-    subtotal: moneyString(out.subtotal),
-    tax: moneyString(out.tax),
-    total: moneyString(out.total),
-  };
-}
-
 // === 0062: SKU line-item picker write path ================================
 // The composer (Phase 5) submits a `lines` JSON payload — picked SKUs with a
 // per-line quantity and (effective) price — instead of the calculator's
 // structured `inputs`. The server resolves each line against the live
 // catalogue to snapshot code/label/description/unitPrice, derives the
 // per-quote override from the typed price, recomputes totals, and
-// delete-and-inserts the `quote_line_items` rows. A JSONB mirror is still
-// written to `quotes.line_items` so the legacy render paths (sendQuote /
-// previewQuotePdf) keep working until Phase 6 cuts them over to the table;
-// Phase 7 drops the column. `quoteNotes` is the one input the composer still
-// owns — it's merged onto the preserved `inputs` snapshot.
+// delete-and-inserts the `quote_line_items` rows — the sole source of truth
+// (the former `quotes.line_items` jsonb mirror was dropped in Phase 7; every
+// render path now reads the table via the `renderLines` subquery). `quoteNotes`
+// is the one input the composer still owns — merged onto the preserved
+// `inputs` snapshot.
 
 type PickedLineInput = { serviceItemId: number; qty: number; price: number };
 
@@ -324,26 +206,6 @@ function buildPickedLines(
   return { ok: true, lines };
 }
 
-// JSONB mirror of the picked lines so the JSONB-reading render paths keep
-// rendering until the column drops in Phase 7. `unit: 'flat'` is a
-// non-load-bearing placeholder. `description` carries the SKU catalogue
-// description so the PDF can render it as a sub-line (`validatePersistedLines`
-// reads it through to `QuoteLineItem.subDescription`).
-function pickedLinesToJsonbMirror(
-  lines: PickedLine[],
-): Array<ComputedLine & { description?: string }> {
-  return lines.map((l) => ({
-    code: l.code,
-    label: l.label,
-    description: l.description,
-    unit: 'flat',
-    unitPrice: l.unitPrice,
-    overrideUnitPrice: l.overrideUnitPrice,
-    qty: l.qty,
-    lineTotal: l.lineTotal,
-  }));
-}
-
 // Map a computed `PickedLine` to a `quote_line_items` insert row (money → fixed
 // strings; nullable fields normalized). `displayOrder` is the array index.
 function pickedLineInsertValues(
@@ -382,15 +244,10 @@ export const createQuote = capabilityClient('quote:edit')
     const dealerId = parseId(formData, 'dealerId');
     if (dealerId == null) return { error: 'Dealer is required.' };
 
-    // Composer Save-Draft path: callers can pass `inputs` (JSON-serialized
-    // QuoteInputs) and `tax` to seed the row with a real snapshot. Absent
-    // → fall back to the default empty inputs + zeroed lines/total
-    // (existing 0026 P2 behavior).
-    let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
-    let computed: ReturnType<typeof computeQuote> | null = null;
     // 0062 picker path: `lines` present → resolve picked SKUs against the
-    // catalogue, compute totals, seed the row with the JSONB mirror + the
-    // quote_line_items rows (inserted inside the tx below once we have the id).
+    // catalogue, compute totals, seed the row, and insert the quote_line_items
+    // rows inside the tx below once we have the id. Absent → an empty draft.
+    let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
     let pickedComputed: PickedQuoteComputation | null = null;
     if (formData.has('lines')) {
       const linesResult = parsePickedLineInputs(formData);
@@ -407,39 +264,6 @@ export const createQuote = capabilityClient('quote:edit')
         throw err;
       }
       inputsSnapshot = { ...DEFAULT_QUOTE_INPUTS, quoteNotes: parseQuoteNotes(formData) };
-    } else if (formData.has('inputs')) {
-      const inputResult = parseQuoteInputs(formData);
-      if (!inputResult.ok) {
-        return { error: inputResult.error, ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}) };
-      }
-      const taxResult = parseTax(formData);
-      if (typeof taxResult === 'object') return taxResult;
-
-      const catalog = await loadActiveCatalog();
-      try {
-        computed = computeQuote(inputResult.data, catalog, taxResult);
-      } catch (err) {
-        if (err instanceof QuoteInputsError) return { error: err.message };
-        throw err;
-      }
-      // 0052: same override-application shape as `setQuoteInputs` so a
-      // first-save from /quotes/new with the override toggle on doesn't
-      // silently drop the coach's tuned prices.
-      const overridesResult = parseOverrides(formData);
-      if (!overridesResult.ok) return { error: overridesResult.error };
-      const overrides = overridesResult.data;
-      if (Object.keys(overrides).length > 0) {
-        const linesWithOverrides: ComputedLine[] = computed.lines.map((l) =>
-          overrides[l.code] != null ? { ...l, overrideUnitPrice: overrides[l.code] } : l,
-        );
-        try {
-          computed = recomputeTotalsWithOverrides(linesWithOverrides, taxResult);
-        } catch (err) {
-          if (err instanceof QuoteInputsError) return { error: err.message };
-          throw err;
-        }
-      }
-      inputsSnapshot = inputResult.data;
     }
 
     const baseInsert = {
@@ -451,25 +275,11 @@ export const createQuote = capabilityClient('quote:edit')
     const insertValues = pickedComputed
       ? {
           ...baseInsert,
-          lineItems: pickedLinesToJsonbMirror(pickedComputed.lines),
           subtotal: moneyString(pickedComputed.subtotal),
           tax: moneyString(pickedComputed.tax),
           total: moneyString(pickedComputed.total),
         }
-      : computed
-        ? {
-            ...baseInsert,
-            ...(() => {
-              const patch = persistComputationPatch(inputsSnapshot, computed);
-              return {
-                lineItems: patch.lineItems,
-                subtotal: patch.subtotal,
-                tax: patch.tax,
-                total: patch.total,
-              };
-            })(),
-          }
-        : baseInsert;
+      : baseInsert;
 
     // Verify dealer is active **inside the transaction with a row lock** so a
     // concurrent `archiveDealer` between our SELECT and the INSERT cannot
@@ -491,8 +301,7 @@ export const createQuote = capabilityClient('quote:edit')
         .values(insertValues)
         .returning({ id: quotes.id });
       // 0062: persist the picked lines as relational rows now that we have the
-      // quote id. The JSONB mirror (in insertValues) stays the legacy read
-      // source until Phase 6.
+      // quote id — the sole line-item store.
       if (pickedComputed && pickedComputed.lines.length > 0) {
         await tx
           .insert(quoteLineItems)
@@ -516,9 +325,9 @@ export const createQuote = capabilityClient('quote:edit')
 
 // 0062 picker save: resolve the submitted `lines` against the catalogue,
 // recompute totals, delete-and-insert the `quote_line_items` rows, write the
-// totals + JSONB mirror + merged `quoteNotes`. Same optimistic-lock + audit-
-// diff discipline as the legacy `setQuoteInputs` body. Module-private (not a
-// Server Action) so the action-gate lint doesn't flag it.
+// totals + merged `quoteNotes`. Optimistic-lock + audit-diff discipline matches
+// the other composer setters. Module-private (not a Server Action) so the
+// action-gate lint doesn't flag it.
 async function applyPickerSave(
   formData: FormData,
   quoteId: number,
@@ -543,7 +352,7 @@ async function applyPickerSave(
         tax: quotes.tax,
         subtotal: quotes.subtotal,
         total: quotes.total,
-        lineItems: quotes.lineItems,
+        renderLines: renderLinesColumn,
         inputs: quotes.inputs,
         updatedAt: quotes.updatedAt,
       })
@@ -567,7 +376,6 @@ async function applyPickerSave(
       throw err;
     }
 
-    const mirror = pickedLinesToJsonbMirror(computed.lines);
     const mergedInputs: QuoteInputs = { ...(row.inputs as QuoteInputs), quoteNotes };
 
     // Replace the relational rows (delete-and-insert), then the guarded UPDATE.
@@ -582,7 +390,6 @@ async function applyPickerSave(
       .update(quotes)
       .set({
         inputs: mergedInputs,
-        lineItems: mirror,
         subtotal: moneyString(computed.subtotal),
         tax: moneyString(computed.tax),
         total: moneyString(computed.total),
@@ -615,8 +422,8 @@ async function applyPickerSave(
       tax: moneyString(computed.tax),
       total: moneyString(computed.total),
     };
-    const beforeLinesHash = hashLineItems(row.lineItems);
-    const afterLinesHash = hashLineItems(mirror);
+    const beforeLinesHash = lineFingerprint(row.renderLines);
+    const afterLinesHash = lineFingerprint(computed.lines);
     const dirtyFields: string[] = [];
     if (beforePriced.subtotal !== afterPriced.subtotal) dirtyFields.push('subtotal');
     if (beforePriced.tax !== afterPriced.tax) dirtyFields.push('tax');
@@ -648,19 +455,12 @@ async function applyPickerSave(
   return { ok: true };
 }
 
-/** Composer-side setter: replace the input snapshot, recompute lines + totals
- *  against the live catalog, persist atomically. 0046 flipped the lifecycle
- *  doctrine — `sent` (and derived `expired`) rows stay editable so coaches
- *  can fix pricing typos and Re-send. Only the terminal contract artifacts
- *  (`accepted` / `declined`) are immutable.
- *
- *  Optimistic-locking via `WHERE date_trunc('ms', updatedAt) = preloaded` —
- *  same shape as `sendQuote`. A concurrent send / accept that bumped
- *  updatedAt under us misses the UPDATE, and the re-select classifies the
- *  miss (terminal status → friendly error; otherwise "edited concurrently;
- *  please retry"). Emits `quote.edited` only when the priced output
- *  (subtotal / tax / total / lineItems) actually changed — typo-style saves
- *  on unchanged inputs are no-ops in the audit log. */
+/** Composer-side setter: persist the picked line items + tax + quote notes,
+ *  delegating to `applyPickerSave`. 0046 lifecycle doctrine — `sent` (and
+ *  derived `expired`) rows stay editable so coaches can fix pricing typos and
+ *  Re-send; only the terminal contract artifacts (`accepted`/`declined`) are
+ *  immutable. (Name kept for call-site stability; the composer no longer sends
+ *  the old structured `inputs`.) */
 export const setQuoteInputs = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -669,175 +469,9 @@ export const setQuoteInputs = capabilityClient('quote:edit')
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
 
-    // 0062: the picker composer submits `lines`; the legacy calculator path
-    // (below) is retired in Phase 7. Branch early so the two never interleave.
-    if (formData.has('lines')) {
-      return applyPickerSave(formData, quoteId, userId);
-    }
-
-    const inputResult = parseQuoteInputs(formData);
-    if (!inputResult.ok) {
-      return { error: inputResult.error, ...(inputResult.fieldErrors ? { fieldErrors: inputResult.fieldErrors } : {}) };
-    }
-    const parsed = inputResult.data;
-
-    // `tax` is optional — if absent, preserve whatever's on the row.
-    const taxRequested = formData.has('tax') ? parseTax(formData) : null;
-    if (taxRequested && typeof taxRequested === 'object') return taxRequested;
-
-    // 0052: per-line coach price overrides. Empty/absent → no overrides
-    // applied; the client always sends the full intended override set
-    // (same model as `tax`), so omitting a code clears any prior override.
-    const overridesResult = parseOverrides(formData);
-    if (!overridesResult.ok) return { error: overridesResult.error };
-    const overrides = overridesResult.data;
-
-    type EditResult =
-      | { ok: true; auditPayload: Record<string, unknown> | null }
-      | { error: string; fieldErrors?: Record<string, string[] | undefined> };
-
-    // Load current tax + priced-output snapshot + updatedAt (when not being
-    // changed) — we still need them to recompute total, drive the
-    // optimistic-lock predicate, and decide whether to emit `quote.edited`.
-    // Doing this read + the guarded update inside a transaction keeps the
-    // snapshot consistent with the row state.
-    const txResult: EditResult = await db.transaction(async (tx): Promise<EditResult> => {
-      const [row] = await tx
-        .select({
-          status: quotes.status,
-          tax: quotes.tax,
-          subtotal: quotes.subtotal,
-          total: quotes.total,
-          lineItems: quotes.lineItems,
-          updatedAt: quotes.updatedAt,
-        })
-        .from(quotes)
-        .where(eq(quotes.id, quoteId))
-        .limit(1);
-      if (!row) return { error: 'Quote not found.' };
-      if (row.status === 'accepted' || row.status === 'declined') {
-        return {
-          error: `This quote has been ${row.status} — make a new quote to revise it.`,
-        };
-      }
-
-      const taxNumber = taxRequested != null ? (taxRequested as number) : Number(row.tax) || 0;
-      const catalog = await loadActiveCatalog();
-      let computed: ReturnType<typeof computeQuote>;
-      try {
-        computed = computeQuote(parsed, catalog, taxNumber);
-      } catch (err) {
-        if (err instanceof QuoteInputsError) return { error: err.message };
-        throw err;
-      }
-
-      // 0052: apply per-line overrides on top of the freshly computed lines,
-      // then recompute subtotal/tax/total using `effectiveUnit()`. Lines the
-      // map doesn't mention stay as-is; codes in the map that don't match a
-      // computed line are silently ignored (e.g. coach toggled an input that
-      // dropped a conditional line — the orphan override is dropped too).
-      // Catalogue `unitPrice` is preserved on every line so the original is
-      // recoverable from the JSONB snapshot for audit / coach reference.
-      const linesWithOverrides: ComputedLine[] = computed.lines.map((l) =>
-        overrides[l.code] != null ? { ...l, overrideUnitPrice: overrides[l.code] } : l,
-      );
-      let final: ReturnType<typeof recomputeTotalsWithOverrides>;
-      try {
-        final = recomputeTotalsWithOverrides(linesWithOverrides, taxNumber);
-      } catch (err) {
-        if (err instanceof QuoteInputsError) return { error: err.message };
-        throw err;
-      }
-
-      const patch = persistComputationPatch(parsed, final);
-      const updated = await tx
-        .update(quotes)
-        .set({
-          inputs: patch.inputs,
-          lineItems: patch.lineItems,
-          subtotal: patch.subtotal,
-          tax: patch.tax,
-          total: patch.total,
-          updatedById: userId,
-        })
-        .where(
-          and(
-            eq(quotes.id, quoteId),
-            sql`${quotes.status} NOT IN ('accepted', 'declined')`,
-            // Same `date_trunc('milliseconds', …)` shape as `sendQuote` —
-            // postgres-js decodes timestamptz at ms precision, so the
-            // truncation keeps both sides comparable. ISO + ::timestamptz
-            // cast forces the bound parameter to a string Postgres parses
-            // back to a timestamp (raw Date binding throws).
-            sql`date_trunc('milliseconds', ${quotes.updatedAt}) = ${row.updatedAt.toISOString()}::timestamptz`,
-          ),
-        )
-        .returning({ id: quotes.id });
-      if (!updated.length) {
-        // Optimistic-lock miss. Re-classify against the latest row state:
-        // a concurrent accept/decline gets the friendly terminal-status
-        // copy; otherwise the row was edited or sent under us and the UI
-        // should retry with a fresh snapshot.
-        const [latest] = await tx
-          .select({ status: quotes.status })
-          .from(quotes)
-          .where(eq(quotes.id, quoteId))
-          .limit(1);
-        if (!latest) return { error: 'Quote not found.' };
-        if (latest.status === 'accepted' || latest.status === 'declined') {
-          return {
-            error: `This quote has been ${latest.status} — make a new quote to revise it.`,
-          };
-        }
-        return { error: 'Quote was edited concurrently; please retry.' };
-      }
-
-      // Decide whether this save changed the priced output. We compare on
-      // string-form money values (already canonicalized via moneyString) +
-      // a short SHA-256 digest over lineItems. A no-op save (e.g. the
-      // user toggled a UI field that doesn't affect pricing) skips the
-      // audit emit so the Send-history reads stay clean.
-      const beforePriced = {
-        subtotal: row.subtotal,
-        tax: row.tax,
-        total: row.total,
-      };
-      const afterPriced = {
-        subtotal: patch.subtotal,
-        tax: patch.tax,
-        total: patch.total,
-      };
-      const beforeLinesHash = hashLineItems(row.lineItems);
-      const afterLinesHash = hashLineItems(patch.lineItems);
-      const dirtyFields: string[] = [];
-      if (beforePriced.subtotal !== afterPriced.subtotal) dirtyFields.push('subtotal');
-      if (beforePriced.tax !== afterPriced.tax) dirtyFields.push('tax');
-      if (beforePriced.total !== afterPriced.total) dirtyFields.push('total');
-      if (beforeLinesHash !== afterLinesHash) dirtyFields.push('lineItems');
-      const auditPayload = dirtyFields.length
-        ? {
-            before: { ...beforePriced, lineItemsHash: beforeLinesHash },
-            after: { ...afterPriced, lineItemsHash: afterLinesHash },
-            dirtyFields,
-          }
-        : null;
-
-      return { ok: true, auditPayload };
-    });
-
-    if ('error' in txResult) return txResult;
-
-    if (txResult.auditPayload) {
-      await recordAudit({
-        action: 'quote.edited',
-        targetTable: 'quotes',
-        targetId: quoteId,
-        payload: txResult.auditPayload,
-      });
-    }
-
-    revalidateQuoteViews();
-    return { ok: true };
+    // 0062: the composer submits a picker `lines` payload (absent → empty
+    // quote). All saves route through `applyPickerSave`.
+    return applyPickerSave(formData, quoteId, userId);
   });
 
 /** Composer-side setter: override just the tax amount on a draft quote.
@@ -953,58 +587,10 @@ function pdfStorageKey(quoteId: number): string {
   return `quotes/${quoteId}/${QUOTE_PDF_REVISION}.pdf`;
 }
 
-type ValidatedLines = { ok: true; lines: QuoteLineItem[] } | { error: string };
-
-const CORRUPTED_LINES_ERROR = 'Quote line items are corrupted; cannot render.';
 // MAX_ADDRESS_LINES lives in ./constants because `'use server'` files may
-// only export async functions (Next 16 RSC constraint).
-
-function isFiniteNonNegative(n: unknown): n is number {
-  return typeof n === 'number' && Number.isFinite(n) && n >= 0;
-}
-
-/** Validate a persisted `ComputedLine` snapshot before mapping into the
- *  renderer's shape. Corrupt jsonb must fail closed rather than rendering
- *  blanks/zeroes into a client-visible PDF. */
-function validatePersistedLines(raw: unknown): ValidatedLines {
-  if (!Array.isArray(raw)) return { error: CORRUPTED_LINES_ERROR };
-  const lines: QuoteLineItem[] = [];
-  for (const item of raw) {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return { error: CORRUPTED_LINES_ERROR };
-    }
-    const l = item as Partial<ComputedLine>;
-    if (
-      typeof l.label !== 'string' ||
-      l.label.trim().length === 0 ||
-      !isFiniteNonNegative(l.qty) ||
-      !isFiniteNonNegative(l.unitPrice) ||
-      !isFiniteNonNegative(l.lineTotal)
-    ) {
-      return { error: CORRUPTED_LINES_ERROR };
-    }
-    // 0052: PDF + email render the prospect-facing tuned price. `lineTotal`
-    // is already override-aware on persist (recomputeTotalsWithOverrides
-    // sets it to effectiveUnit * qty), so only `unitPrice` needs the
-    // preference rule here. Catalogue `unitPrice` stays on the persisted
-    // JSONB row so the original is recoverable for audit / coach reference.
-    // 0062: the picker mirror carries the SKU `description` → render it as a
-    // sub-line. Legacy calculator lines have no `description` (undefined).
-    const rawDescription = (item as { description?: unknown }).description;
-    const subDescription =
-      typeof rawDescription === 'string' && rawDescription.trim().length > 0
-        ? rawDescription
-        : undefined;
-    lines.push({
-      description: l.label,
-      ...(subDescription ? { subDescription } : {}),
-      quantity: l.qty,
-      unitPrice: l.overrideUnitPrice ?? l.unitPrice,
-      total: l.lineTotal,
-    });
-  }
-  return { ok: true, lines };
-}
+// only export async functions (Next 16 RSC constraint). Line items for the
+// renderer come from `quote_line_items` via `mapRenderLines(renderLinesColumn)`
+// (`@/lib/quotes/render-lines`).
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -1097,7 +683,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
         sentAt: quotes.sentAt,
         createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
-        lineItems: quotes.lineItems,
+        renderLines: renderLinesColumn,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
         total: quotes.total,
@@ -1118,8 +704,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
       .limit(1);
     if (!dealer) return { error: 'Dealer not found or archived.' };
 
-    const lineResult = validatePersistedLines(quote.lineItems);
-    if ('error' in lineResult) return lineResult;
+    const lines = mapRenderLines(quote.renderLines);
 
     // For sent quotes the issued/validity dates anchor on `sentAt`. For
     // drafts (preview-only) we fall back to today so the preview shows what
@@ -1135,7 +720,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
       eventName: 'Sales Event',
-      lineItems: lineResult.lines,
+      lineItems: lines,
       subtotal: Number(quote.subtotal),
       tax: Number(quote.tax),
       total: Number(quote.total),
@@ -1200,7 +785,7 @@ export const sendQuote = capabilityClient('quote:edit')
         updatedAt: quotes.updatedAt,
         createdAt: quotes.createdAt,
         quoteValidDays: quotes.quoteValidDays,
-        lineItems: quotes.lineItems,
+        renderLines: renderLinesColumn,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
         total: quotes.total,
@@ -1265,11 +850,10 @@ export const sendQuote = capabilityClient('quote:edit')
     if ('error' in recipientResult) return recipientResult;
     const recipient = recipientResult.recipient;
 
-    const lineResult = validatePersistedLines(draft.lineItems);
-    if ('error' in lineResult) return lineResult;
+    const lines = mapRenderLines(draft.renderLines);
     // 0062: refuse to send an empty quote — fail closed before any side
     // effects (render / GCS / email / status flip).
-    if (lineResult.lines.length === 0) {
+    if (lines.length === 0) {
       return { error: 'Add at least one line item before sending this quote.' };
     }
 
@@ -1292,7 +876,7 @@ export const sendQuote = capabilityClient('quote:edit')
       // TODO(post-0026): add `eventName` to QuoteInputs (or link quote ↔
       // campaign by then) and source from there.
       eventName: 'Sales Event',
-      lineItems: lineResult.lines,
+      lineItems: lines,
       subtotal: Number(draft.subtotal),
       tax: Number(draft.tax),
       total: Number(draft.total),

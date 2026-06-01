@@ -1,6 +1,6 @@
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
-import { quoteLineItems } from './quote-line-items';
+import { quoteLineItems } from './schema/quote-line-items';
 
 // Pure schema-introspection test (no DB) — locks the `quote_line_items` shape
 // the 0062 picker depends on: the column set, the money-column types, and the

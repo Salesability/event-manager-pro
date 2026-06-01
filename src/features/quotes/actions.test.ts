@@ -251,13 +251,15 @@ const DRAFT_ROW = {
   createdAt: new Date('2026-05-12T11:00:00.000Z'),
   acceptToken: '11111111-2222-3333-4444-555555555555',
   quoteValidDays: 30,
-  lineItems: [
+  // 0062: render lines come inline from the quote_line_items subquery
+  // (`renderLines`), mapped by `mapRenderLines` (label → PDF description).
+  renderLines: [
     {
-      code: 'base-event',
       label: 'Base Event (includes 500 records)',
-      unit: 'flat',
-      unitPrice: 6900,
+      description: null,
       qty: 1,
+      unitPrice: 6900,
+      overrideUnitPrice: null,
       lineTotal: 6900,
     },
   ],
@@ -701,7 +703,7 @@ describe('sendQuote', () => {
 
   // 0062: empty-quote guard — a picker quote with zero lines can't be sent.
   it('refuses to send an empty quote (no line items) before any side effect', async () => {
-    mocks.dbResults.push([{ ...DRAFT_ROW, lineItems: [] }], [DEALER_ROW]);
+    mocks.dbResults.push([{ ...DRAFT_ROW, renderLines: [] }], [DEALER_ROW]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({
       error: 'Add at least one line item before sending this quote.',
@@ -998,376 +1000,6 @@ const CATALOG_FIXTURE = [
   },
 ];
 
-describe('createQuote (composer Save-Draft path)', () => {
-  it('persists inputs + computed lines + totals when `inputs` is submitted', async () => {
-    // db round-trips: catalog SELECT (loadActiveCatalog before tx), then
-    // inside transaction: dealer FOR-UPDATE SELECT, then insert returns id.
-    mocks.dbResults.push(CATALOG_FIXTURE, [{ id: 7 }], [{ id: 99 }]);
-    const result = await call(
-      createQuote(
-        fd({
-          dealerId: '7',
-          inputs: JSON.stringify({ audienceSize: 700, eventDays: 1 }),
-          tax: '50',
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true, quoteId: 99 });
-    const insert = mocks.inserts[0].values as Record<string, unknown>;
-    expect(insert.inputs).toMatchObject({ audienceSize: 700, eventDays: 1 });
-    // base 6900 + 200 × 3 = 7500 subtotal, + 50 tax = 7550 total.
-    expect(insert.subtotal).toBe('7500.00');
-    expect(insert.tax).toBe('50.00');
-    expect(insert.total).toBe('7550.00');
-    expect(Array.isArray(insert.lineItems)).toBe(true);
-  });
-
-  it('rejects bad JSON in inputs payload', async () => {
-    const result = await call(
-      createQuote(fd({ dealerId: '7', inputs: 'not-json' })),
-    );
-    expect(result).toEqual({ error: 'Quote inputs payload is not valid JSON.' });
-    expect(mocks.inserts).toHaveLength(0);
-  });
-
-  it('rejects inputs failing validation (negative count)', async () => {
-    mocks.dbResults.push(CATALOG_FIXTURE);
-    const result = await call(
-      createQuote(
-        fd({
-          dealerId: '7',
-          inputs: JSON.stringify({ bdcCallCount: -1 }),
-        }),
-      ),
-    );
-    expect((result as { error: string }).error).toContain('bdcCallCount');
-    expect(mocks.inserts).toHaveLength(0);
-  });
-
-  it('discards unknown JSON keys instead of persisting them', async () => {
-    mocks.dbResults.push(CATALOG_FIXTURE, [{ id: 7 }], [{ id: 99 }]);
-    await call(
-      createQuote(
-        fd({
-          dealerId: '7',
-          inputs: JSON.stringify({
-            audienceSize: 500,
-            __proto__: { polluted: true },
-            constructor: { prototype: { x: 1 } },
-            blob: 'garbage',
-          }),
-        }),
-      ),
-    );
-    const insert = mocks.inserts[0].values as Record<string, unknown>;
-    const persistedInputs = insert.inputs as Record<string, unknown>;
-    expect(persistedInputs).not.toHaveProperty('blob');
-    expect(persistedInputs).not.toHaveProperty('constructor');
-    // Canonical fields are present.
-    expect(persistedInputs.audienceSize).toBe(500);
-    expect(persistedInputs.eventDays).toBe(1);
-  });
-
-  // 0045 Phase 2 — schema-as-contract: action surfaces `fieldErrors` alongside
-  // `error` so a future composer caller can route per-field via `setError`.
-  it('surfaces per-field errors on safeParse failure', async () => {
-    mocks.dbResults.push(CATALOG_FIXTURE);
-    const result = (await call(
-      createQuote(
-        fd({
-          dealerId: '7',
-          inputs: JSON.stringify({ audienceSize: -1, eventDays: 0 }),
-        }),
-      ),
-    )) as { error: string; fieldErrors?: Record<string, string[]> };
-    expect(result.error).toContain('audienceSize');
-    expect(result.fieldErrors?.audienceSize?.length).toBeGreaterThan(0);
-    expect(mocks.inserts).toHaveLength(0);
-  });
-});
-
-// Realistic setQuoteInputs pre-load row. 0046 added subtotal/total/lineItems
-// + updatedAt to the SELECT (optimistic-lock predicate + priced-output diff
-// for the `quote.edited` audit emit decision). Tests can spread + override.
-// The line-items shape mirrors what `computeQuote` produces for the
-// `audienceSize: 500, eventDays: 1` default; the no-op edit test relies on
-// that congruence so its hash compares equal end-to-end.
-const SET_INPUTS_PRELOAD = {
-  status: 'draft',
-  tax: '0.00',
-  subtotal: '6900.00',
-  total: '6900.00',
-  lineItems: [
-    {
-      code: 'base-event',
-      label: 'Base Event',
-      unit: 'flat',
-      unitPrice: 6900,
-      qty: 1,
-      lineTotal: 6900,
-    },
-  ],
-  updatedAt: new Date('2026-05-12T12:00:00.000Z'),
-};
-
-describe('setQuoteInputs', () => {
-  it('updates inputs + recomputes lines/totals on a draft quote', async () => {
-    // pre-load SELECT, catalog SELECT, then UPDATE.returning() returns one row.
-    mocks.dbResults.push(
-      [SET_INPUTS_PRELOAD],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.inputs).toMatchObject({ audienceSize: 600 });
-    // base 6900 + 100 × 3 = 7200; tax preserved at 0.
-    expect(patch.subtotal).toBe('7200.00');
-    expect(patch.total).toBe('7200.00');
-  });
-
-  it('allows edit on a sent quote (0046: sent stays editable) and emits quote.edited', async () => {
-    mocks.dbResults.push(
-      [{ ...SET_INPUTS_PRELOAD, status: 'sent' }],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.subtotal).toBe('7200.00');
-    // priced output changed → audit row emitted with before/after digest.
-    expect(mocks.recordAudit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'quote.edited',
-        targetTable: 'quotes',
-        targetId: 42,
-        payload: expect.objectContaining({
-          dirtyFields: expect.arrayContaining(['subtotal', 'total', 'lineItems']),
-        }),
-      }),
-    );
-  });
-
-  it('allows edit on an expired quote (status=sent + past validity is a presentation, not a guard)', async () => {
-    const sentLongAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
-    mocks.dbResults.push(
-      [{ ...SET_INPUTS_PRELOAD, status: 'sent', updatedAt: sentLongAgo }],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-  });
-
-  it('does not emit quote.edited when the priced output is unchanged', async () => {
-    // Inputs that recompute back to the same subtotal/tax/total/lineItems
-    // shape — same audienceSize + eventDays as the seed default (500 / 1)
-    // means the priced output matches and no audit row should fire.
-    mocks.dbResults.push(
-      [SET_INPUTS_PRELOAD],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 500, eventDays: 1 }),
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    expect(mocks.recordAudit).not.toHaveBeenCalled();
-  });
-
-  it('rejects edit on an accepted quote with the friendly terminal-status message', async () => {
-    mocks.dbResults.push([{ ...SET_INPUTS_PRELOAD, status: 'accepted' }]);
-    const result = await call(
-      setQuoteInputs(
-        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
-      ),
-    );
-    expect(result).toEqual({
-      error: 'This quote has been accepted — make a new quote to revise it.',
-    });
-    expect(mocks.updates).toHaveLength(0);
-    expect(mocks.recordAudit).not.toHaveBeenCalled();
-  });
-
-  it('rejects edit on a declined quote with the friendly terminal-status message', async () => {
-    mocks.dbResults.push([{ ...SET_INPUTS_PRELOAD, status: 'declined' }]);
-    const result = await call(
-      setQuoteInputs(
-        fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 600 }) }),
-      ),
-    );
-    expect(result).toEqual({
-      error: 'This quote has been declined — make a new quote to revise it.',
-    });
-    expect(mocks.updates).toHaveLength(0);
-  });
-
-  it('returns a retry error when the optimistic-lock predicate misses (concurrent edit/send bumped updatedAt)', async () => {
-    // pre-load → catalog → UPDATE misses (updatedAt mismatch) → re-select
-    // finds the row still in a non-terminal status. Coach gets a retry.
-    mocks.dbResults.push(
-      [SET_INPUTS_PRELOAD],
-      CATALOG_FIXTURE,
-      [],
-      [{ status: 'sent' }],
-    );
-    const result = await call(
-      setQuoteInputs(fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 500 }) })),
-    );
-    expect(result).toEqual({ error: 'Quote was edited concurrently; please retry.' });
-  });
-
-  it('classifies an optimistic-lock miss as terminal when the row raced to accepted', async () => {
-    mocks.dbResults.push(
-      [SET_INPUTS_PRELOAD],
-      CATALOG_FIXTURE,
-      [],
-      [{ status: 'accepted' }],
-    );
-    const result = await call(
-      setQuoteInputs(fd({ quoteId: '42', inputs: JSON.stringify({ audienceSize: 500 }) })),
-    );
-    expect(result).toEqual({
-      error: 'This quote has been accepted — make a new quote to revise it.',
-    });
-  });
-
-  it('rejects when the quote is gone', async () => {
-    mocks.dbResults.push([]);
-    const result = await call(
-      setQuoteInputs(fd({ quoteId: '42', inputs: JSON.stringify({}) })),
-    );
-    expect(result).toEqual({ error: 'Quote not found.' });
-  });
-
-  it('rejects invalid id without a db round-trip', async () => {
-    const result = await call(setQuoteInputs(fd({ inputs: '{}' })));
-    expect(result).toEqual({ error: 'Invalid quote id.' });
-  });
-
-  // 0052: per-line coach price overrides
-  it('applies overrides to lineItems and recomputes subtotal/total', async () => {
-    // Audience=600 → base-event (1 × 6900) + additional-contact (100 × 3).
-    // Without override: subtotal 7200. Overriding additional-contact $3 → $2:
-    // base 6900 + 100 × 2 = 7100; line lineTotal flips to 200.
-    mocks.dbResults.push(
-      [SET_INPUTS_PRELOAD],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
-          overrides: JSON.stringify({ 'additional-contact': 2 }),
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.subtotal).toBe('7100.00');
-    expect(patch.total).toBe('7100.00');
-    const lineItems = patch.lineItems as Array<{
-      code: string;
-      unitPrice: number;
-      overrideUnitPrice?: number;
-      lineTotal: number;
-    }>;
-    const overridden = lineItems.find((l) => l.code === 'additional-contact');
-    expect(overridden?.unitPrice).toBe(3);
-    expect(overridden?.overrideUnitPrice).toBe(2);
-    expect(overridden?.lineTotal).toBe(200);
-    // base-event has no override → stays $6900.
-    const base = lineItems.find((l) => l.code === 'base-event');
-    expect(base?.unitPrice).toBe(6900);
-    expect(base?.overrideUnitPrice).toBeUndefined();
-  });
-
-  it('clears overrides when an empty map is sent (toggle-off model)', async () => {
-    // Pre-load row already carries an override on additional-contact.
-    mocks.dbResults.push(
-      [
-        {
-          ...SET_INPUTS_PRELOAD,
-          subtotal: '7100.00',
-          total: '7100.00',
-          lineItems: [
-            { code: 'base-event', label: 'Base Event', unit: 'flat', unitPrice: 6900, qty: 1, lineTotal: 6900 },
-            { code: 'additional-contact', label: 'Additional Contact', unit: 'per-record', unitPrice: 3, overrideUnitPrice: 2, qty: 100, lineTotal: 200 },
-          ],
-        },
-      ],
-      CATALOG_FIXTURE,
-      [{ id: 42 }],
-    );
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
-          overrides: JSON.stringify({}),
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    // Catalogue totals restored (additional-contact back to $3 × 100 = 300).
-    expect(patch.subtotal).toBe('7200.00');
-    const lineItems = patch.lineItems as Array<{ code: string; overrideUnitPrice?: number }>;
-    expect(lineItems.find((l) => l.code === 'additional-contact')?.overrideUnitPrice).toBeUndefined();
-  });
-
-  it('rejects an override value > MAX_DOLLARS', async () => {
-    mocks.dbResults.push([SET_INPUTS_PRELOAD]);
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 600, eventDays: 1 }),
-          overrides: JSON.stringify({ 'additional-contact': 99_999_999 }),
-        }),
-      ),
-    );
-    expect(result).toMatchObject({ error: expect.stringContaining('additional-contact') });
-  });
-
-  it('rejects a non-JSON overrides payload', async () => {
-    const result = await call(
-      setQuoteInputs(
-        fd({
-          quoteId: '42',
-          inputs: JSON.stringify({ audienceSize: 600 }),
-          overrides: 'not-json',
-        }),
-      ),
-    );
-    expect(result).toEqual({ error: 'Overrides payload is not valid JSON.' });
-  });
-});
-
 describe('setQuoteTax', () => {
   it('overrides tax and recomputes total = subtotal + tax', async () => {
     // status SELECT, then UPDATE.returning() returns one row.
@@ -1441,13 +1073,13 @@ const PICKER_PRELOAD = {
   tax: '0.00',
   subtotal: '0.00',
   total: '0.00',
-  lineItems: [],
+  renderLines: [],
   inputs: { audienceSize: 500, eventDays: 1, quoteNotes: '' },
   updatedAt: new Date('2026-05-12T12:00:00.000Z'),
 };
 
 describe('setQuoteInputs (0062 picker path)', () => {
-  it('persists picked lines as quote_line_items rows + JSONB mirror + totals', async () => {
+  it('persists picked lines as quote_line_items rows + totals', async () => {
     // pre-load SELECT, catalog SELECT, UPDATE returns one row.
     mocks.dbResults.push([PICKER_PRELOAD], CATALOG_FIXTURE, [{ id: 42 }]);
     const result = await call(
@@ -1491,14 +1123,15 @@ describe('setQuoteInputs (0062 picker path)', () => {
       displayOrder: 1,
     });
 
-    // quotes UPDATE: totals + JSONB mirror + merged quoteNotes (audienceSize
-    // preserved from the pre-loaded inputs — the picker doesn't touch it).
+    // quotes UPDATE: totals + merged quoteNotes (audienceSize preserved from
+    // the pre-loaded inputs — the picker doesn't touch it). No more line_items
+    // jsonb column — the rows above are the sole store.
     const patch = mocks.updates[0].patch as Record<string, unknown>;
     expect(patch.subtotal).toBe('6910.00');
     expect(patch.total).toBe('6910.00');
     expect((patch.inputs as Record<string, unknown>).quoteNotes).toBe('VIP setup');
     expect((patch.inputs as Record<string, unknown>).audienceSize).toBe(500);
-    expect((patch.lineItems as unknown[]).length).toBe(2);
+    expect(patch.lineItems).toBeUndefined();
   });
 
   it('clears the rows and zeroes totals on an empty lines payload', async () => {
@@ -1517,7 +1150,6 @@ describe('setQuoteInputs (0062 picker path)', () => {
     const patch = mocks.updates[0].patch as Record<string, unknown>;
     expect(patch.subtotal).toBe('0.00');
     expect(patch.total).toBe('0.00');
-    expect((patch.lineItems as unknown[]).length).toBe(0);
   });
 
   it('rejects a malformed lines payload before any db round-trip', async () => {
@@ -1575,7 +1207,7 @@ describe('createQuote (0062 picker path)', () => {
     const quoteValues = mocks.inserts[0].values as Record<string, unknown>;
     expect(quoteValues.subtotal).toBe('6900.00');
     expect((quoteValues.inputs as Record<string, unknown>).quoteNotes).toBe('VIP setup');
-    expect((quoteValues.lineItems as unknown[]).length).toBe(1);
+    expect(quoteValues.lineItems).toBeUndefined();
     expect(mocks.inserts[1].table).toBe('quote_line_items');
     const rows = mocks.inserts[1].values as Array<Record<string, unknown>>;
     expect(rows[0]).toMatchObject({ quoteId: 99, code: 'base-event', displayOrder: 0 });

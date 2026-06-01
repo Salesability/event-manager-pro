@@ -156,13 +156,14 @@ const DRAFT_QUOTE_ROW = {
   status: 'draft' as const,
   createdAt: new Date('2026-05-12T11:00:00.000Z'),
   quoteValidDays: 30,
-  lineItems: [
+  // 0062: render lines come inline from the quote_line_items subquery.
+  renderLines: [
     {
-      code: 'base-event',
       label: 'Base Event (includes 500 records)',
-      unit: 'flat',
-      unitPrice: 6900,
+      description: null,
       qty: 1,
+      unitPrice: 6900,
+      overrideUnitPrice: null,
       lineTotal: 6900,
     },
   ],

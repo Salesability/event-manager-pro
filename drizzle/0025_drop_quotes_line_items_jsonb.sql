@@ -1,0 +1,13 @@
+-- 0062 Phase 7: drop the legacy `quotes.line_items` jsonb column.
+--
+-- The picker (0062) moved line items into the `quote_line_items` table
+-- (created + backfilled in 0024). By this migration every reader has been cut
+-- over to the table — the composer rehydrates from it, the write path
+-- delete-and-inserts it, and the PDF renderer reads it via a correlated
+-- subquery on the quote preload — so the jsonb mirror is dead weight.
+--
+-- expand -> migrate -> contract: 0024 created + backfilled the table (additive,
+-- safe). This is the contract step. Apply only after the picker is verified;
+-- the line data already lives in `quote_line_items`, so this drops a redundant
+-- copy, not the data. Rehearsed against the 0063 test-db container before ship.
+ALTER TABLE "quotes" DROP COLUMN "line_items";

@@ -1,78 +1,36 @@
-// Pure pricing module — drives the quote composer (0035 Phase 3) and the PDF
-// renderer (0026 Phase 3). Stateless: no Date, no randomness, no DB; the same
-// inputs + catalog produce the same lines, subtotal, tax, total.
-//
-// **Shape principle:** the composer is a calculator, not a line-item picker.
-// Coach edits a small set of structured inputs (audience, days, per-channel
-// touches, retrieval bracket, travel); the line-item table is computed
-// read-only output. The input snapshot is persisted alongside the computed
-// lines on every save so the invoice (future Phase 7.3) can recompute against
-// the same inputs and reconcile.
+// Pure pricing module for the SKU line-item picker (0062). Stateless: no Date,
+// no randomness, no DB — the same picked lines + tax produce the same totals.
 //
 // Money discipline: amounts are stored as numeric(10,2) strings on the
-// `service_items` and `quotes` tables. This module accepts either string or
-// number unit prices (via `catalogUnitPriceNumber()`); computed line totals
-// are returned as **numbers** for downstream stringification (the persistence
-// layer formats them back to `numeric(10,2)` strings). The catalog is small
-// (≤ 8 rows in v1), so the IEEE-754 rounding risk is negligible for the
-// integer-multiplied lines; the round-to-cents helper guards anyway.
-
-import { z } from 'zod';
-
-import type { ServiceItem, ServiceItemUnit } from '@/features/services/queries';
+// `service_items` / `quote_line_items` / `quotes` tables. This module works in
+// numbers; computed line totals are returned as **numbers** for downstream
+// stringification (the persistence layer formats them back to `numeric` strings
+// via `moneyString`). The round-to-cents helper guards IEEE-754 drift.
+//
+// History: this module used to drive a parametric *calculator* (structured
+// inputs auto-derived into 8 hardcoded catalogue codes). 0062 reversed that to
+// a picker; the calculator (`computeQuote` et al.) was deleted in Phase 7.
 
 export type QuoteInputs = {
-  /** Audience size; drives `additional-contact` qty = max(0, size - 500). */
+  /** Audience size. Retained on the `quotes.inputs` jsonb for the
+   *  production/reports/calendar readers; no longer composer-driven (0062). */
   audienceSize: number;
-  /** Number of event days; drives `additional-day` qty = max(0, days - 1). */
   eventDays: number;
-  /** Per-touch BDC call count. */
   bdcCallCount: number;
-  /** Per-touch letter / postage count. */
   letterCount: number;
-  /** Per-touch SMS / email count. */
   digitalCount: number;
-  /** Record-retrieval bracket amount: typically 0 / 100 / 200 / 300 / 400.
-   *  Catalog row's `unit_price_min` / `_max` define the accepted range. */
   recordRetrievalAmount: number;
-  /** Travel dollar amount — coach types actual cost at quote time. */
   travelAmount: number;
-  /** Freeform Hotel / Mileage / Air breakdown — rendered on PDF, not priced. */
   travelNotes: string;
-  /** Additional notes rendered on the PDF. */
+  /** Free-text notes rendered on the PDF — the one input the picker composer
+   *  still writes. */
   quoteNotes: string;
 };
 
-export type ComputedLine = {
-  code: string;
-  label: string;
-  unit: ServiceItemUnit;
-  /** Dollar amount per unit. For range items this is the bracket amount the
-   *  coach chose; for `travel` it's the typed dollar amount. */
-  unitPrice: number;
-  /** Optional per-quote coach override of `unitPrice` (0052). When present,
-   *  the prospect-facing PDF + totals use this value via `effectiveUnit()`;
-   *  `unitPrice` is preserved as the catalogue reference so the coach can
-   *  see both numbers in the composer. Absent on pre-feature rows and on
-   *  any line the coach hasn't tuned. */
-  overrideUnitPrice?: number;
-  qty: number;
-  lineTotal: number;
-};
-
-export type QuoteComputation = {
-  lines: ComputedLine[];
-  subtotal: number;
-  tax: number;
-  total: number;
-};
-
-/** A line on the 0062 SKU picker. Superset of the persisted fields the
+/** A line on the SKU picker. Superset of the persisted fields the
  *  `quote_line_items` table carries. The coach picks a catalogue SKU (which
  *  seeds `serviceItemId`/`code`/`label`/`description`/`unitPrice`), sets `qty`,
- *  and may tune the price per quote via `overrideUnitPrice`. Unlike the
- *  calculator's `ComputedLine`, there is no `unit` discriminator — a picked
- *  line is just label + qty + price. */
+ *  and may tune the price per quote via `overrideUnitPrice`. */
 export type PickedLine = {
   /** Catalogue row the coach picked. Optional only for legacy rows backfilled
    *  from the pre-0062 jsonb snapshot (those carried no service-item id). */
@@ -100,58 +58,14 @@ export type PickedQuoteComputation = {
  *  inputs before the numeric(12,2) line total can overflow. */
 const MAX_QTY = 1_000_000;
 
-/** Reasonable upper bounds — rejects adversarial / fat-finger inputs without
- *  the server having to wait for a numeric(10,2) overflow. */
-const MAX_AUDIENCE = 1_000_000;
-const MAX_DAYS = 365;
-const MAX_TOUCHES = 1_000_000;
+/** Rejects adversarial / fat-finger dollar inputs before a numeric(10,2)
+ *  overflow. */
 export const MAX_DOLLARS = 9_999_999;
-
-const NOTES_MAX = 1_000;
-
-/** Shared between client (`quote-composer.tsx` via `zodResolver`) and server
- *  (`quotes/actions.ts` via `safeParse` on the JSON-decoded `inputs` payload).
- *  Strict input shape — server callers that may omit fields merge over
- *  `DEFAULT_QUOTE_INPUTS` before `safeParse` (see `parseQuoteInputs`). Keep
- *  bounds in lockstep with `validateQuoteInputs` below. */
-export const quoteInputsSchema = z.object({
-  audienceSize: z.number().int().min(0).max(MAX_AUDIENCE),
-  eventDays: z.number().int().min(1).max(MAX_DAYS),
-  bdcCallCount: z.number().int().min(0).max(MAX_TOUCHES),
-  letterCount: z.number().int().min(0).max(MAX_TOUCHES),
-  digitalCount: z.number().int().min(0).max(MAX_TOUCHES),
-  recordRetrievalAmount: z.number().min(0).max(MAX_DOLLARS),
-  travelAmount: z.number().min(0).max(MAX_DOLLARS),
-  travelNotes: z.string().max(NOTES_MAX),
-  quoteNotes: z.string().max(NOTES_MAX),
-}) satisfies z.ZodType<QuoteInputs>;
 
 export class QuoteInputsError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'QuoteInputsError';
-  }
-}
-
-/** Validate a candidate `QuoteInputs` snapshot. Throws `QuoteInputsError` on
- *  any field that fails the integer / non-negative / range checks. Composer
- *  Server Actions wrap the throw into a friendly `{ error }` ActionResult. */
-export function validateQuoteInputs(input: QuoteInputs): void {
-  assertNonNegInt(input.audienceSize, 'audienceSize', MAX_AUDIENCE);
-  assertNonNegInt(input.eventDays, 'eventDays', MAX_DAYS);
-  if (input.eventDays < 1) {
-    throw new QuoteInputsError('eventDays must be at least 1.');
-  }
-  assertNonNegInt(input.bdcCallCount, 'bdcCallCount', MAX_TOUCHES);
-  assertNonNegInt(input.letterCount, 'letterCount', MAX_TOUCHES);
-  assertNonNegInt(input.digitalCount, 'digitalCount', MAX_TOUCHES);
-  assertNonNegMoney(input.recordRetrievalAmount, 'recordRetrievalAmount');
-  assertNonNegMoney(input.travelAmount, 'travelAmount');
-  if (typeof input.travelNotes !== 'string' || input.travelNotes.length > NOTES_MAX) {
-    throw new QuoteInputsError(`travelNotes must be a string up to ${NOTES_MAX} chars.`);
-  }
-  if (typeof input.quoteNotes !== 'string' || input.quoteNotes.length > NOTES_MAX) {
-    throw new QuoteInputsError(`quoteNotes must be a string up to ${NOTES_MAX} chars.`);
   }
 }
 
@@ -171,137 +85,16 @@ function roundCents(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Parse a catalog row's `unitPrice` — stored as a `numeric(10,2)` string by
- *  Drizzle. Returns 0 for null (variable-priced rows like `travel`). */
-function catalogUnitPriceNumber(item: Pick<ServiceItem, 'unitPrice'>): number {
-  if (item.unitPrice == null) return 0;
-  const n = Number(item.unitPrice);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Look up a catalog row by code. Returns undefined when the catalog doesn't
- *  carry the row (e.g. it was archived between snapshot and recompute). The
- *  caller decides whether a missing row is fatal — `computeQuote` simply
- *  omits the line, which keeps the composer renderable even when a coach
- *  archives an in-use catalog row mid-edit. */
-function findCode(catalog: ServiceItem[], code: string): ServiceItem | undefined {
-  return catalog.find((c) => c.code === code);
-}
-
-/** Compute the line items + totals for a draft quote.
- *
- *  @deprecated 0062 pivots the composer to a SKU picker (`computePickedTotals`).
- *  This parametric calculator — structured inputs auto-derived into the 8
- *  hardcoded catalogue codes — is retired from the UI in Phase 5 and deleted in
- *  Phase 7. Kept compiling in between so the old composer/actions/tests stay
- *  green during the cutover. Do not wire new callers to it.
- *
- *  Rules (locked 2026-05-08 in 0035 plan Phase 3):
- *  - `base-event` always present, qty 1.
- *  - `additional-contact` qty = max(0, audienceSize - 500); line omitted if 0.
- *  - `additional-day` qty = max(0, eventDays - 1); line omitted if 0.
- *  - `bdc-call` / `letter-postage` / `digital-record` qty from corresponding
- *    count input; line omitted if 0.
- *  - `record-retrieval` emitted iff `recordRetrievalAmount > 0`; unit price =
- *    the chosen bracket amount (range-priced).
- *  - `travel` emitted iff `travelAmount > 0`; unit price = `travelAmount`
- *    (variable; catalog row carries no unit price).
- *
- *  `tax` defaults to 0; callers pass a non-zero `taxOverride` to inject a
- *  final-tax decision (0026 Phase 3 will decide NS HST vs buyer-province).
- */
-export function computeQuote(
-  inputs: QuoteInputs,
-  catalog: ServiceItem[],
-  taxOverride = 0,
-): QuoteComputation {
-  validateQuoteInputs(inputs);
-  if (!Number.isFinite(taxOverride) || taxOverride < 0 || taxOverride > MAX_DOLLARS) {
-    throw new QuoteInputsError(`tax must be a non-negative number ≤ ${MAX_DOLLARS}.`);
-  }
-
-  const lines: ComputedLine[] = [];
-
-  function emitFixed(code: string, qty: number): void {
-    if (qty <= 0) return;
-    const item = findCode(catalog, code);
-    if (!item) return;
-    const unitPrice = catalogUnitPriceNumber(item);
-    lines.push({
-      code: item.code,
-      label: item.label,
-      unit: item.unit,
-      unitPrice,
-      qty,
-      lineTotal: roundCents(unitPrice * qty),
-    });
-  }
-
-  function emitVariable(code: string, unitPrice: number): void {
-    if (unitPrice <= 0) return;
-    const item = findCode(catalog, code);
-    if (!item) return;
-    // Range-bound check (per plan Phase 3 OQ resolution: "coach-typed within
-    // range"). UI bracket pills enforce this client-side; the pricing rule
-    // lives here so direct Server Action calls can't bypass. **Fail closed**
-    // when a `range`-typed catalog row is malformed (missing/non-finite
-    // bounds): the only safe answer is to reject, not to skip the check.
-    if (item.unit === 'range') {
-      const min = item.unitPriceMin == null ? Number.NaN : Number(item.unitPriceMin);
-      const max = item.unitPriceMax == null ? Number.NaN : Number(item.unitPriceMax);
-      if (!Number.isFinite(min) || !Number.isFinite(max)) {
-        throw new QuoteInputsError(
-          `${code} catalog row is missing min/max bounds; cannot price a range item.`,
-        );
-      }
-      if (unitPrice < min || unitPrice > max) {
-        throw new QuoteInputsError(
-          `${code} amount must be between ${min.toFixed(2)} and ${max.toFixed(2)} (got ${unitPrice}).`,
-        );
-      }
-    }
-    lines.push({
-      code: item.code,
-      label: item.label,
-      unit: item.unit,
-      unitPrice,
-      qty: 1,
-      lineTotal: roundCents(unitPrice),
-    });
-  }
-
-  // Fixed-unit lines (qty derived from inputs).
-  emitFixed('base-event', 1);
-  emitFixed('additional-contact', Math.max(0, inputs.audienceSize - 500));
-  emitFixed('additional-day', Math.max(0, inputs.eventDays - 1));
-  emitFixed('bdc-call', inputs.bdcCallCount);
-  emitFixed('letter-postage', inputs.letterCount);
-  emitFixed('digital-record', inputs.digitalCount);
-
-  // Variable-unit lines (unit price typed by the coach).
-  emitVariable('record-retrieval', inputs.recordRetrievalAmount);
-  emitVariable('travel', inputs.travelAmount);
-
-  const subtotal = roundCents(lines.reduce((acc, l) => acc + l.lineTotal, 0));
-  const tax = roundCents(taxOverride);
-  const total = roundCents(subtotal + tax);
-
-  return { lines, subtotal, tax, total };
-}
-
 /** Returns the per-unit dollar amount that drives line totals, PDF rendering,
- *  and `subtotal`/`total`. Prefers the coach's per-line override (set on the
- *  composer Summary in 0052) and falls back to the catalogue-derived
- *  `unitPrice` snapshot. Pre-0052 lines + lines the coach hasn't tuned have
- *  no `overrideUnitPrice`, so the fallback is the universal default. Structural
- *  param so it serves both the calculator `ComputedLine` and the 0062
- *  `PickedLine`. */
+ *  and `subtotal`/`total`. Prefers the coach's per-line override and falls back
+ *  to the catalogue-derived `unitPrice` snapshot. Structural param so it serves
+ *  any priced line shape. */
 export function effectiveUnit(line: { unitPrice: number; overrideUnitPrice?: number }): number {
   return line.overrideUnitPrice ?? line.unitPrice;
 }
 
-/** Validate a candidate set of picked lines (0062). Throws `QuoteInputsError`
- *  on the first line that fails: non-empty `code`/`label`, integer qty in
+/** Validate a candidate set of picked lines. Throws `QuoteInputsError` on the
+ *  first line that fails: non-empty `code`/`label`, integer qty in
  *  `[1, MAX_QTY]`, finite non-negative `unitPrice`/`overrideUnitPrice` ≤
  *  MAX_DOLLARS. The composer enforces these client-side; this lives here so a
  *  direct Server Action call can't bypass. */
@@ -324,12 +117,11 @@ export function validatePickedLines(lines: PickedLine[]): void {
   }
 }
 
-/** Recompute line totals + roll-ups for a set of picked lines (0062). The
- *  picker has no derivation step — totals are just `effectiveUnit(line) × qty`
- *  summed, plus the coach-typed `tax` dollar amount (same contract as
- *  `computeQuote`/`recomputeTotalsWithOverrides`: tax is a typed amount, never
- *  a derived percentage). Returns NEW `PickedLine` objects (immutable) so the
- *  caller can hand the result straight to the persist path. */
+/** Recompute line totals + roll-ups for a set of picked lines (0062). Totals
+ *  are `effectiveUnit(line) × qty` summed, plus the coach-typed `tax` dollar
+ *  amount (tax is a typed amount, never a derived percentage). Returns NEW
+ *  `PickedLine` objects (immutable) so the caller can hand the result straight
+ *  to the persist path. */
 export function computePickedTotals(
   lines: PickedLine[],
   taxOverride = 0,
@@ -348,45 +140,9 @@ export function computePickedTotals(
   return { lines: recomputed, subtotal, tax, total };
 }
 
-/** Recompute `lineTotal` per line + roll-up totals using `effectiveUnit()` —
- *  i.e. with per-line overrides honored. `tax` stays a coach-typed dollar
- *  amount (matches `computeQuote`'s `taxOverride` contract): overrides do
- *  NOT auto-recompute tax against the override subtotal, because tax has
- *  never been a derived percentage in this codebase. The caller passes
- *  whatever `taxOverride` the coach typed; null/undefined means 0.
- *
- *  Returns NEW `ComputedLine` objects (immutable shape) so callers can pass
- *  the result straight into the JSONB persist path without mutating inputs.
- *  Throws `QuoteInputsError` on the same range checks `computeQuote` uses
- *  for overrides + taxes (positive, finite, ≤ MAX_DOLLARS). */
-export function recomputeTotalsWithOverrides(
-  lines: ComputedLine[],
-  taxOverride = 0,
-): QuoteComputation {
-  if (!Number.isFinite(taxOverride) || taxOverride < 0 || taxOverride > MAX_DOLLARS) {
-    throw new QuoteInputsError(`tax must be a non-negative number ≤ ${MAX_DOLLARS}.`);
-  }
-  const recomputed: ComputedLine[] = lines.map((l) => {
-    const override = l.overrideUnitPrice;
-    if (override != null) {
-      if (!Number.isFinite(override) || override < 0 || override > MAX_DOLLARS) {
-        throw new QuoteInputsError(
-          `overrideUnitPrice for ${l.code} must be a non-negative number ≤ ${MAX_DOLLARS}.`,
-        );
-      }
-    }
-    const unit = effectiveUnit(l);
-    return { ...l, lineTotal: roundCents(unit * l.qty) };
-  });
-  const subtotal = roundCents(recomputed.reduce((acc, l) => acc + l.lineTotal, 0));
-  const tax = roundCents(taxOverride);
-  const total = roundCents(subtotal + tax);
-  return { lines: recomputed, subtotal, tax, total };
-}
-
-/** Default inputs for a fresh draft quote. Matches the `DEFAULT_QUOTE_INPUTS`
- *  shape that `createQuote` writes for a brand-new row — extracted here so
- *  the composer can share the same default with the action layer. */
+/** Default `quotes.inputs` bag for a fresh draft. The picker only writes
+ *  `quoteNotes`; the other fields persist as zeros for the non-composer readers
+ *  that still consume the column. */
 export const DEFAULT_QUOTE_INPUTS: QuoteInputs = {
   audienceSize: 500,
   eventDays: 1,

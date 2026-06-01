@@ -24,12 +24,13 @@ import { masterServiceAgreements } from './master-service-agreements';
 // holds the operational delivery (FK runs `campaigns.acceptedQuoteId` →
 // `quotes.id`, populated when an accepted quote spawns a delivery campaign).
 //
-// `inputs` is the typed `QuoteInputs` snapshot the composer writes (audience
-// size, event days, per-channel counts, etc.). `lineItems` is the computed
-// output snapshot derived from `inputs` × the service-items catalog at
-// edit/send time. Both columns are jsonb in v1; normalization into a
-// `quote_line_items` table is deferred to 7.3 if invoicing needs per-line
-// reporting (see 0026 Open Questions).
+// `inputs` is a jsonb bag the composer writes — since 0062 the picker only
+// stores `quoteNotes` here (the audience/days/per-channel fields linger for the
+// production/reports/calendar readers but are no longer composer-driven). The
+// quote's line items live in the `quote_line_items` table (0062, one row per
+// picked SKU); the former `line_items` jsonb column was dropped in 0062 Phase 7
+// (migration 0025) once the composer, read path, and PDF renderer all read the
+// table.
 //
 // `id` uses `bigIdentity()` not uuid (deviates from the plan body's "id (uuid)"
 // wording): repo convention defaults to bigint for domain tables (`campaigns`,
@@ -75,7 +76,6 @@ export const quotes = pgTable(
     subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
     tax: numeric('tax', { precision: 12, scale: 2 }).notNull().default('0'),
     total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
-    lineItems: jsonb('line_items').notNull().default(sql`'[]'::jsonb`),
     previousQuoteId: bigint('previous_quote_id', { mode: 'number' }).references(
       (): AnyPgColumn => quotes.id,
       { onDelete: 'set null' }
