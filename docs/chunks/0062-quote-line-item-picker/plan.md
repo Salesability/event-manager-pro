@@ -11,7 +11,7 @@
 | 1: Schema + backfill migration — `quote_line_items` table from JSONB | Done | `2b735dd` |
 | 2: Pricing module — retire calculator derivation, add picked-line totals | Done | `16a057a` |
 | 3: Read path — rehydrate picked lines + expose catalogue to the picker | Done | `ad62e89` |
-| 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Pending | - |
+| 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Done | `ba27ef4` |
 | 5: Composer UI — replace Inputs panel with the add-line picker | Pending | - |
 | 6: Send / PDF — render picked lines + description; empty-quote guard | Pending | - |
 | 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Pending | - |
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 38% (3/8 phases complete)
+**Overall Progress:** 50% (4/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -78,12 +78,14 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [x] Unit test: `queries.test.ts` covers (i) table rows present → `pickedLines` from the table (string→number money coercion, override mapped), (ii) table empty + JSONB rows → JSONB-derived `pickedLines`. 16 tests pass.
 
 #### Phase 4: Write path — `setQuoteInputs` against the table
-- [ ] In `src/features/quotes/actions.ts`, rework the write block (`:293-420`): accept a `lines: PickedLine[]` payload (picked SKUs + qty + per-line price) instead of `inputs` driving `computeQuote`
-- [ ] Transaction: optimistic-lock `quotes.updatedAt` → `DELETE FROM quote_line_items WHERE quote_id = ?` → `INSERT` the picked rows (snapshot `code/label/description/unit_price` from the chosen catalogue row; `override_unit_price` when the coach edited the price) → write `quotes.subtotal/tax/total` from `computePickedTotals`
-- [ ] Continue writing `inputs.quoteNotes` (the one input the composer still owns); stop writing pricing inputs + `quotes.line_items` JSONB
-- [ ] `hashLineItems` (`:164`) → hash picked rows ordered by `display_order` (same no-op-save intent)
-- [ ] Unit test: a save persists `quote_line_items` with correct totals; identical save is a no-op (no audit row); editing a price sets `override_unit_price` + recomputes `line_total`
-- [ ] Integration test (real DB): two saves + a price-edit; assert row counts + totals
+- [x] In `src/features/quotes/actions.ts`, added the picker write path: `parsePickedLineInputs` (parse `lines` JSON) + `buildPickedLines` (resolve against catalogue, seed `unitPrice`, derive `overrideUnitPrice` when the typed price ≠ seed) + `pickedLineInsertValues`. Both `setQuoteInputs` (via module-private `applyPickerSave`) and `createQuote` branch on `formData.has('lines')`.
+- [x] Transaction: optimistic-lock `quotes.updatedAt` (same `date_trunc('ms')` predicate) → `DELETE FROM quote_line_items WHERE quote_id = ?` → `INSERT` the picked rows (snapshot `code/label/description/unit_price`; `override_unit_price` when tuned; `display_order` = index) → write `quotes.subtotal/tax/total` from `computePickedTotals`.
+- [x] Continues writing `inputs.quoteNotes` (merged onto the preserved `inputs` snapshot — `audienceSize`/etc. preserved untouched).
+- [x] ~~Stop writing `quotes.line_items` JSONB~~ → **Deviation (expand→migrate→contract):** the picker path *also* writes a JSONB **mirror** (`pickedLinesToJsonbMirror`, `unit:'flat'` placeholder) because the render paths (`sendQuote`/`previewQuotePdf`) still read `quotes.line_items` until Phase 6. The JSONB write stops + column drops in **Phase 7**, not here — otherwise rendering would break for picker-saved quotes mid-chunk.
+- [x] ~~`hashLineItems` re-roots to table rows~~ → **Deviation:** stays rooted on the JSONB **mirror** (still written) for the `quote.edited` audit no-op diff; re-roots to the `PickedLine[]` when the mirror retires in Phase 7. Same intent.
+- [x] **Kept the legacy `inputs`/`computeQuote` path as a fallback** (when `lines` absent) so every existing test + the not-yet-flipped composer stay green through Phase 5; deleted in Phase 7.
+- [x] Unit tests: picker save persists `quote_line_items` rows + JSONB mirror + merged quoteNotes + override math (`actions.test.ts`); empty-lines clears rows + zeroes totals; malformed payload rejected pre-tx; catalogue-miss rejected; terminal-status rejected; `createQuote` picker path inserts quotes + quote_line_items; unknown catalogue id rejected. Added `tx.delete` + a `deletes` recorder to the db mock. 83 actions tests pass (+7).
+- [ ] ~~Integration test (real DB)~~ **Deferred to Phase 8 / deploy** — no local DB in the build loop (see Phase 1 note); the mocked-db unit tests cover the row/total/override logic.
 
 #### Phase 5: Composer UI — the add-line picker
 - [ ] Replace the form schema's structured-input fields with `lines: Array<{ serviceItemId, qty, price }>` + keep `quoteNotes` + `taxOverride` (RHF `useFieldArray`)
