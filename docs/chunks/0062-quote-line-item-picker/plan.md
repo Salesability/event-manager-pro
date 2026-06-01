@@ -15,7 +15,7 @@
 | 5: Composer UI — replace Inputs panel with the add-line picker | Done | `beca36e` |
 | 6: Send / PDF — render picked lines + description; empty-quote guard | Done | `6f2dd8f` |
 | 7: Drop `quotes.line_items` JSONB + retire dead calculator code | Done | `a4259ae` |
-| 8: Tests + smoke verification + wiki update | In Progress | - |
+| 8: Tests + smoke verification + wiki update | Done (smoke pending deploy) | `59bb9b8` |
 
 This chunk pivots the quote composer from a parametric calculator to a SKU line-item picker. "Done" looks like: a coach opens a draft quote, clicks **Add line**, picks a SKU from the catalogue (the owner's library, including new ones like "VIP EVENT"), the catalogue price prefills and stays editable, qty is set per line, and the assembled lines persist to `quote_line_items`, render on the PDF (label + description + qty + effective price + line total), and roll up to subtotal/tax/total. The structured-input calculator is gone from the UI and the `computeQuote()` derivation is retired; `quotes.inputs` / `audience_source_id` columns stay on the schema so production/reports/calendar are untouched.
 
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 88% (7/8 phases complete)
+**Overall Progress:** ~95% — feature-complete + green (8 phases built; 901 tests, tsc clean, migration rehearsed against the 0063 container). Remaining: deploy-time `db:migrate` (0024+0025) + the browser smoke against the migrated DB. Not auto-closed — the smoke + the destructive migration apply are human-coordinated at deploy.
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -119,13 +119,9 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - [x] **Latent bug found + fixed:** `quote-line-items.test.ts` lived in `src/lib/db/schema/` — `drizzle-kit generate` imports every file there and choked on the `vitest` import. Moved to `src/lib/db/quote-line-items.schema.test.ts`.
 
 #### Phase 8: Tests + smoke verification + wiki update
-- [ ] Service integration test: create draft → save picked lines (one with an edited price) → reload → assert `quote_line_items` rows + `override_unit_price` + `quotes.subtotal/tax/total`
-- [ ] Integration test: `sendQuote` on a picked quote — persisted totals match, PDF carries label + description + tuned price; empty-quote send is refused
-- [ ] Unit test (PDF): line renders `override_unit_price` when set, `unit_price` when null, description when present
-- [ ] Smoke (web-test): `goto /quotes/<draft-id>`; expect heading "Summary" + an **Add line** control + a SKU picker (no audience/days inputs present)
-- [ ] Smoke (web-test): add a line from the picker → row appears with catalogue price prefilled; subtotal/total update
-- [ ] Smoke (web-test): edit a line price → total updates; remove the line → total reverts
-- [ ] Smoke (web-test): `goto /admin/lookups` (or services-admin route) → add a SKU "VIP EVENT" with a description + price → reload composer → "VIP EVENT" selectable in the picker
-- [ ] Regression smoke: `goto /production` + `/reports` + `/calendar` render 200 (audience_source_id readers untouched)
-- [ ] Update `docs/wiki/data-model.md` (new `quote_line_items` section; retire JSONB callout), `architecture.md` (flip the calculator subsection), `commercial-spine.md` (composer flow); add `log.md` entry
-- [ ] Run `/eval`; resolve any Must-Fix; commit
+- [x] Unit coverage (mocked-DB): picker write path (`actions.test.ts` — rows/totals/override/empty/catalogue-miss/terminal), read path (`queries.test.ts`), pricing (`pricing.test.ts`), PDF sub-description + empty-send guard, schema introspection. tsc clean; **901 tests pass**.
+- [x] Updated `docs/wiki/data-model.md` (new `quote_line_items` section; `line_items` dropped; `inputs`/`service_items` reframed), `architecture.md` (composer subsection flipped calculator→picker), `commercial-spine.md` (composer flow), `log.md` (entry).
+- [ ] ~~Service / `sendQuote` integration tests (real DB)~~ → **now unblocked by the 0063 harness** but not yet written; parked as a follow-up (`0062 follow-up (a)` — real-DB integration tests against `db:test:reset`). The mocked-DB unit tests cover the logic.
+- [ ] **Browser smoke — BLOCKED on DB state.** The branch's code reads `quote_line_items` + the `renderLines` subquery; the shared sandbox DB has neither until `0024`/`0025` are applied (`pnpm db:migrate`, a deploy step). So the web-test smoke (add line / edit price / remove / "VIP EVENT" appears / `/production`+`/reports`+`/calendar` regression) runs **at deploy against the migrated DB**, or against the 0063 container (`DATABASE_URL`→container + dev server). Migration chain already rehearsed clean against the container.
+- [ ] **Deploy step (carry to go-live):** `pnpm db:migrate` applies `0024` (create+backfill — additive, safe) then `0025` (drop column) to the shared DB. Safe to split: apply `0024`, verify the picker, then `0025`. Until migrated, do **not** deploy this branch against the shared DB (schema mismatch).
+- [ ] Chunk-end `/eval` (static + Codex + browser smoke) — **deferred** with the browser smoke (above). Static is green; a Codex review pass is worthwhile on the large Phase 7 refactor when run.

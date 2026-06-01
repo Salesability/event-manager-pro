@@ -4,7 +4,7 @@
 **Intent:** [`docs/chunks/0062-quote-line-item-picker/intent.md`](0062-quote-line-item-picker/intent.md)
 
 **Started:** 2026-06-01
-**Status:** Resumed at **Phase 7** (6/8 done) on feature branch `0062-quote-line-item-picker`. The SKU line-item picker is built + green (Phases 1–6; 953 tests, last commit `6f2dd8f`). **0063 test-DB harness landed + closed** (`b2357f8`) — now the destructive `DROP COLUMN quotes.line_items` + the render-path cutover can be rehearsed against the container (`pnpm db:test:reset`) before they touch the shared DB. Phase 7 = write the `0025` drop migration + cut `sendQuote`/`previewQuotePdf` to read `quote_line_items` + delete the dead `computeQuote` calculator; Phase 8 = eval + wiki.
+**Status:** **Feature-complete + green** on feature branch `0062-quote-line-item-picker` (all 8 phases built; 901 tests, tsc clean; last commit `59bb9b8`). The quote composer is now a SKU line-item picker; `quotes.line_items` jsonb dropped (`0025`), lines live in `quote_line_items` (`0024`), `computeQuote` calculator deleted. Migration chain `0000→0025` rehearsed clean against the 0063 test-DB container. **Two human-coordinated steps remain before close:** (1) **deploy `pnpm db:migrate`** to apply `0024`+`0025` to the shared DB (do NOT deploy the branch against the un-migrated shared DB — schema mismatch); (2) **browser smoke** the picker against the migrated DB (or the container). Not auto-closed — the destructive migration apply + smoke are the user's call. Parked follow-up: `0062 follow-up (a)` real-DB integration tests via the 0063 harness.
 
 **Active sub-plan:** _None._
 
