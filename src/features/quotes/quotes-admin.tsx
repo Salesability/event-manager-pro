@@ -157,7 +157,7 @@ export function QuotesAdmin({ quotes }: { quotes: Quote[] }) {
                 </button>
               </span>
             ) : (
-              'No quotes yet — create the first one from a dealer row on /dealerships.'
+              'No quotes yet — click “New Quote” above (or use the Quote action on a dealer).'
             )
           }
         />

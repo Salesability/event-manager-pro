@@ -1,5 +1,6 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
+import { Button } from '@/components/catalyst/button';
 import { loadQuotes } from '@/features/quotes/queries';
 import { QuotesAdmin } from '@/features/quotes/quotes-admin';
 
@@ -15,6 +16,14 @@ export default async function QuotesPage() {
       <PageHeader
         title="Quotes"
         description="Every quote in the pipeline — drafts, sent, accepted, declined."
+        actions={
+          // Page-level `assertCan('quote:edit')` already gates this surface, so
+          // the button needs no extra gate. Opens the composer with no dealer
+          // pre-selected — the coach picks the dealer in the composer.
+          <Button href="/quotes/new" color="brand">
+            New Quote
+          </Button>
+        }
       />
       <QuotesAdmin quotes={all} />
     </div>
