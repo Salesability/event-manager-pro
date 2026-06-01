@@ -8,7 +8,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema + backfill migration — `quote_line_items` table from JSONB | Pending | - |
+| 1: Schema + backfill migration — `quote_line_items` table from JSONB | Done | `2b735dd` |
 | 2: Pricing module — retire calculator derivation, add picked-line totals | Pending | - |
 | 3: Read path — rehydrate picked lines + expose catalogue to the picker | Pending | - |
 | 4: Write path — `setQuoteInputs` delete-and-inserts picked lines | Pending | - |
@@ -43,7 +43,7 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 - `docs/wiki/commercial-spine.md` — composer flow lines; accepted-quote-is-the-contract framing now lands directly on `quote_line_items` rows.
 - `CLAUDE.md` → Conventions — mutations stay Server Actions; the Phase 4 rewrite stays inside `setQuoteInputs`.
 
-**Overall Progress:** 0% (0/8 phases complete)
+**Overall Progress:** 13% (1/8 phases complete)
 
 **Note:**
 - Phases 1–4 are the data + server rebuild (table, pricing, read, write); Phase 5 is the UI pivot (the visible change); Phase 6 is send/PDF; Phase 7 retires the old column + dead calculator; Phase 8 is verification + wiki.
@@ -54,14 +54,14 @@ This chunk pivots the quote composer from a parametric calculator to a SKU line-
 ### Phase Checklist
 
 #### Phase 1: Schema + backfill migration
-- [ ] Invoke `db-conventions` skill before writing schema/migration.
-- [ ] Write `src/lib/db/schema/quote-line-items.ts` — `pgTable('quote_line_items', { id: bigIdentity(), quoteId (FK → quotes.id, onDelete cascade), serviceItemId (FK → service_items.id, onDelete set null, nullable), code text, label text, description text (nullable), qty integer, unitPrice numeric(10,2), overrideUnitPrice numeric(10,2) nullable, lineTotal numeric(12,2), displayOrder integer, ...timestamps, ...actors })`
-- [ ] Index `quote_line_items_quote_id_idx` on `(quoteId, displayOrder)`. **No** `(quote_id, code)` unique — a picker may repeat a SKU (intent OQ).
-- [ ] Re-export `quoteLineItems` from `src/lib/db/schema/index.ts`
-- [ ] `pnpm drizzle-kit generate` → review the generated `0024_*.sql` (rename to `0024_quote_line_items_table.sql`); verify the journal `when` is greater than `0023`'s (project memory: Drizzle journal `when` gotcha)
-- [ ] Hand-extend with backfill: `INSERT INTO quote_line_items (quote_id, code, label, qty, unit_price, line_total, display_order, created_at, updated_at) SELECT q.id, elem->>'code', elem->>'label', (elem->>'qty')::int, (elem->>'unitPrice')::numeric, (elem->>'lineTotal')::numeric, ord, now(), now() FROM quotes q, jsonb_array_elements(q.line_items) WITH ORDINALITY AS t(elem, ord)` (description/serviceItemId left null on backfill — no old line carried them)
-- [ ] Run against fresh local DB; spot-check row count vs `SELECT sum(jsonb_array_length(line_items)) FROM quotes`
-- [ ] Unit test (schema introspection): table + columns + index present
+- [x] Invoke `db-conventions` skill before writing schema/migration.
+- [x] Write `src/lib/db/schema/quote-line-items.ts` — `pgTable('quote_line_items', { id: bigIdentity(), quoteId (FK → quotes.id, onDelete cascade), serviceItemId (FK → service_items.id, onDelete set null, nullable), code text, label text, description text (nullable), qty integer, unitPrice numeric(10,2), overrideUnitPrice numeric(10,2) nullable, lineTotal numeric(12,2), displayOrder integer, ...timestamps, ...actors })`
+- [x] Index `quote_line_items_quote_id_idx` on `(quoteId, displayOrder)`. **No** `(quote_id, code)` unique — a picker may repeat a SKU (intent OQ). Also FK indexes on `service_item_id` + the two actor columns (matches the `dealer_contacts` anchor).
+- [x] Re-export `quoteLineItems` from `src/lib/db/schema/index.ts`
+- [x] `pnpm drizzle-kit generate` → `0024_quote_line_items_table.sql` (renamed from `0024_fast_hawkeye`; journal tag synced). Journal `when` = `1780328402209` > `0023`'s `1780156800000` ✓ (gotcha did not fire — real clock is ahead). No `CREATE SCHEMA "auth"` emitted, so nothing to strip; the `auth.users` FK `REFERENCES` are correct and stay.
+- [x] Hand-extend with backfill: `INSERT … SELECT … FROM quotes q CROSS JOIN LATERAL jsonb_array_elements(coalesce(q.line_items, '[]'::jsonb)) WITH ORDINALITY` — `coalesce` guards null/empty; description/serviceItemId left null on backfill.
+- [ ] ~~Run against fresh local DB; spot-check row count~~ **Deferred to deploy.** `.env.local`'s `DATABASE_URL` targets the **shared** Supabase pooler — applying migrations is the explicit deploy-time `pnpm db:migrate` step (per the 0057→0061 history), not a build action. Phase 1 is verified by the schema-introspection test + SQL review; the backfill runs at deploy and is spot-checked then (`SELECT sum(jsonb_array_length(line_items)) FROM quotes` vs new row count).
+- [x] Unit test (schema introspection): `src/lib/db/schema/quote-line-items.test.ts` — columns, money-column types/nullability, index set, FK targets (cascade/set-null). 5 tests pass (no DB needed; `getTableConfig`).
 
 #### Phase 2: Pricing module — retire derivation, add picked-line totals
 - [ ] Add `PickedLine` type to `pricing.ts` (`{ serviceItemId?: number; code: string; label: string; description?: string; qty: number; unitPrice: number; overrideUnitPrice?: number; lineTotal: number }`) — superset of `ComputedLine`'s persisted fields
