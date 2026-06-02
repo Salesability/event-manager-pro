@@ -19,12 +19,12 @@ The Quote composer becomes a **line-item picker**:
 - The coach adds lines by picking a SKU from the catalogue (a real dropdown over `service_items`), sets a quantity, and gets a price **prefilled from the catalogue but editable on that quote**.
 - The owner maintains the SKU library in `services-admin` — any SKU added (e.g. "VIP EVENT", with a description) immediately shows up in the picker. No code change needed to add a product.
 - The line items the coach assembles are the source of truth: they persist as `quote_line_items` rows, render on the PDF (label + description + qty + price + line total), and roll up to subtotal/tax/total.
-- The accepted quote's stored line rows **are the contract** (per [`commercial-spine.md`](../../wiki/commercial-spine.md)) — invoicing later sums those rows directly, no recompute-from-inputs cleverness required.
+- The accepted quote's stored line rows **are the contract** (per [`commercial-spine.md`](../../../wiki/commercial-spine.md)) — invoicing later sums those rows directly, no recompute-from-inputs cleverness required.
 
 ## Non-goals
 
 - **No invoice schema / payment surface.** This lays the relational line-item floor; it does not stand up `invoices`/`invoice_line_items` (that stays 0025 Phase 7.3).
-- **No decoupling or removal of `audience_source_id` or the `quotes.inputs` columns.** They stay on the schema, untouched, so the production export, reports, and calendar readers keep working (the 0037 Phase 4 deferral, [`commercial-spine.md`](../../wiki/commercial-spine.md) "Scope narrowed"). The composer simply stops *driving pricing* from them. Rehoming those readers is a later chunk.
+- **No decoupling or removal of `audience_source_id` or the `quotes.inputs` columns.** They stay on the schema, untouched, so the production export, reports, and calendar readers keep working (the 0037 Phase 4 deferral, [`commercial-spine.md`](../../../wiki/commercial-spine.md) "Scope narrowed"). The composer simply stops *driving pricing* from them. Rehoming those readers is a later chunk.
 - **No catalogue redesign.** `service_items` stays; we only loosen its coupling to the calculator (the `unit`/`range` machinery and the 8 load-bearing codes stop being load-bearing). `unitPrice` becomes the picker's seed price.
 - **No new line types.** A line is `pick SKU → qty → price`. No bundles, no percentage discounts, no auto-derived quantities.
 - **No prospect-visible discount math.** The PDF renders the tuned (effective) price only; the catalogue original is composer-side context for the coach, never shown to the prospect.
