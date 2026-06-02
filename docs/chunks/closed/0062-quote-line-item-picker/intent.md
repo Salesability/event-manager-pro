@@ -1,8 +1,8 @@
 # Quote Line-Item Picker — Intent
 
 **Created:** 2026-06-01
-**Supersedes:** [`0053-quote-line-items-table`](../closed/0053-quote-line-items-table/plan.md) — that chunk (0% built) normalized JSONB → `quote_line_items` while *keeping the calculator*. This chunk folds in the same table migration but pivots the composer to a picker, so 0053's relational table becomes the picker's backing store. 0053 moved to `closed/` as superseded.
-**Reverses:** the locked "composer is a calculator, not a line-item picker" decision from [`closed/0035-quote-composer`](../closed/0035-quote-composer/plan.md) (plan.md:92, :146). That was a deliberate v1 bet; this chunk is the v2 the same plan anticipated in OQ #8.
+**Supersedes:** [`0053-quote-line-items-table`](../0053-quote-line-items-table/plan.md) — that chunk (0% built) normalized JSONB → `quote_line_items` while *keeping the calculator*. This chunk folds in the same table migration but pivots the composer to a picker, so 0053's relational table becomes the picker's backing store. 0053 moved to `closed/` as superseded.
+**Reverses:** the locked "composer is a calculator, not a line-item picker" decision from [`closed/0035-quote-composer`](../0035-quote-composer/plan.md) (plan.md:92, :146). That was a deliberate v1 bet; this chunk is the v2 the same plan anticipated in OQ #8.
 
 ## Problem
 

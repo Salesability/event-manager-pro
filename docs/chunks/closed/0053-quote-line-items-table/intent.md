@@ -3,7 +3,7 @@
 **Created:** 2026-05-15
 **Supersedes:** [`0052-quote-coach-price-override`](../0052-quote-coach-price-override/plan.md) — the JSONB-only override approach.
 
-> **Superseded + closed 2026-06-01** — folded into [`0062-quote-line-item-picker`](../../0062-quote-line-item-picker/intent.md). See the plan for context. This chunk bakes the override columns into the relational schema instead, in one combined move.
+> **Superseded + closed 2026-06-01** — folded into [`0062-quote-line-item-picker`](../0062-quote-line-item-picker/intent.md). See the plan for context. This chunk bakes the override columns into the relational schema instead, in one combined move.
 
 ## Problem
 

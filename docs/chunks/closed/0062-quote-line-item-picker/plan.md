@@ -2,7 +2,7 @@
 
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-06-01
-**Supersedes:** [`0053-quote-line-items-table`](../closed/0053-quote-line-items-table/plan.md) (folds in its table migration). **Reverses:** the calculator decision in [`closed/0035-quote-composer`](../closed/0035-quote-composer/plan.md).
+**Supersedes:** [`0053-quote-line-items-table`](../0053-quote-line-items-table/plan.md) (folds in its table migration). **Reverses:** the calculator decision in [`closed/0035-quote-composer`](../0035-quote-composer/plan.md).
 
 ## Progress Tracker
 
