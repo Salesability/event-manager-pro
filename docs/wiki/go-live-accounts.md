@@ -66,6 +66,11 @@ Each section below is marked **You do** / **Developer does** so the boundary is 
 - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` *(secret — password manager only)*
 - Database connection string (Settings → Database → URI) → `DATABASE_URL` *(secret)*
 
+> **Production DB secret (deploy).** `deploy.sh` reads the runtime `DATABASE_URL` from a **GCP Secret Manager** secret, keyed on the deploy env: a `production` deploy uses **`database-url-production`** (the prod connection string — kept only in Secret Manager, never in `.env.local`); other envs use `database-url` (stage, seeded from `.env.local`). For a production DB, the developer:
+> 1. Applies **all migrations to the prod DB first** — `DATABASE_URL=<prod-session-pooler:5432> pnpm db:migrate` (use the **session pooler / direct** connection on 5432, not the transaction pooler on 6543 — DDL needs a transactional connection).
+> 2. Creates the secret once: `printf '%s' '<prod-URI>' | gcloud secrets create database-url-production --project=nnwweb --replication-policy=automatic --data-file=-`.
+> 3. Deploys: `DEPLOY_APP_ENV=production ./deploy.sh` (it errors with these steps if the secret is missing). To rotate the URL later: `… | gcloud secrets versions add database-url-production --data-file=-`.
+
 ---
 
 ## 2. Resend — outbound email

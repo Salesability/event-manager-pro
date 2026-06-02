@@ -21,7 +21,8 @@ fi
 PROJECT_ID="${GCP_PROJECT_ID:-nnwweb}"
 SERVICE_NAME="${GCP_SERVICE_NAME:-event-manager-pro}"
 REGION="${GCP_REGION:-northamerica-northeast1}"
-DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-database-url}"
+# Default chosen below, keyed on DEPLOY_APP_ENV (override here to force a secret).
+DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-}"
 SERVICE_ROLE_SECRET_NAME="${GCP_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
 IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
@@ -43,6 +44,20 @@ PROD_SITE_URL="${PROD_SITE_URL:-https://event-manager-pro-7435lagfjq-nn.a.run.ap
 # Separate name from APP_ENV so that sourcing .env.local (which sets
 # APP_ENV=development for the local dev server) doesn't shadow it.
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"
+
+# Database secret is environment-keyed (2026-06-02): a `production` deploy reads
+# DATABASE_URL from the GCP-managed `database-url-production` secret; any other
+# env uses `database-url` (stage). The prod secret's value is NEVER seeded from
+# .env.local — you manage it directly in Secret Manager so the prod connection
+# string never lives in the repo/dotfiles. Override either with
+# GCP_DATABASE_URL_SECRET. (See docs/wiki/go-live-accounts.md.)
+if [ -z "${DB_SECRET_NAME}" ]; then
+    if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+        DB_SECRET_NAME="database-url-production"
+    else
+        DB_SECRET_NAME="database-url"
+    fi
+fi
 
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
@@ -89,7 +104,24 @@ ensure_secret() {
     fi
 }
 
-ensure_secret "${DB_SECRET_NAME}" "DATABASE_URL"
+# DB secret. Only the stage `database-url` secret is auto-seeded from
+# .env.local; ANY other secret (the prod `database-url-production`, or a custom
+# GCP_DATABASE_URL_SECRET override) is externally managed — require it to exist
+# and NEVER seed it from .env.local (which holds the stage URL). Keying on the
+# secret name (not DEPLOY_APP_ENV) keeps the override case safe.
+if [ "${DB_SECRET_NAME}" = "database-url" ]; then
+    ensure_secret "${DB_SECRET_NAME}" "DATABASE_URL"
+else
+    echo "🔐 DB secret '${DB_SECRET_NAME}' is externally managed (value untouched)."
+    if ! gcloud secrets describe "${DB_SECRET_NAME}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+        echo "❌ DB secret '${DB_SECRET_NAME}' not found in Secret Manager."
+        echo "   Create it once (the connection string stays out of the repo):"
+        echo "     printf '%s' 'postgresql://...SESSION-POOLER:5432/postgres' \\"
+        echo "       | gcloud secrets create ${DB_SECRET_NAME} --project=${PROJECT_ID} --replication-policy=automatic --data-file=-"
+        echo "   FIRST apply all migrations to that DB (set DATABASE_URL=<that-db>; pnpm db:migrate)."
+        exit 1
+    fi
+fi
 ensure_secret "${SERVICE_ROLE_SECRET_NAME}" "SUPABASE_SERVICE_ROLE_KEY"
 ensure_secret "boldsign-api-key" "BOLDSIGN_API_KEY"
 ensure_secret "boldsign-webhook-secret" "BOLDSIGN_WEBHOOK_SECRET"
