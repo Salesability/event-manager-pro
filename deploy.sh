@@ -19,17 +19,15 @@ else
 fi
 
 PROJECT_ID="${GCP_PROJECT_ID:-nnwweb}"
-SERVICE_NAME="${GCP_SERVICE_NAME:-event-manager-pro}"
 REGION="${GCP_REGION:-northamerica-northeast1}"
-# Default chosen below, keyed on DEPLOY_APP_ENV (override here to force a secret).
-DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-}"
 SERVICE_ROLE_SECRET_NAME="${GCP_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
-IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
-
-# Public origin used by server actions to build OAuth/magic-link redirect URLs.
-# Override via PROD_SITE_URL if the service hostname changes.
-PROD_SITE_URL="${PROD_SITE_URL:-https://event-manager-pro-7435lagfjq-nn.a.run.app}"
+# SERVICE_NAME, IMAGE, PROD_SITE_URL, DB_SECRET_NAME are all keyed on
+# DEPLOY_APP_ENV below (each overridable via its GCP_*/PROD_SITE_URL env var) so
+# stage and prod are separate Cloud Run services.
+SERVICE_NAME="${GCP_SERVICE_NAME:-}"
+DB_SECRET_NAME="${GCP_DATABASE_URL_SECRET:-}"
+PROD_SITE_URL="${PROD_SITE_URL:-}"
 
 # APP_ENV value baked into the Cloud Run service. Default 'production' real-
 # sends through Resend (no EMAIL_DEV_TO redirect) and marks BoldSign envelopes
@@ -45,6 +43,26 @@ PROD_SITE_URL="${PROD_SITE_URL:-https://event-manager-pro-7435lagfjq-nn.a.run.ap
 # APP_ENV=development for the local dev server) doesn't shadow it.
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"
 
+# Service + public URL are environment-keyed (2026-06-02): a `production` deploy
+# targets the `event-manager-pro` service (the canonical prod URL); any other
+# env deploys to a SEPARATE service `event-manager-pro-<env>` (its own URL), so
+# stage and prod run side by side and a deploy to one never overwrites the
+# other. Override the service with GCP_SERVICE_NAME, the URL with PROD_SITE_URL.
+if [ -z "${SERVICE_NAME}" ]; then
+    if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+        SERVICE_NAME="event-manager-pro"
+    else
+        SERVICE_NAME="event-manager-pro-${DEPLOY_APP_ENV}"
+    fi
+fi
+IMAGE="gcr.io/${PROJECT_ID}/${SERVICE_NAME}:${IMAGE_TAG}"
+# Cloud Run's legacy URL hash (7435lagfjq-nn) is stable per project+region, so a
+# service's URL is just its name slotted into the same pattern. Server actions
+# use this for OAuth/magic-link redirects — it must match the live service.
+if [ -z "${PROD_SITE_URL}" ]; then
+    PROD_SITE_URL="https://${SERVICE_NAME}-7435lagfjq-nn.a.run.app"
+fi
+
 # Database secret is environment-keyed (2026-06-02): a `production` deploy reads
 # DATABASE_URL from the GCP-managed `database-url-production` secret; any other
 # env uses `database-url` (stage). The prod secret's value is NEVER seeded from
@@ -58,6 +76,20 @@ if [ -z "${DB_SECRET_NAME}" ]; then
         DB_SECRET_NAME="database-url"
     fi
 fi
+
+# Deploy-target banner — the operator's "which env am I shipping?" confirmation.
+# A bare `./deploy.sh` defaults to PRODUCTION (real Resend sends + non-sandbox
+# BoldSign + the prod DB), so the banner is loud for prod. Ctrl-C now if wrong.
+echo "────────────────────────────────────────────────────────────────"
+echo "🌍 DEPLOY TARGET"
+echo "   env (APP_ENV) : ${DEPLOY_APP_ENV}"
+echo "   service       : ${SERVICE_NAME}"
+echo "   url           : ${PROD_SITE_URL}"
+echo "   DB secret     : ${DB_SECRET_NAME}"
+if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+    echo "   ⚠️  PRODUCTION — real customer emails + production-tier BoldSign + prod DB."
+fi
+echo "────────────────────────────────────────────────────────────────"
 
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
