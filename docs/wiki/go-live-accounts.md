@@ -66,12 +66,12 @@ Each section below is marked **You do** / **Developer does** so the boundary is 
 - `service_role` secret key → `SUPABASE_SERVICE_ROLE_KEY` *(secret — password manager only)*
 - Database connection string (Settings → Database → URI) → `DATABASE_URL` *(secret)*
 
-> **Stage vs prod are separate Cloud Run services (deploy).** `deploy.sh` keys the service, URL, and DB secret on `DEPLOY_APP_ENV`, so the two environments run side by side and a deploy to one never overwrites the other:
-> | Env | Service | URL | DB secret |
-> |---|---|---|---|
-> | `DEPLOY_APP_ENV=production` | `event-manager-pro` | `…run.app` | `database-url-production` |
-> | sandbox (any non-prod) | `event-manager-pro-<env>` (e.g. `-sandbox`) | `…-<env>…run.app` | `database-url` |
-> The script prints a **DEPLOY TARGET** banner (env · service · url · DB secret) before building. ⚠️ `DEPLOY_APP_ENV` **defaults to `production`** (real emails + prod-tier BoldSign + prod DB), so always set it explicitly for stage: `DEPLOY_APP_ENV=sandbox ./deploy.sh`.
+> **Stage vs prod are separate Cloud Run services in separate GCP projects (deploy).** `deploy.sh` keys the **GCP project**, service, URL, and DB secret on `DEPLOY_APP_ENV`, so the two environments run side by side (different projects, owned by different Google accounts) and a deploy to one never overwrites the other:
+> | Env | GCP project | Service | URL | DB secret |
+> |---|---|---|---|---|
+> | `DEPLOY_APP_ENV=production` | `eventpro-498313` (business-owned) | `event-manager-pro` | `…run.app` | `database-url-production` |
+> | sandbox (any non-prod) | `nnwweb` (dev / Network Node) | `event-manager-pro-<env>` (e.g. `-sandbox`) | `…-<env>…run.app` | `database-url` |
+> The script prints a **DEPLOY TARGET** banner (env · project · service · url · DB secret) before building, and a `production` deploy also requires a typed `production` confirmation (bypass with `DEPLOY_CONFIRM=production` for non-interactive/CI use). ⚠️ `DEPLOY_APP_ENV` **defaults to `production`** (real emails + prod-tier BoldSign + prod DB + prod project), so always set it explicitly for stage: `DEPLOY_APP_ENV=sandbox ./deploy.sh`. Override the project with `GCP_PROJECT_ID`. Because prod and stage live under different Google logins, switch the active gcloud account/config before a prod deploy (a wrong account fails closed with a permission error).
 >
 > **Production DB secret.** The prod runtime `DATABASE_URL` lives **only** in the GCP-managed **`database-url-production`** secret (never in `.env.local`). For a production DB, the developer:
 > 1. Applies **all migrations to the prod DB first** — `DATABASE_URL=<prod-session-pooler:5432> pnpm db:migrate` (use the **session pooler / direct** connection on 5432, not the transaction pooler on 6543 — DDL needs a transactional connection).

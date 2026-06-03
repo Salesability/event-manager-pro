@@ -18,7 +18,10 @@ else
     echo "⚠️  No .env.local file found. Falling back to current shell env."
 fi
 
-PROJECT_ID="${GCP_PROJECT_ID:-nnwweb}"
+# PROJECT_ID is environment-keyed below (after DEPLOY_APP_ENV is known), just
+# like SERVICE_NAME / the DB secret: production ships to its own business-owned
+# GCP project so a stage deploy can never touch prod. Override with GCP_PROJECT_ID.
+PROJECT_ID="${GCP_PROJECT_ID:-}"
 REGION="${GCP_REGION:-northamerica-northeast1}"
 SERVICE_ROLE_SECRET_NAME="${GCP_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
@@ -42,6 +45,19 @@ PROD_SITE_URL="${PROD_SITE_URL:-}"
 # Separate name from APP_ENV so that sourcing .env.local (which sets
 # APP_ENV=development for the local dev server) doesn't shadow it.
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"
+
+# Project is environment-keyed (2026-06-03): production ships to its own
+# business-owned GCP project (eventpro-498313); any other env stays on the
+# developer 'nnwweb' project (stage), so a stage deploy can never touch prod and
+# vice versa. One script, one knob (DEPLOY_APP_ENV) drives project + service +
+# URL + DB secret. Override the project with GCP_PROJECT_ID.
+if [ -z "${PROJECT_ID}" ]; then
+    if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+        PROJECT_ID="eventpro-498313"
+    else
+        PROJECT_ID="nnwweb"
+    fi
+fi
 
 # Service + public URL are environment-keyed (2026-06-02): a `production` deploy
 # targets the `event-manager-pro` service (the canonical prod URL); any other
@@ -83,6 +99,7 @@ fi
 echo "────────────────────────────────────────────────────────────────"
 echo "🌍 DEPLOY TARGET"
 echo "   env (APP_ENV) : ${DEPLOY_APP_ENV}"
+echo "   project       : ${PROJECT_ID}"
 echo "   service       : ${SERVICE_NAME}"
 echo "   url           : ${PROD_SITE_URL}"
 echo "   DB secret     : ${DB_SECRET_NAME}"
@@ -90,6 +107,23 @@ if [ "${DEPLOY_APP_ENV}" = "production" ]; then
     echo "   ⚠️  PRODUCTION — real customer emails + production-tier BoldSign + prod DB."
 fi
 echo "────────────────────────────────────────────────────────────────"
+
+# Production safety gate: a prod build requires an explicit typed confirmation.
+# Fails closed — a non-interactive prod deploy (no TTY) must pass
+# DEPLOY_CONFIRM=production, otherwise it's refused rather than shipped silently.
+if [ "${DEPLOY_APP_ENV}" = "production" ] && [ "${DEPLOY_CONFIRM:-}" != "production" ]; then
+    if [ -t 0 ]; then
+        printf "Type 'production' to deploy to PROD (anything else aborts): "
+        read -r CONFIRM_REPLY
+        if [ "${CONFIRM_REPLY}" != "production" ]; then
+            echo "❌ Aborted — confirmation did not match 'production'."
+            exit 1
+        fi
+    else
+        echo "❌ Production deploy needs confirmation. Re-run with DEPLOY_CONFIRM=production (non-interactive)."
+        exit 1
+    fi
+fi
 
 # Runtime + build vars actually used by the app code (see src/ usages).
 # DATABASE_URL is server-only; NEXT_PUBLIC_* must be present at build time
