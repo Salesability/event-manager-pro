@@ -13,6 +13,7 @@ export * from './master-service-agreements';
 export * from './quote-line-items';
 export * from './quotes';
 export * from './service-items';
+export * from './tax-rates';
 export * from './team-member-roles';
 export * from './vehicle-ownerships';
 export * from './vehicles';
