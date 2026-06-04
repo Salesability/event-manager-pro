@@ -10,7 +10,7 @@
 | 1: Schema + Server Action | Done | 95957ff |
 | 2: Compose form component | Done | 5f1f2d0 |
 | 3: Admin page + nav entry | Done | 30dbdce |
-| 4: Tests + smoke verification | Done (automated) — manual send pending | 02311ac |
+| 4: Tests + smoke verification | Done | 02311ac |
 
 A standalone admin **Send Test Email** page: a free-compose form (To / Subject / Body) gated by `email:send` that calls a thin Server Action over the existing `sendEmail()` helper. Its job is **deliverability verification** — prove the system sends a real email to a chosen address and surface the Resend message id (or the error) in the UI. "Done" = an admin can load the page, send themselves a message, see it arrive, and the page reports the outcome — with no new schema, no new capability, and no bypass of the non-prod dev-redirect gate.
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/lib/email/send.ts` — reuse `sendEmail({ to, subject, text, replyTo })`; it already owns the prod/dev split (non-prod rewrites recipient to `EMAIL_DEV_TO` + `[DEV→…]` subject prefix). The tool must not bypass this.
 - `src/lib/actions/legacy-result.ts` (`toLegacyResult`) + `src/lib/actions/action-client.ts:65` (`formDataSchema`) — the action-client + result-adapter idiom every form uses.
 
-**Overall Progress:** 100% of build/verify automated work (4/4 phases); chunk-end `/eval` **PASS** ([`eval-2026-06-04-1412.md`](eval-2026-06-04-1412.md)). Open: the manual deliverability send (out-of-gate user/ops action) before close.
+**Overall Progress:** 100% (4/4 phases). Chunk-end `/eval` **PASS** ([`eval-2026-06-04-1412.md`](eval-2026-06-04-1412.md)) + live deliverability send confirmed (Resend id `cb007019-…`). Ready to close pending the branch decision (0064 sits on `deploy-prod-db-secret`; `CURRENT.md` carries unrelated prior-session 0060 edits — close should not bundle those).
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -63,4 +63,4 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Action unit tests green (Phase 1, `actions.test.ts`) + schema rejects bad email / whitespace subject / empty body (Phase 2, `test-email-schema.test.ts`). Full suite 917 passing, tsc clean.
 - [x] Smoke (web-test, **read-only**): `goto /admin/send-test-email`; heading "Send Test Email" + `To` / `Subject` / `Body` + `Send` button all present; nav dropdown lists "Send Test Email". Did **not** submit. ✅ ([`eval-2026-06-04-1412.md`](eval-2026-06-04-1412.md))
 - [x] Smoke (web-test): unauth `goto /admin/send-test-email` → redirects to `/login?next=%2Fadmin%2Fsend-test-email`. ✅
-- [ ] **Manual one-off (out of the automated gate, pending):** admin sends to their own address, confirms inbox receipt + the message id shows in the UI. This is the chunk's headline deliverability check — a person/ops action. Record the result in the chunk close-out.
+- [x] **Manual one-off — live send done 2026-06-04.** Drove the real form (admin auth) → To `david.hogan@networknode.ca`, subject "SaleDay deliverability test (chunk 0064)". Resend **accepted** it; the UI surfaced **message id `cb007019-412b-486b-8e5c-3c4c10d55b72`** in the green "Sent ✓" banner; server logged `POST /admin/send-test-email 200`. Ran in `APP_ENV=development`, so it went through the dev-redirect (temporarily pointed `EMAIL_DEV_TO` at david for the run, restored to shannon after) — recipient gets it with a `[DEV→…]` subject prefix, from `onboarding@resend.dev`. **The true production-path send (real from-address `eventpro@salesability.ca`, `APP_ENV=production`) is exercised on the prod deploy.**
