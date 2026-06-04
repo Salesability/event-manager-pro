@@ -12,6 +12,7 @@ import { quoteDisplayName } from '@/features/quotes/display-name';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
+import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
 import { signedUrl } from '@/lib/storage/gcs';
 
@@ -65,9 +66,10 @@ export default async function QuoteEditPage({
   const quote = await loadQuote(id);
   if (!quote) notFound();
 
-  const [dealers, catalog, recipientResult, sendHistory, msa] = await Promise.all([
+  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa] = await Promise.all([
     loadDealers(),
     loadServiceItems(),
+    loadTaxRates(),
     resolveQuoteRecipient(quote.dealerId),
     loadQuoteSendHistory(quote.id),
     // 0046 Phase 5: when the dealer\'s MSA envelope is with BoldSign awaiting
@@ -169,6 +171,7 @@ export default async function QuoteEditPage({
       </Link>
       <QuoteComposer
         dealers={dealers}
+        taxRates={taxRates}
         catalog={catalog}
         initialDealerId={quote.dealerId}
         initialCampaignId={null}
@@ -180,6 +183,7 @@ export default async function QuoteEditPage({
           pickedLines: quote.pickedLines,
           subtotal: Number(quote.subtotal) || 0,
           tax: Number(quote.tax) || 0,
+          taxOverride: quote.taxOverride != null ? Number(quote.taxOverride) : null,
           total: Number(quote.total) || 0,
           status: quote.status,
           isExpired: quote.isExpired,

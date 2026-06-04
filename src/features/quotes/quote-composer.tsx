@@ -44,6 +44,8 @@ import {
   QuoteInputsError,
   type PickedLine,
 } from '@/lib/quotes/pricing';
+import { rateForProvince, type TaxRate } from '@/lib/tax-rates';
+import { CA_PROVINCE_NAMES } from '@/lib/ca-provinces';
 
 // Quote composer — SKU line-item picker (0062, reversing the 0035 calculator).
 // The coach assembles the quote by picking services from the catalogue, each
@@ -67,6 +69,8 @@ export type InitialQuote = {
   /** Tax dollar amount (not %). Matches the `tax` FormData field consumed by
    *  `setQuoteInputs`/`createQuote`. */
   tax: number;
+  /** Coach's manual tax override, or null when tax is auto from the province (0065). */
+  taxOverride: number | null;
   total: number;
   status: QuoteStatus;
   /** Derived at read time — `status='sent' && sentAt + quoteValidDays < now()`.
@@ -89,6 +93,8 @@ export type Recipient = { email: string; firstName: string } | { error: string }
 
 type Props = {
   dealers: Dealer[];
+  /** Province → sales-tax rates (0065). Drives the live tax preview + label. */
+  taxRates: TaxRate[];
   catalog: ServiceItem[];
   initialDealerId: number | null;
   initialCampaignId: number | null;
@@ -153,7 +159,8 @@ type LineFieldValue = z.infer<typeof lineFieldSchema>;
 
 const quoteFormSchema = z.object({
   dealerId: z.number().int().positive().nullable(),
-  taxOverride: z.number().min(0).max(MAX_DOLLARS),
+  // 0065: nullable — null means "auto" (derive tax from the dealer's province).
+  taxOverride: z.number().min(0).max(MAX_DOLLARS).nullable(),
   quoteNotes: z.string().max(1000),
   lines: z.array(lineFieldSchema),
 });
@@ -201,6 +208,7 @@ function toPickedLines(
 
 export function QuoteComposer({
   dealers,
+  taxRates,
   catalog,
   initialDealerId,
   initialCampaignId,
@@ -260,7 +268,7 @@ export function QuoteComposer({
     }));
     return {
       dealerId: initial?.dealerId ?? initialDealerId,
-      taxOverride: initial?.tax ?? 0,
+      taxOverride: initial?.taxOverride ?? null,
       quoteNotes: initial?.quoteNotes ?? '',
       lines,
     };
@@ -306,20 +314,30 @@ export function QuoteComposer({
   // the on-screen subtotal/total never drift from what gets persisted. Catches
   // validation errors so a mid-keystroke out-of-range value doesn't crash the
   // render.
+  // 0065: the selected dealer's province sales-tax rate drives the live tax
+  // preview + label. 0 when the dealer has no province set.
+  const selectedDealer = useMemo(
+    () => dealers.find((d) => d.id === watched.dealerId) ?? null,
+    [dealers, watched.dealerId],
+  );
+  const ratePct = useMemo(
+    () => rateForProvince(taxRates, selectedDealer?.province ?? null) ?? 0,
+    [taxRates, selectedDealer],
+  );
+
   const computed = useMemo(() => {
     try {
       const picked = toPickedLines((watched.lines ?? []) as LineFieldValue[], catalogById);
-      // 0065: the typed value is the manual override; the province-rate-aware
-      // live preview is wired in Phase 5.
+      // 0065: tax = the manual override if typed, else subtotal × province rate.
       return {
         ok: true as const,
-        out: computePickedTotals(picked, { override: watched.taxOverride ?? null }),
+        out: computePickedTotals(picked, { ratePct, override: watched.taxOverride ?? null }),
       };
     } catch (err) {
       const msg = err instanceof QuoteInputsError ? err.message : 'Invalid lines.';
       return { ok: false as const, error: msg };
     }
-  }, [watched, catalogById]);
+  }, [watched, catalogById, ratePct]);
 
   const display = isReadOnly && initial
     ? {
@@ -362,7 +380,8 @@ export function QuoteComposer({
             })),
           ),
         );
-        fd.set('tax', String(values.taxOverride));
+        // 0065: blank → auto (server derives tax from the dealer's province).
+        fd.set('tax', values.taxOverride != null ? String(values.taxOverride) : '');
         fd.set('quoteNotes', values.quoteNotes ?? '');
         if (initial?.quoteId) {
           fd.set('quoteId', String(initial.quoteId));
@@ -657,15 +676,34 @@ export function QuoteComposer({
             ) : null}
           </Field>
           <Field>
-            <Label htmlFor="qf-tax">Tax ($)</Label>
+            <Label htmlFor="qf-tax">
+              Tax
+              {selectedDealer?.province
+                ? ` — ${CA_PROVINCE_NAMES[selectedDealer.province]} ${ratePct}%`
+                : ''}
+            </Label>
             <input
               id="qf-tax"
               type="number"
               min={0}
               step="0.01"
+              placeholder={
+                selectedDealer?.province
+                  ? fmtMoney(computed.ok ? computed.out.tax : 0)
+                  : ''
+              }
               className="w-40 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-              {...register('taxOverride', { valueAsNumber: true })}
+              {...register('taxOverride', {
+                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+              })}
             />
+            <span className={labelClass}>
+              {!selectedDealer?.province
+                ? 'Set the dealer’s province to calculate sales tax.'
+                : watched.taxOverride != null
+                  ? 'Manual override — clear the field to use the province rate.'
+                  : `Auto: ${CA_PROVINCE_NAMES[selectedDealer.province]} ${ratePct}%.`}
+            </span>
             {errors.taxOverride?.message ? (
               <FieldError>{errors.taxOverride.message}</FieldError>
             ) : null}

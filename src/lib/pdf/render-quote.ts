@@ -27,6 +27,9 @@ export type QuoteData = {
   lineItems: QuoteLineItem[];
   subtotal: number;
   tax: number;
+  /** Applied province sales-tax rate (percent) for the Tax line label (0065).
+   *  When > 0 the line reads "Tax (13%)"; omit / 0 → plain "Tax". */
+  taxPct?: number | null;
   total: number;
 };
 
@@ -340,7 +343,9 @@ export async function renderQuotePdf(
       y,
     );
     y -= 14;
-    drawRight({ page, font, size: 10, color: black }, 'Tax', totalsLabelR, y);
+    const taxLabel =
+      quote.taxPct != null && quote.taxPct > 0 ? `Tax (${quote.taxPct}%)` : 'Tax';
+    drawRight({ page, font, size: 10, color: black }, taxLabel, totalsLabelR, y);
     drawRight({ page, font, size: 10, color: black }, formatCurrency(quote.tax), colTotalR, y);
     y -= 14;
     drawRight({ page, font: bold, size: 11, color: black }, 'Total', totalsLabelR, y);

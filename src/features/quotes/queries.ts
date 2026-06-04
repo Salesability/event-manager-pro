@@ -3,6 +3,7 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { audienceSources, auditLog, dealers, quoteLineItems, quotes } from '@/lib/db/schema';
 import type { PickedLine, QuoteInputs } from '@/lib/quotes/pricing';
+import type { CaProvinceCode } from '@/lib/ca-provinces';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined';
 
@@ -21,7 +22,12 @@ export type Quote = {
   subtotal: string;
   tax: string;
   total: string;
+  /** Snapshot of the dealer's province sales-tax rate applied (percent). */
   taxPct: string;
+  /** Coach's manual tax override, or null when tax is auto (0065). */
+  taxOverride: string | null;
+  /** The dealer's province (for the tax label), or null. */
+  province: CaProvinceCode | null;
   inputs: QuoteInputs;
   /** 0062 — the SKU picker's line rows, from `quote_line_items` ordered by
    *  `display_order`. Populated only by `loadQuote` (the composer path); list
@@ -59,6 +65,8 @@ const projection = {
   tax: quotes.tax,
   total: quotes.total,
   taxPct: quotes.taxPct,
+  taxOverride: quotes.taxOverride,
+  province: dealers.province,
   inputs: quotes.inputs,
   audienceSourceId: quotes.audienceSourceId,
   audienceSourceLabel: audienceSources.label,
@@ -83,6 +91,8 @@ type QuoteRow = {
   tax: string;
   total: string;
   taxPct: string;
+  taxOverride: string | null;
+  province: CaProvinceCode | null;
   inputs: unknown;
   audienceSourceId: number | null;
   audienceSourceLabel: string | null;
@@ -114,6 +124,8 @@ function mapRow(row: QuoteRow): Quote {
     tax: row.tax,
     total: row.total,
     taxPct: row.taxPct,
+    taxOverride: row.taxOverride,
+    province: row.province,
     inputs: row.inputs as QuoteInputs,
     // List loaders leave this empty; `loadQuote` populates it from the table.
     pickedLines: [],

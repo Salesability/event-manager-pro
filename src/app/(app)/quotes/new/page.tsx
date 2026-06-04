@@ -1,6 +1,7 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
+import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer } from '@/features/quotes/quote-composer';
 
 // Quote composer entry point. Admin || coach (`quote:edit`); coaches own
@@ -25,12 +26,17 @@ export default async function NewQuotePage({
   const initialDealerId = pickFirst(sp.dealerId);
   const initialCampaignId = pickFirst(sp.campaignId);
 
-  const [dealers, catalog] = await Promise.all([loadDealers(), loadServiceItems()]);
+  const [dealers, catalog, taxRates] = await Promise.all([
+    loadDealers(),
+    loadServiceItems(),
+    loadTaxRates(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <QuoteComposer
         dealers={dealers}
+        taxRates={taxRates}
         catalog={catalog}
         initialDealerId={parseIntOrNull(initialDealerId)}
         initialCampaignId={parseIntOrNull(initialCampaignId)}

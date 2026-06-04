@@ -762,6 +762,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
         renderLines: renderLinesColumn,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
+        taxPct: quotes.taxPct,
         total: quotes.total,
       })
       .from(quotes)
@@ -799,6 +800,7 @@ export const previewQuotePdf = capabilityClient('quote:edit')
       lineItems: lines,
       subtotal: Number(quote.subtotal),
       tax: Number(quote.tax),
+      taxPct: Number(quote.taxPct) || 0,
       total: Number(quote.total),
     });
     if ('error' in rendered) {
@@ -864,6 +866,7 @@ export const sendQuote = capabilityClient('quote:edit')
         renderLines: renderLinesColumn,
         subtotal: quotes.subtotal,
         tax: quotes.tax,
+        taxPct: quotes.taxPct,
         total: quotes.total,
       })
       .from(quotes)
@@ -955,6 +958,7 @@ export const sendQuote = capabilityClient('quote:edit')
       lineItems: lines,
       subtotal: Number(draft.subtotal),
       tax: Number(draft.tax),
+      taxPct: Number(draft.taxPct) || 0,
       total: Number(draft.total),
     };
 
