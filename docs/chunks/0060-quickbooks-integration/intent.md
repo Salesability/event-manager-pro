@@ -1,9 +1,9 @@
 # 0060 — QuickBooks Online integration · intent
 
-> **Deferred to `future/` on 2026-05-29.** Scaffolded from a research conversation, not yet planned.
-> **Un-defer trigger:** owner is ready to prioritize QBO integration AND has answered the two open
-> decisions below (sync cadence + system-of-record). No `plan.md` yet — write it from this intent
-> once the decisions land.
+> **Un-deferred 2026-06-03** (moved out of `future/`). The owner prioritized the import and answered
+> Open Decision #1 → **one-time import** (seed prod now; living sync stays a later slice). See
+> [`plan.md`](plan.md) for the shippable first slice (Playground-token one-time script, no schema change)
+> and [`runbook.md`](runbook.md) for the Intuit-side setup steps.
 
 ## Problem
 
@@ -13,7 +13,7 @@ companies have to be re-entered into this app as `dealers` by hand. We want to c
 1. **(First slice)** existing QBO customers are **imported as `dealers`** (+ their contact people), so the
    app's client list is seeded from the real book of business instead of manual entry.
 2. **(Later)** the commercial spine flows back the other way — an accepted **Quote → QBO Estimate/Invoice**,
-   so invoicing isn't double-keyed. See [`../../../wiki/commercial-spine.md`](../../../wiki/commercial-spine.md).
+   so invoicing isn't double-keyed. See [`../../wiki/commercial-spine.md`](../../wiki/commercial-spine.md).
 
 This `intent.md` anchors both, but the **first shippable slice is the import + the OAuth connection** that
 everything else depends on.
@@ -21,7 +21,7 @@ everything else depends on.
 ## Vocabulary bridge (the crux)
 
 QBO's data model calls the company-you-invoice a **`Customer`**. This app calls that a **`dealer`** (the
-schema noun for what the business calls a "client" — see [`../../../wiki/data-model.md`](../../../wiki/data-model.md)
+schema noun for what the business calls a "client" — see [`../../wiki/data-model.md`](../../wiki/data-model.md)
 §Dealers). So the import is `QBO Customer → dealers`, and the person on the QBO customer record maps to a
 `dealer_contacts(role='staff')` (our point of contact *at* the dealership), **not** `role='customer'` (that
 role is reserved for the dealership's own car-buyers, which don't come from QBO).
