@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Dealer `province` field | Done | 0315ebd |
-| 2: Province→rate lookup table + seed | Pending | - |
+| 2: Province→rate lookup table + seed | Done | 136e17f |
 | 3: Tax-rate admin (edit rates) | Pending | - |
 | 4: Auto-compute tax from province (+ override) | Pending | - |
 | 5: Composer + PDF show province/rate | Pending | - |
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -60,9 +60,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: `dealer-schema.test.ts` — accepts valid code / '' / omitted; rejects an invalid code.
 
 #### Phase 2: Province→rate lookup table + seed
-- [ ] Invoke `db-conventions`. New table `tax_rates`: `province` (code, unique), `label` (province name), `rate` `numeric(6,3)` (combined %), audit columns. Migration **seeds the 13 rows** with the June-2026 rates from `intent.md` (AB 5.000 … QC 14.975 … ON 13.000). Verify journal `when`.
-- [ ] Query loader `loadTaxRates()` (+ `taxRateForProvince(code)`) in the queries layer.
-- [ ] Test: loader returns 13 rows; `taxRateForProvince('QC')` = 14.975; unknown code → null.
+- [x] New table `src/lib/db/schema/tax-rates.ts`: `province` (the shared `ca_province` enum, unique), `label`, `rate` `numeric(6,3)`, `...timestamps` (lookup is edited-in-place not archived → timestamps over actors/archivable). Registered in schema `index.ts`. Migration `0027_odd_onslaught.sql` creates the table + **idempotent seed** of all 13 rows (June-2026 rates, `ON CONFLICT (province) DO NOTHING`). Journal `when` later than 0026; no auth gotcha.
+- [x] Loaders in `src/features/tax-rates/queries.ts`: `loadTaxRates()` + `taxRateForProvince(code)`. Pure `rateForProvince(rows, code)` + `TaxRate` type live in client-safe `src/lib/tax-rates.ts` (so the composer/admin + tests avoid `server-only`).
+- [x] Test `src/lib/tax-rates.test.ts`: `rateForProvince` returns 14.975 for QC (3-decimal), numbers for ON/AB, null for a province with no row / null province. (Seed-row count + QC value verified at migration-apply on stage/prod.)
 
 #### Phase 3: Tax-rate admin (edit rates)
 - [ ] `/admin/lookups` gains a "Sales Tax Rates" section listing the 13 provinces with an **editable rate** per row (edit-only — no create/archive). Anchor on lookup-admin + the 0059 inline-edit pattern.
