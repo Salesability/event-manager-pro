@@ -117,27 +117,47 @@ export function validatePickedLines(lines: PickedLine[]): void {
   }
 }
 
-/** Recompute line totals + roll-ups for a set of picked lines (0062). Totals
- *  are `effectiveUnit(line) × qty` summed, plus the coach-typed `tax` dollar
- *  amount (tax is a typed amount, never a derived percentage). Returns NEW
- *  `PickedLine` objects (immutable) so the caller can hand the result straight
- *  to the persist path. */
+/** How a quote's tax is determined (0065). `ratePct` is the dealer's province
+ *  sales-tax percent (0 when the dealer has no province / no rate). `override`
+ *  is the coach's manual dollar amount; when present it wins and `ratePct` is
+ *  ignored for the amount (the rate is still snapshotted on the quote by the
+ *  caller for display). */
+export type QuoteTaxBasis = {
+  ratePct?: number;
+  override?: number | null;
+};
+
+/** Recompute line totals + roll-ups for a set of picked lines (0062). Totals are
+ *  `effectiveUnit(line) × qty` summed; tax is the coach's manual `override` when
+ *  set, otherwise `subtotal × ratePct/100` from the dealer's province (0065).
+ *  Returns NEW `PickedLine` objects (immutable) so the caller can hand the
+ *  result straight to the persist path. */
 export function computePickedTotals(
   lines: PickedLine[],
-  taxOverride = 0,
+  tax: QuoteTaxBasis = {},
 ): PickedQuoteComputation {
   validatePickedLines(lines);
-  if (!Number.isFinite(taxOverride) || taxOverride < 0 || taxOverride > MAX_DOLLARS) {
-    throw new QuoteInputsError(`tax must be a non-negative number ≤ ${MAX_DOLLARS}.`);
+  const ratePct = tax.ratePct ?? 0;
+  const override = tax.override ?? null;
+  if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) {
+    throw new QuoteInputsError('Tax rate must be between 0 and 100%.');
+  }
+  if (
+    override != null &&
+    (!Number.isFinite(override) || override < 0 || override > MAX_DOLLARS)
+  ) {
+    throw new QuoteInputsError(
+      `Tax override must be a non-negative number ≤ ${MAX_DOLLARS}.`,
+    );
   }
   const recomputed: PickedLine[] = lines.map((line) => ({
     ...line,
     lineTotal: roundCents(effectiveUnit(line) * line.qty),
   }));
   const subtotal = roundCents(recomputed.reduce((acc, l) => acc + l.lineTotal, 0));
-  const tax = roundCents(taxOverride);
-  const total = roundCents(subtotal + tax);
-  return { lines: recomputed, subtotal, tax, total };
+  const tax_ = override != null ? roundCents(override) : roundCents(subtotal * (ratePct / 100));
+  const total = roundCents(subtotal + tax_);
+  return { lines: recomputed, subtotal, tax: tax_, total };
 }
 
 /** Default `quotes.inputs` bag for a fresh draft. The picker only writes

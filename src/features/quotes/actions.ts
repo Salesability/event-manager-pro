@@ -5,6 +5,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { dealers, masterServiceAgreements, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
+import { dealerTaxRatePct } from '@/features/tax-rates/queries';
 import { recordAudit } from '@/features/audit/actions';
 import { field, parseId } from '@/features/schedule/validators';
 import {
@@ -88,26 +89,42 @@ async function loadActiveCatalog(): Promise<ServiceItem[]> {
 // `2.675`). Canonicalizing here means every call site sees the same cents.
 const TAX_RE = /^\d+(\.\d{1,2})?$/;
 
-function parseTax(formData: FormData): number | { error: string } {
+function moneyString(n: number): string {
+  return n.toFixed(2);
+}
+
+// 0065: parse the composer's manual tax override. Empty/absent → null (auto:
+// tax derives from the dealer's province rate). A present value (incl. '0') is
+// the override. Canonicalized to ≤2 decimals via `TAX_RE` so the override
+// can't out-precision the numeric(12,2) column.
+function parseTaxOverride(formData: FormData): number | null | { error: string } {
   const raw = field(formData, 'tax');
-  if (!raw) return 0;
+  if (!raw) return null;
   if (!TAX_RE.test(raw)) {
     return { error: 'Tax must be a non-negative number with at most 2 decimal places.' };
   }
   const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) {
-    return { error: 'Tax must be a non-negative number.' };
-  }
-  // Cap matches `computePickedTotals` so the `setQuoteTax` standalone path
-  // can't bypass the guard the picker save enforces through the pricing module.
-  if (n > MAX_DOLLARS) {
-    return { error: `Tax must be ≤ ${MAX_DOLLARS}.` };
-  }
+  if (!Number.isFinite(n) || n < 0) return { error: 'Tax must be a non-negative number.' };
+  if (n > MAX_DOLLARS) return { error: `Tax must be ≤ ${MAX_DOLLARS}.` };
   return n;
 }
 
-function moneyString(n: number): string {
-  return n.toFixed(2);
+function roundCents(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// 0065: effective tax dollars — the override if set, else subtotal × ratePct/100.
+function resolveTaxAmount(
+  subtotal: number,
+  ratePct: number,
+  override: number | null,
+): number {
+  return override != null ? roundCents(override) : roundCents(subtotal * (ratePct / 100));
+}
+
+// 0065: snapshot string for `tax_pct` (numeric(6,3)).
+function pctString(ratePct: number): string {
+  return ratePct.toFixed(3);
 }
 
 // === 0062: SKU line-item picker write path ================================
@@ -244,21 +261,27 @@ export const createQuote = capabilityClient('quote:edit')
     const dealerId = parseId(formData, 'dealerId');
     if (dealerId == null) return { error: 'Dealer is required.' };
 
+    // 0065: snapshot the dealer's province sales-tax rate; tax auto-derives from
+    // it unless the coach typed an override.
+    const ratePct = await dealerTaxRatePct(dealerId);
+
     // 0062 picker path: `lines` present → resolve picked SKUs against the
     // catalogue, compute totals, seed the row, and insert the quote_line_items
     // rows inside the tx below once we have the id. Absent → an empty draft.
     let inputsSnapshot: QuoteInputs = DEFAULT_QUOTE_INPUTS;
     let pickedComputed: PickedQuoteComputation | null = null;
+    let override: number | null = null;
     if (formData.has('lines')) {
       const linesResult = parsePickedLineInputs(formData);
       if (!linesResult.ok) return { error: linesResult.error };
-      const taxResult = parseTax(formData);
-      if (typeof taxResult === 'object') return taxResult;
+      const ov = parseTaxOverride(formData);
+      if (typeof ov === 'object' && ov !== null) return ov;
+      override = ov;
       const catalog = await loadActiveCatalog();
       const built = buildPickedLines(linesResult.data, catalog);
       if (!built.ok) return { error: built.error };
       try {
-        pickedComputed = computePickedTotals(built.lines, taxResult);
+        pickedComputed = computePickedTotals(built.lines, { ratePct, override });
       } catch (err) {
         if (err instanceof QuoteInputsError) return { error: err.message };
         throw err;
@@ -269,6 +292,7 @@ export const createQuote = capabilityClient('quote:edit')
     const baseInsert = {
       dealerId,
       inputs: inputsSnapshot,
+      taxPct: pctString(ratePct),
       createdById: userId,
       updatedById: userId,
     };
@@ -277,6 +301,7 @@ export const createQuote = capabilityClient('quote:edit')
           ...baseInsert,
           subtotal: moneyString(pickedComputed.subtotal),
           tax: moneyString(pickedComputed.tax),
+          taxOverride: override != null ? moneyString(override) : null,
           total: moneyString(pickedComputed.total),
         }
       : baseInsert;
@@ -336,8 +361,10 @@ async function applyPickerSave(
   const linesResult = parsePickedLineInputs(formData);
   if (!linesResult.ok) return { error: linesResult.error };
 
-  const taxRequested = formData.has('tax') ? parseTax(formData) : null;
-  if (taxRequested && typeof taxRequested === 'object') return taxRequested;
+  // 0065: 'tax' present → it's the manual override (null when blank = auto);
+  // absent → preserve the quote's existing override.
+  const overrideRequested = formData.has('tax') ? parseTaxOverride(formData) : undefined;
+  if (overrideRequested && typeof overrideRequested === 'object') return overrideRequested;
 
   const quoteNotes = parseQuoteNotes(formData);
 
@@ -352,6 +379,8 @@ async function applyPickerSave(
         tax: quotes.tax,
         subtotal: quotes.subtotal,
         total: quotes.total,
+        dealerId: quotes.dealerId,
+        taxOverride: quotes.taxOverride,
         renderLines: renderLinesColumn,
         inputs: quotes.inputs,
         updatedAt: quotes.updatedAt,
@@ -364,13 +393,21 @@ async function applyPickerSave(
       return { error: `This quote has been ${row.status} — make a new quote to revise it.` };
     }
 
-    const taxNumber = taxRequested != null ? (taxRequested as number) : Number(row.tax) || 0;
+    // 0065: override = explicit from the form, else preserve the stored one;
+    // rate = the dealer's province rate (snapshotted onto the quote).
+    const override =
+      overrideRequested !== undefined
+        ? overrideRequested
+        : row.taxOverride != null
+          ? Number(row.taxOverride)
+          : null;
+    const ratePct = await dealerTaxRatePct(row.dealerId);
     const catalog = await loadActiveCatalog();
     const built = buildPickedLines(linesResult.data, catalog);
     if (!built.ok) return { error: built.error };
     let computed: PickedQuoteComputation;
     try {
-      computed = computePickedTotals(built.lines, taxNumber);
+      computed = computePickedTotals(built.lines, { ratePct, override });
     } catch (err) {
       if (err instanceof QuoteInputsError) return { error: err.message };
       throw err;
@@ -392,6 +429,8 @@ async function applyPickerSave(
         inputs: mergedInputs,
         subtotal: moneyString(computed.subtotal),
         tax: moneyString(computed.tax),
+        taxPct: pctString(ratePct),
+        taxOverride: override != null ? moneyString(override) : null,
         total: moneyString(computed.total),
         updatedById: userId,
       })
@@ -474,10 +513,11 @@ export const setQuoteInputs = capabilityClient('quote:edit')
     return applyPickerSave(formData, quoteId, userId);
   });
 
-/** Composer-side setter: override just the tax amount on a draft quote.
- *  Recomputes total = subtotal + tax (lines untouched). */
-// validation: skip — single-value action (quoteId + tax); `parseTax` and
-// `parseId` cover both inputs.
+/** Composer-side setter: set (or clear) the manual tax override on a draft quote
+ *  (0065). Blank clears the override so tax reverts to the dealer's province
+ *  rate. Recomputes total = subtotal + tax (lines untouched). */
+// validation: skip — single-value action (quoteId + tax); `parseTaxOverride`
+// and `parseId` cover both inputs.
 export const setQuoteTax = capabilityClient('quote:edit')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
@@ -486,12 +526,16 @@ export const setQuoteTax = capabilityClient('quote:edit')
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
 
-    const tax = parseTax(formData);
-    if (typeof tax === 'object') return tax;
+    const override = parseTaxOverride(formData);
+    if (override && typeof override === 'object') return override;
 
     return db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ status: quotes.status, subtotal: quotes.subtotal })
+        .select({
+          status: quotes.status,
+          subtotal: quotes.subtotal,
+          dealerId: quotes.dealerId,
+        })
         .from(quotes)
         .where(eq(quotes.id, quoteId))
         .limit(1);
@@ -501,12 +545,16 @@ export const setQuoteTax = capabilityClient('quote:edit')
       }
 
       const subtotal = Number(row.subtotal) || 0;
+      const ratePct = await dealerTaxRatePct(row.dealerId);
+      const tax = resolveTaxAmount(subtotal, ratePct, override);
       const total = subtotal + tax;
 
       const updated = await tx
         .update(quotes)
         .set({
           tax: moneyString(tax),
+          taxPct: pctString(ratePct),
+          taxOverride: override != null ? moneyString(override) : null,
           total: moneyString(total),
           updatedById: userId,
         })
@@ -555,9 +603,37 @@ export const setQuoteDealer = capabilityClient('quote:edit')
         .limit(1);
       if (!dealer) return { error: 'Dealer not found or archived.' };
 
+      // 0065: swapping the dealer can change the province → re-derive the tax
+      // (preserving any manual override) so the new dealer's rate applies.
+      const [q] = await tx
+        .select({
+          status: quotes.status,
+          subtotal: quotes.subtotal,
+          taxOverride: quotes.taxOverride,
+        })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+      if (!q) return { error: 'Quote not found.' };
+      if (q.status !== 'draft') {
+        return { error: `Quote cannot be edited in status '${q.status}'.` };
+      }
+
+      const ratePct = await dealerTaxRatePct(dealerId);
+      const subtotal = Number(q.subtotal) || 0;
+      const override = q.taxOverride != null ? Number(q.taxOverride) : null;
+      const tax = resolveTaxAmount(subtotal, ratePct, override);
+      const total = subtotal + tax;
+
       const result = await tx
         .update(quotes)
-        .set({ dealerId, updatedById: userId })
+        .set({
+          dealerId,
+          taxPct: pctString(ratePct),
+          tax: moneyString(tax),
+          total: moneyString(total),
+          updatedById: userId,
+        })
         .where(and(eq(quotes.id, quoteId), eq(quotes.status, 'draft')))
         .returning({ id: quotes.id });
       if (!result.length) {

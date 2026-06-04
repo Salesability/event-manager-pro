@@ -1,7 +1,7 @@
 import 'server-only';
-import { asc } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { taxRates } from '@/lib/db/schema';
+import { dealers, taxRates } from '@/lib/db/schema';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 import { rateForProvince, type TaxRate } from '@/lib/tax-rates';
 
@@ -27,4 +27,18 @@ export async function taxRateForProvince(
 ): Promise<number | null> {
   if (!province) return null;
   return rateForProvince(await loadTaxRates(), province);
+}
+
+/** The sales-tax rate (percent) for a dealer's province, or 0 when the dealer
+ *  has no province / no rate row. One join — `tax_rates` is stable config, so a
+ *  read on the app pool (outside any quote tx) is fine. Used by the quote
+ *  actions to auto-compute tax (0065). */
+export async function dealerTaxRatePct(dealerId: number): Promise<number> {
+  const [r] = await db
+    .select({ rate: taxRates.rate })
+    .from(dealers)
+    .leftJoin(taxRates, eq(taxRates.province, dealers.province))
+    .where(eq(dealers.id, dealerId))
+    .limit(1);
+  return r?.rate ? Number(r.rate) : 0;
 }

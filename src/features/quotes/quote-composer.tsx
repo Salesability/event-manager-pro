@@ -309,7 +309,12 @@ export function QuoteComposer({
   const computed = useMemo(() => {
     try {
       const picked = toPickedLines((watched.lines ?? []) as LineFieldValue[], catalogById);
-      return { ok: true as const, out: computePickedTotals(picked, watched.taxOverride ?? 0) };
+      // 0065: the typed value is the manual override; the province-rate-aware
+      // live preview is wired in Phase 5.
+      return {
+        ok: true as const,
+        out: computePickedTotals(picked, { override: watched.taxOverride ?? null }),
+      };
     } catch (err) {
       const msg = err instanceof QuoteInputsError ? err.message : 'Invalid lines.';
       return { ok: false as const, error: msg };

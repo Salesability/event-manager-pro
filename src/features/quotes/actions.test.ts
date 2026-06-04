@@ -40,6 +40,12 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
     loadCurrentMembership: mocks.loadCurrentMembership,
   };
 });
+// 0065: the quote actions derive tax from the dealer's province rate. Stub the
+// rate lookup to 0 here so these pre-existing tax assertions (tax = 0 or the
+// typed override) hold; the rate math itself is covered in pricing.test.ts.
+vi.mock('@/features/tax-rates/queries', () => ({
+  dealerTaxRatePct: () => Promise.resolve(0),
+}));
 vi.mock('@/features/audit/actions', () => ({
   recordAudit: mocks.recordAudit,
 }));
@@ -1045,7 +1051,13 @@ describe('setQuoteTax', () => {
 
 describe('setQuoteDealer', () => {
   it('flips dealer on a draft quote when the new dealer is active', async () => {
-    mocks.dbResults.push([{ id: 9 }], [{ id: 42 }]);
+    // dealer active, quote pre-read (0065: re-derives tax for the new dealer),
+    // guarded UPDATE.
+    mocks.dbResults.push(
+      [{ id: 9 }],
+      [{ status: 'draft', subtotal: '1000', taxOverride: null }],
+      [{ id: 42 }],
+    );
     const result = await call(setQuoteDealer(fd({ quoteId: '42', dealerId: '9' })));
     expect(result).toEqual({ ok: true });
     expect((mocks.updates[0].patch as Record<string, unknown>).dealerId).toBe(9);
@@ -1058,8 +1070,8 @@ describe('setQuoteDealer', () => {
   });
 
   it('rejects edit on non-draft quote', async () => {
-    // dealer ok, guarded UPDATE misses, re-select finds status='sent'.
-    mocks.dbResults.push([{ id: 9 }], [], [{ status: 'sent' }]);
+    // dealer ok; the 0065 quote pre-read finds status='sent' → early reject.
+    mocks.dbResults.push([{ id: 9 }], [{ status: 'sent' }]);
     const result = await call(setQuoteDealer(fd({ quoteId: '42', dealerId: '9' })));
     expect(result).toEqual({ error: "Quote cannot be edited in status 'sent'." });
   });

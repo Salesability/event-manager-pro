@@ -68,13 +68,20 @@ export const quotes = pgTable(
     fee: numeric('fee', { precision: 10, scale: 2 }).notNull().default('0'),
     travel: numeric('travel', { precision: 10, scale: 2 }).notNull().default('0'),
     depositPct: numeric('deposit_pct', { precision: 5, scale: 2 }).notNull().default('0'),
-    taxPct: numeric('tax_pct', { precision: 5, scale: 2 }).notNull().default('15'),
+    // 0065: snapshot of the dealer's province sales-tax rate applied to this
+    // quote (percent). Widened 5,2 → 6,3 so QC's 14.975 fits. Default 0 (was a
+    // dead 15) — the real value is derived from the dealer's province at
+    // create/edit time.
+    taxPct: numeric('tax_pct', { precision: 6, scale: 3 }).notNull().default('0'),
     quoteValidDays: integer('quote_valid_days').notNull().default(30),
     audienceSourceId: bigint('audience_source_id', { mode: 'number' }).references(
       () => audienceSources.id
     ),
     subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
     tax: numeric('tax', { precision: 12, scale: 2 }).notNull().default('0'),
+    // 0065: coach's manual tax override. NULL = auto (subtotal × tax_pct/100);
+    // when set, used verbatim as the tax. Lets a coach handle exemptions.
+    taxOverride: numeric('tax_override', { precision: 12, scale: 2 }),
     total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
     previousQuoteId: bigint('previous_quote_id', { mode: 'number' }).references(
       (): AnyPgColumn => quotes.id,
