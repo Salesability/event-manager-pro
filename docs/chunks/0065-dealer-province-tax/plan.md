@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Dealer `province` field | Pending | - |
+| 1: Dealer `province` field | Done | 0315ebd |
 | 2: Province→rate lookup table + seed | Pending | - |
 | 3: Tax-rate admin (edit rates) | Pending | - |
 | 4: Auto-compute tax from province (+ override) | Pending | - |
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 17% (1/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -53,11 +53,11 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Dealer `province` field
-- [ ] Invoke `db-conventions`. Add a nullable `province` column to `dealers` (text + check constraint for the 13 codes `AB BC MB NB NL NS NT NU ON PE QC SK YT`, or a pgEnum — match the repo's existing enum convention). Migration; verify journal `when`.
-- [ ] Add `province` to `dealer-schema.ts` (`z.enum([...]).optional()`).
-- [ ] Add a province `<select>` to `dealer-form.tsx` (anchor on the status select); wire into `valuesToFormData` + `createDealer`/`updateDealer`.
-- [ ] Existing dealers: `province` stays NULL (admin fills in). Note the missing-province behavior for Phase 4.
-- [ ] Test: dealer schema accepts a valid province + rejects an invalid code.
+- [x] Invoked `db-conventions`. Added a nullable `province` column to `dealers` via `pgEnum('ca_province', …)` (matches the existing `dealer_status` pgEnum convention; province is a stable 13-value set). Single source of truth = new `src/lib/ca-provinces.ts` (codes + names). Migration `0026_melted_veda.sql` (`CREATE TYPE ca_province` + `ADD COLUMN province`); journal `when` 1780602341087 > 0025's. No auth.users gotcha.
+- [x] Added `province` to `dealer-schema.ts` (`z.union([z.enum(CA_PROVINCE_CODES), z.literal('')]).optional()` — '' = unset/clear).
+- [x] Added a province `<select>` to `dealer-form.tsx` (anchored on the status select); wired into `valuesToFormData`, `defaultValues`, the `Dealer` query type + both projections (`loadDealersInner`/`loadDealer`), and `createDealer` (insert) + `updateDealer` (patch — present→set/clear, absent→preserve).
+- [x] Existing dealers: `province` stays NULL (admin fills in). Missing-province behavior handled in Phase 4 ($0 + warning).
+- [x] Test: `dealer-schema.test.ts` — accepts valid code / '' / omitted; rejects an invalid code.
 
 #### Phase 2: Province→rate lookup table + seed
 - [ ] Invoke `db-conventions`. New table `tax_rates`: `province` (code, unique), `label` (province name), `rate` `numeric(6,3)` (combined %), audit columns. Migration **seeds the 13 rows** with the June-2026 rates from `intent.md` (AB 5.000 … QC 14.975 … ON 13.000). Verify journal `when`.
