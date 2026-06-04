@@ -6,16 +6,22 @@
 
 set -euo pipefail
 
-# Load .env.local into the environment so we can reuse the same values
-# for the build and the Cloud Run service.
-if [ -f .env.local ]; then
-    echo "📄 Loading environment variables from .env.local..."
+# Load the environment-specific dotfile so the same values feed the build and
+# the Cloud Run service. Production reads .env.production.local (prod Supabase /
+# Resend / BoldSign values); any other env reads .env.local (sandbox). Keyed on
+# the caller-provided DEPLOY_APP_ENV so a prod deploy never sources sandbox creds.
+ENV_FILE=".env.local"
+if [ "${DEPLOY_APP_ENV:-production}" = "production" ]; then
+    ENV_FILE=".env.production.local"
+fi
+if [ -f "${ENV_FILE}" ]; then
+    echo "📄 Loading environment variables from ${ENV_FILE}..."
     set -a
     # shellcheck disable=SC1091
-    source .env.local
+    source "${ENV_FILE}"
     set +a
 else
-    echo "⚠️  No .env.local file found. Falling back to current shell env."
+    echo "⚠️  No ${ENV_FILE} file found. Falling back to current shell env."
 fi
 
 # PROJECT_ID is environment-keyed below (after DEPLOY_APP_ENV is known), just
@@ -131,7 +137,6 @@ fi
 REQUIRED_VARS=(
     "NEXT_PUBLIC_SUPABASE_URL"
     "NEXT_PUBLIC_SUPABASE_ANON_KEY"
-    "DATABASE_URL"
     "SUPABASE_SERVICE_ROLE_KEY"
     "MSA_TEMPLATE_VERSION"
     "BOLDSIGN_API_KEY"
@@ -140,6 +145,13 @@ REQUIRED_VARS=(
     "RESEND_API_KEY"
     "RESEND_FROM_EMAIL"
 )
+# DATABASE_URL is only needed in the env when the stage 'database-url' secret is
+# auto-seeded from it. For an externally-managed secret (prod's
+# database-url-production), the runtime URL comes from Secret Manager, so it
+# doesn't need to live in the dotfile.
+if [ "${DB_SECRET_NAME}" = "database-url" ]; then
+    REQUIRED_VARS+=("DATABASE_URL")
+fi
 MISSING_VARS=()
 for var in "${REQUIRED_VARS[@]}"; do
     if [ -z "${!var:-}" ]; then
