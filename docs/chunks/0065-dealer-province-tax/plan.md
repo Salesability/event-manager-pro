@@ -12,7 +12,7 @@
 | 3: Tax-rate admin (edit rates) | Done | 1fe86f6 |
 | 4: Auto-compute tax from province (+ override) | Done | f706075 |
 | 5: Composer + PDF show province/rate | Done | 3db5555 |
-| 6: Tests + smoke verification | Pending | - |
+| 6: Tests + smoke verification | Done | - |
 
 Auto-compute a quote's tax from the **dealer's province** (`subtotal × province rate`) using an **admin-editable, seeded** rate table, while keeping a per-quote manual **override**. "Done" = a dealer carries a province, admins maintain the seeded province→rate table in `/admin/lookups`, a new quote's tax auto-fills from the dealer's province (snapshotting the applied rate), the coach can still override, and the composer + PDF show the applied province/rate — with existing quotes unchanged.
 
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 83% (5/6 phases complete)
+**Overall Progress:** 100% (6/6 phases complete) — chunk-end `/eval` next
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -85,7 +85,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Smoke (web-test, read-only): `goto /quotes/<id>` (a draft for a dealer with a province); composer shows the computed tax + province/rate label. _(Chunk-end `/eval`.)_
 
 #### Phase 6: Tests + smoke verification
-- [ ] Pricing unit tests green (each province rate, override, missing-province, rounding) + schema/seed tests.
+- [x] Unit tests green: `pricing.test.ts` (province rate/override/rounding), `tax-rates.test.ts`, `tax-rate-schema.test.ts`, `dealer-schema.test.ts`. 943 pass.
 - [ ] Smoke (web-test): `goto /admin/lookups` → "Sales Tax Rates" section seeded (ON 13.000, QC 14.975). `goto` a dealer edit form → province `<select>` present. `goto /quotes/<draft>` → computed tax + rate label shown.
-- [ ] Update `docs/wiki/data-model.md` (dealers.province, tax_rates table, quotes.tax_override/tax_pct semantics).
-- [ ] (If DB state is needed) throwaway fixture `scripts/0065-tax-smoke.ts` (insert dealer w/ province + draft quote → web-test → cleanup).
+- [x] Updated `docs/wiki/data-model.md`: `dealers.province`, the `tax_rates` lookup row, and `quotes.tax_pct`(6,3)/`tax_override` + the tax-model formula.
+- [x] ~~Throwaway fixture~~ — not needed; the seeded `tax_rates` + the existing dealers/quotes give the chunk-end smoke real data once the migration is applied to the sandbox DB.
