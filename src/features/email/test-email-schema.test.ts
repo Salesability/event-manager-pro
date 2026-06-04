@@ -33,6 +33,24 @@ describe('testEmailFormSchema', () => {
     expect(parsed.success).toBe(false);
   });
 
+  it('rejects a comma-separated recipient list (single mailbox only)', () => {
+    const parsed = testEmailFormSchema.safeParse({
+      to: 'dest@example.test,other@example.test',
+      subject: 'Hi',
+      body: 'Body',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a subject containing a line break (no header injection)', () => {
+    const parsed = testEmailFormSchema.safeParse({
+      to: 'dest@example.test',
+      subject: 'Hi\r\nBcc: victim@example.test',
+      body: 'Body',
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('rejects a whitespace-only subject', () => {
     const parsed = testEmailFormSchema.safeParse({
       to: 'dest@example.test',

@@ -202,7 +202,7 @@ describe('sendTestEmail: free-compose validation + send', () => {
     const result = await call(
       sendTestEmail(fdWith({ to: 'not-an-email', subject: 'Hi', body: 'Body' })),
     );
-    expect(result).toMatchObject({ error: expect.stringContaining('Recipient') });
+    expect(result).toMatchObject({ error: expect.stringContaining('valid email') });
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 
