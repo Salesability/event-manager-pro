@@ -224,7 +224,13 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'lookup:edit — admin-only',
   },
 
-  // ---- Email send (3) — admin-only --------------------------------------
+  // ---- Email send (4) — admin-only --------------------------------------
+  {
+    label: 'sendTestEmail',
+    invoke: () => emailActions.sendTestEmail(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'email:send — admin-only (0064 deliverability tool; free-compose)',
+  },
   {
     label: 'sendClientCampaignConfirmation',
     invoke: () => emailActions.sendClientCampaignConfirmation(fd()),

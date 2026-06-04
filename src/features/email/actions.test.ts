@@ -46,6 +46,7 @@ import {
   sendClientCampaignConfirmation,
   sendCoachCampaignConfirmation,
   sendCoachShareLinkEmail,
+  sendTestEmail,
 } from './actions';
 
 // 0033: actions return the safe-action wrapper shape `{data?, serverError?,
@@ -175,6 +176,60 @@ describe('sendCoachCampaignConfirmation: status gate', () => {
     });
     const result = await call(sendCoachCampaignConfirmation(fdWith({ campaignId: '1' })));
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe('sendTestEmail: free-compose validation + send', () => {
+  it('sends with mapped { to, subject, text } and returns the message id', async () => {
+    mocks.sendEmail.mockResolvedValueOnce({ ok: true, id: 'msg_test_42' });
+    const result = await call(
+      sendTestEmail(
+        fdWith({ to: 'dest@example.test', subject: 'Hello', body: 'A test body.' }),
+      ),
+    );
+    expect(result).toEqual({ ok: true, id: 'msg_test_42' });
+    expect(mocks.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'dest@example.test',
+        subject: 'Hello',
+        text: 'A test body.',
+        replyTo: 'sender@example.test',
+      }),
+    );
+  });
+
+  it('rejects an invalid recipient address without sending', async () => {
+    const result = await call(
+      sendTestEmail(fdWith({ to: 'not-an-email', subject: 'Hi', body: 'Body' })),
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining('Recipient') });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty subject without sending', async () => {
+    const result = await call(
+      sendTestEmail(fdWith({ to: 'dest@example.test', subject: '', body: 'Body' })),
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining('Subject') });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty body without sending', async () => {
+    const result = await call(
+      sendTestEmail(fdWith({ to: 'dest@example.test', subject: 'Hi', body: '   ' })),
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining('body') });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a send failure from the email helper', async () => {
+    mocks.sendEmail.mockResolvedValueOnce({ error: 'RESEND_FROM_EMAIL is not set.' });
+    const result = await call(
+      sendTestEmail(
+        fdWith({ to: 'dest@example.test', subject: 'Hi', body: 'Body' }),
+      ),
+    );
+    expect(result).toMatchObject({ error: 'RESEND_FROM_EMAIL is not set.' });
   });
 });
 

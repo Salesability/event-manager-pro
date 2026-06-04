@@ -11,9 +11,23 @@ import {
   coachShareLink,
 } from '@/lib/email/templates';
 import { loadCampaign, loadCampaigns, loadCoach } from '@/features/schedule/queries';
+import { testEmailFormSchema } from './test-email-schema';
 import type { User } from '@supabase/supabase-js';
 
 type ActionResult = { ok: true } | { error: string };
+
+// Test-email send surfaces the Resend message id (it's a deliverability tool —
+// the id is the proof of send). Distinct from `ActionResult`, which the
+// confirmation sends use since their callers don't display the id.
+type TestEmailResult = { ok: true; id: string } | { error: string };
+
+type FieldErrors = Record<string, string[] | undefined>;
+function firstFieldError(fieldErrors: FieldErrors): string | undefined {
+  for (const list of Object.values(fieldErrors)) {
+    if (list && list.length) return list[0];
+  }
+  return undefined;
+}
 
 // Pulls the sender's email off the authed ctx.user. Replaces the imperative
 // `requireSenderEmail()` helper from pre-0033, which itself called
@@ -49,6 +63,27 @@ function parseId(formData: FormData, key: string): number | null {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+// Admin deliverability tool (0064): free-compose a plain-text email to any
+// address and surface the Resend message id. Object-schema validated; reuses
+// the shared `sendEmail()` path, so the non-prod dev-redirect gate still
+// applies (recipient rewritten to EMAIL_DEV_TO + `[DEV→…]` subject prefix).
+export const sendTestEmail = capabilityClient('email:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<TestEmailResult> => {
+    const replyTo = senderEmailOrError(ctx.user);
+    if (typeof replyTo !== 'string') return replyTo;
+
+    const parsed = testEmailFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return { error: firstFieldError(fieldErrors) ?? 'Invalid email input.' };
+    }
+    const { to, subject, body } = parsed.data;
+
+    const result = await sendEmail({ to, subject, text: body, replyTo });
+    return 'ok' in result ? { ok: true, id: result.id } : { error: result.error };
+  });
 
 // validation: skip — id-only action (campaignId); local `parseId` covers it.
 export const sendClientCampaignConfirmation = capabilityClient('email:send')
