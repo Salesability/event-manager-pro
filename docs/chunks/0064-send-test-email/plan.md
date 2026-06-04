@@ -10,7 +10,7 @@
 | 1: Schema + Server Action | Done | 95957ff |
 | 2: Compose form component | Done | 5f1f2d0 |
 | 3: Admin page + nav entry | Done | 30dbdce |
-| 4: Tests + smoke verification | Pending | - |
+| 4: Tests + smoke verification | Done (automated) — manual send pending | 02311ac |
 
 A standalone admin **Send Test Email** page: a free-compose form (To / Subject / Body) gated by `email:send` that calls a thin Server Action over the existing `sendEmail()` helper. Its job is **deliverability verification** — prove the system sends a real email to a chosen address and surface the Resend message id (or the error) in the UI. "Done" = an admin can load the page, send themselves a message, see it arrive, and the page reports the outcome — with no new schema, no new capability, and no bypass of the non-prod dev-redirect gate.
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/lib/email/send.ts` — reuse `sendEmail({ to, subject, text, replyTo })`; it already owns the prod/dev split (non-prod rewrites recipient to `EMAIL_DEV_TO` + `[DEV→…]` subject prefix). The tool must not bypass this.
 - `src/lib/actions/legacy-result.ts` (`toLegacyResult`) + `src/lib/actions/action-client.ts:65` (`formDataSchema`) — the action-client + result-adapter idiom every form uses.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% of build/verify automated work (4/4 phases); chunk-end `/eval` **PASS** ([`eval-2026-06-04-1412.md`](eval-2026-06-04-1412.md)). Open: the manual deliverability send (out-of-gate user/ops action) before close.
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -60,7 +60,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Confirm the route is admin-gated — **two layers**: middleware `ADMIN_PATHS = ['/admin', …]` prefix-matches `/admin/send-test-email` (`src/lib/supabase/middleware.ts:14,21`), plus page-level `assertCan('email:send')`. Nav entry sits inside the `isAdmin`-only dropdown.
 
 #### Phase 4: Tests + smoke verification
-- [ ] Action unit tests green (Phase 1) + schema rejects bad email / empty subject / empty body.
-- [ ] Smoke (web-test, **read-only**): `goto /admin/send-test-email`; expect heading "Send Test Email" + fields `To` / `Subject` / `Body` + a `Send` button. Do **not** click Send.
-- [ ] Smoke (web-test): a non-admin / unauth session does not reach `/admin/send-test-email` (redirect/deny).
-- [ ] Manual one-off (out of the automated gate): admin sends to their own address, confirms inbox receipt + the message id shows in the UI. Record the result in the chunk close-out.
+- [x] Action unit tests green (Phase 1, `actions.test.ts`) + schema rejects bad email / whitespace subject / empty body (Phase 2, `test-email-schema.test.ts`). Full suite 917 passing, tsc clean.
+- [x] Smoke (web-test, **read-only**): `goto /admin/send-test-email`; heading "Send Test Email" + `To` / `Subject` / `Body` + `Send` button all present; nav dropdown lists "Send Test Email". Did **not** submit. ✅ ([`eval-2026-06-04-1412.md`](eval-2026-06-04-1412.md))
+- [x] Smoke (web-test): unauth `goto /admin/send-test-email` → redirects to `/login?next=%2Fadmin%2Fsend-test-email`. ✅
+- [ ] **Manual one-off (out of the automated gate, pending):** admin sends to their own address, confirms inbox receipt + the message id shows in the UI. This is the chunk's headline deliverability check — a person/ops action. Record the result in the chunk close-out.
