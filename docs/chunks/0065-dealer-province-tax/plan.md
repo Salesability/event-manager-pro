@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Dealer `province` field | Done | 0315ebd |
 | 2: Province→rate lookup table + seed | Done | 136e17f |
-| 3: Tax-rate admin (edit rates) | Pending | - |
+| 3: Tax-rate admin (edit rates) | Done | 1fe86f6 |
 | 4: Auto-compute tax from province (+ override) | Pending | - |
 | 5: Composer + PDF show province/rate | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -65,11 +65,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test `src/lib/tax-rates.test.ts`: `rateForProvince` returns 14.975 for QC (3-decimal), numbers for ON/AB, null for a province with no row / null province. (Seed-row count + QC value verified at migration-apply on stage/prod.)
 
 #### Phase 3: Tax-rate admin (edit rates)
-- [ ] `/admin/lookups` gains a "Sales Tax Rates" section listing the 13 provinces with an **editable rate** per row (edit-only — no create/archive). Anchor on lookup-admin + the 0059 inline-edit pattern.
-- [ ] `updateTaxRate` Server Action (`capabilityClient('lookup:edit').schema(formDataSchema)`): guarded UPDATE of one province's rate; Zod-validate rate (≥0, ≤ e.g. 30, ≤3 decimals).
-- [ ] Register `updateTaxRate` in the action-gate matrix (drift test requires it).
-- [ ] Test: action updates a rate; rejects an out-of-range / >3-decimal rate.
-- [ ] Smoke (web-test): `goto /admin/lookups`; a "Sales Tax Rates" section lists rows incl. "Ontario … 13.000" and "Quebec … 14.975" with a rate input + save per row. (Read-only — don't save.)
+- [x] `/admin/lookups` gains a "Sales Tax Rates" section (`TaxRatesAdmin`) — 13 province rows, each an editable rate input + Save (edit-only). Modeled on `lookup-admin.tsx`.
+- [x] `updateTaxRate` Server Action (`capabilityClient('lookup:edit')`): guarded UPDATE keyed on province; `taxRateUpdateSchema` validates rate (regex ≤3 decimals + 0–30%).
+- [x] Registered `updateTaxRate` in the action-gate matrix (ADMIN_ONLY).
+- [x] Test `tax-rate-schema.test.ts`: accepts valid (incl QC 14.975); rejects >3 decimals, >30%, non-numeric, invalid province.
+- [ ] Smoke (web-test): `goto /admin/lookups`; "Sales Tax Rates" section lists rows incl. Ontario 13.000 + Quebec 14.975 with a rate input + Save. _(Chunk-end `/eval`.)_
 
 #### Phase 4: Auto-compute tax from province (+ override)
 - [ ] Invoke `db-conventions`. Widen `quotes.tax_pct` → `numeric(6,3)`; add nullable `quotes.tax_override numeric(12,2)` (blank = auto). Migration; backfill `tax_override = tax` for existing quotes so nothing recomputes (preserve history). Verify journal `when`.
