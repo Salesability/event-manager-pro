@@ -37,9 +37,9 @@ Each section below is marked **You do** / **Developer does** so the boundary is 
 | **Resend** | Sends quote / contract emails | Business | Free tier covers low volume; Pro (~US$20/mo) for a verified domain + headroom |
 | **BoldSign** | E-signatures on MSAs + quotes | Business | Paid (per-sender plans, ~US$10–40/mo); has a free trial |
 | **Google Cloud** | Hosting + PDF storage + "Sign in with Google" | Business | Pay-as-you-go; **likely under ~US$10–20/mo** at this scale, plus a card on file |
-| **Domain / DNS** | The app's web address (`events.salesability.ca`) | Business | Already owned (salesability.ca); just DNS records |
+| **Domain / DNS** | The app's web address (`eventpro.salesability.ca`) | Business | Already owned (salesability.ca); just DNS records |
 
-> **Not needed for launch:** QuickBooks (deferred — see [`../chunks/future/0060-quickbooks-integration/`](../chunks/future/0060-quickbooks-integration/intent.md))
+> **Not needed for launch:** QuickBooks (one-time dealer import — see [`../chunks/0060-quickbooks-integration/`](../chunks/0060-quickbooks-integration/intent.md))
 > and the shareable Google Sheet (deferred — see [`../chunks/future/0058-production-sheet-and-date-range/`](../chunks/future/0058-production-sheet-and-date-range/plan.md)).
 > Skip those for now.
 
@@ -166,11 +166,11 @@ domain (needed by Resend).
 2. Grant the developer access to add records, **or** be available to paste in the records they send you.
 
 **Developer does**
-- Points a subdomain (planned: **`events.salesability.ca`**) at the deployed app, and adds the Resend
+- Points a subdomain (planned: **`eventpro.salesability.ca`**) at the deployed app, and adds the Resend
   verification records from §2.
 
 **Hand back to the developer:**
-- The agreed app address → `SITE_URL` (e.g. `https://events.salesability.ca`)
+- The agreed app address → `SITE_URL` (e.g. `https://eventpro.salesability.ca`)
 - DNS access (or a quick turnaround when records need adding)
 
 ---
@@ -191,7 +191,7 @@ When the accounts exist, the developer needs these collected (secrets via passwo
 - [ ] Resend: API key, verified from-address — **domain verified?**
 - [ ] BoldSign: API key, **region chosen (Canada?)**
 - [ ] Google Cloud: project ID, developer added to IAM, billing active, consent-screen name/email
-- [ ] Domain: agreed app address (`events.salesability.ca`), DNS access
+- [ ] Domain: agreed app address (`eventpro.salesability.ca`), DNS access
 - [ ] Confirm **2FA is on** for every account above
 
 Once these are in hand, the developer runs the database migrations, deploys to Cloud Run, points the domain,

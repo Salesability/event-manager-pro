@@ -111,7 +111,7 @@ Per `docs/chunks/closed/0001-port-stack-analysis/notes.md`, work is sequenced as
 1. ✅ **App shell + auth + Postgres tables** — scaffold (`docs/chunks/closed/0002-nextjs-scaffold/`), auth (`docs/chunks/closed/0003-supabase-auth/`), schema (in flight, see [data-model.md](data-model.md)).
 2. **One-time Sheets → Postgres import** — TS script reading legacy ranges via existing API key, fanning out into `clients` + `contacts` etc.
 3. **Port the three views** — lists, production, calendar (calendar last; reuse the legacy ribbon-packing algorithm).
-4. **Cutover** — point `events.salesability.ca` at the new deploy; Sheets becomes read-only archive.
+4. **Cutover** — point `eventpro.salesability.ca` at the new deploy; Sheets becomes read-only archive.
 5. **New surface** — Quote (PDF + email) → Contract (BoldSign send + webhook → store signed PDF) → Invoice (Stripe Invoice from quote) → Payment-received webhook flips event to "Paid."
 6. **Rotate compromised secrets** — `API_KEY`, `HELLOSIGN_API_KEY`; lock the legacy spreadsheet.
 

@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-04 — new-app go-live domain set to `eventpro.salesability.ca`
+
+- Owner chose `eventpro.salesability.ca` (not the legacy `events.salesability.ca`) as the production web address for this Cloud Run app, so the legacy Netlify app can keep `events.salesability.ca` until/if it's retired.
+- Updated [go-live-accounts.md](go-live-accounts.md) (at-a-glance Domain row, §5 planned subdomain, hand-back app-address + checklist) and [architecture.md](architecture.md) (migration-roadmap cutover step) accordingly; also flipped the `PROD_SITE_URL` comment in `.env.production.local`.
+- Legacy-app references to `events.salesability.ca` (strategy/roadmap.md, closed/0001 + 0004 chunks, this log's history) left as-is — they correctly record the old app's live URL. Custom-domain mapping not yet wired (service still on its `…run.app` URL).
+
 ## 2026-06-01 — Quote composer: calculator → SKU line-item picker (0062)
 
 - [architecture.md](architecture.md) — rewrote "Quote composer" from **calculator** to **SKU line-item picker**: the coach picks SKUs from `service_items`, sets qty + per-quote price (catalogue-seeded, editable); picked lines are the source of truth. New pricing surface (`computePickedTotals`/`validatePickedLines`/`effectiveUnit`), the `lines`-payload write path (delete-and-insert `quote_line_items`), and the `render-lines.ts` subquery the PDF paths read from. History blockquote records the reversal of the 0035 calculator decision.
