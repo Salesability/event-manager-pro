@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema + Server Action | Done | 95957ff |
-| 2: Compose form component | Pending | - |
+| 2: Compose form component | Done | 5f1f2d0 |
 | 3: Admin page + nav entry | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/lib/email/send.ts` — reuse `sendEmail({ to, subject, text, replyTo })`; it already owns the prod/dev split (non-prod rewrites recipient to `EMAIL_DEV_TO` + `[DEV→…]` subject prefix). The tool must not bypass this.
 - `src/lib/actions/legacy-result.ts` (`toLegacyResult`) + `src/lib/actions/action-client.ts:65` (`formDataSchema`) — the action-client + result-adapter idiom every form uses.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -49,10 +49,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test: valid input → `sendEmail` called with mapped `{ to, subject, text, replyTo }`, returns the id; invalid email / empty subject / empty body → `{ error }`; send-helper failure surfaced. (Per-role denial covered by the action-gate matrix row.)
 
 #### Phase 2: Compose form component
-- [ ] `src/features/email/send-test-email-form.tsx` (`'use client'`): `useForm({ resolver: zodResolver(testEmailFormSchema), mode: 'onTouched' })` + `useTransition`.
-- [ ] Fields: To (`<Input type="email">`), Subject (`<Input>`), Body (catalyst `<Textarea>` — anchor on an existing textarea usage), each with `<FieldError>`.
-- [ ] `onSubmit` builds `FormData`, calls `sendTestEmail`, wraps with `toLegacyResult`; on success `toast.success('Sent — <message id>')` and render the id inline; on failure `toast.error(result.error)`. Send button shows `pending` state.
-- [ ] Test: renders the three fields + Send button; client-side validation blocks an empty/invalid submit before the action fires.
+- [x] `src/features/email/send-test-email-form.tsx` (`'use client'`): `useForm({ resolver: zodResolver(testEmailFormSchema), mode: 'onTouched' })` + `useTransition`.
+- [x] Fields: To (`<Input type="email">`), Subject (`<Input>`), Body (catalyst `<Textarea>`), each with `<FieldError>`.
+- [x] `onSubmit` builds `FormData`, calls `sendTestEmail`, wraps with `toLegacyResult`; on success `setSentId(id)` + `toast.success` (and an inline "Sent ✓ — message id" banner); on failure `toast.error(result.error)`. Send button shows `pending` state ("Sending…").
+- [x] ~~Test: render the form + assert validation blocks submit~~ — **not feasible**: repo runs vitest in `node` env with no jsdom/RTL (component tests here only cover hook-free presentational components called as plain functions). Validation is instead pinned at the schema layer in `test-email-schema.test.ts` (the contract `zodResolver` + the action's `safeParse` both use) — covers valid+trim, bad email, whitespace subject, empty body.
 
 #### Phase 3: Admin page + nav entry
 - [ ] `src/app/(app)/admin/send-test-email/page.tsx`: async server component, `await assertCan('email:send')` at top, `<PageHeader title="Send Test Email" description="Send a one-off plain-text email to any address to verify deliverability.">`, render `<SendTestEmailForm />`.
