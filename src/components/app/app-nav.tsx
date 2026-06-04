@@ -37,6 +37,7 @@ const OPERATIONAL_TABS: readonly Tab[] = [
 const ADMIN_TABS: readonly Tab[] = [
   { href: '/admin/people', label: 'Contacts' },
   { href: '/admin/lookups', label: 'Lookups' },
+  { href: '/admin/send-test-email', label: 'Send Test Email' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
