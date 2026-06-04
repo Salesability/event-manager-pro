@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema + Server Action | Done | 95957ff |
 | 2: Compose form component | Done | 5f1f2d0 |
-| 3: Admin page + nav entry | Pending | - |
+| 3: Admin page + nav entry | Done | 30dbdce |
 | 4: Tests + smoke verification | Pending | - |
 
 A standalone admin **Send Test Email** page: a free-compose form (To / Subject / Body) gated by `email:send` that calls a thin Server Action over the existing `sendEmail()` helper. Its job is **deliverability verification** — prove the system sends a real email to a chosen address and surface the Resend message id (or the error) in the UI. "Done" = an admin can load the page, send themselves a message, see it arrive, and the page reports the outcome — with no new schema, no new capability, and no bypass of the non-prod dev-redirect gate.
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/lib/email/send.ts` — reuse `sendEmail({ to, subject, text, replyTo })`; it already owns the prod/dev split (non-prod rewrites recipient to `EMAIL_DEV_TO` + `[DEV→…]` subject prefix). The tool must not bypass this.
 - `src/lib/actions/legacy-result.ts` (`toLegacyResult`) + `src/lib/actions/action-client.ts:65` (`formDataSchema`) — the action-client + result-adapter idiom every form uses.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -55,9 +55,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] ~~Test: render the form + assert validation blocks submit~~ — **not feasible**: repo runs vitest in `node` env with no jsdom/RTL (component tests here only cover hook-free presentational components called as plain functions). Validation is instead pinned at the schema layer in `test-email-schema.test.ts` (the contract `zodResolver` + the action's `safeParse` both use) — covers valid+trim, bad email, whitespace subject, empty body.
 
 #### Phase 3: Admin page + nav entry
-- [ ] `src/app/(app)/admin/send-test-email/page.tsx`: async server component, `await assertCan('email:send')` at top, `<PageHeader title="Send Test Email" description="Send a one-off plain-text email to any address to verify deliverability.">`, render `<SendTestEmailForm />`.
-- [ ] Add `{ href: '/admin/send-test-email', label: 'Send Test Email' }` to `ADMIN_TABS` in `src/components/app/app-nav.tsx:37`.
-- [ ] Confirm the route is admin-gated (route-level `assertCan` is the real enforcement; nav entry is inside the `isAdmin` dropdown).
+- [x] `src/app/(app)/admin/send-test-email/page.tsx`: async server component, `await assertCan('email:send')` at top, `<PageHeader title="Send Test Email" description="Send a one-off plain-text email to any address to verify deliverability.">`, render `<SendTestEmailForm />`.
+- [x] Add `{ href: '/admin/send-test-email', label: 'Send Test Email' }` to `ADMIN_TABS` in `src/components/app/app-nav.tsx`.
+- [x] Confirm the route is admin-gated — **two layers**: middleware `ADMIN_PATHS = ['/admin', …]` prefix-matches `/admin/send-test-email` (`src/lib/supabase/middleware.ts:14,21`), plus page-level `assertCan('email:send')`. Nav entry sits inside the `isAdmin`-only dropdown.
 
 #### Phase 4: Tests + smoke verification
 - [ ] Action unit tests green (Phase 1) + schema rejects bad email / empty subject / empty body.
