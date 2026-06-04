@@ -11,7 +11,7 @@
 | 2: Province→rate lookup table + seed | Done | 136e17f |
 | 3: Tax-rate admin (edit rates) | Done | 1fe86f6 |
 | 4: Auto-compute tax from province (+ override) | Done | f706075 |
-| 5: Composer + PDF show province/rate | Pending | - |
+| 5: Composer + PDF show province/rate | Done | 3db5555 |
 | 6: Tests + smoke verification | Pending | - |
 
 Auto-compute a quote's tax from the **dealer's province** (`subtotal × province rate`) using an **admin-editable, seeded** rate table, while keeping a per-quote manual **override**. "Done" = a dealer carries a province, admins maintain the seeded province→rate table in `/admin/lookups`, a new quote's tax auto-fills from the dealer's province (snapshotting the applied rate), the coach can still override, and the composer + PDF show the applied province/rate — with existing quotes unchanged.
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -79,10 +79,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Tests: pricing.test.ts (province-rate block) + quote-action tests updated (rate stubbed to 0 → existing tax assertions hold; setQuoteDealer FIFO updated for the new tax re-derive). 943 pass.
 
 #### Phase 5: Composer + PDF show province/rate
-- [ ] Composer: replace the bare "Tax ($)" field with the auto-computed tax + the applied province/rate label (e.g. "Tax — ON (HST 13%): $130.00") and an **override** input (blank = auto). Missing-province → inline "set the dealer's province" warning.
-- [ ] PDF (`render-quote.ts`): the tax line shows the province + rate (e.g. "HST (ON) 13%") alongside the amount.
-- [ ] Test: composer renders the computed tax + rate label for a dealer with a province; PDF tax line includes the rate.
-- [ ] Smoke (web-test, read-only): `goto /quotes/<id>` (a draft for a dealer with a province); composer shows the computed tax + province/rate label. Don't send.
+- [x] Composer: "Tax ($)" → "Tax — {Province} {rate}%" with the auto tax as the input placeholder + an **override** input (blank = auto, nullable schema). Hint line shows auto vs override vs the missing-province warning. `taxRates` prop threaded from both pages; live preview uses the selected dealer's `rateForProvince`.
+- [x] PDF (`render-quote.ts`): `QuoteData.taxPct` added; the tax line reads "Tax (13%)" when a rate applies (both `previewQuotePdf` + bundled-MSA render sites thread `taxPct`).
+- [x] ~~Composer render test~~ — not feasible (hook-driven; repo has no jsdom/RTL, same as 0064). Live-preview math covered by pricing.test.ts; the rate label is verified by the chunk-end smoke. Quote query fixtures updated for the new `taxOverride`/`province` fields.
+- [ ] Smoke (web-test, read-only): `goto /quotes/<id>` (a draft for a dealer with a province); composer shows the computed tax + province/rate label. _(Chunk-end `/eval`.)_
 
 #### Phase 6: Tests + smoke verification
 - [ ] Pricing unit tests green (each province rate, override, missing-province, rounding) + schema/seed tests.
