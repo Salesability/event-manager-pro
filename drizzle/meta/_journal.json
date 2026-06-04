@@ -183,6 +183,13 @@
       "when": 1780334030204,
       "tag": "0025_drop_quotes_line_items_jsonb",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1780602341087,
+      "tag": "0026_melted_veda",
+      "breakpoints": true
     }
   ]
 }

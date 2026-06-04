@@ -1,0 +1,2 @@
+CREATE TYPE "public"."ca_province" AS ENUM('AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT');--> statement-breakpoint
+ALTER TABLE "dealers" ADD COLUMN "province" "ca_province";

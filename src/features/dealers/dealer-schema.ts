@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CA_PROVINCE_CODES } from '@/lib/ca-provinces';
 
 // Single source of truth for dealer-form validation. Imported by both the
 // client component (`dealer-form.tsx` via `zodResolver`) and the Server Action
@@ -28,6 +29,13 @@ export const dealerFormSchema = z.object({
     .optional(),
   contactPhone: z.string().trim().optional(),
   address: z.string().trim().optional(),
+  // CA province/territory (0065). Accepts a code or '' (= unset/clear); the
+  // form's select submits '' for the "no province" option. Stored nullable.
+  province: z
+    .union([z.enum(CA_PROVINCE_CODES), z.literal('')], {
+      error: 'Invalid province.',
+    })
+    .optional(),
   status: z
     .enum(['active', 'prospect'], { error: 'Invalid dealer status.' })
     .optional(),

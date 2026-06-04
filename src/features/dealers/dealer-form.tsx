@@ -14,6 +14,7 @@ import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
+import { CA_PROVINCES } from '@/lib/ca-provinces';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
@@ -44,6 +45,7 @@ function valuesToFormData(values: DealerFormValues, id?: number): FormData {
   fd.set('contactEmail', values.contactEmail ?? '');
   fd.set('contactPhone', values.contactPhone ?? '');
   fd.set('address', values.address ?? '');
+  fd.set('province', values.province ?? '');
   // status is `'active' | 'prospect' | undefined` per the schema, but the form's
   // defaultValues always seed a definite value and the native <select> can't
   // unset it — the `??` keeps TS happy without changing runtime behaviour.
@@ -91,6 +93,7 @@ export function DealerForm({
       contactEmail: dealer?.primaryEmail ?? '',
       contactPhone: dealer?.primaryPhone ?? '',
       address: dealer?.address ?? '',
+      province: dealer?.province ?? '',
       // create-only hint: the composer's inline-prospect path forces
       // 'prospect' here; edit mode honours the existing row's status.
       status:
@@ -176,6 +179,25 @@ export function DealerForm({
         <Field>
           <Label htmlFor="df-address">Address</Label>
           <Input id="df-address" type="text" {...register('address')} />
+        </Field>
+
+        <Field>
+          <Label htmlFor="df-province">Province</Label>
+          {/* Native select — same rationale as the status select below. Drives
+              province-based sales tax on quotes (0065). */}
+          <select
+            id="df-province"
+            className="h-8 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm"
+            {...register('province')}
+          >
+            <option value="">— Select province —</option>
+            {CA_PROVINCES.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <Description>Used to calculate sales tax on quotes.</Description>
         </Field>
 
         {!hideStatusSelect && (

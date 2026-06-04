@@ -2,6 +2,7 @@ import 'server-only';
 import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { formatYearMonth } from '@/lib/dates';
+import type { CaProvinceCode } from '@/lib/ca-provinces';
 import {
   availabilityBlocks,
   billingAdjustments,
@@ -20,6 +21,8 @@ export type Dealer = {
   publicId: string;
   name: string;
   address: string | null;
+  /** CA province/territory, or null if not yet set. Drives quote sales tax (0065). */
+  province: CaProvinceCode | null;
   status: 'prospect' | 'active';
   acquiredVia: string | null;
   /** ISO timestamp when archived, else null. Surfaced for the /dealerships
@@ -201,6 +204,7 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       publicId: dealers.publicId,
       name: dealers.name,
       address: dealers.address,
+      province: dealers.province,
       status: dealers.status,
       acquiredVia: dealers.acquiredVia,
       archivedAt: dealers.archivedAt,
@@ -223,6 +227,7 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       publicId: r.publicId,
       name: r.name,
       address: r.address,
+      province: r.province,
       status: r.status,
       acquiredVia: r.acquiredVia,
       archivedAt: r.archivedAt,
@@ -254,6 +259,7 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
       publicId: dealers.publicId,
       name: dealers.name,
       address: dealers.address,
+      province: dealers.province,
       status: dealers.status,
       acquiredVia: dealers.acquiredVia,
       archivedAt: dealers.archivedAt,
@@ -273,6 +279,7 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
     publicId: row.publicId,
     name: row.name,
     address: row.address,
+    province: row.province,
     status: row.status,
     acquiredVia: row.acquiredVia,
     archivedAt: row.archivedAt,

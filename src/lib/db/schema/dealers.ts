@@ -1,4 +1,5 @@
 import { index, pgEnum, pgTable, text } from 'drizzle-orm/pg-core';
+import { CA_PROVINCE_CODES } from '@/lib/ca-provinces';
 import { actors, archivable, bigIdentity, timestamps } from './_columns';
 
 // `prospect` = a quote drafted, no signed relationship yet. `active` = quote
@@ -7,6 +8,10 @@ import { actors, archivable, bigIdentity, timestamps } from './_columns';
 // 0035 plan Open Question #1).
 export const dealerStatus = pgEnum('dealer_status', ['prospect', 'active']);
 
+// Canada's province/territory (0065) — drives province-based sales-tax
+// computation on quotes. Code list is shared from `@/lib/ca-provinces`.
+export const caProvince = pgEnum('ca_province', CA_PROVINCE_CODES);
+
 export const dealers = pgTable(
   'dealers',
   {
@@ -14,6 +19,9 @@ export const dealers = pgTable(
     publicId: text('public_id').notNull().unique(),
     name: text('name').notNull(),
     address: text('address'),
+    // Nullable: existing dealers are backfilled by admins. Drives sales-tax
+    // computation (0065) via the `tax_rates` lookup.
+    province: caProvince('province'),
     status: dealerStatus('status').notNull().default('active'),
     // Free-form acquisition source — "Book Your Event form", "referral",
     // "outbound", "trade show". Distinct from `audience_sources` (per-campaign

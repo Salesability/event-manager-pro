@@ -136,6 +136,7 @@ export const createDealer = capabilityClient('dealer:create')
             publicId: generatePublicId(),
             name,
             address: address || null,
+            province: v.province || null,
             status,
             acquiredVia: acquiredVia as string | null,
             createdById: userId,
@@ -229,6 +230,12 @@ export const updateDealer = capabilityClient('dealer:edit')
     const acquiredViaPatch: string | null | undefined = formData.has('acquiredVia')
       ? (v.acquiredVia ?? '') || null
       : undefined;
+    // Province is a patch: present (form always submits the select) → set the
+    // code, or clear to null when the "none" option ('') is chosen; absent →
+    // preserve. Drives quote sales tax (0065).
+    const provincePatch = formData.has('province')
+      ? (v.province || null)
+      : undefined;
 
     const dealerPatch: Record<string, unknown> = {
       name,
@@ -237,6 +244,7 @@ export const updateDealer = capabilityClient('dealer:edit')
     };
     if (statusPatch !== undefined) dealerPatch.status = statusPatch;
     if (acquiredViaPatch !== undefined) dealerPatch.acquiredVia = acquiredViaPatch;
+    if (provincePatch !== undefined) dealerPatch.province = provincePatch;
 
   let notFound = false;
   try {
