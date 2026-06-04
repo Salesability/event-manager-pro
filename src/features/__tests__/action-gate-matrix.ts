@@ -16,6 +16,7 @@ import * as emailActions from '@/features/email/actions';
 import * as quotesActions from '@/features/quotes/actions';
 import * as reportsActions from '@/features/reports/actions';
 import * as servicesActions from '@/features/services/actions';
+import * as taxRatesActions from '@/features/tax-rates/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
 
@@ -222,6 +223,14 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => servicesActions.archiveServiceItem(fd()),
     expectedByRole: ADMIN_ONLY,
     note: 'lookup:edit — admin-only',
+  },
+
+  // ---- Sales tax rates (1) — admin-only (lookup:edit) -------------------
+  {
+    label: 'updateTaxRate',
+    invoke: () => taxRatesActions.updateTaxRate(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'lookup:edit — admin-only (0065 province sales-tax-rate editor)',
   },
 
   // ---- Email send (4) — admin-only --------------------------------------

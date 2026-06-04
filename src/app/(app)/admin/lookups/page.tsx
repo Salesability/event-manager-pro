@@ -4,13 +4,16 @@ import { LookupAdmin } from '@/features/schedule/lookup-admin';
 import { loadCampaignStyles, loadAudienceSources } from '@/features/schedule/queries';
 import { ServicesAdmin } from '@/features/services/services-admin';
 import { loadServiceItems } from '@/features/services/queries';
+import { TaxRatesAdmin } from '@/features/tax-rates/tax-rates-admin';
+import { loadTaxRates } from '@/features/tax-rates/queries';
 
 export default async function LookupsPage() {
   await assertCan('admin:access'); // expected: server-only
-  const [styles, sources, services] = await Promise.all([
+  const [styles, sources, services, taxRates] = await Promise.all([
     loadCampaignStyles(),
     loadAudienceSources(),
     loadServiceItems(),
+    loadTaxRates(),
   ]);
 
   return (
@@ -26,6 +29,8 @@ export default async function LookupsPage() {
       </div>
 
       <ServicesAdmin items={services} />
+
+      <TaxRatesAdmin items={taxRates} />
     </div>
   );
 }
