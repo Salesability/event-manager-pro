@@ -10,7 +10,7 @@
 | 1: Dealer `province` field | Done | 0315ebd |
 | 2: Province→rate lookup table + seed | Done | 136e17f |
 | 3: Tax-rate admin (edit rates) | Done | 1fe86f6 |
-| 4: Auto-compute tax from province (+ override) | Pending | - |
+| 4: Auto-compute tax from province (+ override) | Done | f706075 |
 | 5: Composer + PDF show province/rate | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -44,7 +44,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Money convention: amounts are `numeric(X,2)` decimal dollars, stringified on read, `toFixed(2)` on write, `roundCents()` guards IEEE-754 drift. The new rate column is `numeric(6,3)` (percent, holds 14.975).
 - Place-of-supply: tax keys off the **dealer's** province, not the event location (see intent Non-goals).
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -72,11 +72,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Smoke (web-test): `goto /admin/lookups`; "Sales Tax Rates" section lists rows incl. Ontario 13.000 + Quebec 14.975 with a rate input + Save. _(Chunk-end `/eval`.)_
 
 #### Phase 4: Auto-compute tax from province (+ override)
-- [ ] Invoke `db-conventions`. Widen `quotes.tax_pct` → `numeric(6,3)`; add nullable `quotes.tax_override numeric(12,2)` (blank = auto). Migration; backfill `tax_override = tax` for existing quotes so nothing recomputes (preserve history). Verify journal `when`.
-- [ ] Extend `computePickedTotals` (pricing.ts): tax = `override ?? roundCents(subtotal × ratePct / 100)`; `total = subtotal + tax`. Keep `roundCents`.
-- [ ] Wire auto-compute into the quote actions: on `createQuote` / `setQuoteDealer` / line-change, look up the dealer's province → `taxRateForProvince` → snapshot `tax_pct` + recompute `tax`/`total`. Missing province → $0 tax + a surfaced warning (per intent open-question lean).
-- [ ] `setQuoteTax` becomes the **override** setter (writes `tax_override`; clearing it reverts to auto).
-- [ ] Test: ON quote (subtotal 1000) → tax 130.00; QC → 149.75; override 50 → tax 50.00; dealer with no province → tax 0 + warning; rounding (roundCents) holds.
+- [x] Widened `quotes.tax_pct` → `numeric(6,3)` (default 0); added nullable `quotes.tax_override numeric(12,2)`. Migration `0028_wandering_raza.sql` + backfill `UPDATE quotes SET tax_override = tax` (locks existing quotes). Journal `when` ok.
+- [x] `computePickedTotals(lines, { ratePct, override })`: tax = `override ?? roundCents(subtotal × ratePct/100)`. pricing.test.ts covers ON→130, QC→149.75, override-wins, rate-0→0, override-0-honored, rounding.
+- [x] Wired into `createQuote`, `applyPickerSave` (line-change), `setQuoteTax`, `setQuoteDealer`: `dealerTaxRatePct(dealerId)` (moved to `tax-rates/queries.ts`, mockable) → snapshot `tax_pct` + recompute `tax`/`total`. Missing province → rate 0 → $0 (warning surfaced in the composer, Phase 5).
+- [x] `setQuoteTax` is now the **override** setter (`parseTaxOverride`: blank → clears `tax_override` → auto; value → override).
+- [x] Tests: pricing.test.ts (province-rate block) + quote-action tests updated (rate stubbed to 0 → existing tax assertions hold; setQuoteDealer FIFO updated for the new tax re-derive). 943 pass.
 
 #### Phase 5: Composer + PDF show province/rate
 - [ ] Composer: replace the bare "Tax ($)" field with the auto-computed tax + the applied province/rate label (e.g. "Tax — ON (HST 13%): $130.00") and an **override** input (blank = auto). Missing-province → inline "set the dealer's province" warning.
