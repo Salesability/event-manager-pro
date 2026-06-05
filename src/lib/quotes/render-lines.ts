@@ -1,7 +1,6 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { sql } from 'drizzle-orm';
-import { quotes } from '@/lib/db/schema';
 import type { QuoteLineItem } from '@/lib/pdf/render-quote';
 
 // 0062 Phase 7: the quote's line items live in `quote_line_items` (the former
@@ -36,7 +35,13 @@ export const renderLinesColumn = sql<RenderLineRow[]>`(
     '[]'::jsonb
   )
   from quote_line_items li
-  where li.quote_id = ${quotes.id}
+  -- Correlate to the OUTER quotes row. NB: write the qualified column literally
+  -- rather than interpolating \${quotes.id} — Drizzle renders a Column embedded
+  -- in this module-level sql template as bare "id" (unqualified), which inside
+  -- this subquery binds to quote_line_items.id (it also has an id column), so
+  -- the correlation silently became li.quote_id = li.id and the PDF dropped
+  -- every line whose row id ≠ its quote_id. (Bugfix 2026-06-05.)
+  where li.quote_id = "quotes"."id"
 )`;
 
 // Map the subquery rows to the PDF renderer's shape: the SKU label is the line
