@@ -82,3 +82,27 @@ name+address, contacts on the email/phone unique index; nothing duplicates).
 - **`Missing env`** — one of `QBO_ACCESS_TOKEN` / `QBO_REALM_ID` / `DATABASE_URL` is unset.
 - **Fewer dealers than expected** — check the "skipping N sub-customers/jobs" line; v1 flattens those out.
   Re-run with `QBO_INCLUDE_INACTIVE=1` if some are marked inactive in QBO.
+
+## Executed — 2026-06-05 (one-time seed, PRODUCTION)
+
+Ran against prod (`eventpro-498313` / `database-url-production`, session pooler `:5432`) via
+`./scripts/with-prod-db.sh`. Pre-flight: live QBO re-export was byte-identical to the approved
+`qbo-import-preview.csv`; dry-run clean; prod had 0 prior QuickBooks-import dealers (fresh seed).
+
+**Result:** 146 customers fetched → **137 dealers inserted** (0 reused), **133 staff links**, 4 dealers
+without a contact, 4 dropped channels (company email/phone, no person). 130 dealers carry a CA province,
+7 imported province-less. The 133 links resolve to 119 distinct contacts — 13 reps are shared across >1
+dealer (the email/phone unique index deduped people across dealerships).
+
+**Dedup added before the run:** `Palmers Motor Company*` (QBO Id 414) is a duplicate of `Palmers Motor
+Company` (Id 397) — same contact + email. Added to `DEDUP_NAMES` in the script; the asterisked record is
+skipped, the canonical one kept. (Palmers is a UK dealer, intentionally retained with no CA province.)
+
+**Manual follow-ups in-app:**
+- Set province on the 6 CA dealers QBO had no subdivision for: Rallye Motors Nissan, Grand Falls Hyundai,
+  Porsche of Halifax, Charlottetown Mitsubishi, Sturgeon Falls Chrysler, Tantramar Chevrolet. (The 7th
+  province-less dealer is Palmers Motor Company — UK, correctly has none.)
+- Optionally add a staff contact to the 4 no-person dealers (Alan Ferguson, Browns VW, Exclusive Private
+  Sales, Kentville Mitsubishi) — their QBO email/phone had no person name so the channel was dropped.
+- `Bruce Hyundai`'s staff email identifier holds two comma-joined addresses
+  (`bdeveau@…,mlaffin@…`) straight from QBO — split into one primary if it matters for sending.
