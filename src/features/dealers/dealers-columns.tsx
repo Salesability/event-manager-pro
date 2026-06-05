@@ -81,9 +81,18 @@ export function buildDealersColumns(
       id: 'email',
       accessorFn: (d) => d.primaryEmail ?? '',
       header: 'Email',
+      // Catalyst's <Table> sets `whitespace-nowrap` table-wide, so without a
+      // width cap a long email (or address, below) stretches the table past the
+      // viewport and pushes Status + the row menu off-screen behind a horizontal
+      // scrollbar. Cap + truncate; full value on hover (`title`) and the detail page.
       cell: ({ row }) =>
         row.original.primaryEmail ? (
-          <span className="text-xs text-zinc-500">{row.original.primaryEmail}</span>
+          <span
+            className="block max-w-[14rem] truncate text-xs text-zinc-500"
+            title={row.original.primaryEmail}
+          >
+            {row.original.primaryEmail}
+          </span>
         ) : (
           <span className="text-xs text-zinc-500/70">—</span>
         ),
@@ -105,9 +114,16 @@ export function buildDealersColumns(
       id: 'address',
       accessorFn: (d) => d.address ?? '',
       header: 'Address',
+      // Capped + truncated for the same reason as Email above (table-wide
+      // `whitespace-nowrap`); full address on hover (`title`) and the detail page.
       cell: ({ row }) =>
         row.original.address ? (
-          <span className="text-xs text-zinc-500">{row.original.address}</span>
+          <span
+            className="block max-w-[16rem] truncate text-xs text-zinc-500"
+            title={row.original.address}
+          >
+            {row.original.address}
+          </span>
         ) : (
           <span className="text-xs text-zinc-500/70">—</span>
         ),
