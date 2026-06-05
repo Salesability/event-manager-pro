@@ -28,7 +28,10 @@ fi
 # like SERVICE_NAME / the DB secret: production ships to its own business-owned
 # GCP project so a stage deploy can never touch prod. Override with GCP_PROJECT_ID.
 PROJECT_ID="${GCP_PROJECT_ID:-}"
-REGION="${GCP_REGION:-northamerica-northeast1}"
+# Default to us-east4 — canonical prod Cloud Run lives there (the custom domain
+# eventpro.salesability.ca domain-maps to us-east4). The old northamerica-northeast1
+# default silently shipped to an orphaned Montreal service the domain ignores.
+REGION="${GCP_REGION:-us-east4}"
 SERVICE_ROLE_SECRET_NAME="${GCP_SERVICE_ROLE_SECRET:-supabase-service-role-key}"
 IMAGE_TAG="$(date -u +%Y%m%d-%H%M%S)"
 # SERVICE_NAME, IMAGE, PROD_SITE_URL, DB_SECRET_NAME are all keyed on
