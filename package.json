@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:prod": "./scripts/with-prod-db.sh drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:test:reset": "bash scripts/test-db/reset.sh",
     "db:test:up": "docker compose up -d",
