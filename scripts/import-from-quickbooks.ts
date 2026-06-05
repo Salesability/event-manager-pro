@@ -53,8 +53,9 @@ const SOURCE = 'quickbooks-import';
 // own company, and individuals. The one-time seed wants real dealer customers
 // only, so these are skipped (matched case-insensitively on the customer's
 // display/company name). Edit this list if the QBO customer list changes before
-// a re-run. Note: this does NOT cover the UK "Palmers Motor Company" — that's a
-// dealer (just out-of-country), left in unless told otherwise.
+// a re-run. The UK "Palmers Motor Company" IS a dealer (just out-of-country) and
+// is kept; its duplicate record "Palmers Motor Company*" is deduped via
+// DEDUP_NAMES below.
 const SKIP_NAMES = new Set(
   [
     'Salesability Canada Inc.',
@@ -66,6 +67,12 @@ const SKIP_NAMES = new Set(
     'Lawyer',
   ].map((s) => s.toLowerCase()),
 );
+
+// Exact QBO duplicate records to drop, keeping the canonical row. Matched
+// case-insensitively on name. "Palmers Motor Company*" (QBO Id 414) duplicates
+// "Palmers Motor Company" (Id 397) — same contact, same email; keep the unmarked
+// canonical name and drop the asterisked one.
+const DEDUP_NAMES = new Set(['Palmers Motor Company*'].map((s) => s.toLowerCase()));
 
 // ---------- config ----------
 
@@ -379,6 +386,9 @@ function buildCsv(mapped: DealerImport[]): string {
     } else if (SKIP_NAMES.has(d.name.toLowerCase())) {
       decision = 'skip';
       reason = 'non-dealer (vendor / individual / Salesability)';
+    } else if (DEDUP_NAMES.has(d.name.toLowerCase())) {
+      decision = 'skip';
+      reason = 'duplicate (deduped — keep canonical Palmers Motor Company)';
     }
     return [
       decision,
@@ -410,9 +420,16 @@ async function main() {
 
   const mapped = customers.map(mapCustomer).filter((d) => d.name);
   const jobs = mapped.filter((d) => d.isJob);
-  const skipped = mapped.filter((d) => !d.isJob && SKIP_NAMES.has(d.name.toLowerCase()));
+  const skipped = mapped.filter(
+    (d) =>
+      !d.isJob &&
+      (SKIP_NAMES.has(d.name.toLowerCase()) || DEDUP_NAMES.has(d.name.toLowerCase())),
+  );
   const dealersToImport = mapped.filter(
-    (d) => !d.isJob && !SKIP_NAMES.has(d.name.toLowerCase()),
+    (d) =>
+      !d.isJob &&
+      !SKIP_NAMES.has(d.name.toLowerCase()) &&
+      !DEDUP_NAMES.has(d.name.toLowerCase()),
   );
   const nameless = mapped.length - mapped.filter((d) => d.name).length;
   if (nameless > 0) console.log(`  (${nameless} customers had no usable name — skipped)`);
@@ -422,7 +439,7 @@ async function main() {
   }
   if (skipped.length > 0) {
     console.log(
-      `  Skipping ${skipped.length} non-dealer customers (vendors / Salesability / individuals):`,
+      `  Skipping ${skipped.length} non-dealer / duplicate customers (vendors / Salesability / individuals / dedupes):`,
     );
     for (const s of skipped) console.log(`    - ${s.name} (QBO Id ${s.qboId})`);
   }
