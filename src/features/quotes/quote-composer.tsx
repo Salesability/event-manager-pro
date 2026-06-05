@@ -676,34 +676,72 @@ export function QuoteComposer({
             ) : null}
           </Field>
           <Field>
-            <Label htmlFor="qf-tax">
-              Tax
-              {selectedDealer?.province
-                ? ` — ${CA_PROVINCE_NAMES[selectedDealer.province]} ${ratePct}%`
-                : ''}
-            </Label>
-            <input
-              id="qf-tax"
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder={
-                selectedDealer?.province
-                  ? fmtMoney(computed.ok ? computed.out.tax : 0)
-                  : ''
-              }
-              className="w-40 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-              {...register('taxOverride', {
-                setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
-              })}
-            />
-            <span className={labelClass}>
-              {!selectedDealer?.province
-                ? 'Set the dealer’s province to calculate sales tax.'
-                : watched.taxOverride != null
-                  ? 'Manual override — clear the field to use the province rate.'
-                  : `Auto: ${CA_PROVINCE_NAMES[selectedDealer.province]} ${ratePct}%.`}
-            </span>
+            <Label htmlFor="qf-tax">Tax</Label>
+            {!selectedDealer?.province ? (
+              // No province → nothing to compute; point the coach at the fix.
+              <span className={labelClass}>
+                Set the dealer’s province to calculate sales tax.
+              </span>
+            ) : watched.taxOverride != null ? (
+              // Override mode: an editable amount, seeded from the auto value,
+              // with an explicit path back to the province rate.
+              <div className="flex flex-col gap-1">
+                <input
+                  id="qf-tax"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-40 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  {...register('taxOverride', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                />
+                <span className={labelClass}>
+                  Manual override.{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-brand-600 underline hover:text-brand-700"
+                    onClick={() =>
+                      form.setValue('taxOverride', null, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                  >
+                    Use {CA_PROVINCE_NAMES[selectedDealer.province]} {ratePct}% (
+                    {fmtMoney(computed.ok ? computed.out.tax : 0)})
+                  </button>
+                </span>
+              </div>
+            ) : (
+              // Auto mode: show the computed tax as a real value (not a ghost
+              // placeholder) + an explicit Override affordance that seeds the
+              // input with the current amount.
+              <div className="flex items-center gap-2">
+                <span
+                  id="qf-tax"
+                  className="text-sm font-semibold tabular-nums text-zinc-800"
+                >
+                  {fmtMoney(computed.ok ? computed.out.tax : 0)}
+                </span>
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
+                  auto · {CA_PROVINCE_NAMES[selectedDealer.province]} {ratePct}%
+                </span>
+                <button
+                  type="button"
+                  className="text-xs font-medium text-brand-600 underline hover:text-brand-700"
+                  onClick={() =>
+                    form.setValue(
+                      'taxOverride',
+                      computed.ok ? computed.out.tax : 0,
+                      { shouldDirty: true, shouldValidate: true },
+                    )
+                  }
+                >
+                  Override
+                </button>
+              </div>
+            )}
             {errors.taxOverride?.message ? (
               <FieldError>{errors.taxOverride.message}</FieldError>
             ) : null}
