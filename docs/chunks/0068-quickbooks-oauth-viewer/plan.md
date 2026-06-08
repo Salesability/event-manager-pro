@@ -8,8 +8,8 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Connection storage + token crypto (db-conventions) | Done | `177ebfa` |
-| 2: OAuth connect / callback / refresh / disconnect + config | Done | - |
-| 3: Admin viewer page (read + display) + nav item | Pending | - |
+| 2: OAuth connect / callback / refresh / disconnect + config | Done | `a678ca6` |
+| 3: Admin viewer page (read + display) + nav item | Done | - |
 | 4: Tests + smoke verification | Pending | - |
 
 The in-app OAuth slice 0060 deferred: an admin connects QuickBooks (sandbox) from **Admin → QuickBooks**, the
@@ -28,6 +28,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 | `src/app/auth/quickbooks/callback/route.ts` (code→token exchange) | `src/app/auth/callback/route.ts:17,29` | OAuth-code-exchange route handler — `resolveOrigin` + `GET`, read `code`/`state`/`realmId`, redirect back on success/error. |
 | `src/features/quickbooks/actions.ts` (connect-initiation, disconnect) | `src/features/auth/actions.ts:13,36` | Admin-gated Server Action that builds an OAuth authorize redirect via the `siteUrl()` helper. |
 | `src/app/(app)/admin/quickbooks/page.tsx` + feature component | `src/app/(app)/admin/send-test-msa/page.tsx:9` | Admin page shell: `await assertCan('admin:access')` → `PageHeader` + feature component. |
+| `src/features/quickbooks/quickbooks-admin.tsx` (viewer UI) | `src/features/msa/send-test-msa-form.tsx` (admin feature component) + catalyst `Table`/`Button`/`Badge` | Server component using `<form action={serverAction}>` (no client JS); catalyst design-system table for the customer list. |
 | nav item in `src/components/app/app-nav.tsx` | `src/components/app/app-nav.tsx:41` (`Send Test MSA` tab) | New sibling `ADMIN_TABS` entry `{ href: '/admin/quickbooks', label: 'QuickBooks' }`. |
 | secret wiring in `deploy.sh` | `deploy.sh:207` (`ensure_secret boldsign-api-key`) | Sibling `ensure_secret` lines for `qbo-client-id` / `qbo-client-secret` / `qbo-token-enc-key`. |
 
@@ -37,7 +38,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - `db-conventions` skill — **invoke before** writing the schema file + migration (Phase 1). ID/type defaults, audit columns, direct-vs-pooled migration rule.
 - `docs/chunks/0060-quickbooks-integration/research.md` — OAuth flow, `realmId` gotcha, token lifetimes/rotation, sandbox host; `scripts/import-from-quickbooks.ts` — the existing hand-rolled QBO fetch to lift.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -66,12 +67,11 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - [x] Tests (`client.test.ts`): authorize-URL params, exchange/refresh request shape (Basic-auth + body + rotation), `fetchCustomers` pagination/Bearer/sandbox-host/401→`QboAuthError`, `verifyState`. (`connection.test.ts`): `computeExpiry` + `accessTokenFresh`. (getValidAccessToken refresh-and-persist with a mocked DB is a Phase 4 unit.)
 
 #### Phase 3: Admin viewer page (read + display) + nav item
-- [ ] `src/app/(app)/admin/quickbooks/page.tsx` — `await assertCan('admin:access')`; if no connection → Connect button
-      (calls `connectQuickbooks`); if connected → status (realm, last-refresh), the customer list, and a Disconnect button.
-- [ ] Feature component(s) under `src/features/quickbooks/` render the connect/disconnect controls + the customer table
-      (company name, primary email/phone) from a server-side `fetchCustomers()` call. **No DB writes.**
-- [ ] Add `{ href: '/admin/quickbooks', label: 'QuickBooks' }` to `ADMIN_TABS` in `src/components/app/app-nav.tsx`.
-- [ ] Surface a friendly error state when the fetch 401s / connection is stale (prompt re-connect).
+- [x] `src/app/(app)/admin/quickbooks/page.tsx` — `await assertCan('admin:access')`; reads `getConnection()`, then for a
+      live connection calls `getValidAccessToken()` + `fetchCustomers()`; decodes `?connected=1` / `?error=…` into a notice.
+- [x] `src/features/quickbooks/quickbooks-admin.tsx` (server component) renders the connect/disconnect controls (`<form action={serverAction}>`, no client JS) + the customer table (company / email / phone) from the page's server-side fetch. **No DB writes.**
+- [x] Added `{ href: '/admin/quickbooks', label: 'QuickBooks' }` to `ADMIN_TABS` in `src/components/app/app-nav.tsx`.
+- [x] Friendly error state — a 401/stale fetch surfaces an amber "Couldn't load customers" card with a **Reconnect** button; the callback's `?error=` lands as a red banner.
 
 #### Phase 4: Tests + smoke verification
 - [ ] Unit: `getValidAccessToken()` refreshes on expiry and re-stores the rotated refresh token; `fetchCustomers()` paginates.
