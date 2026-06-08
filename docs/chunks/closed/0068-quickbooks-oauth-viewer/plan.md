@@ -80,6 +80,9 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - [ ] Smoke (web-test): confirm the nav **Admin → QuickBooks** item is present and routes to `/admin/quickbooks`. **→ runs in the chunk-end `/eval`.**
 - [ ] Manual (owner — can't be auto-driven, leaves Intuit's domain): full Connect round-trip against the sandbox company → customer list renders → Disconnect. Prereq: owner adds the sandbox `QBO_CLIENT_ID`/`QBO_CLIENT_SECRET` + a generated `QBO_TOKEN_ENC_KEY` to `.env.local`. **→ owner-pending.**
 
+## Post-close fixes
+- **`640110a`** `fix(quickbooks): hide Connect until creds configured` — owner manual smoke hit a raw server-error overlay when clicking **Connect** with no `QBO_CLIENT_ID`/`QBO_CLIENT_SECRET` (`qboConfig()` throws in `buildAuthorizeUrl`). Fix: added non-throwing `qboConfigured()`, and the disconnected panel now hides the Connect button and shows an amber "add creds to `.env.local`" hint until configured (so the throw is unreachable from the UI). Verified in-browser: unconfigured page shows the hint, no Connect button.
+
 ## Out of scope (later slices)
 - Import/upsert QBO customers → `dealers` from the UI (stays the 0060 script); `external_account_links` table.
 - Production keys + env-keyed prod secret wiring (BoldSign-style); nightly keep-alive refresh cron.
