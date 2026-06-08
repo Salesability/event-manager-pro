@@ -269,7 +269,7 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'admin:access — admin-only (0067 BoldSign verification tool; real prod envelope). NOT msa:edit, which also admits coaches.',
   },
 
-  // ---- QuickBooks connection (2) — admin-only ---------------------------
+  // ---- QuickBooks connection (3) — admin-only ---------------------------
   {
     label: 'connectQuickbooks',
     invoke: () => quickbooksActions.connectQuickbooks(),
@@ -281,6 +281,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => quickbooksActions.disconnectQuickbooks(),
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0068 QBO OAuth disconnect; revoke + drop the connection row)',
+  },
+  {
+    label: 'syncDealersFromQuickbooks',
+    invoke: () => quickbooksActions.syncDealersFromQuickbooks(),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0069 QBO dealer sync; reconciles QB customers into dealers)',
   },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------

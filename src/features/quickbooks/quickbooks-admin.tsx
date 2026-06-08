@@ -8,14 +8,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/catalyst/table';
-import type { QboCustomer } from '@/lib/quickbooks/client';
-import { connectQuickbooks, disconnectQuickbooks } from './actions';
+import type { SyncAction, SyncPlanRow } from '@/lib/quickbooks/dealer-sync';
+import { connectQuickbooks, disconnectQuickbooks, syncDealersFromQuickbooks } from './actions';
 
-// Read-only QuickBooks viewer UI (chunk 0068). Server component — the
-// connect/disconnect controls are `<form action={serverAction}>` so no client
-// JS is needed. `connectQuickbooks` redirects to Intuit; `disconnectQuickbooks`
-// revalidates this route in place. NO DB writes happen here — `customers` is a
-// live read passed down from the page.
+// QuickBooks dealer-sync UI (chunks 0068 + 0069). Server component — the
+// connect/disconnect/sync controls are `<form action={serverAction}>` so no
+// client JS is needed. The connected view renders the computed change set (one
+// row per QB customer, with the action that *would* land in our DB); the "Sync
+// dealers" button applies it via `syncDealersFromQuickbooks`. The plan is
+// computed READ-ONLY on the page; nothing here writes.
 
 export type ConnectionView = {
   realmId: string;
@@ -28,19 +29,29 @@ export type Notice = { kind: 'error' | 'success'; message: string } | null;
 type Props = {
   connection: ConnectionView | null;
   configured: boolean;
-  customers: QboCustomer[] | null;
+  plan: SyncPlanRow[] | null;
   fetchError: string | null;
   notice: Notice;
 };
 
-function company(c: QboCustomer): string {
-  return c.CompanyName ?? c.DisplayName ?? '—';
-}
-function email(c: QboCustomer): string {
-  return c.PrimaryEmailAddr?.Address ?? '—';
-}
-function phone(c: QboCustomer): string {
-  return c.PrimaryPhone?.FreeFormNumber ?? c.Mobile?.FreeFormNumber ?? '—';
+const ACTION_BADGE: Record<SyncAction, { color: 'blue' | 'amber' | 'lime' | 'red'; label: string }> = {
+  create: { color: 'blue', label: 'Create' },
+  link: { color: 'amber', label: 'Link' },
+  'already-linked': { color: 'lime', label: 'Already linked' },
+  'skip-collision': { color: 'red', label: 'Skip' },
+};
+
+function ActionBadge({ row }: { row: SyncPlanRow }) {
+  const { color, label } = ACTION_BADGE[row.action];
+  // `Link → #N` names the existing dealer the QB id backfills onto; the other
+  // actions need no target.
+  const suffix = row.action === 'link' && row.dealerId != null ? ` → #${row.dealerId}` : '';
+  return (
+    <Badge color={color}>
+      {label}
+      {suffix}
+    </Badge>
+  );
 }
 
 function ConnectButton({ label }: { label: string }) {
@@ -53,7 +64,16 @@ function ConnectButton({ label }: { label: string }) {
   );
 }
 
-export function QuickbooksAdmin({ connection, configured, customers, fetchError, notice }: Props) {
+export function QuickbooksAdmin({ connection, configured, plan, fetchError, notice }: Props) {
+  const counts = (plan ?? []).reduce(
+    (acc, row) => {
+      acc[row.action]++;
+      return acc;
+    },
+    { create: 0, link: 0, 'already-linked': 0, 'skip-collision': 0 } as Record<SyncAction, number>,
+  );
+  const actionable = counts.create + counts.link;
+
   return (
     <div className="flex flex-col gap-6">
       {notice && (
@@ -73,8 +93,8 @@ export function QuickbooksAdmin({ connection, configured, customers, fetchError,
           <div className="space-y-1">
             <p className="text-sm font-medium text-zinc-900">Not connected</p>
             <p className="text-sm text-zinc-500">
-              Connect the business&apos;s QuickBooks Online company to view its customer list. Read-only —
-              this never changes anything in QuickBooks.
+              Connect the business&apos;s QuickBooks Online company to reconcile its customers with your
+              dealers. Reading is non-destructive — dealers only change when you press Sync.
             </p>
           </div>
           {configured ? (
@@ -101,11 +121,20 @@ export function QuickbooksAdmin({ connection, configured, customers, fetchError,
                 {new Date(connection.connectedAt).toLocaleString()}
               </p>
             </div>
-            <form action={disconnectQuickbooks}>
-              <Button type="submit" outline>
-                Disconnect
-              </Button>
-            </form>
+            <div className="flex items-center gap-2">
+              {!fetchError && actionable > 0 && (
+                <form action={syncDealersFromQuickbooks}>
+                  <Button type="submit" color="green">
+                    Sync dealers
+                  </Button>
+                </form>
+              )}
+              <form action={disconnectQuickbooks}>
+                <Button type="submit" outline>
+                  Disconnect
+                </Button>
+              </form>
+            </div>
           </div>
 
           {fetchError ? (
@@ -122,7 +151,9 @@ export function QuickbooksAdmin({ connection, configured, customers, fetchError,
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-zinc-500">
-                Customers ({customers?.length ?? 0})
+                {(plan?.length ?? 0)} customers · {counts.create} create · {counts.link} link ·{' '}
+                {counts['already-linked']} already linked · {counts['skip-collision']} skip
+                {actionable === 0 && plan && plan.length > 0 ? ' — dealers are up to date.' : ''}
               </p>
               <Table dense className="[--gutter:--spacing(6)]">
                 <TableHead>
@@ -130,19 +161,23 @@ export function QuickbooksAdmin({ connection, configured, customers, fetchError,
                     <TableHeader>Company</TableHeader>
                     <TableHeader>Email</TableHeader>
                     <TableHeader>Phone</TableHeader>
+                    <TableHeader>Action</TableHeader>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {(customers ?? []).map((c) => (
-                    <TableRow key={c.Id}>
-                      <TableCell className="font-medium text-zinc-900">{company(c)}</TableCell>
-                      <TableCell className="text-zinc-500">{email(c)}</TableCell>
-                      <TableCell className="text-zinc-500">{phone(c)}</TableCell>
+                  {(plan ?? []).map((row) => (
+                    <TableRow key={row.qbId}>
+                      <TableCell className="font-medium text-zinc-900">{row.company}</TableCell>
+                      <TableCell className="text-zinc-500">{row.email ?? '—'}</TableCell>
+                      <TableCell className="text-zinc-500">{row.phone ?? '—'}</TableCell>
+                      <TableCell>
+                        <ActionBadge row={row} />
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {(customers?.length ?? 0) === 0 && (
+                  {(plan?.length ?? 0) === 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-zinc-500">
+                      <TableCell colSpan={4} className="text-zinc-500">
                         No customers found in the connected QuickBooks company.
                       </TableCell>
                     </TableRow>

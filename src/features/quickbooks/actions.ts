@@ -8,10 +8,12 @@ import { assertCan } from '@/lib/auth/assert-can';
 import {
   QBO_STATE_COOKIE,
   buildAuthorizeUrl,
+  fetchCustomers,
   quickbooksRedirectUri,
   revokeToken,
 } from '@/lib/quickbooks/client';
-import { deleteConnection, getConnection } from '@/lib/quickbooks/connection';
+import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
+import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
 
 // Connect-initiation + disconnect for the QuickBooks OAuth connection (chunk
 // 0068). Both are admin-gated Server Actions per repo conventions (the Intuit
@@ -75,4 +77,28 @@ export async function disconnectQuickbooks() {
   // The Disconnect button lives ON /admin/quickbooks — revalidate in place so
   // the page re-renders into the disconnected state (no redirect needed).
   revalidatePath('/admin/quickbooks');
+}
+
+// authz: admin:access
+// validation: skip — no FormData input; reads the live QB customer list and
+// applies the computed dealer change set.
+//
+// Reconciles the connected company's QuickBooks customers into `dealers`
+// (chunk 0069): match-by-QB-ID → match-by-name+address & backfill → insert.
+// On success, redirects with `?synced=<created>.<linked>.<skipped>` so the page
+// flashes a summary and re-renders the recomputed (now mostly already-linked)
+// plan. Errors (not connected / token refresh / fetch) propagate to Next's
+// error boundary rather than being caught-and-redirected — the Sync button only
+// renders once the page has already loaded the customer list (so the token is
+// fresh), making a sync-time failure rare, and a post-gate redirect would read
+// as a wrong gate-admit to the action-gate-matrix suite.
+export async function syncDealersFromQuickbooks() {
+  const user = await assertCan('admin:access');
+
+  const { realmId, accessToken } = await getValidAccessToken();
+  const customers = await fetchCustomers(realmId, accessToken);
+  const result = await applyDealerSync(customers, user.id);
+
+  revalidatePath('/admin/quickbooks');
+  redirect(`/admin/quickbooks?synced=${encodeSyncSummary(result)}`);
 }
