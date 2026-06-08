@@ -46,6 +46,194 @@ Three things to know up front:
 
 ## Layout
 
+The full entity-relationship map (Mermaid — renders on GitHub, VS Code, and mermaid.live). The ASCII diagrams that follow are domain-cluster zoom-ins.
+
+```mermaid
+erDiagram
+    auth_users ||--o| contacts : "user_id · SET NULL · UNIQUE"
+    auth_users ||--o{ audit_log : "actor_user_id · SET NULL"
+
+    contacts ||--o{ contact_identifiers : "contact_id · CASCADE"
+    contacts ||--o{ team_member_roles : "contact_id · CASCADE"
+    contacts ||--o{ dealer_contacts : "contact_id · CASCADE"
+    contacts ||--o{ vehicle_ownerships : "contact_id · CASCADE"
+    contacts ||--o{ campaigns : "coach_id · SET NULL"
+    contacts ||--o{ availability_blocks : "coach_id · CASCADE"
+
+    dealers ||--o{ dealer_contacts : "dealer_id · CASCADE"
+    dealers ||--o{ campaigns : "dealer_id · RESTRICT"
+    dealers ||--o{ quotes : "dealer_id · RESTRICT"
+    dealers ||--o{ master_service_agreements : "dealer_id · RESTRICT"
+
+    campaign_styles ||--o{ campaigns : "style_id"
+    audience_sources ||--o{ campaigns : "audience_source_id"
+    audience_sources ||--o{ quotes : "audience_source_id"
+    campaigns ||--o{ billing_adjustments : "campaign_id · CASCADE"
+    quotes ||--o| campaigns : "accepted_quote_id"
+
+    master_service_agreements ||--o{ quotes : "msa_id · RESTRICT · nullable"
+    quotes ||--o{ quote_line_items : "quote_id · CASCADE"
+    quotes ||--o{ quotes : "previous_quote_id · self · SET NULL"
+    service_items ||--o{ quote_line_items : "service_item_id · SET NULL · nullable"
+
+    vehicles ||--o{ vehicle_ownerships : "vehicle_id · CASCADE"
+
+    auth_users {
+        uuid id PK "Supabase-managed (shadow decl)"
+    }
+    contacts {
+        bigint id PK
+        text first_name
+        text last_name
+        text display_name "computed"
+        uuid user_id FK "→ auth.users · UNIQUE · nullable"
+    }
+    contact_identifiers {
+        bigint id PK
+        bigint contact_id FK
+        contact_identifier_kind kind "email | phone"
+        text value
+        boolean is_primary
+    }
+    team_member_roles {
+        bigint id PK
+        bigint contact_id FK
+        team_member_role role "admin|staff|coach|viewer|dealer"
+        text specialty
+    }
+    dealer_contacts {
+        bigint id PK
+        bigint dealer_id FK
+        bigint contact_id FK
+        dealer_contact_role role "customer|staff|prospect"
+        boolean do_not_contact
+        text title
+    }
+    dealers {
+        bigint id PK
+        text public_id "nanoid · UNIQUE · URL slug"
+        text name
+        text address
+        ca_province province
+        dealer_status status
+        text acquired_via
+    }
+    campaigns {
+        bigint id PK
+        text public_id "URL slug"
+        bigint dealer_id FK
+        bigint coach_id FK
+        bigint style_id FK
+        bigint audience_source_id FK
+        bigint accepted_quote_id FK "→ quotes"
+        date start_date
+        date end_date
+        campaign_status status "draft|booked|cancelled|completed"
+    }
+    billing_adjustments {
+        bigint id PK
+        bigint campaign_id FK
+        text field "qty_records|sms_email|letters|bdc"
+        integer value "≥ 0"
+    }
+    master_service_agreements {
+        bigint id PK
+        bigint dealer_id FK
+        msa_status status "pending|active|expired|terminated"
+        timestamp signed_at
+        timestamp expires_at
+        text provider_document_id
+        text template_version
+    }
+    quotes {
+        bigint id PK
+        bigint dealer_id FK
+        bigint msa_id FK "nullable"
+        bigint audience_source_id FK
+        bigint previous_quote_id FK "self · revision chain"
+        quote_status status "draft|sent|accepted|declined"
+        uuid accept_token "UNIQUE"
+        numeric subtotal
+        numeric tax
+        numeric tax_override "nullable = auto"
+        numeric tax_pct "province snapshot"
+        numeric total
+        jsonb inputs
+    }
+    quote_line_items {
+        bigint id PK
+        bigint quote_id FK
+        bigint service_item_id FK "nullable · snapshot"
+        text code
+        text label
+        integer qty
+        numeric unit_price
+        numeric override_unit_price
+        numeric line_total
+        integer display_order
+    }
+    service_items {
+        bigint id PK
+        text code "UNIQUE"
+        text label
+        numeric unit_price "nullable · blank = variable"
+        text description
+    }
+    vehicles {
+        bigint id PK
+        text vin
+        integer year
+        text make
+        text model
+        text trim
+    }
+    vehicle_ownerships {
+        bigint id PK
+        bigint vehicle_id FK
+        bigint contact_id FK
+        date acquired_at
+        date sold_at "NULL = current owner"
+    }
+    availability_blocks {
+        bigint id PK
+        date start_date
+        date end_date
+        availability_block_kind kind "holiday|closure|coach_unavail"
+        bigint coach_id FK "nullable"
+        text region
+    }
+    audience_sources {
+        bigint id PK
+        text label "UNIQUE"
+        integer sort_order
+    }
+    campaign_styles {
+        bigint id PK
+        text label "UNIQUE"
+        integer sort_order
+    }
+    tax_rates {
+        bigint id PK
+        ca_province province "UNIQUE"
+        text label
+        numeric rate "combined % · QC 14.975"
+    }
+    audit_log {
+        bigint id PK
+        timestamp occurred_at
+        uuid actor_user_id FK "nullable"
+        text actor_role
+        audit_action action
+        text target_table
+        bigint target_id
+        jsonb payload
+    }
+```
+
+> Deliberately not drawn: every editable domain table also has `created_by_id` / `updated_by_id` → `auth.users` (the `actors` mixin, `ON DELETE SET NULL`); and `tax_rates` has **no FK** — it joins logically by the `ca_province` enum (`quotes.tax_pct` is a point-in-time snapshot of the rate, not a live foreign key). (Chunk 0066 flattened `service_items` to a single `unit_price`, dropping the vestigial `unit` enum + `unit_price_min`/`unit_price_max` — the live quote path only ever read `unit_price`.)
+
+### Cluster zoom-ins
+
 ```
                   ┌──────────────────────────┐
                   │   auth.users (Supabase)  │
@@ -143,7 +331,7 @@ Edges left out of the diagrams for clarity:
 | `dealer_contacts` | `id` bigint | `dealer_id` (FK dealers), `contact_id` (FK contacts), `role` enum (`customer\|staff\|prospect`), `do_not_contact`, `since` date, `source` text, `last_contacted_at`, `title` text (used when `role='staff'`) — UNIQUE on `(dealer_id, contact_id, role)` |
 | `contact_identifiers` | `id` bigint | `contact_id` (FK contacts, cascade), `kind` enum (`email\|phone`), `value` (normalized), `is_primary` |
 | `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address`, `province` enum (`ca_province`: 13 CA province/territory codes, **nullable** — drives quote sales tax, 0065), `status` enum (`prospect\|active`, default `active`), `acquired_via` text (nullable) |
-| `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit` enum (`flat\|per-record\|per-touch\|per-day\|range`), `unit_price` numeric(10,2), `unit_price_min` / `unit_price_max` numeric(10,2) (range items only), `description`, `sort_order` — quote-composer catalog; see [`commercial-spine.md`](commercial-spine.md) |
+| `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit_price` numeric(10,2) (nullable; blank = "variable"), `description`, `sort_order` — flat quote-composer catalog (0066 dropped the legacy `unit` enum + `unit_price_min`/`max`); see [`commercial-spine.md`](commercial-spine.md) |
 | `vehicles` | `id` bigint | `vin` (UNIQUE, normalized), `year`, `make`, `model`, `trim` — one row per physical vehicle, persists across owners |
 | `vehicle_ownerships` | `id` bigint | `vehicle_id` (FK vehicles), `contact_id` (FK contacts), `acquired_at`, `sold_at` (nullable) — junction; one open ownership per vehicle |
 | `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK — slated to move to `quotes` once the booking-form/composer flow is reconciled), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `accepted_quote_id` (FK `quotes`, nullable; the contract that spawned this delivery), plus inline day-of contact fields and service flags (see `campaigns` section below). Commercial columns (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) live on `quotes` per [`commercial-spine.md`](commercial-spine.md) — dropped from `campaigns` in 0037 Phase 4. |
@@ -457,14 +645,12 @@ Columns:
 
 - `code` text NOT NULL UNIQUE — stable kebab-case key referenced from the pricing module (`base-event`, `additional-contact`, `bdc-call`, `letter-postage`, `digital-record`, `additional-day`, `record-retrieval`, `travel`). The code is the API surface; coaches see the `label`.
 - `label` text NOT NULL — display name on the composer + PDF.
-- `unit` enum (`flat | per-record | per-touch | per-day | range`, NOT NULL) — discriminates how a `QuoteInputs` field maps to a line qty. `flat` rows are once-off (e.g. base event); `per-record` multiplies by `(audience_size - 500)` for the additional-contact overage; `per-touch` multiplies by the matching count input; `per-day` multiplies by `(event_days - 1)` for the extra-day overage; `range` rows present a coach-typed amount bounded by `unit_price_min..unit_price_max` (the record-retrieval row).
-- `unit_price` numeric(10,2) (nullable) — populated for `flat` and `per-*` rows. **Null for `range` rows.** Also null for `flat`-with-variable rows (`travel`), where the coach types the actual dollar amount at quote-edit time.
-- `unit_price_min`, `unit_price_max` numeric(10,2) (nullable) — populated for `range` rows; min/max bracket the coach's typed amount. The pricing module fails closed when a `range` row has null or non-finite bracket bounds (carry-forward from 0035 Phase 3 Codex pass-2).
+- `unit_price` numeric(10,2) (nullable) — the seed price the composer reads (`seedPrice` / the server's `buildPickedLines`). The picked line snapshots it into `quote_line_items.unit_price`; the coach can override per quote. **Null = "variable"** (e.g. `travel`): the line seeds $0 and the coach types the actual dollar amount at quote time. Since 0066 this is the **only** price column — the legacy `unit` enum (which discriminated how a `QuoteInputs` field mapped to a line qty in the pre-0062 calculator) and the `unit_price_min`/`unit_price_max` range bracket were dropped as vestigial once the 0053/0062 picker made every row a plain pick-qty-price line.
 - `description` text (nullable) — optional admin-facing note (not rendered to dealers).
 - `sort_order` integer NOT NULL DEFAULT 0 — UI ordering on `/admin/lookups`. Capped at `MAX_PG_INTEGER` by the Server Action.
 - mixins: `archivable` only (no `timestamps`, no `actors` — admin-config, not domain data).
 
-Seeded v1 catalog (migration `drizzle/0013_seed_service_items.sql`, idempotent on `code`): `base-event` $6,900 flat, `additional-contact` $3.00 per-record, `bdc-call` $2.25 per-touch, `letter-postage` $2.50 per-touch, `digital-record` $0.59 per-touch, `additional-day` $995 per-day, `record-retrieval` range $100–$400, `travel` flat with null `unit_price`.
+Seeded v1 catalog (migration `drizzle/0013_seed_service_items.sql`, idempotent on `code`): `base-event` $6,900, `additional-contact` $3.00, `bdc-call` $2.25, `letter-postage` $2.50, `digital-record` $0.59, `additional-day` $995, `record-retrieval` $100 (was a `$100–$400` range pre-0066; backfilled to the $100 menu floor by `0030` so it no longer seeds $0), `travel` null `unit_price` (variable — coach types the amount).
 
 CRUD via Server Actions at `src/features/services/actions.ts` (`createServiceItem` / `updateServiceItem` / `archiveServiceItem`), gated `lookup:edit` (admin-only). `createServiceItem` un-archives by `code` to avoid permanent code lockout after an archive (mirrors `createCampaignStyle`). Money parsing is string-only against `MONEY_RE = /^(0|[1-9]\d{0,7})(\.\d{1,2})?$/` (no IEEE-754 rounding; caps at the column's `numeric(10,2)` precision). Admin UI at `src/features/services/services-admin.tsx` renders under heading "Services" on `/admin/lookups`.
 

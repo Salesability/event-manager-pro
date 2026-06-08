@@ -13,6 +13,19 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-08 — `service_items` flattened to a single `unit_price` (chunk 0066)
+
+- Chunk 0066 shipped: dropped the vestigial `service_item_unit` enum + `unit`/`unit_price_min`/`unit_price_max` columns (migration `drizzle/0030_flatten_service_item_units.sql`), leaving `service_items` as flat `{code, label, unit_price, description, sort_order}`. The 0053/0062 line-item picker had already made the `unit`/range model dead — `seedPrice` / `buildPickedLines` only ever read `unit_price`.
+- Backfilled the one `range` row (`record-retrieval`, previously `unit_price` NULL → seeded **$0** in the composer) to **$100.00** (the old `$100–$400` menu floor; seed-then-editable). `travel` left NULL (variable — coach types the amount). Applied to the **sandbox** DB; **prod apply is a pending deploy-time step**.
+- Updated [`data-model.md`](data-model.md): the Mermaid ERD `service_items` entity, the "deliberately not drawn" note (marked-for-removal → done), the entity-summary table row, and the `### service_items` detail prose + seed-catalog line. Admin form (`/admin/lookups`) simplified to Code / Label / Sort / Unit price / Description (no unit picker, no min/max). `unit_price` kept **optional** (blank = variable), not made required — preserves the `travel` row.
+- Chunk working notes: [`docs/chunks/0066-flatten-service-item-units/`](../chunks/0066-flatten-service-item-units/plan.md).
+
+## 2026-06-08 — full Mermaid ERD added to data-model.md
+
+- Added a complete entity-relationship diagram (Mermaid `erDiagram`) at the top of the **Layout** section of [`data-model.md`](data-model.md), covering all 18 domain tables + `auth.users` with PK/FK/enum attributes and every FK edge (cardinality + onDelete). Previously only ASCII cluster zoom-ins existed and the **commercial spine** (`quotes` / `master_service_agreements` / `quote_line_items` / `service_items`) had no diagram at all.
+- Annotated the `service_items` `unit` / `unit_price_min` / `unit_price_max` columns as marked-for-removal by chunk 0066 (vestigial since the 0053/0062 line-item composer). Noted the un-drawn `actors` audit FKs and the no-FK `tax_rates` ↔ `ca_province` logical join.
+- The ASCII cluster diagrams are retained below the Mermaid block as zoom-ins.
+
 ## 2026-06-04 — new-app go-live domain set to `eventpro.salesability.ca`
 
 - Owner chose `eventpro.salesability.ca` (not the legacy `events.salesability.ca`) as the production web address for this Cloud Run app, so the legacy Netlify app can keep `events.salesability.ca` until/if it's retired.
