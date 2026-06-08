@@ -114,8 +114,15 @@ the app when a customer has signed.
    Canada). The business is in Nova Scotia, so choose **Canada** — and tell the developer you did, because a
    Canada-region key only works against the Canadian API host (`api-ca.boldsign.com`). Getting this wrong
    produces a confusing "invalid authentication" error later.
-3. Choose a plan (there's a free trial; a paid per-sender plan is needed for ongoing live use). This account
-   signs documents *as the business*, so it must be the business's own account.
+3. **⚠️ Buy the right plan — this app sends via the API, so it needs the *Enterprise API* plan, NOT the
+   per-user "Web App" plans.** On BoldSign's pricing page there are two tabs: **API Pricing** and **Web App
+   Pricing**. The Web-App plans (Essentials $0 / Growth $5 / Business $15 / Premium $99) only grant a
+   **Sandbox** API key — production sends (`isSandbox=false`) are rejected with them. You must buy the
+   **Enterprise API** plan (API Pricing tab, **~$30/mo, 40 docs included, $0.75/doc after**) to unlock the
+   **Live/production** environment + a Live API key. It also includes **Webhooks**, which the signed-MSA
+   round-trip requires. The **Free Sandbox** is test-only (watermarked docs, deleted after 14 days). This
+   account signs documents *as the business*, so it must be the business's own account. **(Discovered
+   2026-06-08: prod was on Free Sandbox → the first real Send Test MSA failed; see the Send Test MSA note below.)**
 
 **Developer does**
 - Generates the API key, registers the app's webhook URL (`/api/boldsign/webhook`) with a signing secret, and
