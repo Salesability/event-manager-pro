@@ -10,7 +10,7 @@
 | 1: Schema + Server Action (+ webhook test-guard) | Done | `7377653` |
 | 2: Compose form component | Done | `85ebd48` |
 | 3: Admin page + nav entry | Done | `61d4eab` |
-| 4: Tests + smoke verification | In Progress | - |
+| 4: Tests + smoke verification | Done | `1b78eab` |
 
 A standalone admin **Send Test MSA** page: a minimal form (Recipient email / Signer name / optional Message) gated by `msa:edit` that calls a thin Server Action over the existing `renderMsaPdf()` + `sendSignatureRequest()` primitives. Its job is **BoldSign verification** — prove the system posts a real envelope to a chosen address in prod (prod-tier key, `api-ca` host, `isSandbox=false`, field placement, PDF upload) and surface the BoldSign `documentId` (or the error) in the UI. "Done" = an admin can load the page, send themselves a test MSA, see the document id, and (if OQ2→option b) a signed test envelope no longer 404s the webhook — with **no** new MSA/quote row, **no** new capability, and **no** bypass of the `isSandbox`/dev-redirect gate. Mirrors chunk **0064 (Send Test Email)** for BoldSign instead of Resend.
 
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `src/features/msa/template-version.ts` — `MSA_TEMPLATE_VERSION` feeds `MsaPdfData.templateVersion` (same as the real flow).
 - `src/lib/actions/legacy-result.ts` (`toLegacyResult`) + `src/lib/actions/action-client.ts` (`formDataSchema`) — the action-client + result-adapter idiom every form uses.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete) — chunk-end `/eval` PASS-with-warnings ([`eval-2026-06-08-0917.md`](eval-2026-06-08-0917.md)); Codex Medium (APP_ENV `isSandbox` normalization) fixed in-cycle at `2c9a011`.
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -68,6 +68,6 @@ For each new file or method below, the builder reads the anchor first and matche
 #### Phase 4: Tests + smoke verification
 - [x] Action unit tests green (Phase 1, `actions.test.ts` — 7 `sendTestMsa` cases) + schema rejects bad email / multi-recipient / empty signer name / CRLF / over-length message (`test-msa-schema.test.ts`) + webhook test-guard test (`route.test.ts`). Full suite **963 passing**, tsc clean.
 - [x] Ingested into `docs/wiki/`: `commercial-spine.md` (send-path verification + `metaData.test` guard) and `go-live-accounts.md` (BoldSign runbook — how to verify prod). Added a `log.md` entry.
-- [ ] Smoke (web-test, **read-only**): `goto /admin/send-test-msa`; heading "Send Test MSA" + `Recipient` / `Signer name` / `Message` fields + `Send` button present; nav dropdown lists "Send Test MSA". Do **not** submit. *(chunk-end `/eval`)*
-- [ ] Smoke (web-test): unauth `goto /admin/send-test-msa` → redirects to `/login?next=%2Fadmin%2Fsend-test-msa`. *(chunk-end `/eval`)*
+- [x] Smoke (web-test, **read-only**): `/admin/send-test-msa` shows heading "Send Test MSA" + `Recipient` / `Signer name` / `Message (optional)` + `Send`; Admin nav dropdown lists "Send Test MSA". **PASS** (chunk-end `/eval` 2026-06-08-0917; did not submit).
+- [x] Smoke (web-test): unauth `/admin/send-test-msa` → `/login?next=%2Fadmin%2Fsend-test-msa`. **PASS**.
 - [ ] **Manual one-off (prod):** after deploy, drive the real form (admin auth) → recipient = admin's own email; confirm BoldSign returns a `documentId`, the email arrives, and the envelope shows in the BoldSign dashboard. **This is a real prod send** — use a controlled address.
