@@ -222,8 +222,10 @@ export function encodeSyncSummary(r: SyncSummary): string {
 export function decodeSyncSummary(param: string): SyncSummary | null {
   const parts = param.split('.');
   if (parts.length !== 3) return null;
+  // Each segment must be all-digits — `parseInt` alone would accept '1x' (-> 1)
+  // or '1e9' (-> 1) and render a bogus tampered-URL summary.
+  if (!parts.every((p) => /^\d+$/.test(p))) return null;
   const [created, linked, skipped] = parts.map((p) => Number.parseInt(p, 10));
-  if ([created, linked, skipped].some((n) => !Number.isInteger(n) || n < 0)) return null;
   return { created, linked, skipped };
 }
 

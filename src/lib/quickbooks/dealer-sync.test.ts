@@ -121,6 +121,8 @@ describe('sync summary param encode/decode', () => {
     expect(decodeSyncSummary('1.2.3.4')).toBeNull(); // too many parts
     expect(decodeSyncSummary('a.b.c')).toBeNull(); // non-numeric
     expect(decodeSyncSummary('-1.0.0')).toBeNull(); // negative
+    expect(decodeSyncSummary('1x.2.3')).toBeNull(); // numeric prefix junk
+    expect(decodeSyncSummary('1e9.0.0')).toBeNull(); // exponent notation
     expect(decodeSyncSummary('')).toBeNull();
   });
 });
