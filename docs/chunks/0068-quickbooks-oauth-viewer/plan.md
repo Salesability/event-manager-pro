@@ -9,8 +9,8 @@
 |-------|--------|--------|
 | 1: Connection storage + token crypto (db-conventions) | Done | `177ebfa` |
 | 2: OAuth connect / callback / refresh / disconnect + config | Done | `a678ca6` |
-| 3: Admin viewer page (read + display) + nav item | Done | - |
-| 4: Tests + smoke verification | Pending | - |
+| 3: Admin viewer page (read + display) + nav item | Done | `aa199eb` |
+| 4: Tests + smoke verification | Done | `0338e63` |
 
 The in-app OAuth slice 0060 deferred: an admin connects QuickBooks (sandbox) from **Admin → QuickBooks**, the
 callback persists `realmId` + encrypted tokens, and the page live-fetches and **displays** the sandbox company's
@@ -38,7 +38,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - `db-conventions` skill — **invoke before** writing the schema file + migration (Phase 1). ID/type defaults, audit columns, direct-vs-pooled migration rule.
 - `docs/chunks/0060-quickbooks-integration/research.md` — OAuth flow, `realmId` gotcha, token lifetimes/rotation, sandbox host; `scripts/import-from-quickbooks.ts` — the existing hand-rolled QBO fetch to lift.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete) — browser smoke + Codex run in the chunk-end `/eval`; the owner round-trip is manual.
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -74,13 +74,11 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - [x] Friendly error state — a 401/stale fetch surfaces an amber "Couldn't load customers" card with a **Reconnect** button; the callback's `?error=` lands as a red banner.
 
 #### Phase 4: Tests + smoke verification
-- [ ] Unit: `getValidAccessToken()` refreshes on expiry and re-stores the rotated refresh token; `fetchCustomers()` paginates.
-- [ ] Unit: callback rejects a missing/forged `state`; stores realmId + encrypted (not plaintext) tokens.
-- [ ] Smoke (web-test): `goto /admin/quickbooks`; expect heading "QuickBooks" + a `Connect to QuickBooks` button
-      (disconnected state — the auth-injected admin will not have a live connection).
-- [ ] Smoke (web-test): confirm the nav **Admin → QuickBooks** item is present and routes to `/admin/quickbooks`.
-- [ ] Manual (owner, can't be auto-driven — leaves Intuit's domain): full Connect round-trip against the sandbox
-      company → customer list renders → Disconnect. Record the run in `runbook.md`.
+- [x] Unit (`connection.test.ts`): `getValidAccessToken()` returns the stored token when fresh, and on expiry refreshes + persists the ROTATED refresh token **encrypted** (decrypt round-trip asserted); throws when not connected. `fetchCustomers()` pagination is covered in `client.test.ts` (Phase 2).
+- [x] Unit (`callback/route.test.ts`): rejects forged/missing `state` and non-admin (no exchange, no save); on a valid admin callback exchanges the code with the exact `redirect_uri` and calls `saveConnection({ realmId, tokens, connectedById })` → `?connected=1`; token-exchange failure → `?error=`.
+- [ ] Smoke (web-test): `goto /admin/quickbooks`; expect heading "QuickBooks" + a `Connect to QuickBooks` button (disconnected state — the auth-injected admin has no live connection). **→ runs in the chunk-end `/eval`.**
+- [ ] Smoke (web-test): confirm the nav **Admin → QuickBooks** item is present and routes to `/admin/quickbooks`. **→ runs in the chunk-end `/eval`.**
+- [ ] Manual (owner — can't be auto-driven, leaves Intuit's domain): full Connect round-trip against the sandbox company → customer list renders → Disconnect. Prereq: owner adds the sandbox `QBO_CLIENT_ID`/`QBO_CLIENT_SECRET` + a generated `QBO_TOKEN_ENC_KEY` to `.env.local`. **→ owner-pending.**
 
 ## Out of scope (later slices)
 - Import/upsert QBO customers → `dealers` from the UI (stays the 0060 script); `external_account_links` table.
