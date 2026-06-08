@@ -228,6 +228,23 @@ grant_secret_access "boldsign-api-key"
 grant_secret_access "boldsign-webhook-secret"
 grant_secret_access "resend-api-key"
 
+# QuickBooks secrets (chunk 0068/0069) are OPTIONAL — mounted only when they
+# exist in the target project. Prod (eventpro-498313) carries
+# quickbooks-client-id / -client-secret / -token-enc-key; stage may not. When
+# absent, qboConfigured() is false and /admin/quickbooks renders the
+# "credentials not set" hint (no crash). When present, QBO_ENV (below) must match
+# the Intuit key tier: a sandbox-tier key against QBO_ENV=production 401s.
+QBO_SECRET_MOUNTS=""
+if gcloud secrets describe quickbooks-client-id --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    echo "🔐 QuickBooks secrets present in ${PROJECT_ID} — wiring QBO_CLIENT_ID/SECRET/TOKEN_ENC_KEY (QBO_ENV=${QBO_ENV:-production})."
+    grant_secret_access "quickbooks-client-id"
+    grant_secret_access "quickbooks-client-secret"
+    grant_secret_access "quickbooks-token-enc-key"
+    QBO_SECRET_MOUNTS=",QBO_CLIENT_ID=quickbooks-client-id:latest,QBO_CLIENT_SECRET=quickbooks-client-secret:latest,QBO_TOKEN_ENC_KEY=quickbooks-token-enc-key:latest"
+else
+    echo "ℹ️  QuickBooks secrets not found in ${PROJECT_ID} — /admin/quickbooks ships dormant."
+fi
+
 echo "🏗️  Building image ${IMAGE} via Cloud Build..."
 gcloud builds submit \
     --config cloudbuild.yaml \
@@ -259,6 +276,12 @@ fi
 if [ -n "${BOLDSIGN_API_BASE_URL:-}" ]; then
     ENV_VARS+="${ENV_DELIM}BOLDSIGN_API_BASE_URL=${BOLDSIGN_API_BASE_URL}"
 fi
+# QBO_ENV picks the Intuit API host + expected key tier (sandbox vs production).
+# Only baked when the QBO secrets are mounted; defaults to production (the prod
+# project is where these secrets live). Override with QBO_ENV=sandbox.
+if [ -n "${QBO_SECRET_MOUNTS}" ]; then
+    ENV_VARS+="${ENV_DELIM}QBO_ENV=${QBO_ENV:-production}"
+fi
 
 BOLDSIGN_HOST="${BOLDSIGN_API_BASE_URL:-https://api.boldsign.com (US default)}"
 if [ "${DEPLOY_APP_ENV}" = "production" ]; then
@@ -281,7 +304,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --allow-unauthenticated \
     --port=3000 \
     --set-env-vars="${ENV_VARS}" \
-    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest"
+    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest${QBO_SECRET_MOUNTS}"
 
 echo "✅ Deployment complete."
 echo "🌐 Service URL:"
