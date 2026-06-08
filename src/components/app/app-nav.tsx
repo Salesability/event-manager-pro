@@ -39,6 +39,7 @@ const ADMIN_TABS: readonly Tab[] = [
   { href: '/admin/lookups', label: 'Lookups' },
   { href: '/admin/send-test-email', label: 'Send Test Email' },
   { href: '/admin/send-test-msa', label: 'Send Test MSA' },
+  { href: '/admin/quickbooks', label: 'QuickBooks' },
 ];
 
 function isActive(pathname: string, href: string): boolean {
