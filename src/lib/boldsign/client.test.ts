@@ -183,6 +183,18 @@ describe('sendSignatureRequest', () => {
     expect(sent.isSandbox).toBe(false);
   });
 
+  // 0067: isSandbox normalises APP_ENV (trim + lowercase) to match the
+  // dev-redirect decision — a non-canonical spelling must not send to the real
+  // recipient while marking the envelope sandbox (the prod-smoke false positive
+  // Codex flagged).
+  it('marks isSandbox=false when APP_ENV is non-canonical " Production "', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_live_abc';
+    process.env.APP_ENV = ' Production ';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as { isSandbox?: boolean };
+    expect(sent.isSandbox).toBe(false);
+  });
+
   it('forwards metadata when supplied', async () => {
     process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
     process.env.EMAIL_DEV_TO = 'dev@example.test';

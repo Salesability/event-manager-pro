@@ -88,9 +88,18 @@ type SignerRedirectDecision =
   | { redirect: true; to: string }
   | { redirect: false; reason: 'production' | 'no-dev-target' };
 
+// APP_ENV is normalised (trim + lowercase) so ` Production ` / `Production`
+// don't fall through to a dev redirect OR a sandbox stamp in real prod
+// (matches `send.ts:47-49`). Single source so the redirect decision and the
+// `isSandbox` flag below can never disagree: before 0067 `isSandbox` compared
+// the RAW env, so a non-canonical spelling sent to the real recipient while
+// marking the envelope sandbox — a false "prod works" signal for the test tool.
+function isProductionEnv(): boolean {
+  return process.env.APP_ENV?.trim().toLowerCase() === 'production';
+}
+
 function decideSignerRedirect(): SignerRedirectDecision {
-  const appEnv = process.env.APP_ENV?.trim().toLowerCase();
-  if (appEnv === 'production') {
+  if (isProductionEnv()) {
     return { redirect: false, reason: 'production' };
   }
   const devTo = process.env.EMAIL_DEV_TO?.trim();
@@ -150,7 +159,7 @@ export async function sendSignatureRequest(
   const sendForSign = new SendForSign();
   sendForSign.title = input.subject;
   sendForSign.message = input.message;
-  sendForSign.isSandbox = process.env.APP_ENV !== 'production';
+  sendForSign.isSandbox = !isProductionEnv();
 
   const signer = new DocumentSigner();
   // signer.name keeps the original Client name so the dev inbox can still see
