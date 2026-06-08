@@ -4,7 +4,7 @@
 
 ## Problem
 
-Chunk [0068](../closed/0068-quickbooks-oauth-viewer/plan.md) gave us an in-app, read-only QuickBooks OAuth viewer at `/admin/quickbooks`: connect → see the live customer list → disconnect. But it writes nothing. Our `dealers` rows and QuickBooks customers have **no stable link** between them — the only correlation is a fuzzy `lower(name)+lower(address)` match (how the [0060](../0060-quickbooks-integration/) one-time import seeded dealers). Without a durable QB customer ID on each dealer we can't reconcile, re-sync, or eventually push data back to QuickBooks without re-running the brittle name-match every time.
+Chunk [0068](../0068-quickbooks-oauth-viewer/plan.md) gave us an in-app, read-only QuickBooks OAuth viewer at `/admin/quickbooks`: connect → see the live customer list → disconnect. But it writes nothing. Our `dealers` rows and QuickBooks customers have **no stable link** between them — the only correlation is a fuzzy `lower(name)+lower(address)` match (how the [0060](../../0060-quickbooks-integration/) one-time import seeded dealers). Without a durable QB customer ID on each dealer we can't reconcile, re-sync, or eventually push data back to QuickBooks without re-running the brittle name-match every time.
 
 Concretely: production dealers already exist (created from a QuickBooks extract via the 0060 import) but **lack QB IDs**. Sandbox has no dealers at all. We want the existing Connect flow to be the data source that closes this gap.
 
