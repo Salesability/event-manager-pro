@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Connection storage + token crypto (db-conventions) | Done | `177ebfa` |
-| 2: OAuth connect / callback / refresh / disconnect + config | Pending | - |
+| 2: OAuth connect / callback / refresh / disconnect + config | Done | - |
 | 3: Admin viewer page (read + display) + nav item | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -24,6 +24,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 | `src/lib/db/schema/quickbooks-connection.ts` (singleton connection row) | `src/lib/db/schema/tax-rates.ts` | Small single-table schema; `bigIdentity` + `timestamps` mixins; edited-in-place row (not archived). |
 | `src/lib/crypto/sealed-box.ts` (AES-256-GCM encrypt/decrypt) | *(none — new; Node `crypto`)* | No encryption helper exists in the repo. Keep minimal: `encrypt(plaintext)→string`, `decrypt(string)→plaintext`, key from `QBO_TOKEN_ENC_KEY`. Named `sealed-box` (not `secret-box`) to dodge the `*secret*` .gitignore catch-all. |
 | `src/lib/quickbooks/client.ts` (token exchange + refresh + `fetchCustomers`) | `src/lib/boldsign/client.ts:21` + `scripts/import-from-quickbooks.ts:129` | `server-only` external-API client reading env config; mirror BoldSign's `client()`/result-type shape; lift the script's `fetchAllCustomers` query/pagination. |
+| `src/lib/quickbooks/connection.ts` (singleton persistence + `getValidAccessToken`) | `src/features/reports/actions.ts:62` (upsert idiom) + `src/lib/crypto/sealed-box.ts` | Drizzle singleton upsert via `onConflictDoUpdate({ target: singleton })`; encrypt tokens at rest. Split from `client.ts` so HTTP stays DB-free + unit-testable. |
 | `src/app/auth/quickbooks/callback/route.ts` (code→token exchange) | `src/app/auth/callback/route.ts:17,29` | OAuth-code-exchange route handler — `resolveOrigin` + `GET`, read `code`/`state`/`realmId`, redirect back on success/error. |
 | `src/features/quickbooks/actions.ts` (connect-initiation, disconnect) | `src/features/auth/actions.ts:13,36` | Admin-gated Server Action that builds an OAuth authorize redirect via the `siteUrl()` helper. |
 | `src/app/(app)/admin/quickbooks/page.tsx` + feature component | `src/app/(app)/admin/send-test-msa/page.tsx:9` | Admin page shell: `await assertCan('admin:access')` → `PageHeader` + feature component. |
@@ -36,7 +37,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - `db-conventions` skill — **invoke before** writing the schema file + migration (Phase 1). ID/type defaults, audit columns, direct-vs-pooled migration rule.
 - `docs/chunks/0060-quickbooks-integration/research.md` — OAuth flow, `realmId` gotcha, token lifetimes/rotation, sandbox host; `scripts/import-from-quickbooks.ts` — the existing hand-rolled QBO fetch to lift.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -57,16 +58,12 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - [x] Unit test (`sealed-box.test.ts`): round-trip, fresh-IV, UTF-8/empty, tampered-ciphertext throws, missing-key + wrong-length errors.
 
 #### Phase 2: OAuth connect / callback / refresh / disconnect + config
-- [ ] `src/lib/quickbooks/client.ts` — config (`QBO_CLIENT_ID`/`QBO_CLIENT_SECRET`/`QBO_ENV` → sandbox host + endpoints),
-      `buildAuthorizeUrl(state)`, `exchangeCode(code)`, `refreshTokens(refreshToken)`, `getValidAccessToken()`
-      (refresh when expired, persist rotated refresh token), `revoke(token)`, `fetchCustomers()` (lift from script).
-- [ ] `src/features/quickbooks/actions.ts` — `connectQuickbooks()` (admin-gated; set signed `state` cookie; redirect to
-      authorize URL) and `disconnectQuickbooks()` (revoke + delete row).
-- [ ] `src/app/auth/quickbooks/callback/route.ts` — validate `state` cookie, exchange `code`, capture `realmId`,
-      write the encrypted connection row, redirect to `/admin/quickbooks` (error → an error query param on the page).
-- [ ] Config: add `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` / `QBO_ENV` / `QBO_TOKEN_ENC_KEY` to `.env.example` (+ local `.env.local`);
-      wire `ensure_secret` + grant + `--set-secrets`/env in `deploy.sh` (sandbox values; prod env-keying is a follow-up).
-- [ ] Tests: token-exchange + refresh request shape (Basic-auth header, body, rotation persistence) mocked; `state` mismatch rejected.
+- [x] `src/lib/quickbooks/client.ts` — pure HTTP: `qboConfig()`, `buildAuthorizeUrl`, `exchangeCodeForTokens`, `refreshTokens`, `revokeToken`, `fetchCustomers` (lifted from the script), `verifyState` (constant-time CSRF). Shared `QBO_STATE_COOKIE` / `QBO_CALLBACK_PATH` / `quickbooksRedirectUri` so authorize + token-exchange use a byte-identical `redirect_uri`.
+- [x] `src/lib/quickbooks/connection.ts` — **new module** (persistence + lifecycle split out of client.ts): `getConnection`/`saveConnection`/`deleteConnection` (singleton upsert, tokens encrypted via `sealed-box`), `getValidAccessToken()` (refresh-on-expiry + rotate-persist), pure `computeExpiry`/`accessTokenFresh`.
+- [x] `src/features/quickbooks/actions.ts` — `connectQuickbooks()` (admin-gated; random `state` in httpOnly+lax cookie; redirect to authorize URL) and `disconnectQuickbooks()` (revoke + delete row, then `revalidatePath` in place — no redirect). Added both to the action-gate matrix (`src/features/__tests__/action-gate-matrix.ts`, ADMIN_ONLY).
+- [x] `src/app/auth/quickbooks/callback/route.ts` — `verifyState` cookie vs param (constant-time), `exchangeCodeForTokens`, capture `realmId`, `saveConnection` (encrypted), `isAdmin()` defense-in-depth, redirect to `/admin/quickbooks` (`?connected=1` / `?error=…`).
+- [x] Config: added `QBO_CLIENT_ID`/`QBO_CLIENT_SECRET`/`QBO_ENV`/`QBO_TOKEN_ENC_KEY` to `.env.example`. ~~deploy.sh secret-wiring~~ **deferred to stage-deploy time** — not needed for local sandbox validation (localhost redirect URI), and `deploy.sh` carries an unrelated pre-existing uncommitted edit; QBO secret-wiring will land in a dedicated commit when the viewer is deployed.
+- [x] Tests (`client.test.ts`): authorize-URL params, exchange/refresh request shape (Basic-auth + body + rotation), `fetchCustomers` pagination/Bearer/sandbox-host/401→`QboAuthError`, `verifyState`. (`connection.test.ts`): `computeExpiry` + `accessTokenFresh`. (getValidAccessToken refresh-and-persist with a mocked DB is a Phase 4 unit.)
 
 #### Phase 3: Admin viewer page (read + display) + nav item
 - [ ] `src/app/(app)/admin/quickbooks/page.tsx` — `await assertCan('admin:access')`; if no connection → Connect button
