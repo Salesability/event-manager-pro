@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema — `dealers.quickbooks_id` + unique partial index + migration | Done | `79a74ff` |
 | 2: Shared sync module (`map` + `compute-plan` + `apply`) | Done | `80d502c` |
-| 3: Sync-diff page + "Sync dealers" Server Action button | Pending | - |
+| 3: Sync-diff page + "Sync dealers" Server Action button | Done | `a93f779` |
 | 4: Tests + smoke verification | Pending | - |
 
 Follow-up to 0068. Adds a durable `quickbooks_id` link on `dealers` and **pivots the `/admin/quickbooks` page from a passive customer list into a sync surface**: it computes, per QB customer, the change that *would* land in our DB (Create / Link → #N / Already linked / Skip), shows that change set, and a deliberate "Sync dealers" button applies it. "Done" = the column + unique index ship to sandbox; the connected page renders the computed change set (read-only); the apply action creates/links dealers through one env-agnostic path (match-by-QB-ID → match-by-name+address-and-backfill → insert); local fields are never clobbered; and the chunk-end `/eval` is PASS.
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] — after `drizzle-kit generate`, verify the new journal `when` > previous, or the migration silently never applies.
 - Memory [[project_prod_db]] — apply migrations on the **session pooler (5432)**, sandbox first; prod is a separate DB.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -71,13 +71,13 @@ For each new file or method below, the builder reads the anchor first and matche
 **Out-of-scope note flagged for chunk-end:** the classifier has **no non-dealer skip-list** (0060's `SKIP_NAMES`/`DEDUP_NAMES` that excluded vendors/Salesability-itself/dupes from the one-time prod seed). Per the plan's 4-action model that's correct for the **sandbox-only** sync this chunk ships; if/when a *prod* QB connection is enabled, re-introducing a curated skip-list is a natural follow-up so a general sync doesn't create dealer rows for vendors.
 
 #### Phase 3: Sync-diff page + "Sync dealers" Server Action button
-- [ ] Page (`src/app/(app)/admin/quickbooks/page.tsx`): when connected, after `fetchCustomers`, call `computeDealerSyncPlan(customers)` and pass the plan rows (not the raw customers) into the component. The action column is computed read-only on load.
-- [ ] Reshape `quickbooks-admin.tsx`'s connected table into a **change-set table**: columns Company · Email · Phone · **Action** (badge: Create / Link → #N / Already linked / Skip), with a counts header ("N create · M link · K skip"). Reuse the existing `<Table>` shell (`:122-153`).
-- [ ] Add `syncDealersFromQuickbooks` Server Action to `src/features/quickbooks/actions.ts`: `assertCan('admin:access')` → `getValidAccessToken()` → `fetchCustomers(realmId, accessToken)` → `applyDealerSync(...)` → `revalidatePath('/admin/quickbooks')` → `redirect('/admin/quickbooks?synced=<created>.<linked>.<skipped>')` (encode the summary into the flash param, mirroring `?connected=1`). After revalidate, the recomputed plan shows the post-sync state (mostly `already-linked`).
-- [ ] Handle the not-connected / fetch-error case gracefully (redirect with `?error=…`, same as the callback pattern).
-- [ ] Add the "Sync dealers" `<form action={syncDealersFromQuickbooks}>` button next to Disconnect, guarded so it only renders when connected + a plan was computed (and ideally disabled/hidden when the plan has zero create+link rows — nothing to do).
-- [ ] Extend the page's notice decode to turn `?synced=...` into a success `Notice` ("Created N · linked M · skipped K dealers from QuickBooks").
-- [ ] Keep it no-JS: server component + `<form action>`, matching the existing controls.
+- [x] Page (`src/app/(app)/admin/quickbooks/page.tsx`): when connected, after `fetchCustomers`, calls `computeDealerSyncPlan(customers)` and passes `SyncPlanRow[]` (not raw customers) into the component. Action column computed read-only on load.
+- [x] Reshaped `quickbooks-admin.tsx`'s connected table into a **change-set table**: columns Company · Email · Phone · **Action** (badge: Create / Link → #N / Already linked / Skip), with a counts header ("N customers · N create · M link · K already linked · J skip" + "dealers are up to date" when nothing's actionable). Reuses the `<Table>` shell.
+- [x] Added `syncDealersFromQuickbooks` Server Action: `assertCan('admin:access')` → `getValidAccessToken()` → `fetchCustomers(realmId, accessToken)` → `applyDealerSync(customers, user.id)` → `revalidatePath('/admin/quickbooks')` → `redirect('/admin/quickbooks?synced=<created>.<linked>.<skipped>')` (via `encodeSyncSummary`). Registered in `action-gate-matrix.ts` (admin-only).
+- [x] ~~Handle the not-connected / fetch-error case with a `?error=` redirect~~ — **ADJUSTED:** errors **propagate** (no catch) to Next's error boundary instead. Rationale: the action-gate-matrix suite treats any post-gate `redirect()` as a wrong gate-admit, and the test's admin path hits "not connected" → a caught-and-redirected error would fail it (mirrors `connectQuickbooks`, which also doesn't catch). The Sync button only renders once the page has already loaded customers (token is fresh + `!fetchError`), so a sync-time failure is rare; the page-load path already renders the `fetchError` "Couldn't load customers / Reconnect" state and hides the Sync button.
+- [x] Added the "Sync dealers" `<form action={syncDealersFromQuickbooks}>` button next to Disconnect, guarded to render only when connected + `!fetchError` + `actionable > 0` (create+link). Hidden when nothing to do (the counts line shows "up to date").
+- [x] Extended the page's notice decode to turn `?synced=...` into a success `Notice` via `decodeSyncSummary` ("Synced dealers from QuickBooks — created N · linked M · skipped K.").
+- [x] No-JS: server component + `<form action>`, matching connect/disconnect.
 
 #### Phase 4: Tests + smoke verification
 - [ ] Integration test for `syncDealersFromQbo` against a real test DB: insert-then-resync is idempotent; name+address pre-seed gets QB ID backfilled (the prod path); province not clobbered when already set.
