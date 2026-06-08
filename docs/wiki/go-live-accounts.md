@@ -120,6 +120,10 @@ the app when a customer has signed.
 **Developer does**
 - Generates the API key, registers the app's webhook URL (`/api/boldsign/webhook`) with a signing secret, and
   runs a live test signature.
+- **Verify prod BoldSign anytime from the app (0067):** sign in as an admin → **Send Test MSA** (`/admin/send-test-msa`)
+  posts a real test envelope to a typed address (use your own) and shows the BoldSign document id. Re-run after any
+  key rotation, region change, `MSA_TEMPLATE_VERSION` bump, or redeploy. (The signed test envelope is acked by the
+  webhook via its `metaData.test` flag — it has no MSA row.)
 
 **Hand back to the developer:**
 - API key → `BOLDSIGN_API_KEY` *(secret)*

@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-08 — admin "Send Test MSA" BoldSign-verification tool (chunk 0067)
+
+- Added an admin-only **Send Test MSA** tool (`/admin/send-test-msa`) that posts a real BoldSign envelope to a typed address to verify production e-signature — the BoldSign sibling of the 0064 Send Test Email tool. `sendTestMsa` (`src/features/msa/actions.ts`) renders the MSA prose with placeholder data and calls `sendSignatureRequest`, surfacing the `documentId`; **no** `master_service_agreements` row is created. Gated `admin:access` (not `msa:edit`, which also admits coaches).
+- The signed-webhook (`src/app/api/boldsign/webhook/route.ts`) now acks `200` on `metaData.test === 'true'` (after signature verification) so a signed test envelope doesn't 404-retry on the missing MSA row.
+- Documented in [`commercial-spine.md`](commercial-spine.md) (send-path verification) + [`go-live-accounts.md`](go-live-accounts.md) (BoldSign runbook: how to verify prod after a key/region/template change). Chunk notes: [`docs/chunks/0067-send-test-msa/`](../chunks/0067-send-test-msa/plan.md).
+
 ## 2026-06-08 — `service_items` flattened to a single `unit_price` (chunk 0066)
 
 - Chunk 0066 shipped: dropped the vestigial `service_item_unit` enum + `unit`/`unit_price_min`/`unit_price_max` columns (migration `drizzle/0030_flatten_service_item_units.sql`), leaving `service_items` as flat `{code, label, unit_price, description, sort_order}`. The 0053/0062 line-item picker had already made the `unit`/range model dead — `seedPrice` / `buildPickedLines` only ever read `unit_price`.
