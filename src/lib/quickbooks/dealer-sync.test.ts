@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   classifyDealerSyncPlan,
+  decodeSyncSummary,
+  encodeSyncSummary,
   type ExistingDealer,
   mapCustomerToDealer,
 } from './dealer-sync';
@@ -101,5 +103,24 @@ describe('classifyDealerSyncPlan', () => {
 
   it('carries email/phone from the customer onto the plan row', () => {
     expect(byQb.get('1')?.email).toBe('a@acme.test');
+  });
+});
+
+describe('sync summary param encode/decode', () => {
+  it('round-trips a result through the flash param', () => {
+    const summary = { created: 12, linked: 7, skipped: 3 };
+    expect(decodeSyncSummary(encodeSyncSummary(summary))).toEqual(summary);
+  });
+
+  it('encodes as <created>.<linked>.<skipped>', () => {
+    expect(encodeSyncSummary({ created: 1, linked: 0, skipped: 5 })).toBe('1.0.5');
+  });
+
+  it('rejects malformed params', () => {
+    expect(decodeSyncSummary('1.2')).toBeNull(); // too few parts
+    expect(decodeSyncSummary('1.2.3.4')).toBeNull(); // too many parts
+    expect(decodeSyncSummary('a.b.c')).toBeNull(); // non-numeric
+    expect(decodeSyncSummary('-1.0.0')).toBeNull(); // negative
+    expect(decodeSyncSummary('')).toBeNull();
   });
 });
