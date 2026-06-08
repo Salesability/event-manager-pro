@@ -64,7 +64,7 @@ if [ -z "${PROJECT_ID}" ]; then
     if [ "${DEPLOY_APP_ENV}" = "production" ]; then
         PROJECT_ID="eventpro-498313"
     else
-        PROJECT_ID="nnwweb"
+        PROJECT_ID="eventpro-stage"
     fi
 fi
 
