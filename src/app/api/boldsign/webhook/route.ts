@@ -36,6 +36,10 @@ type BoldSignEvent = {
 
 type BoldSignData = {
   documentId?: string;
+  // BoldSign echoes the metadata set at send time (`sendForSign.metaData`).
+  // The admin Send Test MSA tool (0067) stamps `test: 'true'` so this handler
+  // can ack a signed test envelope instead of 404ing on the missing MSA row.
+  metaData?: Record<string, string>;
 };
 
 type BoldSignPayload = {
@@ -161,6 +165,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const parsed = parsePayload(rawBody);
   if ('error' in parsed) {
     return new NextResponse(parsed.error, { status: 400 });
+  }
+
+  // 0067: test envelopes (the admin Send Test MSA tool) carry `metaData.test`
+  // and have NO `master_service_agreements` row — ack them so a signed test
+  // doesn't 404-retry through the lookup below. Sits AFTER signature
+  // verification (only authentic BoldSign payloads reach here) and is safe
+  // because real envelopes never carry `test:'true'` (they carry `msaId`).
+  // Best-effort: only fires if BoldSign echoes metadata in the webhook payload;
+  // otherwise a signed test falls back to the 404 below (benign — BoldSign
+  // gives up after its retry window).
+  if (parsed.data?.metaData?.test === 'true') {
+    return new NextResponse('OK (test envelope — no MSA row).', { status: 200 });
   }
 
   const eventType = parsed.event.eventType;

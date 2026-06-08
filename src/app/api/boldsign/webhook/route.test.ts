@@ -174,6 +174,21 @@ describe('POST /api/boldsign/webhook', () => {
     expect(mocks.markMsaSigned).not.toHaveBeenCalled();
   });
 
+  it('test envelope (metaData.test) acks 200 without an MSA lookup (0067)', async () => {
+    // No dbResults pushed: if the guard failed and we reached handleSigned,
+    // the lookup would return [] → 404. Asserting 200 + no side effects proves
+    // the metaData.test short-circuit fired (a signed test envelope has no row).
+    const body = JSON.stringify({
+      event: { id: 'evt-test', eventType: 'Signed', created: NOW_SECONDS, environment: 'Sandbox' },
+      data: { documentId: 'doc-test', metaData: { test: 'true' } },
+    });
+    const res = await POST(makeRequest(body));
+    expect(res.status).toBe(200);
+    expect(mocks.getSignedFileBytes).not.toHaveBeenCalled();
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.markMsaSigned).not.toHaveBeenCalled();
+  });
+
   it('Signed event for an already-active MSA short-circuits to 200 (replay) without re-uploading', async () => {
     mocks.dbResults.push([{ id: 1, status: 'active' }]);
     const body = payload({ eventType: 'Signed' });

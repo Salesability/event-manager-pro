@@ -115,7 +115,7 @@ vi.mock('@/lib/db', () => {
   };
 });
 
-import { createMsaDraft, sendMsaEnvelope } from './actions';
+import { createMsaDraft, sendMsaEnvelope, sendTestMsa } from './actions';
 
 async function call<T>(
   p: Promise<{ data?: T; serverError?: string; validationErrors?: unknown } | undefined | null>,
@@ -441,5 +441,88 @@ describe('sendMsaEnvelope', () => {
       'must be in draft or sent',
     );
     expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+});
+
+// 0067 — admin BoldSign-verification tool. No DB row; renders placeholder MSA
+// prose and posts a real envelope, surfacing the documentId.
+describe('sendTestMsa', () => {
+  const SIG_ANCHOR = { pageNumber: 3, x: 321, y: 600, width: 241, height: 22 };
+
+  beforeEach(() => {
+    // Default render mock omits signatureAnchor; the test tool passes it
+    // through to BoldSign, so give it one for the happy-path assertions.
+    mocks.renderMsaPdf.mockResolvedValue({
+      ok: true,
+      body: Buffer.from('%PDF-test-msa'),
+      signatureAnchor: SIG_ANCHOR,
+    });
+  });
+
+  it('renders placeholder MSA + posts a test envelope, returning the documentId', async () => {
+    const result = await call(
+      sendTestMsa(fd({ to: 'me@admin.test', signerName: 'Pat Admin', message: 'pls sign' })),
+    );
+    expect(result).toEqual({ ok: true, documentId: 'doc-abc' });
+
+    // Render got placeholder data with the typed signer threaded in.
+    const renderArg = mocks.renderMsaPdf.mock.calls[0][0] as Record<string, unknown>;
+    expect(renderArg.signerName).toBe('Pat Admin');
+    expect(renderArg.signerEmail).toBe('me@admin.test');
+    expect(renderArg.templateVersion).toBe('2026-05-12');
+
+    // Envelope went to the typed recipient with the test metadata + anchor.
+    const sendArg = mocks.sendSignatureRequest.mock.calls[0][0] as {
+      signer: { emailAddress: string; name: string };
+      metadata: Record<string, string>;
+      signatureAnchor: unknown;
+      message: string;
+    };
+    expect(sendArg.signer).toEqual({ emailAddress: 'me@admin.test', name: 'Pat Admin' });
+    expect(sendArg.metadata).toEqual({ test: 'true' });
+    expect(sendArg.signatureAnchor).toEqual(SIG_ANCHOR);
+    expect(sendArg.message).toBe('pls sign');
+  });
+
+  it('falls back to a default message when none is supplied', async () => {
+    await call(sendTestMsa(fd({ to: 'me@admin.test', signerName: 'Pat Admin' })));
+    const sendArg = mocks.sendSignatureRequest.mock.calls[0][0] as { message: string };
+    expect(sendArg.message).toMatch(/TEST envelope/i);
+  });
+
+  it('rejects a malformed recipient without rendering or sending', async () => {
+    const result = await call(sendTestMsa(fd({ to: 'nope', signerName: 'Pat Admin' })));
+    expect((result as { error: string }).error).toMatch(/valid email/i);
+    expect(mocks.renderMsaPdf).not.toHaveBeenCalled();
+    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty signer name', async () => {
+    const result = await call(sendTestMsa(fd({ to: 'me@admin.test', signerName: '  ' })));
+    expect((result as { error: string }).error).toMatch(/signer name/i);
+    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a missing MSA_TEMPLATE_VERSION before any send', async () => {
+    mocks.currentMsaTemplateVersion.mockReturnValueOnce({
+      error: 'MSA_TEMPLATE_VERSION is not set.',
+    });
+    const result = await call(sendTestMsa(fd({ to: 'me@admin.test', signerName: 'Pat Admin' })));
+    expect((result as { error: string }).error).toContain('MSA_TEMPLATE_VERSION');
+    expect(mocks.renderMsaPdf).not.toHaveBeenCalled();
+    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a render failure', async () => {
+    mocks.renderMsaPdf.mockResolvedValueOnce({ error: 'boom' });
+    const result = await call(sendTestMsa(fd({ to: 'me@admin.test', signerName: 'Pat Admin' })));
+    expect((result as { error: string }).error).toContain('MSA PDF render failed');
+    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a BoldSign send failure', async () => {
+    mocks.sendSignatureRequest.mockResolvedValueOnce({ error: 'BoldSign 401' });
+    const result = await call(sendTestMsa(fd({ to: 'me@admin.test', signerName: 'Pat Admin' })));
+    expect((result as { error: string }).error).toContain('BoldSign send failed');
   });
 });

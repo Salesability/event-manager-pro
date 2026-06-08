@@ -17,6 +17,7 @@ import * as quotesActions from '@/features/quotes/actions';
 import * as reportsActions from '@/features/reports/actions';
 import * as servicesActions from '@/features/services/actions';
 import * as taxRatesActions from '@/features/tax-rates/actions';
+import * as msaActions from '@/features/msa/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
 
@@ -257,6 +258,14 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => emailActions.sendCoachShareLinkEmail(fd()),
     expectedByRole: ADMIN_ONLY,
     note: 'email:send — admin-only',
+  },
+
+  // ---- MSA test tool (1) — admin-only -----------------------------------
+  {
+    label: 'sendTestMsa',
+    invoke: () => msaActions.sendTestMsa(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0067 BoldSign verification tool; real prod envelope). NOT msa:edit, which also admits coaches.',
   },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------

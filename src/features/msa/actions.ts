@@ -17,6 +17,7 @@ import { currentMsaTemplateVersion } from './template-version';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { MAX_ADDRESS_LINES } from '@/features/quotes/constants';
 import { mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
+import { testMsaFormSchema } from './test-msa-schema';
 
 // 0041 Phase 3 — MSA send-side Server Actions. Companion to closed/0037
 // Phase 2's `master_service_agreements` schema; this file is the first
@@ -39,6 +40,9 @@ import { mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
 
 type CreateMsaResult = { ok: true; msaId: number } | { error: string };
 type SendMsaResult = { ok: true } | { error: string };
+// Test tool surfaces the BoldSign documentId (proof of send) — distinct from
+// SendMsaResult, whose callers don't display the id (0067).
+type SendTestMsaResult = { ok: true; documentId: string } | { error: string };
 
 const MSA_DRAFT_GCS_KEY_PREFIX = 'msa';
 
@@ -370,4 +374,63 @@ export const sendMsaEnvelope = capabilityClient('msa:edit')
 
     revalidateMsaViews();
     return { ok: true };
+  });
+
+// 0067: admin BoldSign-verification tool. Renders the MSA prose with
+// placeholder data (NO `master_service_agreements` row, no quote bundle) and
+// posts a real envelope via `sendSignatureRequest`, surfacing the BoldSign
+// `documentId`. In prod (`APP_ENV=production`) this is a real, non-sandbox send
+// to the typed recipient — that's the point: verify production BoldSign
+// end-to-end. Reuses the same `isSandbox`/dev-redirect gate
+// `sendSignatureRequest` owns (non-prod → sandbox + `EMAIL_DEV_TO` redirect,
+// refused if unset). Gated `admin:access` (admin-only), NOT `msa:edit` —
+// `msa:edit` also admits coaches, and this sends real prod envelopes, so it's
+// an admin-only diagnostic. The `test: 'true'` metadata lets the webhook ack a
+// signed test envelope instead of 404ing on the missing MSA row.
+export const sendTestMsa = capabilityClient('admin:access')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<SendTestMsaResult> => {
+    const parsed = testMsaFormSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      const firstErr = Object.values(fieldErrors).flat().find(Boolean);
+      return { error: firstErr ?? 'Invalid test-MSA input.' };
+    }
+    const { to, signerName, message } = parsed.data;
+
+    const templateVersion = currentMsaTemplateVersion();
+    if (typeof templateVersion !== 'string') return templateVersion;
+
+    const issuedDate = todayIsoDate();
+    const msaData: MsaPdfData = {
+      msaNumber: 'TEST',
+      issuedDate,
+      clientName: 'TEST — BoldSign smoke (not a real agreement)',
+      signerName,
+      signerEmail: to,
+      termStart: issuedDate,
+      termEnd: plus12Months(issuedDate),
+      terminationNoticeDays: 30,
+      governingLaw: 'Nova Scotia, Canada',
+      templateVersion,
+    };
+    const msaPdf = await renderMsaPdf(msaData);
+    if ('error' in msaPdf) {
+      return { error: `MSA PDF render failed: ${msaPdf.error}` };
+    }
+
+    const sendResult = await sendSignatureRequest({
+      subject: 'TEST — Salesability Master Service Agreement (BoldSign smoke)',
+      message:
+        message ||
+        'This is a TEST envelope to verify BoldSign e-signature. Not a real agreement — no obligation.',
+      signer: { emailAddress: to, name: signerName },
+      files: [{ filename: 'test-msa.pdf', body: msaPdf.body }],
+      signatureAnchor: msaPdf.signatureAnchor,
+      metadata: { test: 'true' },
+    });
+    if ('error' in sendResult) {
+      return { error: `BoldSign send failed: ${sendResult.error}` };
+    }
+    return { ok: true, documentId: sendResult.documentId };
   });
