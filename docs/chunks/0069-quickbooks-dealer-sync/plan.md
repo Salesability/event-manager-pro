@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — `dealers.quickbooks_id` + unique partial index + migration | Done | `79a74ff` |
-| 2: Shared sync module (`map` + `compute-plan` + `apply`) | Pending | - |
+| 2: Shared sync module (`map` + `compute-plan` + `apply`) | Done | `80d502c` |
 | 3: Sync-diff page + "Sync dealers" Server Action button | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] — after `drizzle-kit generate`, verify the new journal `when` > previous, or the migration silently never applies.
 - Memory [[project_prod_db]] — apply migrations on the **session pooler (5432)**, sandbox first; prod is a separate DB.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -53,18 +53,22 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] (Prod apply deferred — the column ships to prod when prod migrations run via `pnpm db:migrate:prod`; not run here.)
 
 #### Phase 2: Shared sync module (`map` + `compute-plan` + `apply`)
-- [ ] New `src/lib/quickbooks/dealer-sync.ts`. Extract `mapProvince` / `formatAddress` / `mapCustomer` from the import script into `mapCustomerToDealer(c: QboCustomer)` (keep the script working — re-import from the new module, or duplicate-then-dedupe in a later pass; do **not** silently diverge the mapping).
-- [ ] **Batch-load existing dealers once** — `select { id, name(lower), address(lower), quickbooksId }` — and build two lookup maps (by `quickbooks_id`, by `lower(name)+lower(address)`). Classify in memory; avoid N per-customer queries (~137 rows in prod).
-- [ ] `computeDealerSyncPlan(customers: QboCustomer[]): SyncPlanRow[]` — **read-only**. For each (non-`Job`) customer, resolve the action against the maps and return `{ qbId, displayName, action: 'create' | 'link' | 'already-linked' | 'skip-collision', dealerId?, dealerName? }`:
-  - Match by `quickbooks_id` → `already-linked` (carry `dealerId`).
-  - Else match by `lower(name)+lower(address)` → if that dealer's `quickbooks_id IS NULL` → `link` (carry `dealerId`); if linked to a **different** QB ID → `skip-collision`.
+- [x] New `src/lib/quickbooks/dealer-sync.ts`. Mapping (`mapProvince` / `formatAddress` / `mapCustomerToDealer`) **duplicated** from the import script — rewiring the 0060 script is an **intent non-goal**, so the two copies are kept in sync by hand (a header comment flags this; the unit tests pin the QBO→dealer behavior). Contact fields intentionally omitted (`quickbooks_id` lands on the company, not contacts).
+- [x] **Batch-load existing dealers once** via `loadExistingDealers(exec)` — `select { id, name, address, province, quickbooksId }` — and `classifyDealerSyncPlan` builds two in-memory lookup maps (by `quickbooks_id`, by `lower(name)+lower(address)`). No N per-customer queries.
+- [x] `classifyDealerSyncPlan(customers, existing): SyncPlanRow[]` — **pure, read-only** (the unit-tested core). DB-backed `computeDealerSyncPlan(customers, exec=db)` loads the snapshot then delegates. Each row `{ qbId, company, email, phone, action: 'create' | 'link' | 'already-linked' | 'skip-collision', dealerId?, dealerName? }`:
+  - Match by `quickbooks_id` → `already-linked`.
+  - Else match by `lower(name)+lower(address)` → `link` if `quickbooks_id IS NULL`, else `skip-collision`.
   - Else → `create`.
-- [ ] `applyDealerSync(customers, actorId): SyncResult` — re-resolves (or takes the plan) and **writes**: backfill QB ID + null province on `link`; insert on `create` (`quickbooksId`, `acquiredVia: 'QuickBooks sync'`, `status: 'active'`, `createdById/updatedById: actorId`); no-op `already-linked`; leave `skip-collision` untouched. Return `{ created, linked, alreadyLinked, skipped }`. Never clobber non-null local `name`/`address`/`province`.
-- [ ] Skip `Job: true` sub-customers in both functions (per intent Open Question — confirm vs 0060 behavior first).
-- [ ] Set `updatedById`/`createdById` from the acting admin (actors mixin) — don't leave audit columns null.
-- [ ] Unit test the pure mapping (`mapCustomerToDealer`): province normalization, billing→shipping address fallthrough, missing-company DisplayName fallback.
-- [ ] Unit test `computeDealerSyncPlan` classification (the four actions) against a seeded dealer set — pure-ish, no writes.
-- [ ] Integration test `applyDealerSync` precedence: QB-ID match no-op, name+address backfill, fresh insert, already-linked-to-different-ID skip, idempotent re-run.
+- [x] `applyDealerSync(customers, actorId, exec=db): SyncResult` — re-resolves the plan against current DB state and **writes**: **guarded** `UPDATE … WHERE id=? AND quickbooks_id IS NULL` backfills QB ID (+ null province only) on `link`; insert on `create` (`quickbooksId`, `acquiredVia: 'QuickBooks sync'`, `status: 'active'`, `createdById/updatedById: actorId`) with `onConflictDoNothing` on the partial unique index. Returns `{ created, linked, alreadyLinked, skipped }`. Intra-batch name collisions lose the race → counted `skipped`, never clobbering. Never clobbers local `name`/`address`/`province`.
+- [x] Skip `Job: true` (and `ParentRef`) sub-customers + nameless records in the classifier — matches 0060 (which skips jobs).
+- [x] `actorId` threaded into `createdById`/`updatedById` on create and `updatedById` on link.
+- [x] Unit test the pure mapping (`mapCustomerToDealer`): province normalization (alias/full-name/non-CA→null), billing→shipping address+province fallthrough, missing-company DisplayName fallback, Job/ParentRef flag. (`src/lib/quickbooks/dealer-sync.test.ts`)
+- [x] Unit test `classifyDealerSyncPlan` classification (the four actions + job/nameless skip + display fields) against a seeded dealer set — pure, no writes.
+- [x] Integration test `applyDealerSync` precedence against the real DB in **always-rolled-back transactions** (`tests/integration/dealer-sync.test.ts`): fresh insert, name+address backfill (+ null-province backfill), province-not-clobbered, already-linked no-op + idempotent re-run, skip-collision. Seeds derive their address from `mapCustomerToDealer` so the name+address match mirrors how 0060 formatted prod dealers.
+
+**Note (executor injection):** every DB function takes an optional `exec: Database | Transaction = db`. Production call sites (page/action) omit it (use the app `db`); the integration test passes a transaction handle so all writes roll back and never touch the shared sandbox DB. New Code Anchors landed: `classifyDealerSyncPlan` (pure core), `loadExistingDealers`, `computeDealerSyncPlan`, `applyDealerSync` in `src/lib/quickbooks/dealer-sync.ts`.
+
+**Out-of-scope note flagged for chunk-end:** the classifier has **no non-dealer skip-list** (0060's `SKIP_NAMES`/`DEDUP_NAMES` that excluded vendors/Salesability-itself/dupes from the one-time prod seed). Per the plan's 4-action model that's correct for the **sandbox-only** sync this chunk ships; if/when a *prod* QB connection is enabled, re-introducing a curated skip-list is a natural follow-up so a general sync doesn't create dealer rows for vendors.
 
 #### Phase 3: Sync-diff page + "Sync dealers" Server Action button
 - [ ] Page (`src/app/(app)/admin/quickbooks/page.tsx`): when connected, after `fetchCustomers`, call `computeDealerSyncPlan(customers)` and pass the plan rows (not the raw customers) into the component. The action column is computed read-only on load.
