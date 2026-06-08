@@ -18,6 +18,7 @@ import * as reportsActions from '@/features/reports/actions';
 import * as servicesActions from '@/features/services/actions';
 import * as taxRatesActions from '@/features/tax-rates/actions';
 import * as msaActions from '@/features/msa/actions';
+import * as quickbooksActions from '@/features/quickbooks/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
 import { GET as reportsExportGET } from '@/app/(app)/reports/export/route';
 
@@ -266,6 +267,20 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     invoke: () => msaActions.sendTestMsa(fd()),
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0067 BoldSign verification tool; real prod envelope). NOT msa:edit, which also admits coaches.',
+  },
+
+  // ---- QuickBooks connection (2) — admin-only ---------------------------
+  {
+    label: 'connectQuickbooks',
+    invoke: () => quickbooksActions.connectQuickbooks(),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0068 QBO OAuth connect-initiation; redirects to Intuit)',
+  },
+  {
+    label: 'disconnectQuickbooks',
+    invoke: () => quickbooksActions.disconnectQuickbooks(),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0068 QBO OAuth disconnect; revoke + drop the connection row)',
   },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------
