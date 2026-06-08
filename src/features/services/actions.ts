@@ -11,7 +11,6 @@ import {
   serviceItemFormSchema,
   type ServiceItemFormValues,
 } from './service-schema';
-import type { ServiceItemUnit } from './queries';
 
 type ActionResult =
   | { ok: true }
@@ -19,10 +18,7 @@ type ActionResult =
 
 type ServiceItemFields = {
   label: string;
-  unit: ServiceItemUnit;
   unitPrice: string | null;
-  unitPriceMin: string | null;
-  unitPriceMax: string | null;
   description: string | null;
   sortOrder: number;
 };
@@ -36,33 +32,15 @@ function firstFieldError(fieldErrors: FieldErrors): string | undefined {
 }
 
 /** Apply wire → DB normalization on a successfully-parsed form value. The
- *  schema validates per-field format; this helper handles the cross-field
- *  range rule and the string → number / string → padded-money transforms. */
-function toServiceItemFields(
-  v: ServiceItemFormValues,
-): ServiceItemFields | { error: string } {
-  const sortOrder = v.sortOrder ? Number(v.sortOrder) : 0;
-  const unitPrice = normalizeMoney(v.unitPrice);
-  const unitPriceMin = normalizeMoney(v.unitPriceMin);
-  const unitPriceMax = normalizeMoney(v.unitPriceMax);
-
-  if (v.unit === 'range') {
-    if (unitPriceMin == null || unitPriceMax == null) {
-      return { error: 'Range items need both min and max prices.' };
-    }
-    if (Number(unitPriceMin) > Number(unitPriceMax)) {
-      return { error: 'Min price must be ≤ max price.' };
-    }
-  }
-
+ *  schema validates per-field format; this helper handles the string → number /
+ *  string → padded-money transforms. A blank `unitPrice` normalizes to null
+ *  ("variable" — e.g. `travel`, where the coach types the amount at quote time). */
+function toServiceItemFields(v: ServiceItemFormValues): ServiceItemFields {
   return {
     label: v.label,
-    unit: v.unit,
-    unitPrice: v.unit === 'range' ? null : unitPrice,
-    unitPriceMin: v.unit === 'range' ? unitPriceMin : null,
-    unitPriceMax: v.unit === 'range' ? unitPriceMax : null,
+    unitPrice: normalizeMoney(v.unitPrice),
     description: v.description ? v.description : null,
-    sortOrder,
+    sortOrder: v.sortOrder ? Number(v.sortOrder) : 0,
   };
 }
 
@@ -91,7 +69,6 @@ export const createServiceItem = capabilityClient('lookup:edit')
     const code = parsed.data.code;
 
     const fields = toServiceItemFields(parsed.data);
-    if ('error' in fields) return fields;
 
     // Un-archive an existing archived row with this code (matches
     // `createCampaignStyle`'s recovery shape) — keeps the global UNIQUE on
@@ -133,7 +110,6 @@ export const updateServiceItem = capabilityClient('lookup:edit')
     }
 
     const fields = toServiceItemFields(parsed.data);
-    if ('error' in fields) return fields;
 
     const result = await db
       .update(serviceItems)

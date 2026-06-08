@@ -72,10 +72,7 @@ async function loadActiveCatalog(): Promise<ServiceItem[]> {
       id: serviceItems.id,
       code: serviceItems.code,
       label: serviceItems.label,
-      unit: serviceItems.unit,
       unitPrice: serviceItems.unitPrice,
-      unitPriceMin: serviceItems.unitPriceMin,
-      unitPriceMax: serviceItems.unitPriceMax,
       description: serviceItems.description,
       sortOrder: serviceItems.sortOrder,
     })

@@ -109,7 +109,6 @@ describe('createServiceItem', () => {
         fd({
           code: 'add-on',
           label: 'Add-on widget',
-          unit: 'flat',
           unitPrice: '12.5',
           sortOrder: '9',
         }),
@@ -122,69 +121,38 @@ describe('createServiceItem', () => {
     expect(values).toMatchObject({
       code: 'add-on',
       label: 'Add-on widget',
-      unit: 'flat',
       unitPrice: '12.50',
-      unitPriceMin: null,
-      unitPriceMax: null,
       description: null,
       sortOrder: 9,
     });
   });
 
-  it('inserts a range item with both min and max prices', async () => {
-    const result = await call(
-      createServiceItem(
-        fd({
-          code: 'retrieval-tier',
-          label: 'Retrieval tier',
-          unit: 'range',
-          unitPriceMin: '100',
-          unitPriceMax: '400',
-        }),
-      ),
-    );
-    expect(result).toEqual({ ok: true });
-    const values = mocks.inserts[0].values as Record<string, unknown>;
-    expect(values).toMatchObject({
-      unit: 'range',
-      unitPrice: null,
-      unitPriceMin: '100.00',
-      unitPriceMax: '400.00',
-    });
-  });
-
-  it('inserts a variable flat item (no unit price)', async () => {
-    await call(
-      createServiceItem(
-        fd({ code: 'variable-cost', label: 'Variable', unit: 'flat' }),
-      ),
-    );
+  it('inserts a variable item (blank unit price → null)', async () => {
+    await call(createServiceItem(fd({ code: 'variable-cost', label: 'Variable' })));
     const values = mocks.inserts[0].values as Record<string, unknown>;
     expect(values.unitPrice).toBeNull();
-    expect(values.unitPriceMin).toBeNull();
-    expect(values.unitPriceMax).toBeNull();
   });
 
   it('lowercases the supplied code', async () => {
-    await call(createServiceItem(fd({ code: 'Mixed-CASE', label: 'l', unit: 'flat' })));
+    await call(createServiceItem(fd({ code: 'Mixed-CASE', label: 'l' })));
     expect((mocks.inserts[0].values as Record<string, unknown>).code).toBe('mixed-case');
   });
 
   it('rejects when label is missing', async () => {
-    const result = await call(createServiceItem(fd({ code: 'x', unit: 'flat' })));
+    const result = await call(createServiceItem(fd({ code: 'x' })));
     expect(result).toMatchObject({ error: 'Label is required.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
   it('rejects when code is missing', async () => {
-    const result = await call(createServiceItem(fd({ label: 'L', unit: 'flat' })));
+    const result = await call(createServiceItem(fd({ label: 'L' })));
     expect(result).toMatchObject({ error: 'Code is required.' });
     expect(mocks.inserts).toHaveLength(0);
   });
 
   it('rejects code with disallowed characters', async () => {
     const result = await call(
-      createServiceItem(fd({ code: 'bad_code!', label: 'L', unit: 'flat' })),
+      createServiceItem(fd({ code: 'bad_code!', label: 'L' })),
     );
     expect(result).toMatchObject({
       error: 'Code must be lowercase kebab-case (letters, digits, hyphens).',
@@ -192,42 +160,10 @@ describe('createServiceItem', () => {
     expect(mocks.inserts).toHaveLength(0);
   });
 
-  it('rejects unknown unit', async () => {
-    const result = await call(
-      createServiceItem(fd({ code: 'x', label: 'L', unit: 'bogus' })),
-    );
-    expect(result).toMatchObject({ error: 'Invalid unit.' });
-    expect(mocks.inserts).toHaveLength(0);
-  });
-
-  it('rejects range item missing min/max', async () => {
-    const result = await call(
-      createServiceItem(
-        fd({ code: 'x', label: 'L', unit: 'range', unitPriceMin: '100' }),
-      ),
-    );
-    expect(result).toMatchObject({ error: 'Range items need both min and max prices.' });
-  });
-
-  it('rejects range item where min > max', async () => {
-    const result = await call(
-      createServiceItem(
-        fd({
-          code: 'x',
-          label: 'L',
-          unit: 'range',
-          unitPriceMin: '500',
-          unitPriceMax: '100',
-        }),
-      ),
-    );
-    expect(result).toMatchObject({ error: 'Min price must be ≤ max price.' });
-  });
-
   it('rejects negative price', async () => {
     const result = await call(
       createServiceItem(
-        fd({ code: 'x', label: 'L', unit: 'flat', unitPrice: '-1' }),
+        fd({ code: 'x', label: 'L', unitPrice: '-1' }),
       ),
     );
     expect(result).toMatchObject({
@@ -237,7 +173,7 @@ describe('createServiceItem', () => {
 
   it('rejects price with more than 2 decimal places (no IEEE-754 rounding)', async () => {
     const result = await call(
-      createServiceItem(fd({ code: 'x', label: 'L', unit: 'flat', unitPrice: '2.675' })),
+      createServiceItem(fd({ code: 'x', label: 'L', unitPrice: '2.675' })),
     );
     expect((result as { error: string }).error).toContain('2 decimal places');
     expect(mocks.inserts).toHaveLength(0);
@@ -246,7 +182,7 @@ describe('createServiceItem', () => {
   it('rejects price over numeric(10,2) max', async () => {
     const result = await call(
       createServiceItem(
-        fd({ code: 'x', label: 'L', unit: 'flat', unitPrice: '100000000' }),
+        fd({ code: 'x', label: 'L', unitPrice: '100000000' }),
       ),
     );
     expect((result as { error: string }).error).toContain('8 whole digits');
@@ -255,14 +191,14 @@ describe('createServiceItem', () => {
 
   it('truncates trailing decimal silently to 2 places when input has exactly 2', async () => {
     await call(
-      createServiceItem(fd({ code: 'x', label: 'L', unit: 'flat', unitPrice: '12.5' })),
+      createServiceItem(fd({ code: 'x', label: 'L', unitPrice: '12.5' })),
     );
     expect((mocks.inserts[0].values as Record<string, unknown>).unitPrice).toBe('12.50');
   });
 
   it('rejects negative sortOrder', async () => {
     const result = await call(
-      createServiceItem(fd({ code: 'x', label: 'L', unit: 'flat', sortOrder: '-3' })),
+      createServiceItem(fd({ code: 'x', label: 'L', sortOrder: '-3' })),
     );
     expect(result).toMatchObject({ error: 'Sort order must be a non-negative integer.' });
   });
@@ -270,7 +206,7 @@ describe('createServiceItem', () => {
   it('rejects sortOrder over PG integer max', async () => {
     const result = await call(
       createServiceItem(
-        fd({ code: 'x', label: 'L', unit: 'flat', sortOrder: '2147483648' }),
+        fd({ code: 'x', label: 'L', sortOrder: '2147483648' }),
       ),
     );
     expect(result).toMatchObject({ error: 'Sort order must be a non-negative integer.' });
@@ -281,7 +217,7 @@ describe('createServiceItem', () => {
     mocks.dbResults.push([{ id: 7 }]);
     const result = await call(
       createServiceItem(
-        fd({ code: 'base-event', label: 'Restored', unit: 'flat', unitPrice: '6900' }),
+        fd({ code: 'base-event', label: 'Restored', unitPrice: '6900' }),
       ),
     );
     expect(result).toEqual({ ok: true });
@@ -298,7 +234,7 @@ describe('createServiceItem', () => {
       code: '23505',
     });
     const result = await call(
-      createServiceItem(fd({ code: 'base-event', label: 'L', unit: 'flat' })),
+      createServiceItem(fd({ code: 'base-event', label: 'L' })),
     );
     expect(result).toMatchObject({ error: 'That code is already in use.' });
   });
@@ -306,7 +242,7 @@ describe('createServiceItem', () => {
   it('rethrows non-duplicate db errors', async () => {
     mocks.insertError = new Error('connection refused');
     const r = await createServiceItem(
-      fd({ code: 'x', label: 'L', unit: 'flat' }),
+      fd({ code: 'x', label: 'L' }),
     );
     expect(r?.serverError).toBeTruthy();
   });
@@ -316,7 +252,7 @@ describe('createServiceItem', () => {
   it('surfaces per-field errors on safeParse failure', async () => {
     const result = (await call(
       createServiceItem(
-        fd({ code: 'bad_code!', label: '', unit: 'flat' }),
+        fd({ code: 'bad_code!', label: '' }),
       ),
     )) as { error: string; fieldErrors: Record<string, string[]> };
     expect(result.fieldErrors.code?.[0]).toMatch(/kebab/i);
@@ -326,14 +262,13 @@ describe('createServiceItem', () => {
 });
 
 describe('updateServiceItem', () => {
-  it('updates label/unit/price on an active row', async () => {
+  it('updates label/price on an active row', async () => {
     mocks.dbResults.push([{ id: 42 }]);
     const result = await call(
       updateServiceItem(
         fd({
           id: '42',
           label: 'Renamed',
-          unit: 'per-day',
           unitPrice: '750',
           sortOrder: '2',
         }),
@@ -345,7 +280,6 @@ describe('updateServiceItem', () => {
     const patch = mocks.updates[0].patch as Record<string, unknown>;
     expect(patch).toMatchObject({
       label: 'Renamed',
-      unit: 'per-day',
       unitPrice: '750.00',
       sortOrder: 2,
     });
@@ -354,7 +288,7 @@ describe('updateServiceItem', () => {
 
   it('rejects invalid id', async () => {
     const result = await call(
-      updateServiceItem(fd({ label: 'L', unit: 'flat' })),
+      updateServiceItem(fd({ label: 'L' })),
     );
     expect(result).toMatchObject({ error: 'Invalid service-item id.' });
     expect(mocks.updates).toHaveLength(0);
@@ -363,7 +297,7 @@ describe('updateServiceItem', () => {
   it('returns not-found when no row matched', async () => {
     mocks.dbResults.push([]);
     const result = await call(
-      updateServiceItem(fd({ id: '99', label: 'L', unit: 'flat' })),
+      updateServiceItem(fd({ id: '99', label: 'L' })),
     );
     expect(result).toMatchObject({ error: 'Service item not found.' });
   });

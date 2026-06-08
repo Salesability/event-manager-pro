@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { ServiceItemUnit } from './queries';
 
 // Single source of truth for service-item form validation. Imported by both
 // the client component (`services-admin.tsx` via `zodResolver`) and the Server
@@ -8,14 +7,6 @@ import type { ServiceItemUnit } from './queries';
 // Schema validates the wire shape (FormData → string values everywhere); the
 // action layer handles the wire → DB normalization (string '12.5' → '12.50',
 // string '9' → number 9) after `safeParse` confirms the format is well-formed.
-
-export const SERVICE_UNITS: readonly ServiceItemUnit[] = [
-  'flat',
-  'per-record',
-  'per-touch',
-  'per-day',
-  'range',
-];
 
 // Lowercase letters, digits, hyphens; 2–60 chars; no leading/trailing hyphen.
 const CODE_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -49,9 +40,6 @@ export const serviceItemFormSchema = z.object({
     .trim()
     .min(1, 'Label is required.')
     .max(120, 'Label must be 120 characters or fewer.'),
-  unit: z.enum(['flat', 'per-record', 'per-touch', 'per-day', 'range'], {
-    error: 'Invalid unit.',
-  }),
   description: z
     .string()
     .trim()
@@ -66,8 +54,6 @@ export const serviceItemFormSchema = z.object({
     }, 'Sort order must be a non-negative integer.')
     .optional(),
   unitPrice: moneyField('Unit price'),
-  unitPriceMin: moneyField('Min price'),
-  unitPriceMax: moneyField('Max price'),
 });
 
 export type ServiceItemFormValues = z.infer<typeof serviceItemFormSchema>;

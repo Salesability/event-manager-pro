@@ -15,23 +15,8 @@ import {
   createServiceItem,
   updateServiceItem,
 } from '@/features/services/actions';
-import type { ServiceItem, ServiceItemUnit } from '@/features/services/queries';
-import {
-  SERVICE_UNITS,
-  serviceItemFormSchema,
-  type ServiceItemFormValues,
-} from './service-schema';
-
-const UNIT_LABEL: Record<ServiceItemUnit, string> = {
-  flat: 'Flat',
-  'per-record': 'Per record',
-  'per-touch': 'Per touch',
-  'per-day': 'Per day',
-  range: 'Range',
-};
-
-const selectClass =
-  'h-9 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm';
+import type { ServiceItem } from '@/features/services/queries';
+import { serviceItemFormSchema, type ServiceItemFormValues } from './service-schema';
 
 const buttonClass =
   'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
@@ -40,12 +25,6 @@ const submitClass =
   'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 function formatPrice(item: ServiceItem): string {
-  if (item.unit === 'range') {
-    if (item.unitPriceMin != null && item.unitPriceMax != null) {
-      return `$${item.unitPriceMin}–$${item.unitPriceMax}`;
-    }
-    return '—';
-  }
   return item.unitPrice == null ? 'variable' : `$${item.unitPrice}`;
 }
 
@@ -116,9 +95,6 @@ function ServiceRow({ item, onChanged }: { item: ServiceItem; onChanged: () => v
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="font-mono text-xs text-zinc-500">{item.code}</span>
           <span className="text-sm font-medium text-zinc-900">{item.label}</span>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            {UNIT_LABEL[item.unit]}
-          </span>
           <span className="text-sm tabular-nums text-zinc-900">{formatPrice(item)}</span>
         </div>
         {item.description ? (
@@ -184,23 +160,17 @@ function ServiceForm(props: ServiceFormProps) {
       return {
         code: props.item.code,
         label: props.item.label,
-        unit: props.item.unit,
         description: props.item.description ?? '',
         sortOrder: String(props.item.sortOrder),
         unitPrice: props.item.unitPrice ?? '',
-        unitPriceMin: props.item.unitPriceMin ?? '',
-        unitPriceMax: props.item.unitPriceMax ?? '',
       };
     }
     return {
       code: '',
       label: '',
-      unit: 'flat',
       description: '',
       sortOrder: String(props.defaultSortOrder),
       unitPrice: '',
-      unitPriceMin: '',
-      unitPriceMax: '',
     };
   }, [isEdit, props]);
 
@@ -209,9 +179,8 @@ function ServiceForm(props: ServiceFormProps) {
     defaultValues,
     mode: 'onTouched',
   });
-  const { register, handleSubmit, watch, reset, formState } = form;
+  const { register, handleSubmit, reset, formState } = form;
   const { errors, isSubmitting } = formState;
-  const unit = watch('unit');
 
   const onSubmit = handleSubmit(async (values) => {
     const fd = valuesToFormData(values, isEdit ? props.item.id : undefined);
@@ -269,18 +238,6 @@ function ServiceForm(props: ServiceFormProps) {
         </Field>
 
         <Field>
-          <Label htmlFor="svc-unit">Unit</Label>
-          <select id="svc-unit" className={selectClass} {...register('unit')}>
-            {SERVICE_UNITS.map((u) => (
-              <option key={u} value={u}>
-                {UNIT_LABEL[u]}
-              </option>
-            ))}
-          </select>
-          {errors.unit && <FieldError>{errors.unit.message}</FieldError>}
-        </Field>
-
-        <Field>
           <Label htmlFor="svc-sort">Sort</Label>
           <Input
             id="svc-sort"
@@ -292,51 +249,18 @@ function ServiceForm(props: ServiceFormProps) {
           {errors.sortOrder && <FieldError>{errors.sortOrder.message}</FieldError>}
         </Field>
 
-        {unit === 'range' ? (
-          <>
-            <Field>
-              <Label htmlFor="svc-min">Min $</Label>
-              <Input
-                id="svc-min"
-                type="number"
-                step="0.01"
-                min={0}
-                aria-invalid={!!errors.unitPriceMin || undefined}
-                {...register('unitPriceMin')}
-              />
-              {errors.unitPriceMin && (
-                <FieldError>{errors.unitPriceMin.message}</FieldError>
-              )}
-            </Field>
-            <Field>
-              <Label htmlFor="svc-max">Max $</Label>
-              <Input
-                id="svc-max"
-                type="number"
-                step="0.01"
-                min={0}
-                aria-invalid={!!errors.unitPriceMax || undefined}
-                {...register('unitPriceMax')}
-              />
-              {errors.unitPriceMax && (
-                <FieldError>{errors.unitPriceMax.message}</FieldError>
-              )}
-            </Field>
-          </>
-        ) : (
-          <Field className="md:col-span-2">
-            <Label htmlFor="svc-price">Unit $ (blank = variable)</Label>
-            <Input
-              id="svc-price"
-              type="number"
-              step="0.01"
-              min={0}
-              aria-invalid={!!errors.unitPrice || undefined}
-              {...register('unitPrice')}
-            />
-            {errors.unitPrice && <FieldError>{errors.unitPrice.message}</FieldError>}
-          </Field>
-        )}
+        <Field className="md:col-span-2">
+          <Label htmlFor="svc-price">Unit $ (blank = variable)</Label>
+          <Input
+            id="svc-price"
+            type="number"
+            step="0.01"
+            min={0}
+            aria-invalid={!!errors.unitPrice || undefined}
+            {...register('unitPrice')}
+          />
+          {errors.unitPrice && <FieldError>{errors.unitPrice.message}</FieldError>}
+        </Field>
 
         <Field className="md:col-span-4">
           <Label htmlFor="svc-desc">Description (optional)</Label>
@@ -370,14 +294,8 @@ function valuesToFormData(values: ServiceItemFormValues, id?: number): FormData 
   if (id != null) fd.set('id', String(id));
   if (values.code) fd.set('code', values.code);
   fd.set('label', values.label);
-  fd.set('unit', values.unit);
   fd.set('description', values.description ?? '');
   fd.set('sortOrder', values.sortOrder ?? '');
-  if (values.unit === 'range') {
-    fd.set('unitPriceMin', values.unitPriceMin ?? '');
-    fd.set('unitPriceMax', values.unitPriceMax ?? '');
-  } else {
-    fd.set('unitPrice', values.unitPrice ?? '');
-  }
+  fd.set('unitPrice', values.unitPrice ?? '');
   return fd;
 }
