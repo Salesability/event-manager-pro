@@ -10,7 +10,7 @@
 | 1: Backfill + schema migration (db-conventions) | Done | `6f4057c` |
 | 2: Schema + query layer | Done | `6f4057c` |
 | 3: Admin form + validation | Done | `6f4057c` |
-| 4: Tests + wiki + smoke | In Progress | - |
+| 4: Tests + wiki + smoke | Done | `f6e8309` |
 
 This chunk collapses the now-vestigial `service_items` pricing model (`unit` enum +
 `unit_price_min`/`unit_price_max`) down to a flat `unit_price`, which is the only catalog field the
@@ -36,7 +36,7 @@ existing quotes are untouched (they snapshot into `quote_line_items`).
 - ⚠️ Drizzle journal `when` gotcha ([[project-drizzle-journal-when-gotcha]]) — after generating the
   migration, verify the new journal `when` > the previous entry's, or it silently never applies.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete) — chunk-end `/eval` PASS-with-warnings ([`eval-2026-06-08-0807.md`](eval-2026-06-08-0807.md))
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -112,10 +112,10 @@ existing quotes are untouched (they snapshot into `quote_line_items`).
       description,sort_order}`, noting the composer reads only `unit_price` and the QBO-`Item` shape
       alignment. `commercial-spine.md` describes the flow, not the column shape — no change needed.
       Added a `log.md` entry (above the prior-session ERD entry).
-- [ ] Smoke (web-test): `goto /admin/lookups` — form shows Code / Label / Sort / Unit price /
-      Description, **no** unit dropdown, **no** min/max. *(Verified by chunk-end `/eval` web-test.)*
-- [ ] Smoke (web-test): `goto /quotes/new`; add "Record Retrieval and Preparation" → line seeds a
-      **non-zero** ($100) price. *(Verified by chunk-end `/eval` web-test.)*
+- [x] Smoke (web-test): `goto /admin/lookups` — form shows Code / Label / Sort / Unit price /
+      Description, **no** unit dropdown, **no** min/max. **PASS** (chunk-end `/eval` 2026-06-08-0807).
+- [x] Smoke (web-test): `goto /quotes/new`; add "Record Retrieval and Preparation" → line seeds
+      **$100.00** (Subtotal/Total $100.00, no longer $0). **PASS** (chunk-end `/eval` 2026-06-08-0807).
 - [x] **Prod migration apply recorded as a deploy-time step** (NOT auto-run here): apply `0030` to the
       **prod** DB via `pnpm db:migrate:prod` (fetches the `database-url-production` 5432 session-pooler
       secret) **before** deploying 0066's code to prod Cloud Run (`GCP_REGION=us-east4 …`). 0066's

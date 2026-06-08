@@ -18,7 +18,7 @@ Entries are reverse-chronological (newest at the top). Format:
 - Chunk 0066 shipped: dropped the vestigial `service_item_unit` enum + `unit`/`unit_price_min`/`unit_price_max` columns (migration `drizzle/0030_flatten_service_item_units.sql`), leaving `service_items` as flat `{code, label, unit_price, description, sort_order}`. The 0053/0062 line-item picker had already made the `unit`/range model dead — `seedPrice` / `buildPickedLines` only ever read `unit_price`.
 - Backfilled the one `range` row (`record-retrieval`, previously `unit_price` NULL → seeded **$0** in the composer) to **$100.00** (the old `$100–$400` menu floor; seed-then-editable). `travel` left NULL (variable — coach types the amount). Applied to the **sandbox** DB; **prod apply is a pending deploy-time step**.
 - Updated [`data-model.md`](data-model.md): the Mermaid ERD `service_items` entity, the "deliberately not drawn" note (marked-for-removal → done), the entity-summary table row, and the `### service_items` detail prose + seed-catalog line. Admin form (`/admin/lookups`) simplified to Code / Label / Sort / Unit price / Description (no unit picker, no min/max). `unit_price` kept **optional** (blank = variable), not made required — preserves the `travel` row.
-- Chunk working notes: [`docs/chunks/0066-flatten-service-item-units/`](../chunks/0066-flatten-service-item-units/plan.md).
+- Chunk working notes: [`docs/chunks/closed/0066-flatten-service-item-units/`](../chunks/closed/0066-flatten-service-item-units/plan.md).
 
 ## 2026-06-08 — full Mermaid ERD added to data-model.md
 
