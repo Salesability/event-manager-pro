@@ -13,6 +13,19 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-08 — `dealers.quickbooks_id` durable link + on-demand QB dealer sync (0069)
+
+- Ingested the new **`dealers.quickbooks_id`** column (nullable text, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL`) into [`data-model.md`](data-model.md) — both the ERD `dealers` block and the table-summary row. Durable link to the QBO `Customer.Id`; migration `0032`, applied to **sandbox** (prod ships when prod migrations run).
+- The column is **only** written by the on-demand QuickBooks sync at `/admin/quickbooks` (chunk 0069) — `applyDealerSync` in `src/lib/quickbooks/dealer-sync.ts` (match-by-QB-id → match-by-name+address & backfill → insert). Never set from the in-app dealer form. Local `name`/`address` never clobbered; `province` backfills only when null.
+- The viewer at `/admin/quickbooks` (0068) became a **sync surface** (0069): per-customer change set (Create / Link → #N / Already linked / Skip) computed read-only on load, applied by a deliberate "Sync dealers" Server Action. Browser smoke confirmed the connected change-set table against the sandbox QB company (26 customers, all "Create" — sandbox `dealers` empty).
+
+## 2026-06-08 — stage moved from `nnwweb` → `eventpro-stage` (salesability.ca org)
+
+- Stage Cloud Run left the personal **`nnwweb`** project (Network Node account) for a new **`eventpro-stage`** project (number `485010152235`) under the **`salesability.ca`** org, same billing account as prod (`01299D-A56289-F14977`). Both envs now sit under one org / one gcloud login (`admin@salesability.ca`); the "switch accounts before a prod deploy" caveat is retired — the `production` typed-confirmation gate is the guard.
+- `deploy.sh` stage branch repointed (`PROJECT_ID` `nnwweb` → `eventpro-stage`); `.env.local` GCS repointed to a new same-project bucket `eventpro-stage-pdfs`; `PROD_SITE_URL` pinned in `.env.local` so bare stage deploys don't regress to deploy.sh's stale `7435lagfjq-nn` derivation. New stage URL: `https://event-manager-pro-sandbox-485010152235.us-east4.run.app` (verified public, 307 → /login).
+- Captured the **fresh-project-in-this-org** gotchas in [`go-live-accounts.md`](go-live-accounts.md): the org enforces Domain Restricted Sharing + no auto-IAM for default SAs, so a new project needs (1) the `iam.allowedPolicyMemberDomains` → `allValues: ALLOW` override, (2) `roles/cloudbuild.builds.builder` on the compute SA, (3) its own GCS bucket — none of which `deploy.sh` does. Also fixed a stale `--project=nnwweb` on the prod DB-secret example (→ `eventpro-498313`).
+- **Open follow-ups (not done):** add the new stage URL to the sandbox Supabase redirect allowlist (auth login on stage); decommission the old `nnwweb` stage service/secrets (personal account); QBO stage OAuth secrets now belong in `eventpro-stage`, not `nnwweb`.
+
 ## 2026-06-08 — admin "Send Test MSA" BoldSign-verification tool (chunk 0067)
 
 - Added an admin-only **Send Test MSA** tool (`/admin/send-test-msa`) that posts a real BoldSign envelope to a typed address to verify production e-signature — the BoldSign sibling of the 0064 Send Test Email tool. `sendTestMsa` (`src/features/msa/actions.ts`) renders the MSA prose with placeholder data and calls `sendSignatureRequest`, surfacing the `documentId`; **no** `master_service_agreements` row is created. Gated `admin:access` (not `msa:edit`, which also admits coaches).
