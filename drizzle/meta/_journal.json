@@ -225,6 +225,13 @@
       "when": 1780942196993,
       "tag": "0031_chubby_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1780949870990,
+      "tag": "0032_skinny_sister_grimm",
+      "breakpoints": true
     }
   ]
 }
