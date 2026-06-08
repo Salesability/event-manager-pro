@@ -33,8 +33,12 @@ async function siteUrl(): Promise<string> {
 export async function connectQuickbooks() {
   await assertCan('admin:access');
 
-  const state = randomBytes(32).toString('base64url');
   const redirectUri = quickbooksRedirectUri(await siteUrl());
+  const state = randomBytes(32).toString('base64url');
+  // qboConfig() (inside buildAuthorizeUrl) throws when QBO_CLIENT_ID/SECRET are
+  // unset. The page hides the Connect button until `qboConfigured()` is true,
+  // so this is effectively unreachable from the UI — but if it does throw, let
+  // it propagate (Next's error boundary) rather than swallow a real misconfig.
   const authorizeUrl = buildAuthorizeUrl(state, redirectUri);
 
   // httpOnly + sameSite=lax so the cookie rides along on Intuit's top-level

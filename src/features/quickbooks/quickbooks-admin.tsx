@@ -27,6 +27,7 @@ export type Notice = { kind: 'error' | 'success'; message: string } | null;
 
 type Props = {
   connection: ConnectionView | null;
+  configured: boolean;
   customers: QboCustomer[] | null;
   fetchError: string | null;
   notice: Notice;
@@ -52,7 +53,7 @@ function ConnectButton({ label }: { label: string }) {
   );
 }
 
-export function QuickbooksAdmin({ connection, customers, fetchError, notice }: Props) {
+export function QuickbooksAdmin({ connection, configured, customers, fetchError, notice }: Props) {
   return (
     <div className="flex flex-col gap-6">
       {notice && (
@@ -76,7 +77,16 @@ export function QuickbooksAdmin({ connection, customers, fetchError, notice }: P
               this never changes anything in QuickBooks.
             </p>
           </div>
-          <ConnectButton label="Connect to QuickBooks" />
+          {configured ? (
+            <ConnectButton label="Connect to QuickBooks" />
+          ) : (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              QuickBooks credentials aren&apos;t set. Add <code className="font-mono">QBO_CLIENT_ID</code>,{' '}
+              <code className="font-mono">QBO_CLIENT_SECRET</code> and{' '}
+              <code className="font-mono">QBO_TOKEN_ENC_KEY</code> to <code className="font-mono">.env.local</code>{' '}
+              (then restart the dev server) before connecting.
+            </p>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-4">

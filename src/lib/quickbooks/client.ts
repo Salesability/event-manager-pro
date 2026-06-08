@@ -37,6 +37,12 @@ export type QboConfig = {
 // expired → refresh/reconnect" from a generic transport error.
 export class QboAuthError extends Error {}
 
+// Non-throwing presence check — for UI that wants to hint "credentials not set"
+// before the admin clicks Connect (which would otherwise throw in qboConfig).
+export function qboConfigured(): boolean {
+  return Boolean(process.env.QBO_CLIENT_ID?.trim() && process.env.QBO_CLIENT_SECRET?.trim());
+}
+
 export function qboConfig(): QboConfig {
   const clientId = process.env.QBO_CLIENT_ID?.trim();
   const clientSecret = process.env.QBO_CLIENT_SECRET?.trim();

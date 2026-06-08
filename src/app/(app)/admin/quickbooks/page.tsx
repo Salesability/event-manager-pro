@@ -1,6 +1,6 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
-import { fetchCustomers, qboConfig, type QboCustomer } from '@/lib/quickbooks/client';
+import { fetchCustomers, qboConfig, qboConfigured, type QboCustomer } from '@/lib/quickbooks/client';
 import { getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
 import {
   QuickbooksAdmin,
@@ -62,6 +62,7 @@ export default async function QuickbooksAdminPage({
       />
       <QuickbooksAdmin
         connection={connection}
+        configured={qboConfigured()}
         customers={customers}
         fetchError={fetchError}
         notice={notice}
