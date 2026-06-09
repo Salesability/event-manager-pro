@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — `service_items.quickbooks_id` + unique partial index + migration | Done | `8192b9a` |
-| 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Pending | - |
+| 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Done | `194bcd0` |
 | 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Pending | - |
 | 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Pending | - |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first on 5432; prod QBO connected 2026-06-09 but no prod writes yet).
 - `quote_line_items` **snapshot discipline** (0062) + `service_item_id` `set null` on delete — why hard-deleting legacy SKUs is history-safe.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests.
@@ -54,20 +54,14 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Applied to **sandbox** (5432 pooler `aws-1-us-west-2`) via `pnpm db:migrate`; verified col (`text`, nullable) + partial index (`WHERE (quickbooks_id IS NOT NULL)`) via `pg_indexes`. (Prod deferred to next prod migration run.)
 
 #### Phase 2: `client.ts` `fetchItems` + `item-sync.ts`
-- [ ] `client.ts`: `QboItem` type (Id, SyncToken?, Name, Sku?, Description?, UnitPrice?, Active?, Type, SubItem?, ParentRef?) + `fetchItems(realmId, accessToken, opts?)` — paginated `SELECT * FROM Item` (active-only default), mirroring `fetchCustomers`.
-- [ ] `item-sync.ts`:
-  - `mapItemToServiceItem(item)` → `{ qbId, code, label, unitPrice, description, isSyncable }`. `code` = `Sku` trimmed else slugified `Name` (unique-safe); `label` = `Name`; `unitPrice` = `UnitPrice` (string mode, nullable); `isSyncable = Type ∈ {Service, NonInventory}` && !SubItem/!ParentRef && has Name.
-  - Pure `classifyItemSyncPlan(items, existing)`: per syncable QBO item → `create` (no `quickbooks_id` match) or `update` (matched by `quickbooks_id`; QBO fields differ) or `current` (matched, identical); guard two-items-same-derived-`code` → `skip`. Separately compute **`archive`** (existing linked rows whose `quickbooks_id` is absent from the active QBO set) and **`purge`** (existing rows with `quickbooks_id IS NULL` — the legacy SKUs).
-  - DB `loadExistingServiceItems` + `computeItemSyncPlan` (read-only) + `applyItemSync(items, actorId, exec=db)`:
-    - **create** → insert (`quickbooks_id`, `code`, `label`, `unitPrice`, `description`); `onConflictDoNothing` on the partial index.
-    - **update** → overwrite `label`/`unit_price`/`description` from QBO (QBO master), guarded `WHERE quickbooks_id = ?`.
-    - **archive** → set `archivedAt` on linked rows missing from QBO.
-    - **purge** → `DELETE FROM service_items WHERE quickbooks_id IS NULL` (legacy). Runs **after** the upserts so the catalog is never empty.
-    - **Empty-catalog guard:** if `items` is empty (likely a transient QBO error), abort with no writes — never archive/purge the whole catalog on an empty pull.
-    - Returns `{ created, updated, archived, purged, skipped }`. Executor-injection like `dealer-sync.ts`.
-  - `encodeItemSyncSummary`/`decodeItemSyncSummary` (digit-guarded).
-- [ ] Unit: `mapItemToServiceItem` (Sku→code, Name-slug fallback, UnitPrice null, Service/NonInventory syncable, Category/SubItem skip) + `classifyItemSyncPlan` (create/update/current/archive/purge/skip) + summary round-trip + the empty-pull guard.
-- [ ] Unit: `fetchItems` request shaping (URL `FROM Item`, Bearer, pagination, 401) — mirror `fetchCustomers` tests.
+- [x] `client.ts`: `QboItem` type (Id, SyncToken?, Name, Sku?, Description?, UnitPrice?, Active?, Type, SubItem?, ParentRef?) + `fetchItems(realmId, accessToken, opts?)` — paginated `SELECT * FROM Item` (active-only default), mirroring `fetchCustomers`.
+- [x] `item-sync.ts`:
+  - `mapItemToServiceItem` (+ `slugifyItemCode`) → `{ qbId, code, label, unitPrice, description, isSyncable }`. `code` = `Sku` trimmed else slugified `Name`; `unitPrice` = `String(UnitPrice)` or null; `isSyncable = Type ∈ {Service, NonInventory}` && !SubItem/!ParentRef && has Name.
+  - Pure `classifyItemSyncPlan(items, existing)` → create / update / current / archive / purge / skip (non-syncable + derived-code collision against linked codes / prior creates). Price comparison is numeric-normalized (`75` === `75.00` → `current`, no churn). Archived linked row still in QBO → `update` (revive).
+  - DB `loadExistingServiceItems` + `computeItemSyncPlan` (read-only) + `applyItemSync(items, exec=db)` — **note: `service_items` is a lookup table (no `actors`), so no `actorId`/audit columns** (deviation from the planned `(items, actorId, exec)` signature). Order: **purge legacy (`DELETE WHERE quickbooks_id IS NULL`) FIRST** to free derived codes, then archive → update → create (`onConflictDoNothing` on the partial index). **Empty-pull guard:** zero items → no writes. Returns `{ created, updated, archived, purged, skipped }`. Executor-injection like `dealer-sync.ts`; the Server Action wraps the call in a transaction (Phase 4) so readers never see the mid-apply state.
+  - `encodeItemSyncSummary`/`decodeItemSyncSummary` (4-segment `created.updated.archived.purged`, digit-guarded).
+- [x] Unit: `mapItemToServiceItem`/`slugifyItemCode` + `classifyItemSyncPlan` (create/update/current/revive/archive/purge/skip + linked-code collision) + summary round-trip. (`item-sync.test.ts`, 13 cases.)
+- [x] Unit: `fetchItems` request shaping (URL `FROM Item`, Bearer, pagination, active-only, 401) — 3 cases in `client.test.ts`.
 
 #### Phase 3: Remove in-app item CRUD
 - [ ] Delete `createServiceItem` / `updateServiceItem` / `archiveServiceItem` from `src/features/services/actions.ts`; remove now-dead `service-schema.ts` exports + their `actions.test.ts` cases.
