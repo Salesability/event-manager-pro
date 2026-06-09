@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Client write helpers (`createCustomer` / `updateCustomer` / `fetchCustomerById`) + SyncToken | Done | `3cbcc10` |
 | 2: `dealer-push.ts` — `mapDealerToCustomer` (inverse) + `pushDealerToQuickbooks` core | Done | `763844e` |
-| 3: `pushDealerToQuickbooks` Server Action + dealer-page button + flash | Pending | - |
+| 3: `pushDealerToQuickbooks` Server Action + dealer-page button + flash | Done | `8329203` |
 | 4: Tests + smoke verification | Pending | - |
 
 **Slice 1 of the bidirectional QuickBooks effort** (see [`intent.md`](intent.md) → *Follow-on slices*). Reverses chunk 0069's QBO→app pull: an admin pushes an in-app dealer to QuickBooks via an explicit **"Push to QuickBooks"** button on `/dealerships/[id]`. Linked dealer (`quickbooks_id` set) → **update** the QBO Customer with a freshly-read `SyncToken`; unlinked → **create** a Customer then **backfill** the returned `Id` onto `dealers.quickbooks_id` (guarded so it never clobbers an existing link). "Done" = the write helpers ship; the action is admin-gated + gate-matrix-registered; the dealer page shows link state + the button (only when QB is connected); the create-then-backfill write is integration-tested in a rolled-back tx with QBO mocked; chunk-end `/eval` is PASS. Sandbox-only; prod push gated on the owner-pending Intuit Production approval.
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[feedback_no_yup]] — validate the action's `dealerId` FormData input with **Zod**, not yup.
 - Memory [[project_prod_db]] / [[project_boldsign_prod_plan]] — prod QB is a separate connection; this slice stays sandbox-only (prod push gated on Intuit Production approval, owner-pending).
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -61,11 +61,12 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test `mapDealerToCustomer` (name, address→Line1, province→CountrySubDivisionCode, missing province/address, email/phone from contact) + `planDealerPush` (linked→update, unlinked→create). (`dealer-push.test.ts`, 7 cases.)
 
 #### Phase 3: Server Action + dealer-page button + flash
-- [ ] Add `pushDealerToQuickbooks(formData)` Server Action to `src/features/quickbooks/actions.ts`: **Zod-validate** `dealerId` from FormData → `assertCan('admin:access')` → `getValidAccessToken()` → load the dealer (with primary contact) → call the push core → `revalidatePath('/dealerships/<id>')` → `redirect('/dealerships/<id>?qbpush=created|updated')`. Follow `syncDealersFromQuickbooks`'s error-propagation rationale (no catch; button only renders when connected).
-- [ ] Register the action in `src/features/quickbooks/action-gate-matrix.ts` (admin-only), matching the `syncDealersFromQuickbooks` entry.
-- [ ] On `/dealerships/[id]/page.tsx`: add a QuickBooks link-state row (KeyValueStrip item or a small Section) — "Linked to QB customer #N" or "Not in QuickBooks" — and a **"Push to QuickBooks"** `<form action={pushDealerToQuickbooks}>` button with a hidden `dealerId`. Render the button **only when `getConnection()` returns a connection** (mirrors the sync button gating).
-- [ ] Decode `?qbpush=created|updated` into a success `Notice` on the dealer page (same pattern as `?synced=`).
-- [ ] No-JS: server component + `<form action>`, matching connect/disconnect/sync.
+- [x] Add `pushDealerToQuickbooks(formData)` Server Action to `src/features/quickbooks/actions.ts`: `assertCan('admin:access')` → **Zod-validate** `dealerId` (`z.coerce.number().int().positive()`) → `loadDealer` → `getValidAccessToken()` → push core → `revalidatePath('/dealerships/<id>')` → `redirect('/dealerships/<id>?qbpush=created|updated')`. Errors propagate (no catch) per `syncDealersFromQuickbooks`'s rationale. Core imported aliased (`pushDealerToQbo`) to avoid the same-name collision.
+- [x] Register the action in the gate matrix (`src/features/__tests__/action-gate-matrix.ts`, admin-only) — matches the `syncDealersFromQuickbooks` row; satisfies the matrix drift-detection grep.
+- [x] Extended `loadDealer` to return `quickbooksId` (`Dealer & { quickbooksId }`) — feeds both the page link-state and the action's create-vs-update decision; base `Dealer` type untouched.
+- [x] On `/dealerships/[id]/page.tsx`: added a **QuickBooks** `Section` (rendered only when `getConnection()` returns a connection) — link state ("Linked to QuickBooks customer #N" vs "Not in QuickBooks yet") + a **"Push to QuickBooks"** `<form action={pushDealerToQuickbooks}>` button with hidden `dealerId` (hidden on archived dealers, mirroring "+ New quote").
+- [x] Decode `?qbpush=created|updated` into a green flash notice on the dealer page (mirrors the `?synced=`/`?connected=` pattern); page signature gains `searchParams`.
+- [x] No-JS: server component + `<form action>`, matching connect/disconnect/sync.
 
 #### Phase 4: Tests + smoke verification
 - [ ] Integration test (`tests/integration/dealer-push.test.ts`, rolled-back txns): **create path** — mock `createCustomer` to return `Id: '999'`, run the push core against a seeded unlinked dealer, assert `quickbooks_id = '999'` backfilled; **re-run** with the dealer now linked asserts the guarded UPDATE no-ops (skip, no clobber); **update path** — linked dealer calls `fetchCustomerById` + `updateCustomer` with the returned SyncToken (QBO calls mocked, no DB write asserted beyond `updated_by_id`).
