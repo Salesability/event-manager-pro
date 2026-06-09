@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Client write helpers (`createCustomer` / `updateCustomer` / `fetchCustomerById`) + SyncToken | Done | `3cbcc10` |
-| 2: `dealer-push.ts` — `mapDealerToCustomer` (inverse) + `pushDealerToQuickbooks` core | Pending | - |
+| 2: `dealer-push.ts` — `mapDealerToCustomer` (inverse) + `pushDealerToQuickbooks` core | Done | `763844e` |
 | 3: `pushDealerToQuickbooks` Server Action + dealer-page button + flash | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[feedback_no_yup]] — validate the action's `dealerId` FormData input with **Zod**, not yup.
 - Memory [[project_prod_db]] / [[project_boldsign_prod_plan]] — prod QB is a separate connection; this slice stays sandbox-only (prod push gated on Intuit Production approval, owner-pending).
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -51,14 +51,14 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test the request shaping (URL, method, sparse flag, SyncToken inclusion) with `fetch` mocked — 5 cases added to `client.test.ts` (fetchById/create/update shaping + 6240 + 401).
 
 #### Phase 2: `dealer-push.ts` — inverse map + push core
-- [ ] New `src/lib/quickbooks/dealer-push.ts`. Header comment: app→QBO direction (counterpart to `dealer-sync.ts`'s QBO→app); duplication-vs-shared-map note if any helper is shared.
-- [ ] `mapDealerToCustomer(dealer): QboCustomer` (inverse of `mapCustomerToDealer`): `DisplayName`/`CompanyName` ← `name`; `BillAddr.Line1` ← `address` (whole blob, per intent's address-fidelity decision); `CountrySubDivisionCode` ← `province`; `PrimaryEmailAddr`/`PrimaryPhone` ← primary contact when present.
-- [ ] `planDealerPush(dealer): 'create' | 'update'` — pure: `quickbooks_id` set → `update`, else `create` (unit-testable without network).
-- [ ] `pushDealerToQuickbooks(dealer, realmId, accessToken, actorId, exec=db): { action, qbId }` core:
-  - `update` path: `fetchCustomerById` for the fresh `SyncToken` → `updateCustomer` with `Id`+`SyncToken`+sparse fields.
-  - `create` path: `createCustomer` → guarded `UPDATE dealers SET quickbooks_id = <newId>, updated_by_id = actorId WHERE id = ? AND quickbooks_id IS NULL` → `.returning()`; if zero rows (a concurrent push already linked it), treat as already-linked (no clobber).
-- [ ] Executor injection (`exec: Database | Transaction = db`) so the integration test passes a rolled-back tx — same as `dealer-sync.ts`.
-- [ ] Unit test `mapDealerToCustomer` (name, address→Line1, province→CountrySubDivisionCode, missing province/address, email/phone from contact) + `planDealerPush` (linked→update, unlinked→create).
+- [x] New `src/lib/quickbooks/dealer-push.ts`. Header comment: app→QBO direction (counterpart to `dealer-sync.ts`'s QBO→app); flat-address fidelity + inverse-map note.
+- [x] `mapDealerToCustomer(dealer): QboCustomerInput` (inverse of `mapCustomerToDealer`): `DisplayName`/`CompanyName` ← `name`; `BillAddr.Line1` ← `address` (whole blob, per intent's address-fidelity decision); `CountrySubDivisionCode` ← `province`; `PrimaryEmailAddr`/`PrimaryPhone` ← primary contact when present. Returns `QboCustomerInput` (write shape), not `QboCustomer`.
+- [x] `planDealerPush(dealer): 'create' | 'update'` — pure: `quickbooks_id` set → `update`, else `create` (unit-testable without network).
+- [x] `pushDealerToQuickbooks(dealer, realmId, accessToken, actorId, exec=db): { action, qbId }` core:
+  - `update` path: `fetchCustomerById` for the fresh `SyncToken` → `updateCustomer` with `Id`+`SyncToken`+sparse fields; touches `updated_by_id` locally.
+  - `create` path: `createCustomer` → guarded `UPDATE dealers SET quickbooks_id = <newId>, updated_by_id = actorId WHERE id = ? AND quickbooks_id IS NULL` → `.returning()`; zero rows (a concurrent push already linked it) → no clobber.
+- [x] Executor injection (`exec: Database | Transaction = db`) so the integration test passes a rolled-back tx — same as `dealer-sync.ts`. Introduced `DealerToPush` input type (structural subset of `loadDealer`'s `Dealer` + `quickbooksId`).
+- [x] Unit test `mapDealerToCustomer` (name, address→Line1, province→CountrySubDivisionCode, missing province/address, email/phone from contact) + `planDealerPush` (linked→update, unlinked→create). (`dealer-push.test.ts`, 7 cases.)
 
 #### Phase 3: Server Action + dealer-page button + flash
 - [ ] Add `pushDealerToQuickbooks(formData)` Server Action to `src/features/quickbooks/actions.ts`: **Zod-validate** `dealerId` from FormData → `assertCan('admin:access')` → `getValidAccessToken()` → load the dealer (with primary contact) → call the push core → `revalidatePath('/dealerships/<id>')` → `redirect('/dealerships/<id>?qbpush=created|updated')`. Follow `syncDealersFromQuickbooks`'s error-propagation rationale (no catch; button only renders when connected).
