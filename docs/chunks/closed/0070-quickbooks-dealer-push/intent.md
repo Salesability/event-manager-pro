@@ -4,7 +4,7 @@
 
 ## Problem
 
-Chunk [0069](../closed/0069-quickbooks-dealer-sync/plan.md) made the QuickBooks link **one-directional**: QBO Customers flow *into* our `dealers` table (create / link / backfill `quickbooks_id`), but nothing flows *back*. A dealer created or edited in-app — a new prospect from the "Book Your Event" funnel, a corrected address, a fixed company name — never reaches QuickBooks. The owner has to re-key it in QBO by hand, and the two systems drift.
+Chunk [0069](../0069-quickbooks-dealer-sync/plan.md) made the QuickBooks link **one-directional**: QBO Customers flow *into* our `dealers` table (create / link / backfill `quickbooks_id`), but nothing flows *back*. A dealer created or edited in-app — a new prospect from the "Book Your Event" funnel, a corrected address, a fixed company name — never reaches QuickBooks. The owner has to re-key it in QBO by hand, and the two systems drift.
 
 This is **Slice 1 of a larger bidirectional effort** (see *Follow-on slices*). It closes the dealer half of the loop: the same `dealers.quickbooks_id` 0069 introduced becomes the handle for *writing* a dealer back to QBO, not just *reading* one in.
 

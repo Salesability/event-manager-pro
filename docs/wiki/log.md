@@ -17,7 +17,7 @@ Entries are reverse-chronological (newest at the top). Format:
 
 - Amended the **`dealers.quickbooks_id`** note in [`data-model.md`](data-model.md): the column is no longer "never set in-app". It's now written **both directions** — the QBO→app sync (0069) AND a new app→QBO **"Push to QuickBooks"** action on `/dealerships/[id]` (0070). Linked dealer → sparse-update the QBO `Customer` (read-before-write for a fresh `SyncToken`); unlinked → create a Customer and backfill the returned `Id` (guarded `WHERE quickbooks_id IS NULL`).
 - New module `src/lib/quickbooks/dealer-push.ts` (`mapDealerToCustomer` = inverse of `dealer-sync.ts`'s `mapCustomerToDealer`; `pushDealerToQuickbooks` core). Write helpers `createCustomer`/`updateCustomer`/`fetchCustomerById` + `QboDuplicateNameError` (Intuit 6240) added to `client.ts` — the existing `com.intuit.quickbooks.accounting` scope already permits writes (no re-consent).
-- Server Action `pushDealerToQuickbooks` (admin-gated, gate-matrix row added). Slice 1 of a bidirectional QBO effort; later slices (item pull, Quotes→Estimates push, tax-alignment pull) are scoped in [`../chunks/0070-quickbooks-dealer-push/intent.md`](../chunks/0070-quickbooks-dealer-push/intent.md). Sandbox-only; prod push gated on owner-pending Intuit Production approval.
+- Server Action `pushDealerToQuickbooks` (admin-gated, gate-matrix row added). Slice 1 of a bidirectional QBO effort; later slices (item pull, Quotes→Estimates push, tax-alignment pull) are scoped in [`../chunks/closed/0070-quickbooks-dealer-push/intent.md`](../chunks/closed/0070-quickbooks-dealer-push/intent.md). Sandbox-only; prod push gated on owner-pending Intuit Production approval.
 
 ## 2026-06-08 — `dealers.quickbooks_id` durable link + on-demand QB dealer sync (0069)
 
