@@ -17,6 +17,8 @@ import {
   type ConnectionView,
   type Notice,
 } from '@/features/quickbooks/quickbooks-admin';
+import { loadServiceItemsForAdmin } from '@/features/services/queries';
+import { ServiceItemsList } from '@/features/services/service-items-list';
 
 // 0068/0069 — admin in-app QuickBooks OAuth viewer turned dealer-sync surface.
 // Gated on the pure-admin `admin:access` (mirrors `/admin/send-test-msa`),
@@ -35,6 +37,10 @@ export default async function QuickbooksAdminPage({
 }) {
   await assertCan('admin:access');
   const sp = await searchParams;
+
+  // The local service catalog, read-only — shown regardless of QBO connection
+  // (0072). Items are mastered in QuickBooks (0071); this is just visibility.
+  const catalog = await loadServiceItemsForAdmin();
 
   // The callback route lands here with ?connected=1; the dealer sync with
   // ?synced=<c>.<l>.<s>; the item pull with ?itemsynced=<c>.<u>.<a>.<p>; any
@@ -107,6 +113,7 @@ export default async function QuickbooksAdminPage({
         title="QuickBooks"
         description="Connect the business's QuickBooks Online company, reconcile its customers with your dealers, and pull its items into the quote-composer catalog."
       />
+      <ServiceItemsList items={catalog} />
       <QuickbooksAdmin
         connection={connection}
         configured={qboConfigured()}
