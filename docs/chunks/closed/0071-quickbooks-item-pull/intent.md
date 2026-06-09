@@ -5,7 +5,7 @@
 
 ## Problem
 
-Chunk [0070](../closed/0070-quickbooks-dealer-push/plan.md) closed the **dealer** loop. Items, though, are still owned **in-app**: `service_items` is an owner-curated catalog edited via `/admin/lookups`, with no link to QuickBooks. Two problems:
+Chunk [0070](../0070-quickbooks-dealer-push/plan.md) closed the **dealer** loop. Items, though, are still owned **in-app**: `service_items` is an owner-curated catalog edited via `/admin/lookups`, with no link to QuickBooks. Two problems:
 
 1. **No `ItemRef` for Estimates.** Slice 3 (Quotes → QBO Estimates) needs every quote-line SKU linked to a QBO `Item` (`SalesItemLineDetail.ItemRef`). Today none are.
 2. **Two masters.** The business keeps its real item/price list in QuickBooks. Maintaining a *separate* hand-edited catalog in the app means drift and double-entry.
