@@ -171,6 +171,9 @@ export type QboAddr = {
 
 export type QboCustomer = {
   Id: string;
+  // Optimistic-lock version (chunk 0070). Present on every read; QBO rotates it
+  // on every write, and an update MUST echo back the current value or it 400s.
+  SyncToken?: string;
   DisplayName?: string;
   CompanyName?: string;
   GivenName?: string;
@@ -183,6 +186,21 @@ export type QboCustomer = {
   PrimaryEmailAddr?: { Address?: string };
   PrimaryPhone?: { FreeFormNumber?: string };
   Mobile?: { FreeFormNumber?: string };
+};
+
+// Write payload for create/update (chunk 0070). Decoupled from `QboCustomer`
+// (the read shape, where `Id` is always present): a create omits both `Id` and
+// `SyncToken`; an update requires them. `sparse: true` tells QBO to merge the
+// posted fields rather than blank out everything omitted.
+export type QboCustomerInput = {
+  DisplayName?: string;
+  CompanyName?: string;
+  BillAddr?: QboAddr;
+  PrimaryEmailAddr?: { Address?: string };
+  PrimaryPhone?: { FreeFormNumber?: string };
+  Id?: string;
+  SyncToken?: string;
+  sparse?: boolean;
 };
 
 // Read-only fetch of the connected company's Customers, paginated. Lifted from
@@ -224,4 +242,101 @@ export async function fetchCustomers(
   }
 
   return all;
+}
+
+// ---------- Accounting API: read/write a single Customer (chunk 0070) ----------
+
+// Thrown when a Customer create collides with an existing QBO `DisplayName`
+// (Intuit error 6240) so callers can surface "already exists in QuickBooks —
+// link instead" rather than a generic transport error.
+export class QboDuplicateNameError extends Error {}
+
+function customerUrl(cfg: QboConfig, realmId: string, suffix = ''): string {
+  return `${cfg.apiBase}/v3/company/${realmId}/customer${suffix}?minorversion=${MINOR_VERSION}`;
+}
+
+// Shared response handling for the single-Customer read/write endpoints:
+// 401 → QboAuthError (expired token), Intuit 6240 → QboDuplicateNameError
+// (duplicate name), any other non-OK → throw with the body. The success body is
+// `{ Customer: {...} }` (not the `QueryResponse` envelope the query API uses).
+async function readCustomerResponse(res: Response): Promise<QboCustomer> {
+  if (res.status === 401) {
+    throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let duplicate = false;
+    try {
+      const body = JSON.parse(text) as { Fault?: { Error?: { code?: string }[] } };
+      duplicate = body.Fault?.Error?.some((e) => e.code === '6240') ?? false;
+    } catch {
+      duplicate = /\b6240\b/.test(text);
+    }
+    if (duplicate) {
+      throw new QboDuplicateNameError(
+        'QBO rejected the customer: a customer with this display name already exists (6240).',
+      );
+    }
+    throw new Error(`QBO customer ${res.status}: ${text}`);
+  }
+  const json = (await res.json()) as { Customer?: QboCustomer };
+  if (!json.Customer) {
+    throw new Error('QBO customer response missing the Customer body.');
+  }
+  return json.Customer;
+}
+
+// Read one Customer by Id — used right before an update to grab the current
+// `SyncToken` (read-before-write: QBO rotates it on every edit, including those
+// made directly in the QBO UI, so a stored token would go stale).
+export async function fetchCustomerById(
+  realmId: string,
+  accessToken: string,
+  id: string,
+): Promise<QboCustomer> {
+  const cfg = qboConfig();
+  const res = await fetch(customerUrl(cfg, realmId, `/${encodeURIComponent(id)}`), {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  return readCustomerResponse(res);
+}
+
+// Create a new Customer. Returns the created entity (carrying its new `Id`),
+// which the caller backfills onto `dealers.quickbooks_id`.
+export async function createCustomer(
+  realmId: string,
+  accessToken: string,
+  payload: QboCustomerInput,
+): Promise<QboCustomer> {
+  const cfg = qboConfig();
+  const res = await fetch(customerUrl(cfg, realmId), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return readCustomerResponse(res);
+}
+
+// Sparse-update an existing Customer. Requires `Id` + a fresh `SyncToken`;
+// `sparse: true` merges the posted fields instead of clearing omitted ones.
+export async function updateCustomer(
+  realmId: string,
+  accessToken: string,
+  payload: QboCustomerInput & { Id: string; SyncToken: string },
+): Promise<QboCustomer> {
+  const cfg = qboConfig();
+  const res = await fetch(customerUrl(cfg, realmId), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ ...payload, sparse: true }),
+  });
+  return readCustomerResponse(res);
 }

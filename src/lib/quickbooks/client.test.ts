@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   QboAuthError,
+  QboDuplicateNameError,
   buildAuthorizeUrl,
+  createCustomer,
   exchangeCodeForTokens,
+  fetchCustomerById,
   fetchCustomers,
   qboConfig,
   quickbooksRedirectUri,
   refreshTokens,
+  updateCustomer,
   verifyState,
 } from './client';
 
@@ -145,6 +149,73 @@ describe('fetchCustomers', () => {
   it('raises QboAuthError on a 401', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
     await expect(fetchCustomers('realm-123', 'expired')).rejects.toBeInstanceOf(QboAuthError);
+  });
+});
+
+describe('single-Customer read/write (0070)', () => {
+  it('fetchCustomerById GETs /customer/{id} with a Bearer token and returns the SyncToken', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Customer: { Id: '42', SyncToken: '7', DisplayName: 'Acme' } }),
+    );
+    const customer = await fetchCustomerById('realm-123', 'access-1', '42');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('https://sandbox-quickbooks.api.intuit.com/v3/company/realm-123/customer/42');
+    expect(url).toContain('minorversion=');
+    expect(init.headers.Authorization).toBe('Bearer access-1');
+    expect(init.method ?? 'GET').toBe('GET');
+    expect(customer.SyncToken).toBe('7');
+  });
+
+  it('createCustomer POSTs JSON (no Id) and returns the created Customer', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Customer: { Id: '999', SyncToken: '0', DisplayName: 'New Co' } }),
+    );
+    const created = await createCustomer('realm-123', 'access-1', { DisplayName: 'New Co' });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/v3/company/realm-123/customer');
+    expect(init.method).toBe('POST');
+    expect(init.headers['Content-Type']).toBe('application/json');
+    const body = JSON.parse(init.body as string);
+    expect(body.DisplayName).toBe('New Co');
+    expect(body.Id).toBeUndefined();
+    expect(created.Id).toBe('999');
+  });
+
+  it('updateCustomer POSTs a sparse update carrying Id + SyncToken', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Customer: { Id: '42', SyncToken: '8', DisplayName: 'Acme Renamed' } }),
+    );
+    const updated = await updateCustomer('realm-123', 'access-1', {
+      Id: '42',
+      SyncToken: '7',
+      DisplayName: 'Acme Renamed',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.sparse).toBe(true);
+    expect(body.Id).toBe('42');
+    expect(body.SyncToken).toBe('7');
+    expect(updated.SyncToken).toBe('8'); // rotated by QBO on write
+  });
+
+  it('createCustomer raises QboDuplicateNameError on Intuit error 6240', async () => {
+    const fault = JSON.stringify({ Fault: { Error: [{ code: '6240', Message: 'Duplicate Name' }] } });
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => JSON.parse(fault),
+      text: async () => fault,
+    });
+    await expect(
+      createCustomer('realm-123', 'access-1', { DisplayName: 'Dup Co' }),
+    ).rejects.toBeInstanceOf(QboDuplicateNameError);
+  });
+
+  it('raises QboAuthError on a 401 from the customer endpoint', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+    await expect(fetchCustomerById('realm-123', 'expired', '42')).rejects.toBeInstanceOf(QboAuthError);
   });
 });
 
