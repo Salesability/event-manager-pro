@@ -10,7 +10,7 @@
 | 1: Client write helpers (`createCustomer` / `updateCustomer` / `fetchCustomerById`) + SyncToken | Done | `3cbcc10` |
 | 2: `dealer-push.ts` — `mapDealerToCustomer` (inverse) + `pushDealerToQuickbooks` core | Done | `763844e` |
 | 3: `pushDealerToQuickbooks` Server Action + dealer-page button + flash | Done | `8329203` |
-| 4: Tests + smoke verification | Pending | - |
+| 4: Tests + smoke verification | Done | `b31e73c` |
 
 **Slice 1 of the bidirectional QuickBooks effort** (see [`intent.md`](intent.md) → *Follow-on slices*). Reverses chunk 0069's QBO→app pull: an admin pushes an in-app dealer to QuickBooks via an explicit **"Push to QuickBooks"** button on `/dealerships/[id]`. Linked dealer (`quickbooks_id` set) → **update** the QBO Customer with a freshly-read `SyncToken`; unlinked → **create** a Customer then **backfill** the returned `Id` onto `dealers.quickbooks_id` (guarded so it never clobbers an existing link). "Done" = the write helpers ship; the action is admin-gated + gate-matrix-registered; the dealer page shows link state + the button (only when QB is connected); the create-then-backfill write is integration-tested in a rolled-back tx with QBO mocked; chunk-end `/eval` is PASS. Sandbox-only; prod push gated on the owner-pending Intuit Production approval.
 
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[feedback_no_yup]] — validate the action's `dealerId` FormData input with **Zod**, not yup.
 - Memory [[project_prod_db]] / [[project_boldsign_prod_plan]] — prod QB is a separate connection; this slice stays sandbox-only (prod push gated on Intuit Production approval, owner-pending).
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -69,8 +69,8 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] No-JS: server component + `<form action>`, matching connect/disconnect/sync.
 
 #### Phase 4: Tests + smoke verification
-- [ ] Integration test (`tests/integration/dealer-push.test.ts`, rolled-back txns): **create path** — mock `createCustomer` to return `Id: '999'`, run the push core against a seeded unlinked dealer, assert `quickbooks_id = '999'` backfilled; **re-run** with the dealer now linked asserts the guarded UPDATE no-ops (skip, no clobber); **update path** — linked dealer calls `fetchCustomerById` + `updateCustomer` with the returned SyncToken (QBO calls mocked, no DB write asserted beyond `updated_by_id`).
-- [ ] (Server Action wrapper — `assertCan → getValidAccessToken → push core → redirect` — is thin over the tested core + network/auth; gate covered by `action-gate-matrix`.)
-- [ ] Throwaway fixture `scripts/0070-dealer-push-smoke.ts` (`insert` / `cleanup`, idempotent by tag) — sandbox `dealers` is empty after 0069, so seed one dealer to view its detail page.
-- [ ] Smoke (web-test, single gated route): `pnpm dlx tsx scripts/0070-dealer-push-smoke.ts insert`; `goto /dealerships/<fixtureId>`; expect heading = dealer name, the QuickBooks link-state row ("Not in QuickBooks"), and a **"Push to QuickBooks"** button (rendered iff QB connection is live). **Do not click** (it writes to the live sandbox QBO company). `... cleanup` after.
-- [ ] Ingest the app→QBO write path into `docs/wiki/` (a QuickBooks integration page or `data-model.md` note that `quickbooks_id` is now written both directions) + a `docs/wiki/log.md` entry.
+- [x] Integration test (`tests/integration/dealer-push.test.ts`, rolled-back txns): **create path** — mock `createCustomer` → `Id`, push core against a seeded unlinked dealer, assert `quickbooks_id` backfilled + `BillAddr` payload; **update path** — linked dealer calls `fetchCustomerById` then `updateCustomer` with the **freshly-read** `SyncToken` (asserts the read token, not a stored one; no duplicate dealer; `updated_by_id` touched); **guarded create** — a row linked between load and write is not clobbered (guard held). 3 cases, all green against sandbox.
+- [x] (Server Action wrapper — `assertCan → Zod → loadDealer → getValidAccessToken → push core → redirect` — is thin over the tested core + network/auth; gate covered by `action-gate-matrix`'s new row.)
+- [x] Throwaway fixture `scripts/0070-dealer-push-smoke.ts` (`insert` / `cleanup`, idempotent by the `acquired_via` marker) — sandbox `dealers` is empty after 0069, so seed one unlinked dealer to view its detail page.
+- [ ] Smoke (web-test, single gated route): `pnpm dlx tsx scripts/0070-dealer-push-smoke.ts insert`; `goto /dealerships/<fixtureId>`; expect heading = dealer name, the QuickBooks section ("Not in QuickBooks yet"), and a **"Push to QuickBooks"** button (rendered iff QB connection is live). **Do not click** (it writes to the live sandbox QBO company). `... cleanup` after. → **exercised by the chunk-end `/eval`.**
+- [x] Ingest the app→QBO write path into `docs/wiki/data-model.md` (`quickbooks_id` now written both directions) + a `docs/wiki/log.md` entry (2026-06-09).
