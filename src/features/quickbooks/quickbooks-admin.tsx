@@ -9,7 +9,13 @@ import {
   TableRow,
 } from '@/components/catalyst/table';
 import type { SyncAction, SyncPlanRow } from '@/lib/quickbooks/dealer-sync';
-import { connectQuickbooks, disconnectQuickbooks, syncDealersFromQuickbooks } from './actions';
+import type { ItemSyncAction, ItemSyncPlanRow } from '@/lib/quickbooks/item-sync';
+import {
+  connectQuickbooks,
+  disconnectQuickbooks,
+  pullItemsFromQuickbooks,
+  syncDealersFromQuickbooks,
+} from './actions';
 
 // QuickBooks dealer-sync UI (chunks 0068 + 0069). Server component — the
 // connect/disconnect/sync controls are `<form action={serverAction}>` so no
@@ -31,6 +37,8 @@ type Props = {
   configured: boolean;
   plan: SyncPlanRow[] | null;
   fetchError: string | null;
+  itemPlan: ItemSyncPlanRow[] | null;
+  itemsFetchError: string | null;
   notice: Notice;
 };
 
@@ -54,6 +62,18 @@ function ActionBadge({ row }: { row: SyncPlanRow }) {
   );
 }
 
+const ITEM_ACTION_BADGE: Record<
+  ItemSyncAction,
+  { color: 'blue' | 'amber' | 'lime' | 'red' | 'zinc'; label: string }
+> = {
+  create: { color: 'blue', label: 'Create' },
+  update: { color: 'amber', label: 'Update' },
+  current: { color: 'lime', label: 'Current' },
+  archive: { color: 'zinc', label: 'Archive' },
+  purge: { color: 'red', label: 'Purge' },
+  skip: { color: 'zinc', label: 'Skip' },
+};
+
 function ConnectButton({ label }: { label: string }) {
   return (
     <form action={connectQuickbooks}>
@@ -64,7 +84,15 @@ function ConnectButton({ label }: { label: string }) {
   );
 }
 
-export function QuickbooksAdmin({ connection, configured, plan, fetchError, notice }: Props) {
+export function QuickbooksAdmin({
+  connection,
+  configured,
+  plan,
+  fetchError,
+  itemPlan,
+  itemsFetchError,
+  notice,
+}: Props) {
   const counts = (plan ?? []).reduce(
     (acc, row) => {
       acc[row.action]++;
@@ -73,6 +101,19 @@ export function QuickbooksAdmin({ connection, configured, plan, fetchError, noti
     { create: 0, link: 0, 'already-linked': 0, 'skip-collision': 0 } as Record<SyncAction, number>,
   );
   const actionable = counts.create + counts.link;
+
+  const itemCounts = (itemPlan ?? []).reduce(
+    (acc, row) => {
+      acc[row.action]++;
+      return acc;
+    },
+    { create: 0, update: 0, current: 0, archive: 0, purge: 0, skip: 0 } as Record<
+      ItemSyncAction,
+      number
+    >,
+  );
+  const itemsActionable =
+    itemCounts.create + itemCounts.update + itemCounts.archive + itemCounts.purge;
 
   return (
     <div className="flex flex-col gap-6">
@@ -186,6 +227,75 @@ export function QuickbooksAdmin({ connection, configured, plan, fetchError, noti
               </Table>
             </div>
           )}
+
+          {/* Items — QuickBooks is the item master (0071). "Pull items" mirrors
+              the QBO Item list into the quote-composer catalog: create / update
+              (overwrite from QBO) / archive (QBO-removed) / purge (legacy
+              unlinked). Read-only here; the catalog is no longer edited in-app. */}
+          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-zinc-900">Items</h3>
+              {!itemsFetchError && itemsActionable > 0 && (
+                <form action={pullItemsFromQuickbooks}>
+                  <Button type="submit" color="green">
+                    Pull items
+                  </Button>
+                </form>
+              )}
+            </div>
+
+            {itemsFetchError ? (
+              <div className="flex flex-col items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-6">
+                <p className="text-sm font-medium text-amber-900">Couldn&apos;t load items</p>
+                <p className="text-sm text-amber-800">{itemsFetchError}</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-500">
+                  {itemPlan?.length ?? 0} items · {itemCounts.create} create · {itemCounts.update} update ·{' '}
+                  {itemCounts.archive} archive · {itemCounts.purge} purge
+                  {itemsActionable === 0 && itemPlan && itemPlan.length > 0
+                    ? ' — catalog matches QuickBooks.'
+                    : ''}
+                </p>
+                <Table dense className="[--gutter:--spacing(6)]">
+                  <TableHead>
+                    <TableRow>
+                      <TableHeader>Code</TableHeader>
+                      <TableHeader>Label</TableHeader>
+                      <TableHeader>Price</TableHeader>
+                      <TableHeader>Action</TableHeader>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(itemPlan ?? [])
+                      .filter((row) => row.action !== 'current')
+                      .map((row, i) => (
+                        <TableRow key={`${row.qbId ?? row.serviceItemId ?? row.code}-${i}`}>
+                          <TableCell className="font-mono text-xs text-zinc-700">{row.code}</TableCell>
+                          <TableCell className="font-medium text-zinc-900">{row.label}</TableCell>
+                          <TableCell className="text-zinc-500">
+                            {row.unitPrice != null ? `$${row.unitPrice}` : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge color={ITEM_ACTION_BADGE[row.action].color}>
+                              {ITEM_ACTION_BADGE[row.action].label}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    {(itemPlan?.length ?? 0) === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-zinc-500">
+                          No items found in the connected QuickBooks company.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

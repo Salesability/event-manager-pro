@@ -6,16 +6,19 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { assertCan } from '@/lib/auth/assert-can';
+import { db } from '@/lib/db';
 import {
   QBO_STATE_COOKIE,
   buildAuthorizeUrl,
   fetchCustomers,
+  fetchItems,
   quickbooksRedirectUri,
   revokeToken,
 } from '@/lib/quickbooks/client';
 import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
 import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
+import { applyItemSync, encodeItemSyncSummary } from '@/lib/quickbooks/item-sync';
 import { loadDealer } from '@/features/schedule/queries';
 
 // Connect-initiation + disconnect for the QuickBooks OAuth connection (chunk
@@ -104,6 +107,27 @@ export async function syncDealersFromQuickbooks() {
 
   revalidatePath('/admin/quickbooks');
   redirect(`/admin/quickbooks?synced=${encodeSyncSummary(result)}`);
+}
+
+// authz: admin:access
+// validation: skip — no FormData input; reads the live QB item list and applies
+// the computed catalog change set (chunk 0071 — QuickBooks is the item master).
+//
+// Mirrors the connected company's Items into `service_items`: create / overwrite
+// linked / archive QBO-removed / purge legacy unlinked. Wrapped in a transaction
+// so external readers never observe the brief mid-apply (purge-then-create)
+// state, and a failure rolls back rather than leaving a half-wiped catalog. The
+// empty-pull guard inside `applyItemSync` refuses to wipe on a zero-item read.
+// Errors propagate (no catch) — same rationale as `syncDealersFromQuickbooks`.
+export async function pullItemsFromQuickbooks() {
+  await assertCan('admin:access');
+
+  const { realmId, accessToken } = await getValidAccessToken();
+  const items = await fetchItems(realmId, accessToken);
+  const result = await db.transaction((tx) => applyItemSync(items, tx));
+
+  revalidatePath('/admin/quickbooks');
+  redirect(`/admin/quickbooks?itemsynced=${encodeItemSyncSummary(result)}`);
 }
 
 const pushDealerSchema = z.object({
