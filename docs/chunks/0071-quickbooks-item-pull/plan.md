@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema — `service_items.quickbooks_id` + unique partial index + migration | Done | `8192b9a` |
 | 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Done | `194bcd0` |
-| 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Pending | - |
+| 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Done | `bad1005` |
 | 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Pending | - |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
 
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first on 5432; prod QBO connected 2026-06-09 but no prod writes yet).
 - `quote_line_items` **snapshot discipline** (0062) + `service_item_id` `set null` on delete — why hard-deleting legacy SKUs is history-safe.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests.
@@ -64,11 +64,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit: `fetchItems` request shaping (URL `FROM Item`, Bearer, pagination, active-only, 401) — 3 cases in `client.test.ts`.
 
 #### Phase 3: Remove in-app item CRUD
-- [ ] Delete `createServiceItem` / `updateServiceItem` / `archiveServiceItem` from `src/features/services/actions.ts`; remove now-dead `service-schema.ts` exports + their `actions.test.ts` cases.
-- [ ] Remove `<ServicesAdmin>` from `/admin/lookups/page.tsx` (and the `loadServiceItems`-for-edit feed if now unused there); delete `src/features/services/services-admin.tsx`.
-- [ ] Delete the 3 service-item rows from `action-gate-matrix.ts` (keep the drift-detection grep green — confirm `pnpm test` passes the matrix + `pnpm check:capability-pairing`).
-- [ ] Confirm `loadServiceItems` (composer picker) still filters `isNull(archivedAt)` — archived/QBO-removed items drop out of the picker automatically; no change expected.
-- [ ] Grep for any other caller of the removed actions/components (nav links to the lookups items section, `useCan('lookup:edit')` affordances tied only to items) and clean up.
+- [x] Deleted `src/features/services/actions.ts` entirely (it was *only* the 3 item actions) + `service-schema.ts` (`serviceItemFormSchema`/`normalizeMoney`, unused elsewhere) + `services/actions.test.ts`.
+- [x] Removed `<ServicesAdmin>` + its `loadServiceItems` feed from `/admin/lookups/page.tsx` (lookups now: styles, sources, tax rates; description updated to point items at QuickBooks); deleted `src/features/services/services-admin.tsx`.
+- [x] Removed the `import * as servicesActions` + the 3 service-item rows from `action-gate-matrix.ts` (left a breadcrumb comment). `pnpm test` green incl. the matrix + its drift-detection grep (no service-item gated entries remain to represent).
+- [x] Confirmed `loadServiceItems` (composer picker, `src/features/services/queries.ts`) still filters `isNull(archivedAt)` — archived/QBO-removed items drop out of the picker automatically; unchanged. It stays (used by `/quotes/new` + `/quotes/[id]`).
+- [x] Grepped for dangling refs to the deleted files/exports — none. `lookup:edit` capability stays paired via the other lookups (styles/sources/tax rates), so no capability-pairing orphan.
 
 #### Phase 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action
 - [ ] `page.tsx`: when connected, `fetchItems` → `computeItemSyncPlan(items)` → pass to the component (read-only on load); decode `?itemsynced=…` into a `Notice`.
