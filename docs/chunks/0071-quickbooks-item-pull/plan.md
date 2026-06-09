@@ -11,7 +11,7 @@
 | 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Done | `194bcd0` |
 | 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Done | `bad1005` |
 | 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Done | `aa6d0be` |
-| 5: Tests + smoke verification + wiki ingest | Pending | - |
+| 5: Tests + smoke verification + wiki ingest | Done | `426df00` |
 
 **Slice 2 of the bidirectional QuickBooks effort, re-scoped 2026-06-09 to "QBO is the item master"** (see [`intent.md`](intent.md)). The app's `service_items` becomes a **read-through mirror** of the connected QBO company's Items, refreshed by an admin **"Pull items"** action; the app can no longer create/edit/delete items. "Done" = the `quickbooks_id` column + index ship to sandbox; a pull makes the catalog reflect QBO (create new · overwrite linked from QBO · archive QBO-removed · hard-delete legacy unlinked rows); the in-app catalog CRUD (actions + `/admin/lookups` editor + gate-matrix rows) is removed; the quote picker still lists pickable items and historical quotes render unchanged; chunk-end `/eval` PASS.
 
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first on 5432; prod QBO connected 2026-06-09 but no prod writes yet).
 - `quote_line_items` **snapshot discipline** (0062) + `service_item_id` `set null` on delete — why hard-deleting legacy SKUs is history-safe.
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests.
@@ -78,6 +78,6 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] No-JS server component + `<form action>`.
 
 #### Phase 5: Tests + smoke verification + wiki ingest
-- [ ] Integration test (`tests/integration/item-sync.test.ts`, rolled-back txns, mirror `dealer-sync.test.ts`): create-from-QBO; **overwrite** linked row's label/price from QBO; **archive** a linked row whose QBO item is absent; **purge** a legacy (`quickbooks_id IS NULL`) row; idempotent re-run; **empty-pull guard** writes nothing; historical `quote_line_items` snapshot unaffected by a purge (seed a quote line → purge its item → assert the line's snapshot columns intact + `service_item_id` nulled).
-- [ ] Smoke (web-test, gated): `goto /admin/quickbooks` (admin auth) → connected view shows **Dealers** + the new **Items** change-set (Code · Label · Price · Action) + a "Pull items" button. `goto /admin/lookups` → the service-item **editor is gone** (no add/edit item controls); other lookups (campaign styles, audience sources, tax rates) still render. **Do not click Pull** (it writes/deletes `service_items`). Screenshot.
-- [ ] Ingest into `docs/wiki/data-model.md` (`service_items.quickbooks_id` + the "QBO is item master, app is a read-only mirror, no in-app CRUD" note) + `docs/wiki/log.md`; cross-note it's the `ItemRef` source for the Slice 3 Estimate push. Update any wiki page that described the in-app catalog editor as editable.
+- [x] Integration test (`tests/integration/item-sync.test.ts`, rolled-back txns): create-from-QBO; **overwrite** linked row's label/price from QBO; **archive** a linked row absent from QBO; **purge** a legacy (`quickbooks_id IS NULL`) row; idempotent re-run (`current`); **empty-pull guard** writes nothing (seeded unlinked row survives); historical `quote_line_items` snapshot unaffected by a purge (full dealer→quote→line chain; asserts `service_item_id` nulled + `code`/`label`/`unit_price` snapshot intact). 7 cases, all green against sandbox.
+- [ ] Smoke (web-test, gated): `goto /admin/quickbooks` (admin auth) → connected view shows **Dealers** + the new **Items** change-set (Code · Label · Price · Action) + a "Pull items" button. `goto /admin/lookups` → the service-item **editor is gone**; other lookups (styles, sources, tax rates) still render. **Do not click Pull** (it writes/deletes `service_items`). → **exercised by the chunk-end `/eval`.**
+- [x] Ingested into `docs/wiki/data-model.md` (ERD field + table-summary row + the `service_items` section: "QBO is item master, read-only mirror, no in-app CRUD", + the removed-CRUD note) + `docs/wiki/log.md` (2026-06-09 entry); cross-noted it's the `ItemRef` source for the Slice 3 Estimate push.

@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-09 — QuickBooks becomes the item master; in-app catalog CRUD removed (0071)
+
+- Ingested **`service_items.quickbooks_id`** (nullable text, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL`, migration `0033`) into [`data-model.md`](data-model.md) — ERD block + table-summary row + the `service_items` section.
+- Recorded the ownership flip: **QBO is the item master.** `service_items` is now a read-through mirror, refreshed by the on-demand **"Pull items"** action on `/admin/quickbooks` (`src/lib/quickbooks/item-sync.ts` — create / overwrite-from-QBO / archive QBO-removed / hard-delete legacy unlinked; empty-pull guard). The pull (`pullItemsFromQuickbooks`) wraps `applyItemSync` in a transaction.
+- **In-app item CRUD removed:** deleted `src/features/services/actions.ts` (`create`/`update`/`archiveServiceItem`), `service-schema.ts`, and the `services-admin.tsx` editor on `/admin/lookups`; dropped their 3 gate-matrix rows. The `loadServiceItems` read loader stays (composer picker, non-archived). Updated the stale "owner-maintained via services-admin" + CRUD prose in `data-model.md`.
+- History-safety: `quote_line_items` snapshots `code`/`label`/`unit_price` + `ON DELETE SET NULL` FK, so purging/archiving catalog rows never breaks a past quote (covered by `tests/integration/item-sync.test.ts`). Slice 2 of the bidirectional QBO effort; the `quickbooks_id` link is the `ItemRef` source for the upcoming Slice 3 Estimate push. See [`../chunks/0071-quickbooks-item-pull/intent.md`](../chunks/0071-quickbooks-item-pull/intent.md).
+
 ## 2026-06-09 — production QBO company connected + prod read verified
 
 - The **owner-pending Intuit Production setup is DONE**: the prod redirect URI (`https://eventpro.salesability.ca/auth/quickbooks/callback`) is registered on the Intuit **Production** app, production-API approval landed, and the **production QBO company is connected**. A live **read of customers** was verified on prod (`/admin/quickbooks` renders the prod company's change-set). Updated the owner-pending notes in [`../chunks/CURRENT.md`](../chunks/CURRENT.md) (Prod baseline + 0068 follow-up b).

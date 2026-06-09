@@ -179,6 +179,7 @@ erDiagram
         text label
         numeric unit_price "nullable · blank = variable"
         text description
+        text quickbooks_id "nullable · UNIQUE partial · QBO Item.Id"
     }
     vehicles {
         bigint id PK
@@ -332,7 +333,7 @@ Edges left out of the diagrams for clarity:
 | `dealer_contacts` | `id` bigint | `dealer_id` (FK dealers), `contact_id` (FK contacts), `role` enum (`customer\|staff\|prospect`), `do_not_contact`, `since` date, `source` text, `last_contacted_at`, `title` text (used when `role='staff'`) — UNIQUE on `(dealer_id, contact_id, role)` |
 | `contact_identifiers` | `id` bigint | `contact_id` (FK contacts, cascade), `kind` enum (`email\|phone`), `value` (normalized), `is_primary` |
 | `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address`, `province` enum (`ca_province`: 13 CA province/territory codes, **nullable** — drives quote sales tax, 0065), `status` enum (`prospect\|active`, default `active`), `acquired_via` text (nullable), `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL` — durable link to the QBO `Customer.Id`, 0069; written **both directions**: backfilled by the QBO→app sync at `/admin/quickbooks` (0069) and by the app→QBO **Push to QuickBooks** action on `/dealerships/[id]` (0070 — create-a-Customer-then-backfill, or update-if-already-linked)) |
-| `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit_price` numeric(10,2) (nullable; blank = "variable"), `description`, `sort_order` — flat quote-composer catalog (0066 dropped the legacy `unit` enum + `unit_price_min`/`max`); see [`commercial-spine.md`](commercial-spine.md) |
+| `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit_price` numeric(10,2) (nullable; blank = "variable"), `description`, `sort_order`, `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL`, 0071) — flat quote-composer catalog (0066 dropped the legacy `unit` enum + `unit_price_min`/`max`). **As of 0071, QuickBooks is the item master:** this catalog is a read-through mirror of the connected QBO company's Items, populated only by the on-demand "Pull items" action on `/admin/quickbooks` (create / overwrite-from-QBO / archive QBO-removed / hard-delete legacy unlinked). **No in-app item CRUD** — the `/admin/lookups` catalog editor + the `createServiceItem`/`updateServiceItem`/`archiveServiceItem` actions were removed. See [`commercial-spine.md`](commercial-spine.md) |
 | `vehicles` | `id` bigint | `vin` (UNIQUE, normalized), `year`, `make`, `model`, `trim` — one row per physical vehicle, persists across owners |
 | `vehicle_ownerships` | `id` bigint | `vehicle_id` (FK vehicles), `contact_id` (FK contacts), `acquired_at`, `sold_at` (nullable) — junction; one open ownership per vehicle |
 | `campaigns` | `id` bigint | `public_id` (nanoid, UNIQUE), `dealer_id` (FK), `coach_id` (FK contacts, expected `team_member_roles(role='coach')`), `style_id` (FK), `audience_source_id` (FK — slated to move to `quotes` once the booking-form/composer flow is reconciled), `start_date`, `end_date`, `status` enum (`draft\|booked\|cancelled\|completed`), `accepted_quote_id` (FK `quotes`, nullable; the contract that spawned this delivery), plus inline day-of contact fields and service flags (see `campaigns` section below). Commercial columns (`fee`, `travel`, `deposit_pct`, `tax_pct`, `quote_valid_days`) live on `quotes` per [`commercial-spine.md`](commercial-spine.md) — dropped from `campaigns` in 0037 Phase 4. |
@@ -640,7 +641,9 @@ One row per line a coach picked onto a quote (the SKU line-item picker that repl
 
 ### `service_items` — quote-composer SKU catalogue
 
-The SKU library the picker draws from. Shipped 0035 Phase 1; since 0062 the composer is a **line-item picker** — the coach picks SKUs from this catalogue (label + description + seed `unit_price`), sets a qty, and edits the price per quote. Owner-maintained via `services-admin`; any new SKU shows up in the picker. See [`commercial-spine.md`](commercial-spine.md) and the pricing module at `src/lib/quotes/pricing.ts`.
+The SKU library the picker draws from. Shipped 0035 Phase 1; since 0062 the composer is a **line-item picker** — the coach picks SKUs from this catalogue (label + description + seed `unit_price`), sets a qty, and edits the price per quote. See [`commercial-spine.md`](commercial-spine.md) and the pricing module at `src/lib/quotes/pricing.ts`.
+
+**As of 0071, QuickBooks is the item master.** This table is a read-through mirror of the connected QBO company's Items, refreshed by the on-demand **"Pull items"** action on `/admin/quickbooks` (`src/lib/quickbooks/item-sync.ts`): create new · overwrite linked `label`/`unit_price`/`description` from QBO · archive items QBO dropped · hard-delete legacy unlinked rows. **It is no longer edited in-app** — the `/admin/lookups` catalog editor and the `service*Item` Server Actions were removed. The composer still reads it read-only (non-archived rows via `loadServiceItems`); historical quotes are unaffected because `quote_line_items` snapshots `code`/`label`/`unit_price` and its FK is `ON DELETE SET NULL`.
 
 Columns:
 
@@ -648,12 +651,13 @@ Columns:
 - `label` text NOT NULL — display name on the composer + PDF.
 - `unit_price` numeric(10,2) (nullable) — the seed price the composer reads (`seedPrice` / the server's `buildPickedLines`). The picked line snapshots it into `quote_line_items.unit_price`; the coach can override per quote. **Null = "variable"** (e.g. `travel`): the line seeds $0 and the coach types the actual dollar amount at quote time. Since 0066 this is the **only** price column — the legacy `unit` enum (which discriminated how a `QuoteInputs` field mapped to a line qty in the pre-0062 calculator) and the `unit_price_min`/`unit_price_max` range bracket were dropped as vestigial once the 0053/0062 picker made every row a plain pick-qty-price line.
 - `description` text (nullable) — optional admin-facing note (not rendered to dealers).
-- `sort_order` integer NOT NULL DEFAULT 0 — UI ordering on `/admin/lookups`. Capped at `MAX_PG_INTEGER` by the Server Action.
+- `sort_order` integer NOT NULL DEFAULT 0 — UI ordering (legacy; the editable admin surface is gone as of 0071).
+- `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL`, 0071) — durable link to the QBO `Item.Id` this row mirrors. Set only by the item pull; `archived_at` is set when QBO drops the item; legacy rows with `quickbooks_id IS NULL` are purged on the next pull.
 - mixins: `archivable` only (no `timestamps`, no `actors` — admin-config, not domain data).
 
 Seeded v1 catalog (migration `drizzle/0013_seed_service_items.sql`, idempotent on `code`): `base-event` $6,900, `additional-contact` $3.00, `bdc-call` $2.25, `letter-postage` $2.50, `digital-record` $0.59, `additional-day` $995, `record-retrieval` $100 (was a `$100–$400` range pre-0066; backfilled to the $100 menu floor by `0030` so it no longer seeds $0), `travel` null `unit_price` (variable — coach types the amount).
 
-CRUD via Server Actions at `src/features/services/actions.ts` (`createServiceItem` / `updateServiceItem` / `archiveServiceItem`), gated `lookup:edit` (admin-only). `createServiceItem` un-archives by `code` to avoid permanent code lockout after an archive (mirrors `createCampaignStyle`). Money parsing is string-only against `MONEY_RE = /^(0|[1-9]\d{0,7})(\.\d{1,2})?$/` (no IEEE-754 rounding; caps at the column's `numeric(10,2)` precision). Admin UI at `src/features/services/services-admin.tsx` renders under heading "Services" on `/admin/lookups`.
+**In-app CRUD removed in 0071** (QBO is the item master). The former `src/features/services/actions.ts` (`createServiceItem` / `updateServiceItem` / `archiveServiceItem`, gated `lookup:edit`), `service-schema.ts`, and the `services-admin.tsx` editor on `/admin/lookups` were all deleted. The only write path is now `pullItemsFromQuickbooks` (`src/features/quickbooks/actions.ts` → `applyItemSync`), admin-gated `admin:access`, run from the **Items** section of `/admin/quickbooks`. The read loader `loadServiceItems` (`src/features/services/queries.ts`, non-archived only) stays — the composer reads from it.
 
 RLS: `drizzle/0014_service_items_rls.sql` matches the MSA baseline (`service_role` permit-all + `authenticated` staff-only via `is_staff_member()`); included in `tests/integration/rls.test.ts`'s `RLS_TABLES`.
 
