@@ -166,6 +166,23 @@ describe.skipIf(!dbUrl)('applyItemSync (0071)', () => {
     });
   });
 
+  it('destructive-pull guard: a non-empty response with NO syncable items writes nothing', async () => {
+    await inRolledBackTx(async (tx) => {
+      const code = `keep-${randomBytes(4).toString('hex')}`;
+      const [seed] = await tx
+        .insert(serviceItems)
+        .values({ code, label: 'Keep me' })
+        .returning({ id: serviceItems.id });
+
+      // Only a Category (non-syncable) — mimics a transient/partial QBO read.
+      const result = await applyItemSync([{ Id: qbId(), Name: 'A Category', Type: 'Category' }], tx);
+      expect(result).toEqual({ created: 0, updated: 0, archived: 0, purged: 0, skipped: 0 });
+
+      const rows = await tx.select().from(serviceItems).where(eq(serviceItems.id, seed.id));
+      expect(rows).toHaveLength(1); // not purged — guard held on zero syncable items
+    });
+  });
+
   it('purging an item does not break a historical quote line (snapshot + set-null FK)', async () => {
     await inRolledBackTx(async (tx) => {
       const [dealer] = await tx

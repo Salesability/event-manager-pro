@@ -57,7 +57,10 @@ export function mapItemToServiceItem(item: QboItem): MappedItem {
     qbId: item.Id,
     code: sku || slugifyItemCode(name),
     label: name,
-    unitPrice: item.UnitPrice != null ? String(item.UnitPrice) : null,
+    // Canonicalize to the numeric(10,2) money shape up front: a QBO price like
+    // 99.999 becomes '100.00' once, so the next pull compares equal (no perpetual
+    // `update` churn) and we never hand the column an over-precise string.
+    unitPrice: item.UnitPrice != null ? item.UnitPrice.toFixed(2) : null,
     description: description || null,
     isSyncable:
       (type === 'Service' || type === 'NonInventory') &&
@@ -259,16 +262,26 @@ export function decodeItemSyncSummary(param: string): ItemSyncSummary | null {
   return { created, updated, archived, purged };
 }
 
-// Apply the pull. Caller wraps this in a transaction (the Server Action does),
-// so external readers never observe the brief mid-apply state. Order matters:
-// **purge legacy unlinked rows FIRST** so a created item's derived `code` can't
-// collide with a soon-to-be-deleted legacy row, then archive, update, create.
+// Apply the pull. The caller MUST pass a transaction-bound executor (the Server
+// Action wraps this in `db.transaction`), so external readers never observe the
+// brief mid-apply state and a failure rolls back rather than leaving a half-wiped
+// catalog. No `= db` default — that's the type-level nudge to never run the
+// destructive purge on the bare pool. Order matters: **purge legacy unlinked
+// rows FIRST** so a created item's derived `code` can't collide with a
+// soon-to-be-deleted legacy row, then archive, update, create.
 //
-// Empty-pull guard: zero items (a likely transient QBO error) writes NOTHING —
-// never archive/purge the whole catalog on an empty response.
-export async function applyItemSync(items: QboItem[], exec: Executor = db): Promise<ItemSyncResult> {
+// Destructive-pull guard: this pull archives linked rows absent from `items` and
+// purges all unlinked rows. A response with **no syncable items** — an empty
+// pull, a transient/partial read, or a page of only Category/sub-items — would
+// otherwise archive every linked row + purge the catalog. So abort with NO
+// writes unless there is at least one syncable item to anchor the sync.
+// (Detecting a *partial* multi-page read where some syncable items are present
+// but others are silently missing is a separate hardening — see the 0071
+// follow-up before enabling a prod pull.)
+export async function applyItemSync(items: QboItem[], exec: Executor): Promise<ItemSyncResult> {
   const result: ItemSyncResult = { created: 0, updated: 0, archived: 0, purged: 0, skipped: 0 };
-  if (items.length === 0) return result;
+  const syncable = items.filter((i) => mapItemToServiceItem(i).isSyncable);
+  if (syncable.length === 0) return result;
 
   const existing = await loadExistingServiceItems(exec);
   const plan = classifyItemSyncPlan(items, existing);

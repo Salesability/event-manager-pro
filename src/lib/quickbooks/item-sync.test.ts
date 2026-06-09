@@ -27,7 +27,7 @@ describe('mapItemToServiceItem', () => {
       qbId: '10',
       code: 'REC-RET',
       label: 'Record Retrieval',
-      unitPrice: '100',
+      unitPrice: '100.00',
       description: 'Pulls records',
       isSyncable: true,
     });
@@ -74,7 +74,7 @@ describe('classifyItemSyncPlan', () => {
   it('creates a QBO item with no local match', () => {
     const plan = classifyItemSyncPlan([{ Id: '10', Name: 'New SKU', Type: 'Service', UnitPrice: 50 }], []);
     expect(plan).toHaveLength(1);
-    expect(plan[0]).toMatchObject({ action: 'create', qbId: '10', code: 'new-sku', unitPrice: '50' });
+    expect(plan[0]).toMatchObject({ action: 'create', qbId: '10', code: 'new-sku', unitPrice: '50.00' });
   });
 
   it('updates a linked row when fields differ; current when numerically identical', () => {
@@ -84,7 +84,7 @@ describe('classifyItemSyncPlan', () => {
       action: 'update',
       serviceItemId: 1,
       label: 'Renamed',
-      unitPrice: '75',
+      unitPrice: '75.00',
       code: 'rec', // immutable — existing code kept
     });
 
