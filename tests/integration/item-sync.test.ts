@@ -111,7 +111,11 @@ describe.skipIf(!dbUrl)('applyItemSync (0071)', () => {
         [{ Id: qbId(), Name: tagName(), Type: 'Service' }],
         tx,
       );
-      expect(result.archived).toBe(1);
+      // `>= 1`, not `=== 1`: the blanket archive also covers any OTHER linked
+      // rows already in the shared sandbox catalog (absent from this 1-item
+      // pull), so the exact count is shared-state-dependent. Assert our seeded
+      // row specifically below. (Mirrors the `purge` test's `>= 1`.)
+      expect(result.archived).toBeGreaterThanOrEqual(1);
 
       const [row] = await tx.select().from(serviceItems).where(eq(serviceItems.id, seed.id));
       expect(row.archivedAt).not.toBeNull();
