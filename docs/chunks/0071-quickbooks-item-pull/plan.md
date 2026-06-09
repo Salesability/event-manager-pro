@@ -10,7 +10,7 @@
 | 1: Schema — `service_items.quickbooks_id` + unique partial index + migration | Done | `8192b9a` |
 | 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Done | `194bcd0` |
 | 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Done | `bad1005` |
-| 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Pending | - |
+| 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Done | `aa6d0be` |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
 
 **Slice 2 of the bidirectional QuickBooks effort, re-scoped 2026-06-09 to "QBO is the item master"** (see [`intent.md`](intent.md)). The app's `service_items` becomes a **read-through mirror** of the connected QBO company's Items, refreshed by an admin **"Pull items"** action; the app can no longer create/edit/delete items. "Done" = the `quickbooks_id` column + index ship to sandbox; a pull makes the catalog reflect QBO (create new · overwrite linked from QBO · archive QBO-removed · hard-delete legacy unlinked rows); the in-app catalog CRUD (actions + `/admin/lookups` editor + gate-matrix rows) is removed; the quote picker still lists pickable items and historical quotes render unchanged; chunk-end `/eval` PASS.
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first on 5432; prod QBO connected 2026-06-09 but no prod writes yet).
 - `quote_line_items` **snapshot discipline** (0062) + `service_item_id` `set null` on delete — why hard-deleting legacy SKUs is history-safe.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests.
@@ -71,11 +71,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Grepped for dangling refs to the deleted files/exports — none. `lookup:edit` capability stays paired via the other lookups (styles/sources/tax rates), so no capability-pairing orphan.
 
 #### Phase 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action
-- [ ] `page.tsx`: when connected, `fetchItems` → `computeItemSyncPlan(items)` → pass to the component (read-only on load); decode `?itemsynced=…` into a `Notice`.
-- [ ] `quickbooks-admin.tsx`: add an **Items** section below the dealers section — a read-only change-set table (Code · Label · Price · Action badge: Create / Update / Archive / Skip; "current/up-to-date" when nothing actionable) + a counts line incl. the legacy **purge** count. "Pull items" `<form action={pullItemsFromQuickbooks}>` button (render when connected + `!itemsFetchError` + actionable > 0).
-- [ ] `actions.ts`: `pullItemsFromQuickbooks` — `assertCan('admin:access')` → `getValidAccessToken()` → `fetchItems` → `applyItemSync(items, user.id)` → `revalidatePath('/admin/quickbooks')` → `redirect('/admin/quickbooks?itemsynced=<c>.<u>.<a>.<p>')`. Errors propagate (no catch), matching `syncDealersFromQuickbooks`.
-- [ ] Register `pullItemsFromQuickbooks` in `action-gate-matrix.ts` (ADMIN_ONLY).
-- [ ] No-JS server component + `<form action>`.
+- [x] `page.tsx`: when connected, get the token once → `fetchCustomers`/`computeDealerSyncPlan` AND `fetchItems`/`computeItemSyncPlan` (independent try/catch → `itemsFetchError`); decode `?itemsynced=…` into the `Notice`; pass `itemPlan` + `itemsFetchError` through.
+- [x] `quickbooks-admin.tsx`: added an **Items** sub-section (border-top) below the dealers block — read-only change-set table (Code · Label · Price · Action badge: Create / Update / Archive / Purge / Skip; `current` rows filtered out; "catalog matches QuickBooks" when nothing actionable) + counts line incl. **purge**. "Pull items" `<form action={pullItemsFromQuickbooks}>` button renders when connected + `!itemsFetchError` + actionable > 0.
+- [x] `actions.ts`: `pullItemsFromQuickbooks` — `assertCan('admin:access')` → `getValidAccessToken()` → `fetchItems` → **`db.transaction((tx) => applyItemSync(items, tx))`** (atomic purge-then-create) → `revalidatePath` → `redirect('?itemsynced=<c>.<u>.<a>.<p>')`. No `actorId` (lookup table). Errors propagate (no catch).
+- [x] Registered `pullItemsFromQuickbooks` in `action-gate-matrix.ts` (ADMIN_ONLY) — passes across all 7 roles.
+- [x] No-JS server component + `<form action>`.
 
 #### Phase 5: Tests + smoke verification + wiki ingest
 - [ ] Integration test (`tests/integration/item-sync.test.ts`, rolled-back txns, mirror `dealer-sync.test.ts`): create-from-QBO; **overwrite** linked row's label/price from QBO; **archive** a linked row whose QBO item is absent; **purge** a legacy (`quickbooks_id IS NULL`) row; idempotent re-run; **empty-pull guard** writes nothing; historical `quote_line_items` snapshot unaffected by a purge (seed a quote line → purge its item → assert the line's snapshot columns intact + `service_item_id` nulled).
