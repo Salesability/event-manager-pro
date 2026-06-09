@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-09 — production QBO company connected + prod read verified
+
+- The **owner-pending Intuit Production setup is DONE**: the prod redirect URI (`https://eventpro.salesability.ca/auth/quickbooks/callback`) is registered on the Intuit **Production** app, production-API approval landed, and the **production QBO company is connected**. A live **read of customers** was verified on prod (`/admin/quickbooks` renders the prod company's change-set). Updated the owner-pending notes in [`../chunks/CURRENT.md`](../chunks/CURRENT.md) (Prod baseline + 0068 follow-up b).
+- ⚠️ **Reads only so far on prod.** No QBO *write* has been exercised against the production company: the 0069 "Sync dealers" apply (writes `dealers`) and the 0070 "Push to QuickBooks" (merged to `main`, **not yet deployed to prod**) both remain untested in prod.
+
 ## 2026-06-09 — app→QBO dealer push: `quickbooks_id` now written both directions (0070)
 
 - Amended the **`dealers.quickbooks_id`** note in [`data-model.md`](data-model.md): the column is no longer "never set in-app". It's now written **both directions** — the QBO→app sync (0069) AND a new app→QBO **"Push to QuickBooks"** action on `/dealerships/[id]` (0070). Linked dealer → sparse-update the QBO `Customer` (read-before-write for a fresh `SyncToken`); unlinked → create a Customer and backfill the returned `Id` (guarded `WHERE quickbooks_id IS NULL`).
