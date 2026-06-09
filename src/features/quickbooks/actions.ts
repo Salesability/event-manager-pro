@@ -124,7 +124,9 @@ const pushDealerSchema = z.object({
 // as a wrong gate-admit to the action-gate-matrix suite.
 export async function pushDealerToQuickbooks(formData: FormData) {
   const user = await assertCan('admin:access');
-  const { dealerId } = pushDealerSchema.parse({ dealerId: formData.get('dealerId') });
+  const parsed = pushDealerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error('Push to QuickBooks requires a valid dealerId.');
+  const { dealerId } = parsed.data;
 
   const dealer = await loadDealer(dealerId);
   if (!dealer) throw new Error(`Dealer ${dealerId} not found.`);
