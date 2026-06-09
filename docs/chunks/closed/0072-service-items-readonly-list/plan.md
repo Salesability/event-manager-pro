@@ -42,5 +42,5 @@ For each new file or method below, the builder reads the anchor first and matche
 #### Phase 2: Page wire + tests + smoke
 - [x] In `src/app/(app)/admin/quickbooks/page.tsx`: call `loadServiceItemsForAdmin()` **unconditionally** (right after `assertCan`, outside the `if (conn)` block) and render `<ServiceItemsList items={catalog} />` above `<QuickbooksAdmin .../>` (shows whether or not QBO is connected).
 - [x] `tsc` + `pnpm test` green (1047 pass).
-- [ ] Smoke (web-test, gated): `goto /admin/quickbooks` → a "Service items" list renders the current catalog with Linked/Active/Archived badges. → **exercised by the chunk-end `/eval`.**
+- [x] Smoke (web-test, gated) → **PASS** (chunk-end `/eval`, `eval-2026-06-09-1900.md`): `/admin/quickbooks` renders the "Service items" list — "14 items · 14 linked to QuickBooks · 0 archived" + Linked/Active badges. Screenshot `/tmp/web-test-0072-items-list.png`.
 - [x] `docs/wiki/data-model.md` note added (read-only catalog viewer on `/admin/quickbooks`, 0072).

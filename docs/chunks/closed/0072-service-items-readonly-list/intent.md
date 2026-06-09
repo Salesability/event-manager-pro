@@ -4,7 +4,7 @@
 
 ## Problem
 
-Chunk [0071](../closed/0071-quickbooks-item-pull/plan.md) made QuickBooks the item master and **removed the in-app catalog editor** (the `/admin/lookups` `ServicesAdmin` section + the create/update/archive actions). That was intentional — but it also removed the only place to **see** the `service_items` catalog. Today an admin has no plain "what's in my catalog?" view:
+Chunk [0071](../0071-quickbooks-item-pull/plan.md) made QuickBooks the item master and **removed the in-app catalog editor** (the `/admin/lookups` `ServicesAdmin` section + the create/update/archive actions). That was intentional — but it also removed the only place to **see** the `service_items` catalog. Today an admin has no plain "what's in my catalog?" view:
 
 - `/admin/lookups` no longer lists items.
 - `/admin/quickbooks` → **Items** is a QBO *change-set preview* (Create / Update / Archive / **Purge**), not a catalog list — it hides unchanged rows and currently renders the real unlinked SKUs as alarming "Purge" rows.
