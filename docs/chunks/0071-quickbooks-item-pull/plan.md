@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema — `service_items.quickbooks_id` + unique partial index + migration | Pending | - |
+| 1: Schema — `service_items.quickbooks_id` + unique partial index + migration | Done | `8192b9a` |
 | 2: `client.ts` `fetchItems` + `item-sync.ts` (create / overwrite-update / archive-missing / purge-legacy) | Pending | - |
 | 3: Remove in-app item CRUD (services actions + `/admin/lookups` editor + gate-matrix rows) | Pending | - |
 | 4: `/admin/quickbooks` read-only Items change-set + "Pull items" Server Action | Pending | - |
@@ -38,7 +38,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first on 5432; prod QBO connected 2026-06-09 but no prod writes yet).
 - `quote_line_items` **snapshot discipline** (0062) + `service_item_id` `set null` on delete — why hard-deleting legacy SKUs is history-safe.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests.
@@ -47,11 +47,11 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Schema — `service_items.quickbooks_id` + unique partial index + migration
-- [ ] Invoke the `db-conventions` skill before editing schema.
-- [ ] Add `quickbooksId: text('quickbooks_id')` (nullable) to `service_items` with a comment (durable link to the QBO `Item.Id`; QBO is master; set only by the pull).
-- [ ] Add unique partial index `service_items_quickbooks_id_idx` on `(quickbooks_id) WHERE quickbooks_id IS NOT NULL`.
-- [ ] `drizzle-kit generate` → `drizzle/0033_*.sql`; confirm `ADD COLUMN` + `CREATE UNIQUE INDEX ... WHERE`. **Verify journal `when` (0033 > 0032).**
-- [ ] Apply to **sandbox** (5432 pooler); verify col + partial index via `pg_indexes`. (Prod deferred.)
+- [x] Invoke the `db-conventions` skill before editing schema.
+- [x] Add `quickbooksId: text('quickbooks_id')` (nullable) to `service_items` with a comment (QBO is master; set only by the pull). Converted the table to the `(table) => [...]` form to host the index.
+- [x] Add unique partial index `service_items_quickbooks_id_idx` on `(quickbooks_id) WHERE quickbooks_id IS NOT NULL`.
+- [x] `pnpm db:generate` → `drizzle/0033_bored_shotgun.sql` — clean `ADD COLUMN` + `CREATE UNIQUE INDEX ... WHERE` (no stray auth statements). **Journal `when` verified ascending** (0033 `1781027979333` > 0032 `1780949870990`).
+- [x] Applied to **sandbox** (5432 pooler `aws-1-us-west-2`) via `pnpm db:migrate`; verified col (`text`, nullable) + partial index (`WHERE (quickbooks_id IS NOT NULL)`) via `pg_indexes`. (Prod deferred to next prod migration run.)
 
 #### Phase 2: `client.ts` `fetchItems` + `item-sync.ts`
 - [ ] `client.ts`: `QboItem` type (Id, SyncToken?, Name, Sku?, Description?, UnitPrice?, Active?, Type, SubItem?, ParentRef?) + `fetchItems(realmId, accessToken, opts?)` — paginated `SELECT * FROM Item` (active-only default), mirroring `fetchCustomers`.
