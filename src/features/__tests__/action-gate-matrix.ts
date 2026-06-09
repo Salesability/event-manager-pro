@@ -15,7 +15,6 @@ import * as scheduleActions from '@/features/schedule/actions';
 import * as emailActions from '@/features/email/actions';
 import * as quotesActions from '@/features/quotes/actions';
 import * as reportsActions from '@/features/reports/actions';
-import * as servicesActions from '@/features/services/actions';
 import * as taxRatesActions from '@/features/tax-rates/actions';
 import * as msaActions from '@/features/msa/actions';
 import * as quickbooksActions from '@/features/quickbooks/actions';
@@ -207,25 +206,9 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'lookup:edit — admin-only',
   },
 
-  // ---- Service catalog (3) — admin-only (lookup:edit) -------------------
-  {
-    label: 'createServiceItem',
-    invoke: () => servicesActions.createServiceItem(fd()),
-    expectedByRole: ADMIN_ONLY,
-    note: 'lookup:edit — admin-only (quote-composer catalog admin)',
-  },
-  {
-    label: 'updateServiceItem',
-    invoke: () => servicesActions.updateServiceItem(fd()),
-    expectedByRole: ADMIN_ONLY,
-    note: 'lookup:edit — admin-only',
-  },
-  {
-    label: 'archiveServiceItem',
-    invoke: () => servicesActions.archiveServiceItem(fd()),
-    expectedByRole: ADMIN_ONLY,
-    note: 'lookup:edit — admin-only',
-  },
+  // ---- Service catalog — REMOVED (0071): QuickBooks is the item master; the
+  // in-app create/update/archive item actions were deleted. Items are synced
+  // read-only via `pullItemsFromQuickbooks` (below).
 
   // ---- Sales tax rates (1) — admin-only (lookup:edit) -------------------
   {
