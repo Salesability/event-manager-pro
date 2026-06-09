@@ -7,6 +7,7 @@ import {
   exchangeCodeForTokens,
   fetchCustomerById,
   fetchCustomers,
+  fetchItems,
   qboConfig,
   quickbooksRedirectUri,
   refreshTokens,
@@ -216,6 +217,37 @@ describe('single-Customer read/write (0070)', () => {
   it('raises QboAuthError on a 401 from the customer endpoint', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
     await expect(fetchCustomerById('realm-123', 'expired', '42')).rejects.toBeInstanceOf(QboAuthError);
+  });
+});
+
+describe('fetchItems (0071)', () => {
+  const item = (id: number) => ({ Id: String(id), Name: `Item ${id}`, Type: 'Service' });
+
+  it('paginates against FROM Item with a Bearer token until a short page', async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => item(i + 1));
+    const page2 = [item(101)];
+    fetchMock
+      .mockResolvedValueOnce(fakeJson({ QueryResponse: { Item: page1 } }))
+      .mockResolvedValueOnce(fakeJson({ QueryResponse: { Item: page2 } }));
+
+    const items = await fetchItems('realm-123', 'access-1');
+    expect(items).toHaveLength(101);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [url1, init1] = fetchMock.mock.calls[0];
+    expect(url1).toContain('https://sandbox-quickbooks.api.intuit.com/v3/company/realm-123/query');
+    expect(decodeURIComponent(url1)).toContain('FROM Item');
+    expect(init1.headers.Authorization).toBe('Bearer access-1');
+  });
+
+  it('defaults to active-only', async () => {
+    fetchMock.mockResolvedValueOnce(fakeJson({ QueryResponse: { Item: [item(1)] } }));
+    await fetchItems('realm-123', 'access-1');
+    expect(decodeURIComponent(fetchMock.mock.calls[0][0])).toContain('WHERE Active = true');
+  });
+
+  it('raises QboAuthError on a 401', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+    await expect(fetchItems('realm-123', 'expired')).rejects.toBeInstanceOf(QboAuthError);
   });
 });
 

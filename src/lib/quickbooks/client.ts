@@ -340,3 +340,61 @@ export async function updateCustomer(
   });
   return readCustomerResponse(res);
 }
+
+// ---------- Accounting API: read Items (chunk 0071) ----------
+
+export type QboItem = {
+  Id: string;
+  SyncToken?: string;
+  Name?: string;
+  Sku?: string;
+  Description?: string;
+  /** Sales/Service unit price (numeric in the QBO JSON). */
+  UnitPrice?: number;
+  Active?: boolean;
+  /** 'Service' | 'NonInventory' | 'Inventory' | 'Category' | … */
+  Type?: string;
+  SubItem?: boolean;
+  ParentRef?: { value: string };
+};
+
+// Read-only fetch of the connected company's Items, paginated. Same shape as
+// `fetchCustomers` — QBO is the item master (0071); the app mirrors this list
+// into `service_items` via `item-sync.ts`. No DB writes here.
+export async function fetchItems(
+  realmId: string,
+  accessToken: string,
+  opts: { includeInactive?: boolean } = {},
+): Promise<QboItem[]> {
+  const cfg = qboConfig();
+  const all: QboItem[] = [];
+  const pageSize = 100;
+  let start = 1;
+
+  for (;;) {
+    const where = opts.includeInactive ? '' : 'WHERE Active = true ';
+    const query = `SELECT * FROM Item ${where}ORDER BY Id STARTPOSITION ${start} MAXRESULTS ${pageSize}`;
+    const url = `${cfg.apiBase}/v3/company/${realmId}/query?query=${encodeURIComponent(
+      query,
+    )}&minorversion=${MINOR_VERSION}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+
+    if (res.status === 401) {
+      throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+    }
+    if (!res.ok) {
+      throw new Error(`QBO query ${res.status}: ${await res.text()}`);
+    }
+
+    const json = (await res.json()) as { QueryResponse?: { Item?: QboItem[] } };
+    const batch = json.QueryResponse?.Item ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    start += pageSize;
+  }
+
+  return all;
+}
