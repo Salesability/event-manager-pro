@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: `loadServiceItemsForAdmin` loader + `service-items-list.tsx` component | Done | `5a83d84` |
-| 2: Wire into `/admin/quickbooks` page + tests + smoke | Pending | - |
+| 2: Wire into `/admin/quickbooks` page + tests + smoke | Done | `3b45b34` |
 
 Small follow-up to 0071. 0071 removed the in-app catalog editor, leaving no plain "view my service items" UI; this adds a **read-only** "Service items" list on `/admin/quickbooks` (code · label · price · QB-linked? · archived?), rendered independent of the QBO connection. "Done" = the list renders the full catalog (incl. archived) with linked/archived badges; no mutation path; chunk-end `/eval` PASS.
 
@@ -26,7 +26,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `service_items` (post-0071: QBO-mastered, `quickbooks_id` link, `archivable`).
 - `CLAUDE.md` → Conventions — read-only surface, no Server Action needed; page already `assertCan('admin:access')`.
 
-**Overall Progress:** 50% (1/2 phases complete)
+**Overall Progress:** 100% (2/2 phases complete)
 
 **Note:**
 - Pure additive read-only UI — no schema, no migration, no Server Action, no gate-matrix row.
@@ -40,7 +40,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] (Drive-by) made 0071's `item-sync.test.ts` archive assertion resilient to shared sandbox state (`>= 1`, `2535934`) — a local sandbox "Pull items" had replaced the seeded catalog with 14 linked QBO sample items, inflating the blanket-archive count.
 
 #### Phase 2: Page wire + tests + smoke
-- [ ] In `src/app/(app)/admin/quickbooks/page.tsx`: call `loadServiceItemsForAdmin()` **unconditionally** (outside the `if (conn)` block) and render `<ServiceItemsList items={catalog} />` above `<QuickbooksAdmin .../>` (so it shows whether or not QBO is connected).
-- [ ] `tsc` + `pnpm test` green.
-- [ ] Smoke (web-test, gated): `goto /admin/quickbooks` (admin auth) → a "Service items" list renders the current catalog — e.g. a row with code `base-event`, its label + price, and Active/Archived + Linked/— badges. Read-only (nothing to click). Screenshot.
-- [ ] (Optional) one-line `docs/wiki/data-model.md` note that the read-only catalog viewer lives on `/admin/quickbooks` + `docs/wiki/log.md` entry.
+- [x] In `src/app/(app)/admin/quickbooks/page.tsx`: call `loadServiceItemsForAdmin()` **unconditionally** (right after `assertCan`, outside the `if (conn)` block) and render `<ServiceItemsList items={catalog} />` above `<QuickbooksAdmin .../>` (shows whether or not QBO is connected).
+- [x] `tsc` + `pnpm test` green (1047 pass).
+- [ ] Smoke (web-test, gated): `goto /admin/quickbooks` → a "Service items" list renders the current catalog with Linked/Active/Archived badges. → **exercised by the chunk-end `/eval`.**
+- [x] `docs/wiki/data-model.md` note added (read-only catalog viewer on `/admin/quickbooks`, 0072).
