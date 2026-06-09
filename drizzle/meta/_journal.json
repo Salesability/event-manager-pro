@@ -232,6 +232,13 @@
       "when": 1780949870990,
       "tag": "0032_skinny_sister_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1781027979333,
+      "tag": "0033_bored_shotgun",
+      "breakpoints": true
     }
   ]
 }
