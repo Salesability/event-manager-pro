@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
 import { assertCan } from '@/lib/auth/assert-can';
 import {
   QBO_STATE_COOKIE,
@@ -13,7 +14,9 @@ import {
   revokeToken,
 } from '@/lib/quickbooks/client';
 import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
+import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
 import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
+import { loadDealer } from '@/features/schedule/queries';
 
 // Connect-initiation + disconnect for the QuickBooks OAuth connection (chunk
 // 0068). Both are admin-gated Server Actions per repo conventions (the Intuit
@@ -101,4 +104,34 @@ export async function syncDealersFromQuickbooks() {
 
   revalidatePath('/admin/quickbooks');
   redirect(`/admin/quickbooks?synced=${encodeSyncSummary(result)}`);
+}
+
+const pushDealerSchema = z.object({
+  dealerId: z.coerce.number().int().positive(),
+});
+
+// authz: admin:access
+// validation: Zod — `dealerId` (positive int) from the dealer-page form.
+//
+// Push a single in-app dealer TO QuickBooks (chunk 0070 — the reverse of the
+// 0069 sync): linked dealer → update the QBO Customer (with a freshly-read
+// SyncToken); unlinked → create one and backfill its `Id`. On success, redirects
+// back to the dealer page with `?qbpush=created|updated` so it flashes a notice
+// and re-renders the new link state. Errors (not connected / token refresh /
+// QBO write, incl. a duplicate-name 6240) PROPAGATE to Next's error boundary —
+// same rationale as `syncDealersFromQuickbooks`: the button only renders once
+// the page sees a live connection, and a caught-and-redirected error would read
+// as a wrong gate-admit to the action-gate-matrix suite.
+export async function pushDealerToQuickbooks(formData: FormData) {
+  const user = await assertCan('admin:access');
+  const { dealerId } = pushDealerSchema.parse({ dealerId: formData.get('dealerId') });
+
+  const dealer = await loadDealer(dealerId);
+  if (!dealer) throw new Error(`Dealer ${dealerId} not found.`);
+
+  const { realmId, accessToken } = await getValidAccessToken();
+  const result = await pushDealerToQbo(dealer, realmId, accessToken, user.id);
+
+  revalidatePath(`/dealerships/${dealerId}`);
+  redirect(`/dealerships/${dealerId}?qbpush=${result.action}`);
 }

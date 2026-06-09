@@ -13,6 +13,8 @@ import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
 import { DealerForm } from '@/features/dealers/dealer-form';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
+import { pushDealerToQuickbooks } from '@/features/quickbooks/actions';
+import { getConnection } from '@/lib/quickbooks/connection';
 import { signedUrl } from '@/lib/storage/gcs';
 
 // Per-dealer detail. Gated `admin:access` to match the `/dealerships` index;
@@ -24,8 +26,10 @@ const MSA_PDF_SIGNED_URL_TTL_SECONDS = 5 * 60;
 
 export default async function DealerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await assertCan('admin:access'); // expected: server-only
   const { id: idParam } = await params;
@@ -35,10 +39,20 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const [quotes, msa] = await Promise.all([
+  const [quotes, msa, qbConnection] = await Promise.all([
     loadQuotesByDealer(id),
     loadActiveOrPendingMsa(id),
+    getConnection(),
   ]);
+
+  // The push action redirects back here with ?qbpush=created|updated.
+  const sp = await searchParams;
+  const qbNotice =
+    sp.qbpush === 'created'
+      ? 'Created this dealer in QuickBooks and linked it.'
+      : sp.qbpush === 'updated'
+        ? "Pushed this dealer's details to its QuickBooks customer."
+        : null;
 
   let signedMsaPdfUrl: string | null = null;
   if (msa?.status === 'active' && msa.signedPdfStorageKey) {
@@ -66,6 +80,12 @@ export default async function DealerDetailPage({
         actions={<DealerStatusBadge status={dealer.status} archivedAt={dealer.archivedAt} />}
       />
 
+      {qbNotice && (
+        <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          {qbNotice}
+        </p>
+      )}
+
       <KeyValueStrip
         items={[
           {
@@ -92,6 +112,35 @@ export default async function DealerDetailPage({
       <Section title="Details" variant="card">
         <DealerForm mode="edit" dealer={dealer} autoFocus={false} />
       </Section>
+
+      {qbConnection && (
+        <Section title="QuickBooks" variant="card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              {dealer.quickbooksId ? (
+                <>
+                  Linked to QuickBooks customer{' '}
+                  <code className="font-mono text-zinc-700">#{dealer.quickbooksId}</code>. Pushing
+                  updates that customer with this dealer&apos;s current details.
+                </>
+              ) : (
+                <>Not in QuickBooks yet. Pushing creates a new customer and links it to this dealer.</>
+              )}
+            </p>
+            {!dealer.archivedAt && (
+              <form action={pushDealerToQuickbooks}>
+                <input type="hidden" name="dealerId" value={dealer.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
+                >
+                  Push to QuickBooks
+                </button>
+              </form>
+            )}
+          </div>
+        </Section>
+      )}
 
       <Section
         title="Master Service Agreement"

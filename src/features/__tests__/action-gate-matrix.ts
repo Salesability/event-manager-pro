@@ -288,6 +288,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0069 QBO dealer sync; reconciles QB customers into dealers)',
   },
+  {
+    label: 'pushDealerToQuickbooks',
+    invoke: () => quickbooksActions.pushDealerToQuickbooks(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0070 QBO dealer push; create/update a QB customer from a dealer)',
+  },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------
   // Coach is admitted at the role layer; row-ownership (own coach_unavailable

@@ -252,7 +252,13 @@ export async function loadDealersIncludingArchived(): Promise<Dealer[]> {
   return loadDealersInner({ includeArchived: true });
 }
 
-export async function loadDealer(id: number): Promise<Dealer | null> {
+// Single-dealer loader carries `quickbooksId` (0070) on top of the shared
+// `Dealer` shape — the dealer detail page renders the QB link state from it and
+// the "Push to QuickBooks" action reads it to decide create-vs-update. The
+// list loaders don't need it, so it stays off the base `Dealer` type.
+export async function loadDealer(
+  id: number,
+): Promise<(Dealer & { quickbooksId: string | null }) | null> {
   const [row] = await db
     .select({
       id: dealers.id,
@@ -263,6 +269,7 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
       status: dealers.status,
       acquiredVia: dealers.acquiredVia,
       archivedAt: dealers.archivedAt,
+      quickbooksId: dealers.quickbooksId,
     })
     .from(dealers)
     .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
@@ -283,6 +290,7 @@ export async function loadDealer(id: number): Promise<Dealer | null> {
     status: row.status,
     acquiredVia: row.acquiredVia,
     archivedAt: row.archivedAt,
+    quickbooksId: row.quickbooksId,
     contactId: link?.contactId ?? null,
     contactFirstName: link?.firstName ?? null,
     contactLastName: link?.lastName ?? null,
