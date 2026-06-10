@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { QboTaxCode } from '@/lib/quickbooks/client';
 import {
+  codeNamesProvince,
   decodeTaxSyncSummary,
   matchProvinceTaxCode,
   resolveCodeRatePct,
   resolveProvinceLinks,
+  resolveProvinceLinksByName,
 } from './tax-sync';
 
 // `tax-sync` imports `@/lib/db` + `./client` (server-only). Stub so the module
@@ -99,6 +101,60 @@ describe('resolveProvinceLinks', () => {
   it('marks a province unmatched when no code matches its rate', () => {
     const links = resolveProvinceLinks([{ province: 'QC', rate: '14.975' }], [hstOn], rateById);
     expect(links[0]).toEqual({ province: 'QC', taxCodeId: null, status: 'unmatched' });
+  });
+});
+
+// --- 0075: name-heuristic matching --------------------------------------------
+
+describe('codeNamesProvince', () => {
+  it('matches the 2-letter code as a word token', () => {
+    expect(codeNamesProvince('HST ON', 'ON')).toBe(true);
+    expect(codeNamesProvince('GST/PST BC', 'BC')).toBe(true);
+    expect(codeNamesProvince('HST ON', 'BC')).toBe(false);
+  });
+
+  it('matches the full province name (case-insensitive)', () => {
+    expect(codeNamesProvince('Ontario Sales Tax', 'ON')).toBe(true);
+    expect(codeNamesProvince('quebec qst', 'QC')).toBe(true);
+  });
+
+  it('does NOT match federal-only / shared names or substrings', () => {
+    expect(codeNamesProvince('GST', 'ON')).toBe(false);
+    expect(codeNamesProvince('Exempt', 'ON')).toBe(false);
+    expect(codeNamesProvince('Out of scope', 'ON')).toBe(false);
+    expect(codeNamesProvince('Non-taxable', 'ON')).toBe(false); // "on" inside "Non" → no token
+    expect(codeNamesProvince('HST', 'NB')).toBe(false); // shared Atlantic HST names no province
+    expect(codeNamesProvince(undefined, 'ON')).toBe(false);
+  });
+});
+
+describe('resolveProvinceLinksByName', () => {
+  it('links a province to the single code naming it + carries QB rate to adopt', () => {
+    const links = resolveProvinceLinksByName([{ province: 'ON' }], [hstOn, exempt, gstPstBc], rateById);
+    expect(links).toEqual([{ province: 'ON', taxCodeId: '5', ratePct: 13, status: 'linked' }]);
+  });
+
+  it('unmatched when no code names the province (regardless of rate)', () => {
+    const links = resolveProvinceLinksByName([{ province: 'QC' }], [hstOn, exempt], rateById);
+    expect(links[0]).toEqual({ province: 'QC', taxCodeId: null, ratePct: null, status: 'unmatched' });
+  });
+
+  it('ambiguous when >1 active code names the province', () => {
+    const dup = code('99', ['12'], { Name: 'HST ON (old)' });
+    const links = resolveProvinceLinksByName([{ province: 'ON' }], [hstOn, dup], rateById);
+    expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'ambiguous' });
+  });
+
+  it('filters a naming code whose rate cannot be resolved (→ unmatched)', () => {
+    const broken = code('7', ['999'], { Name: 'HST ON' }); // rate ref 999 unknown
+    const links = resolveProvinceLinksByName([{ province: 'ON' }], [broken], rateById);
+    expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'unmatched' });
+  });
+
+  it('ignores inactive codes', () => {
+    const inactive = code('5', ['12'], { Name: 'HST ON', Active: false });
+    const links = resolveProvinceLinksByName([{ province: 'ON' }], [inactive], rateById);
+    expect(links[0].status).toBe('unmatched');
   });
 });
 

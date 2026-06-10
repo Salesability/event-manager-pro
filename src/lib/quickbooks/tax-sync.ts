@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { taxRates } from '@/lib/db/schema';
+import { CA_PROVINCE_NAMES, type CaProvinceCode } from '@/lib/ca-provinces';
 import type { QboTaxCode, QboTaxRate } from '@/lib/quickbooks/client';
 
 // Map the app's province tax rates (0065) onto the connected QBO company's
@@ -87,6 +88,67 @@ export function resolveProvinceLinks(
     }
     if (t.match.taxCodeId) return { province: t.province, taxCodeId: t.match.taxCodeId, status: 'linked' };
     return { province: t.province, taxCodeId: null, status: 'unmatched' };
+  });
+}
+
+// --- 0075: name-heuristic matching (QuickBooks is the tax-rate source of truth)
+// Rate-matching (above) is circular once the goal is to pull QB's possibly-
+// *different* rate, so a province is matched to its QB code by JURISDICTION/NAME
+// and then adopts that code's rate. See docs/chunks/0075-.../decision.md.
+
+// Does this QB tax-code name identify a specific province? Matches the province's
+// 2-letter code as a WORD TOKEN ("HST ON" → ON) or its full name ("Ontario …" →
+// ON), case-insensitive. Federal-only names ("GST", "Exempt", "Out of scope")
+// and shared HST names name no province → those provinces stay app-managed. The
+// word boundary on the abbreviation avoids false hits (e.g. "ON" inside "Non-").
+export function codeNamesProvince(name: string | undefined | null, province: string): boolean {
+  if (!name) return false;
+  const hay = name.toLowerCase();
+  const abbr = province.toLowerCase();
+  if (new RegExp(`\\b${abbr}\\b`).test(hay)) return true;
+  const full = CA_PROVINCE_NAMES[province as CaProvinceCode]?.toLowerCase();
+  return full != null && hay.includes(full);
+}
+
+export type ProvinceTaxLink = {
+  province: string;
+  taxCodeId: string | null;
+  /** QB's summed sales rate for the matched code (percent), to adopt into
+   *  `tax_rates.rate`; null when the province is unmanaged. */
+  ratePct: number | null;
+  status: 'linked' | 'unmatched' | 'ambiguous';
+};
+
+// Pure: match each province to the single ACTIVE QB tax code whose NAME identifies
+// it (`codeNamesProvince`) AND whose sales rate resolves (`resolveCodeRatePct`) —
+// a confident 1:1 match `linked`s the province and carries QB's rate to adopt.
+// Zero naming codes → `unmatched`; >1 → `ambiguous` (the deferred per-province
+// override territory). Replaces the rate-based `resolveProvinceLinks`.
+export function resolveProvinceLinksByName(
+  appRates: { province: string }[],
+  qboCodes: QboTaxCode[],
+  rateById: Map<string, number>,
+): ProvinceTaxLink[] {
+  const active = qboCodes.filter((c) => c.Active !== false);
+  return appRates.map((ar) => {
+    const candidates = active
+      .filter((c) => codeNamesProvince(c.Name, ar.province))
+      .map((c) => ({ id: c.Id, rate: resolveCodeRatePct(c, rateById) }))
+      .filter((c): c is { id: string; rate: number } => c.rate != null);
+    if (candidates.length === 1) {
+      return {
+        province: ar.province,
+        taxCodeId: candidates[0].id,
+        ratePct: candidates[0].rate,
+        status: 'linked',
+      };
+    }
+    return {
+      province: ar.province,
+      taxCodeId: null,
+      ratePct: null,
+      status: candidates.length > 1 ? 'ambiguous' : 'unmatched',
+    };
   });
 }
 
