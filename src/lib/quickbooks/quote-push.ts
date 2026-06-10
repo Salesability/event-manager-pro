@@ -88,9 +88,16 @@ export function mapQuoteToEstimate(
       unitPrice: Number(l.unitPrice),
       overrideUnitPrice: l.overrideUnitPrice != null ? Number(l.overrideUnitPrice) : undefined,
     });
+    // Derive Amount from the (2-decimal) unit × qty rather than the stored
+    // `lineTotal`, so the line is self-consistent for QBO (which validates
+    // Amount == Qty × UnitPrice). They're equal in the normal case; they can
+    // differ by a cent only when a price was entered with >2 decimals (the
+    // numeric(10,2) column rounds `unit` but `lineTotal` was computed pre-round)
+    // — and a self-consistent line keeps QBO from rejecting/recomputing it.
+    const amount = Math.round(unit * l.qty * 100) / 100;
     return {
       DetailType: 'SalesItemLineDetail',
-      Amount: Number(l.lineTotal),
+      Amount: amount,
       Description: l.label,
       SalesItemLineDetail: { ItemRef: { value: l.itemQuickbooksId }, Qty: l.qty, UnitPrice: unit },
     };
