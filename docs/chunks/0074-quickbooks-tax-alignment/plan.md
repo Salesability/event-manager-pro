@@ -11,7 +11,7 @@
 | 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Done | `3bb47b4` |
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Done | `4ae5708` |
 | 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Done | `19e0c5f` |
-| 5: Reconcile rate so Estimate total == quote total | Pending | - |
+| 5: Reconcile rate so Estimate total == quote total | Done | `fac9d26` |
 | 6: Tests + Canadian smoke + wiki | Pending | - |
 
 The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching, by pulling QBO `TaxCode`/`TaxRate` and setting a real `TaxCodeRef` on the Estimate instead of the (dropped) `TxnTaxDetail.TotalTax` override. Fixes the confirmed 0073 finding (pushed Estimates omit tax; total = pre-tax subtotal). **Phase 1 is a gate:** the connected sandbox is US (California) while prod is Canadian (GST/HST/PST), so the Canadian tax-code shape + mapping can't be built/verified against the current sandbox — the owner picks the Phase-1 path (Canadian sandbox / defer-to-prod / inspect-prod-setup) before Phases 2–6 are committed. Phases 2–6 are **provisional** and will be rewritten once Phase 1 lands.
@@ -32,7 +32,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
 - Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
-**Overall Progress:** 67% (4/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 5–6 against the CA sandbox.**
+**Overall Progress:** 83% (5/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phase 6 (tests + wiki; live CA smoke needs re-link).**
 
 **Note:** Phase 1 settled the approach (manual sales tax → set **txn-level** `TxnTaxDetail.TxnTaxCodeRef`, mapped province→`TaxCode.Id`; the AST-would-have-broken-it risk is retired *for the sandbox*). Phase-checklist summaries below reflect the decided shape. Residual to confirm before prod: the **prod** company's `TaxPrefs` (if AST, revisit Phase 4).
 
@@ -62,9 +62,9 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - [x] `mapQuoteToEstimate` now emits `TxnTaxDetail.TxnTaxCodeRef = { value: quote.taxCodeId }` (QBO computes the tax) instead of the dropped `TotalTax`/`TaxExcluded`; omitted when untaxed. `QboEstimate(Input).TxnTaxDetail` type extended with `TxnTaxCodeRef`.
 - [x] Pre-flight (`checkQuotePushReadiness(quote, dealer, lines)`): a **manual `tax_override`** fails closed (v1 — can't represent as a code); a **taxed quote with no mapped province code** fails closed ("run Pull tax codes"). `loadQuoteEstimatePushData` now left-joins `tax_rates` on the dealer's province → `taxCodeId` + selects `taxOverride`. 0073 unit + integration tests updated for the new signature/fields.
 
-#### Phase 5: Reconciliation (provisional)
-- [ ] Ensure the app's quote tax and QBO's computed tax use the **same rate** so the Estimate total equals the quote total (adopt or validate per Phase 1).
-- [ ] Unit tests over the reconciliation (rate parity, total parity).
+#### Phase 5: Reconciliation
+- [x] Parity is enforced two ways: (1) the matcher links a province→code only on **rate equality** (Phase 3), so the link implies parity; (2) a push-time **rate-drift guard** — `quoteTaxMatchesRate(subtotal, tax, rate)` fails closed when the quote's snapshotted `tax` ≠ `round(subtotal × current province rate)` (catches a rate edit between quote-save and push). Loader now carries `subtotal` + `provinceRatePct` (`tax_rates.rate`).
+- [x] Unit tests: `quoteTaxMatchesRate` (match incl. QST rounding; mismatch) + a readiness drift case. (`quote-push.test.ts`)
 
 #### Phase 6: Tests + Canadian smoke + wiki (provisional)
 - [ ] Integration tests (QBO calls mocked) for the tax-code pull + the push's `TaxCodeRef` mapping.
