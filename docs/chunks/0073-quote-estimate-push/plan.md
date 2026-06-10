@@ -11,7 +11,7 @@
 | 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Done | `788ea03` |
 | 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Done | `d2cc9c7` |
 | 4: Server Action + gate-matrix row + quote-page button + flash | Done | `9a589fb` |
-| 5: Tests + smoke verification + wiki ingest | Pending | - |
+| 5: Tests + smoke verification + wiki ingest | Done | `25090fd` |
 
 **Slice 3 (final build slice) of the bidirectional QuickBooks effort.** Push a quote → QBO **Estimate** on demand, reusing 0070's `CustomerRef` (`dealers.quickbooks_id`) + 0071's `ItemRef` (`service_items.quickbooks_id`). Mirrors the 0070 dealer-push shape (read-before-write SyncToken on update, guarded create-then-backfill) but for the quote→Estimate mapping, gated behind a pre-flight check that **every** line SKU + the dealer are QBO-linked. "Done" = the column ships to sandbox; a fully-linked quote creates/updates a matching Estimate; the pre-flight fails closed otherwise; chunk-end `/eval` PASS. Sandbox-first (prod push gated on a prod catalog pull).
 
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → Conventions — mutations are Server Actions; invoke `db-conventions` before schema/migrations.
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]] (accepted Quote IS the contract).
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests; the `applyItemSync`-style DB integration test (the backfill write) comes in Phase 5 against a real DB in rolled-back transactions, with the QBO Estimate calls mocked.
@@ -66,7 +66,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] No-JS server component + `<form action>`.
 
 #### Phase 5: Tests + smoke verification + wiki ingest
-- [ ] Integration test (`tests/integration/quote-push.test.ts`, rolled-back txns, QBO Estimate calls mocked): **create path** — fully-linked quote → `createEstimate` returns `Id` → assert `quickbooks_estimate_id` backfilled; **update path** — linked quote → `fetchEstimateById` + `updateEstimate` with the read SyncToken; **pre-flight fail** — unlinked dealer / unlinked SKU → `QuotePushNotReadyError`, no write, no `createEstimate` call.
-- [ ] Unit (Phase 2/3) cover map + readiness + request shaping.
-- [ ] Smoke (web-test, gated): seed/choose a sandbox quote whose dealer + SKUs are QBO-linked (sandbox items are linked post-pull); `goto /quotes/<id>` → expect the "Push to QuickBooks" button + link-state. **Do not click** (writes a real Estimate to the sandbox QBO company). Fixture script if needed (`scripts/0073-quote-push-smoke.ts`).
-- [ ] Ingest `quotes.quickbooks_estimate_id` + the Estimate-push path into `docs/wiki/data-model.md` + `docs/wiki/log.md`; note the dealer+items link prerequisite.
+- [x] Integration test (`tests/integration/quote-push.test.ts`, rolled-back txns, QBO Estimate calls mocked): **create path** (seed dealer+quote → `createEstimate` → assert `quickbooks_estimate_id` backfilled + payload `CustomerRef`/`ItemRef`); **update path** (linked quote → `fetchEstimateById` + `updateEstimate` with the read SyncToken, no `createEstimate`); **pre-flight fail** (unlinked dealer / unlinked SKU → `QuotePushNotReadyError`, no `createEstimate`, row untouched). 3 cases, green against sandbox.
+- [x] Unit (Phase 2/3): client request shaping + readiness/map covered.
+- [ ] Smoke (web-test, gated): a sandbox quote whose dealer + SKUs are QBO-linked → `goto /quotes/<id>` → "Push to QuickBooks" button + link-state. **Do not click** (writes a real Estimate to the sandbox QBO company). → **exercised by the chunk-end `/eval`.**
+- [x] Ingested `quotes.quickbooks_estimate_id` + the Estimate-push path into `docs/wiki/data-model.md` (`quotes` row) + `docs/wiki/log.md` (2026-06-10), noting the dealer+items link prerequisite + the remaining tax-alignment slice.
