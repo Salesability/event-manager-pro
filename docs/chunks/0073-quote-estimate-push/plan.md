@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration | Done | `0f4a1df` |
 | 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Done | `788ea03` |
-| 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Pending | - |
+| 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Done | `d2cc9c7` |
 | 4: Server Action + gate-matrix row + quote-page button + flash | Pending | - |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
 
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → Conventions — mutations are Server Actions; invoke `db-conventions` before schema/migrations.
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]] (accepted Quote IS the contract).
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests; the `applyItemSync`-style DB integration test (the backfill write) comes in Phase 5 against a real DB in rolled-back transactions, with the QBO Estimate calls mocked.
@@ -55,10 +55,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test request shaping (URL `/estimate`, Bearer, no-Id-on-create, sparse+Id+SyncToken on update, 401) — 4 cases in `client.test.ts`.
 
 #### Phase 3: `quote-push.ts` — pre-flight + map + push core
-- [ ] `checkQuotePushReadiness(quote, lines, dealer)` → `{ ok: true } | { ok: false, reason }`: dealer must have `quickbooks_id`; every line's `service_items.quickbooks_id` must be set (load the SKUs' link state). Clear messages: "dealer not linked — Sync dealers first" / "items not linked: <codes> — Pull items first". (Resolve the `quotes.fee`/`quotes.travel` vs line-items question here.)
-- [ ] `mapQuoteToEstimate(quote, lines, dealer)` → `QboEstimateInput`: `CustomerRef.value = dealer.quickbooks_id`; one `Line` per row (`DetailType: SalesItemLineDetail`, `ItemRef.value = sku.quickbooks_id`, `Qty`, `UnitPrice = effectiveUnit`, `Amount`); tax via `TxnTaxDetail.TotalTax` (quote computed tax) + `GlobalTaxCalculation: TaxExcluded`.
-- [ ] `pushQuoteToQuickbooks(quote, lines, dealer, realmId, accessToken, exec=db)` core: pre-flight → on fail throw a typed `QuotePushNotReadyError`; linked (`quickbooks_estimate_id`) → `fetchEstimateById` for SyncToken → `updateEstimate`; unlinked → `createEstimate` → guarded backfill `UPDATE quotes SET quickbooks_estimate_id=? WHERE id=? AND quickbooks_estimate_id IS NULL`. Executor-injection.
-- [ ] Unit test `checkQuotePushReadiness` (linked/unlinked dealer, linked/unlinked SKUs) + `mapQuoteToEstimate` (CustomerRef, line ItemRefs/qty/price, tax override) — pure, no network/DB.
+- [x] `checkQuotePushReadiness(dealer, lines)` (pure) → `{ ok }`/`{ ok:false, reason }`: dealer `quickbooksId` required; every line `itemQuickbooksId` required (else names the unlinked `code`s); empty-quote guard. Messages reference "Sync dealers" / "Pull items". Lines carry a resolved `itemQuickbooksId` (the Server Action resolves it from `service_items`), keeping the pure fns DB-free.
+- [x] `mapQuoteToEstimate(quote, lines, dealer)` → `QboEstimateInput`: `CustomerRef.value = dealer.quickbooksId`; one `SalesItemLineDetail` `Line` per row (`ItemRef.value = itemQuickbooksId`, `Qty`, `UnitPrice = effectiveUnit`, `Amount = lineTotal`); tax via `TxnTaxDetail.TotalTax` (quote computed tax) + `GlobalTaxCalculation: TaxExcluded` (omitted when tax = 0). **Note: `quotes.fee`/`travel` are already represented as `quote_line_items` rows by the 0062 composer, so no separate top-level Estimate lines needed** (line mapping covers them).
+- [x] `pushQuoteToQuickbooks(quote, lines, dealer, realmId, accessToken, exec=db)` core: pre-flight → throw `QuotePushNotReadyError` on fail; linked → `fetchEstimateById` (fresh SyncToken) → `updateEstimate`; unlinked → `createEstimate` → guarded backfill `UPDATE quotes SET quickbooks_estimate_id WHERE id=? AND … IS NULL`. Executor-injection (default `db`, like dealer-push — single guarded update, no blanket destructive op).
+- [x] Unit test `checkQuotePushReadiness` (linked/unlinked dealer, unlinked-SKU-naming, empty) + `mapQuoteToEstimate` (CustomerRef, ItemRef/qty/override-unit/amount, tax override + omit-on-zero) — 6 cases, pure. (`quote-push.test.ts`)
 
 #### Phase 4: Server Action + gate-matrix + quote-page button + flash
 - [ ] `pushQuoteToQuickbooks(formData)` Server Action in `src/features/quickbooks/actions.ts`: `assertCan('admin:access')` → Zod `quoteId` → load quote + lines + dealer → `getValidAccessToken()` → push core → `revalidatePath('/quotes/<id>')` → `redirect('/quotes/<id>?qbpush=created|updated')`. A `QuotePushNotReadyError` → redirect `?qberror=<message>` (friendly, since the pre-flight is a user-actionable state, unlike the propagate-rationale for connection errors). Register in `action-gate-matrix.ts` (ADMIN_ONLY).
