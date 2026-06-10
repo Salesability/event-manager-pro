@@ -12,7 +12,7 @@
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Done | `4ae5708` |
 | 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Done | `19e0c5f` |
 | 5: Reconcile rate so Estimate total == quote total | Done | `fac9d26` |
-| 6: Tests + Canadian smoke + wiki | Pending | - |
+| 6: Tests + Canadian smoke + wiki | Done | `9507372` |
 
 The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching, by pulling QBO `TaxCode`/`TaxRate` and setting a real `TaxCodeRef` on the Estimate instead of the (dropped) `TxnTaxDetail.TotalTax` override. Fixes the confirmed 0073 finding (pushed Estimates omit tax; total = pre-tax subtotal). **Phase 1 is a gate:** the connected sandbox is US (California) while prod is Canadian (GST/HST/PST), so the Canadian tax-code shape + mapping can't be built/verified against the current sandbox — the owner picks the Phase-1 path (Canadian sandbox / defer-to-prod / inspect-prod-setup) before Phases 2–6 are committed. Phases 2–6 are **provisional** and will be rewritten once Phase 1 lands.
 
@@ -32,7 +32,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
 - Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
-**Overall Progress:** 83% (5/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phase 6 (tests + wiki; live CA smoke needs re-link).**
+**Overall Progress:** 100% (6/6 phases complete) — code + tests + wiki shipped. **Live CA Estimate-with-tax smoke is user-gated (deferred);** prod needs the prod `TaxPrefs`/AST check ([decision.md](decision.md) residual).
 
 **Note:** Phase 1 settled the approach (manual sales tax → set **txn-level** `TxnTaxDetail.TxnTaxCodeRef`, mapped province→`TaxCode.Id`; the AST-would-have-broken-it risk is retired *for the sandbox*). Phase-checklist summaries below reflect the decided shape. Residual to confirm before prod: the **prod** company's `TaxPrefs` (if AST, revisit Phase 4).
 
@@ -66,7 +66,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - [x] Parity is enforced two ways: (1) the matcher links a province→code only on **rate equality** (Phase 3), so the link implies parity; (2) a push-time **rate-drift guard** — `quoteTaxMatchesRate(subtotal, tax, rate)` fails closed when the quote's snapshotted `tax` ≠ `round(subtotal × current province rate)` (catches a rate edit between quote-save and push). Loader now carries `subtotal` + `provinceRatePct` (`tax_rates.rate`).
 - [x] Unit tests: `quoteTaxMatchesRate` (match incl. QST rounding; mismatch) + a readiness drift case. (`quote-push.test.ts`)
 
-#### Phase 6: Tests + Canadian smoke + wiki (provisional)
-- [ ] Integration tests (QBO calls mocked) for the tax-code pull + the push's `TaxCodeRef` mapping.
-- [ ] **Live smoke against a Canadian QBO company** (per Phase 1): push a quote → Estimate, confirm the QBO **tax line is non-zero and equals the quote tax**, and the **total matches**. (A US-sandbox pass is necessary but not sufficient — see the blocker.) Fixture: extend `scripts/0073-quote-push-smoke.ts`.
-- [ ] Ingest the tax-code link + the corrected Estimate-tax behavior into `docs/wiki/data-model.md` + `docs/wiki/log.md`; update the 0073 "tax omitted" caveat to "resolved".
+#### Phase 6: Tests + Canadian smoke + wiki
+- [x] Integration tests: `tax-sync.test.ts` (`applyTaxCodeSync` links the 13% province ON → HST ON, leaves others unmatched, clears a stale link — real seeded `tax_rates`, rolled-back tx) + extended the push integration create test to assert `payload.TxnTaxDetail = { TxnTaxCodeRef: { value: '5' } }`.
+- [ ] **Live CA smoke — USER-GATED (deferred, like 0073's).** Needs the CA sandbox's dealers re-synced + items re-pulled (stale US links), then **Pull tax codes**, then push an **Ontario** quote → Estimate and confirm the QBO **tax line = 13% and the total matches**. Steps handed to the owner; the chunk-end `/eval` verifies the "Pull tax codes" button renders.
+- [x] Ingested into `docs/wiki/data-model.md` (`tax_rates` + the Estimate-push tax behavior) + `docs/wiki/log.md` (2026-06-10) — the override→`TxnTaxCodeRef` switch + the pre-flight guards.
