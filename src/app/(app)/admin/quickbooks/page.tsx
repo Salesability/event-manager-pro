@@ -65,7 +65,7 @@ export default async function QuickbooksAdminPage({
           : taxSynced
             ? {
                 kind: 'success',
-                message: `Mapped province tax codes from QuickBooks — linked ${taxSynced.linked} · unmatched ${taxSynced.unmatched} · ambiguous ${taxSynced.ambiguous}.`,
+                message: `Adopted province tax rates from QuickBooks — managed ${taxSynced.linked} · unmatched ${taxSynced.unmatched} · ambiguous ${taxSynced.ambiguous}.`,
               }
             : sp.connected === '1'
               ? { kind: 'success', message: 'Connected to QuickBooks.' }

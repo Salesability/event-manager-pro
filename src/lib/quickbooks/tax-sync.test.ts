@@ -3,9 +3,8 @@ import type { QboTaxCode } from '@/lib/quickbooks/client';
 import {
   codeNamesProvince,
   decodeTaxSyncSummary,
-  matchProvinceTaxCode,
+  planTaxRateWrites,
   resolveCodeRatePct,
-  resolveProvinceLinks,
   resolveProvinceLinksByName,
 } from './tax-sync';
 
@@ -45,62 +44,41 @@ describe('resolveCodeRatePct', () => {
   });
 });
 
-describe('matchProvinceTaxCode', () => {
-  const codes = [hstOn, exempt, gstPstBc];
+describe('planTaxRateWrites', () => {
+  const linked = (province: string, taxCodeId: string, ratePct: number) =>
+    ({ province, taxCodeId, ratePct, status: 'linked' as const });
 
-  it('matches a province rate to the unambiguous code', () => {
-    expect(matchProvinceTaxCode(13, codes, rateById)).toEqual({ taxCodeId: '5', ambiguous: false });
-    expect(matchProvinceTaxCode(12, codes, rateById)).toEqual({ taxCodeId: '9', ambiguous: false });
+  it('adopts QB rate + sets the code id on a linked province', () => {
+    const rows = [{ id: 1, province: 'ON', rate: '12.000', current: null }];
+    expect(planTaxRateWrites(rows, [linked('ON', '5', 13)])).toEqual([
+      { id: 1, quickbooksTaxCodeId: '5', rate: '13.000' },
+    ]);
   });
 
-  it('no match → null, not ambiguous', () => {
-    expect(matchProvinceTaxCode(14.975, codes, rateById)).toEqual({ taxCodeId: null, ambiguous: false });
+  it('sets only the code id when the rate is already aligned', () => {
+    const rows = [{ id: 1, province: 'ON', rate: '13.000', current: null }];
+    expect(planTaxRateWrites(rows, [linked('ON', '5', 13)])).toEqual([
+      { id: 1, quickbooksTaxCodeId: '5', rate: null }, // rate unchanged → not written
+    ]);
   });
 
-  it('ambiguous when >1 active code shares the rate', () => {
-    const dup = code('99', ['12'], { Name: 'HST dup' }); // also 13
-    expect(matchProvinceTaxCode(13, [hstOn, dup], rateById)).toEqual({
-      taxCodeId: null,
-      ambiguous: true,
-    });
+  it('omits a no-op (rate + code already in the desired state)', () => {
+    const rows = [{ id: 1, province: 'ON', rate: '13.000', current: '5' }];
+    expect(planTaxRateWrites(rows, [linked('ON', '5', 13)])).toEqual([]);
   });
 
-  it('ignores inactive codes', () => {
-    expect(matchProvinceTaxCode(13, [code('5', ['12'], { Active: false })], rateById)).toEqual({
-      taxCodeId: null,
-      ambiguous: false,
-    });
-  });
-});
-
-describe('resolveProvinceLinks', () => {
-  it('links a 1:1 province↔code rate match', () => {
-    const links = resolveProvinceLinks([{ province: 'ON', rate: '13.000' }], [hstOn], rateById);
-    expect(links).toEqual([{ province: 'ON', taxCodeId: '5', status: 'linked' }]);
+  it('clears a stale code link on an unmanaged province but keeps its app rate', () => {
+    const rows = [{ id: 2, province: 'BC', rate: '12.000', current: '99' }];
+    const links = [{ province: 'BC', taxCodeId: null, ratePct: null, status: 'unmatched' as const }];
+    expect(planTaxRateWrites(rows, links)).toEqual([
+      { id: 2, quickbooksTaxCodeId: null, rate: null }, // no rate write → app rate kept
+    ]);
   });
 
-  it('marks BOTH provinces ambiguous when they share a rate but only one code exists', () => {
-    // BC + MB both 12%, only the GST+PST (12%) code exists → neither auto-links
-    // (rate alone can't say which province owns the code).
-    const links = resolveProvinceLinks(
-      [
-        { province: 'BC', rate: '12.000' },
-        { province: 'MB', rate: '12.000' },
-        { province: 'ON', rate: '13.000' },
-      ],
-      [hstOn, gstPstBc],
-      rateById,
-    );
-    const byProv = Object.fromEntries(links.map((l) => [l.province, l]));
-    expect(byProv.BC.status).toBe('ambiguous');
-    expect(byProv.BC.taxCodeId).toBeNull();
-    expect(byProv.MB.status).toBe('ambiguous');
-    expect(byProv.ON).toEqual({ province: 'ON', taxCodeId: '5', status: 'linked' });
-  });
-
-  it('marks a province unmatched when no code matches its rate', () => {
-    const links = resolveProvinceLinks([{ province: 'QC', rate: '14.975' }], [hstOn], rateById);
-    expect(links[0]).toEqual({ province: 'QC', taxCodeId: null, status: 'unmatched' });
+  it('leaves an already-unmanaged province untouched (no write)', () => {
+    const rows = [{ id: 3, province: 'QC', rate: '14.975', current: null }];
+    const links = [{ province: 'QC', taxCodeId: null, ratePct: null, status: 'ambiguous' as const }];
+    expect(planTaxRateWrites(rows, links)).toEqual([]);
   });
 });
 

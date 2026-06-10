@@ -140,12 +140,14 @@ export async function pullItemsFromQuickbooks() {
 
 // authz: admin:access
 // validation: skip — no FormData input; reads the live QB TaxCode/TaxRate list
-// and maps the app's province tax rates onto QBO tax codes (chunk 0074).
+// and adopts QB's rates into the app's province `tax_rates` (chunk 0075 — QB is
+// the tax-rate source of truth).
 //
-// Reconciles `tax_rates.quickbooks_tax_code_id` against the connected company's
-// TaxCodes (match by rate, unambiguous-only — see `tax-sync.ts`). The Estimate
-// push reads this link to set `TxnTaxDetail.TxnTaxCodeRef` so QBO computes tax.
-// Wrapped in a transaction; errors propagate (same rationale as the other pulls).
+// Name-matches each province to the QBO TaxCode whose name identifies it and
+// writes QB's rate + the code id into `tax_rates` (`applyTaxCodeSync` — see
+// `tax-sync.ts`). The Estimate push reads the linked code to set
+// `TxnTaxDetail.TxnTaxCodeRef` so QBO computes tax. Wrapped in a transaction;
+// errors propagate (same rationale as the other pulls).
 export async function pullTaxCodesFromQuickbooks() {
   await assertCan('admin:access');
 

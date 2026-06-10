@@ -298,12 +298,14 @@ export function QuickbooksAdmin({
             )}
           </div>
 
-          {/* Tax codes — map each province's rate to a QBO tax code (0074) so a
-              pushed quote Estimate carries the right tax (QBO computes it from
-              the code). Match is by rate; unmatched provinces stay unlinked. */}
+          {/* Tax rates — QuickBooks is the source of truth (0075). Match each
+              province to the QBO tax code whose NAME identifies it ("HST ON" →
+              ON) and adopt that code's rate into the app; the pushed quote
+              Estimate then carries QBO's own code. Provinces with no confident
+              name match keep their app rate (unmanaged). */}
           <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-zinc-900">Tax codes</h3>
+              <h3 className="text-sm font-semibold text-zinc-900">Tax rates</h3>
               <form action={pullTaxCodesFromQuickbooks}>
                 <Button type="submit" color="green">
                   Pull tax codes
@@ -311,8 +313,10 @@ export function QuickbooksAdmin({
               </form>
             </div>
             <p className="text-sm text-zinc-500">
-              Maps each province&apos;s tax rate to a QuickBooks tax code (by rate) so a pushed
-              quote Estimate carries the right tax. Provinces with no matching code stay unlinked.
+              Adopts each province&apos;s sales-tax rate <strong>from</strong> QuickBooks — a
+              province is matched to the tax code whose name identifies it (&ldquo;HST ON&rdquo; →
+              ON) and takes that code&apos;s rate. Provinces with no confident match keep their
+              app rate (unmanaged). Tax rates are no longer edited in-app.
             </p>
           </div>
         </div>

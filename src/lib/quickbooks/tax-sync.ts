@@ -4,17 +4,15 @@ import { taxRates } from '@/lib/db/schema';
 import { CA_PROVINCE_NAMES, type CaProvinceCode } from '@/lib/ca-provinces';
 import type { QboTaxCode, QboTaxRate } from '@/lib/quickbooks/client';
 
-// Map the app's province tax rates (0065) onto the connected QBO company's
-// TaxCodes (0074). The Estimate push (quote-push.ts) sets
-// `TxnTaxDetail.TxnTaxCodeRef = { value: tax_rates.quickbooks_tax_code_id }` so
-// QBO computes tax with its own code — replacing the dropped `TotalTax` override
-// (see docs/chunks/.../0074-quickbooks-tax-alignment/decision.md).
-//
-// Matching is by RATE: a province links to the (single) QBO TaxCode whose summed
-// sales rate equals the province's rate. Unambiguous-only — if zero or >1 codes
-// match, the province is left unlinked (the push then fails closed). Rate-
-// collision provinces (e.g. the 15% HST group) won't auto-link; a manual mapping
-// UI is a follow-up.
+// QuickBooks is the SOURCE OF TRUTH for province tax rates (0075). A "Pull tax
+// codes" sync matches each province (0065 `tax_rates`) to the QBO TaxCode whose
+// NAME identifies the jurisdiction ("HST ON" → ON; `resolveProvinceLinksByName`)
+// and ADOPTS that code's rate into `tax_rates.rate` — the app no longer hand-
+// maintains rates (the in-app editor was removed). Provinces with no confident
+// name match keep their app rate, flagged unmanaged (`quickbooks_tax_code_id`
+// stays null). The Estimate push (quote-push.ts) reads the linked code to set
+// `TxnTaxDetail.TxnTaxCodeRef` so QBO computes tax with its own code
+// (see docs/chunks/0075-quickbooks-tax-rate-source/decision.md).
 
 type Database = typeof db;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -38,63 +36,6 @@ export function resolveCodeRatePct(
   }
   return sum;
 }
-
-export type TaxCodeMatch = { taxCodeId: string | null; ambiguous: boolean };
-
-// Pure: find the unambiguous QBO TaxCode for a province rate (percent).
-export function matchProvinceTaxCode(
-  appRatePct: number,
-  codes: QboTaxCode[],
-  rateById: Map<string, number>,
-): TaxCodeMatch {
-  const matches = codes
-    .filter((c) => c.Active !== false)
-    .map((c) => ({ id: c.Id, rate: resolveCodeRatePct(c, rateById) }))
-    .filter((c) => c.rate != null && Math.abs(c.rate - appRatePct) < 0.001);
-  if (matches.length === 1) return { taxCodeId: matches[0].id, ambiguous: false };
-  return { taxCodeId: null, ambiguous: matches.length > 1 };
-}
-
-export type ProvinceLink = {
-  province: string;
-  taxCodeId: string | null;
-  status: 'linked' | 'unmatched' | 'ambiguous';
-};
-
-// Pure: resolve every province's final link, accounting for collisions BOTH ways.
-// A province is `ambiguous` (→ unlinked) when either >1 QBO code matches its rate
-// (matchProvinceTaxCode) OR the single matched code is also claimed by another
-// province at the same rate (e.g. BC + MB both 12% but only one 12% code exists)
-// — rate alone can't say which province owns the code, so we link neither and
-// leave it for a manual mapping (follow-up). Only a 1:1 province↔code rate match
-// auto-links.
-export function resolveProvinceLinks(
-  appRates: { province: string; rate: string | number }[],
-  qboCodes: QboTaxCode[],
-  rateById: Map<string, number>,
-): ProvinceLink[] {
-  const tentative = appRates.map((ar) => ({
-    province: ar.province,
-    match: matchProvinceTaxCode(Number(ar.rate), qboCodes, rateById),
-  }));
-  const claims = new Map<string, number>();
-  for (const t of tentative) {
-    if (t.match.taxCodeId) claims.set(t.match.taxCodeId, (claims.get(t.match.taxCodeId) ?? 0) + 1);
-  }
-  return tentative.map((t) => {
-    const collision = t.match.taxCodeId != null && (claims.get(t.match.taxCodeId) ?? 0) > 1;
-    if (collision || t.match.ambiguous) {
-      return { province: t.province, taxCodeId: null, status: 'ambiguous' };
-    }
-    if (t.match.taxCodeId) return { province: t.province, taxCodeId: t.match.taxCodeId, status: 'linked' };
-    return { province: t.province, taxCodeId: null, status: 'unmatched' };
-  });
-}
-
-// --- 0075: name-heuristic matching (QuickBooks is the tax-rate source of truth)
-// Rate-matching (above) is circular once the goal is to pull QB's possibly-
-// *different* rate, so a province is matched to its QB code by JURISDICTION/NAME
-// and then adopts that code's rate. See docs/chunks/0075-.../decision.md.
 
 // Does this QB tax-code name identify a specific province? Matches the province's
 // 2-letter code as a WORD TOKEN ("HST ON" → ON) or its full name ("Ontario …" →
@@ -152,15 +93,60 @@ export function resolveProvinceLinksByName(
   });
 }
 
-export type TaxCodeSyncResult = {
-  linked: number;
-  unmatched: string[]; // province codes with no matching QBO code
-  ambiguous: string[]; // >1 QBO code matched the rate, OR >1 province claimed one code
+export type TaxRateWrite = {
+  id: number;
+  quickbooksTaxCodeId: string | null;
+  /** 3-decimal rate string to adopt into `tax_rates.rate`, or null to leave the
+   *  rate unchanged (the column is NOT NULL — the executor only sets it when
+   *  non-null). */
+  rate: string | null;
 };
 
-// Reconcile `tax_rates.quickbooks_tax_code_id` against the connected company's
-// TaxCodes. Sets each province's link to its matched code (or null), clearing
-// stale links. Executor-injected (no default — callers pass a transaction).
+// Pure: the minimal set of UPDATEs to reconcile `tax_rates` with the resolved
+// links. A `linked` province ADOPTS QB's rate (`ratePct.toFixed(3)`) + sets the
+// code id; an unmanaged province (unmatched/ambiguous) only CLEARS a stale code
+// id, keeping its app rate as a fallback. Rows already in the desired state are
+// omitted. Mirrors item-sync's classify/apply split so the adopt logic is unit-
+// tested without a DB.
+export function planTaxRateWrites(
+  appRows: { id: number; province: string; rate: string; current: string | null }[],
+  links: ProvinceTaxLink[],
+): TaxRateWrite[] {
+  const linkByProvince = new Map(links.map((l) => [l.province, l]));
+  const writes: TaxRateWrite[] = [];
+  for (const row of appRows) {
+    const link = linkByProvince.get(row.province);
+    if (!link) continue;
+    if (link.status === 'linked' && link.ratePct != null) {
+      const newRate = link.ratePct.toFixed(3);
+      const rateChanged = newRate !== row.rate;
+      const codeChanged = link.taxCodeId !== row.current;
+      if (rateChanged || codeChanged) {
+        writes.push({
+          id: row.id,
+          quickbooksTaxCodeId: link.taxCodeId,
+          rate: rateChanged ? newRate : null,
+        });
+      }
+    } else if (row.current !== null) {
+      // unmanaged: drop a stale code link only; keep the app rate.
+      writes.push({ id: row.id, quickbooksTaxCodeId: null, rate: null });
+    }
+  }
+  return writes;
+}
+
+export type TaxCodeSyncResult = {
+  linked: number; // provinces now QB-managed (code linked + rate adopted)
+  unmatched: string[]; // province codes no QBO code names → kept app-managed
+  ambiguous: string[]; // >1 QBO code names the province → deferred to a manual override
+};
+
+// Adopt QB's tax rates into `tax_rates` for the connected company: name-match each
+// province to a QBO TaxCode (`resolveProvinceLinksByName`), then apply the planned
+// writes — `linked` provinces take QB's rate + code id, unmanaged provinces have a
+// stale code id cleared (app rate kept). Executor-injected (no default — callers
+// pass a transaction).
 export async function applyTaxCodeSync(
   qboCodes: QboTaxCode[],
   qboRates: QboTaxRate[],
@@ -171,7 +157,7 @@ export async function applyTaxCodeSync(
     if (r.RateValue != null) rateById.set(r.Id, r.RateValue);
   }
 
-  const appRates = await exec
+  const appRows = await exec
     .select({
       id: taxRates.id,
       province: taxRates.province,
@@ -180,21 +166,19 @@ export async function applyTaxCodeSync(
     })
     .from(taxRates);
 
-  const links = resolveProvinceLinks(appRates, qboCodes, rateById);
-  const byProvince = new Map<string, (typeof appRates)[number]>(
-    appRates.map((ar) => [ar.province, ar]),
-  );
+  const links = resolveProvinceLinksByName(appRows, qboCodes, rateById);
+  const writes = planTaxRateWrites(appRows, links);
+
+  for (const w of writes) {
+    const set: { quickbooksTaxCodeId: string | null; rate?: string } = {
+      quickbooksTaxCodeId: w.quickbooksTaxCodeId,
+    };
+    if (w.rate != null) set.rate = w.rate;
+    await exec.update(taxRates).set(set).where(eq(taxRates.id, w.id));
+  }
 
   const result: TaxCodeSyncResult = { linked: 0, unmatched: [], ambiguous: [] };
   for (const link of links) {
-    const ar = byProvince.get(link.province);
-    if (!ar) continue;
-    if (link.taxCodeId !== ar.current) {
-      await exec
-        .update(taxRates)
-        .set({ quickbooksTaxCodeId: link.taxCodeId })
-        .where(eq(taxRates.id, ar.id));
-    }
     if (link.status === 'linked') result.linked += 1;
     else if (link.status === 'ambiguous') result.ambiguous.push(link.province);
     else result.unmatched.push(link.province);
