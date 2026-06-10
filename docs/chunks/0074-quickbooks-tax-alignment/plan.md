@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | Pending | - |
+| 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | In Progress | - |
 | 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Pending | - |
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Pending | - |
 | 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Pending | - |
@@ -39,7 +39,9 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 ### Phase Checklist
 
 #### Phase 1: Research/decide — Canadian-sandbox blocker + tax-code shape (GATE) — research, no code
-- [ ] **Resolve the Canadian-vs-US blocker** (intent.md): pick (a) create/connect a Canadian QBO sandbox, (b) build generic + defer Canadian verification, or (c) inspect prod tax setup first. **Owner decision.**
+- [x] ~~Resolve the Canadian-vs-US blocker~~ — **DECIDED: path (a)** (2026-06-10). Owner created a **Canadian QBO sandbox, Company ID `9341457252668239`** (vs the US sample sandbox `9341457209207248`; prod Canadian `193514766730959`). Build+verify against the CA sandbox.
+- [ ] **Connect the app to the CA sandbox** — `/admin/quickbooks` → Disconnect (US `…209207248`) → Connect → pick Company ID `…252668239` (owner does the OAuth). ⚠️ **Reconnecting changes the realm → existing dealer/item `quickbooks_id` links (US company ids) go STALE.** Fine for tax-code research; before a full CA Estimate smoke, re-sync dealers + re-pull items from the CA company.
+- [ ] Inspect the CA company's tax model (read-only): list its `TaxCode`/`TaxRate` (GST/HST/PST per province), AST on/off, the customer default tax code / exempt flag. This answers the design Qs below.
 - [ ] Determine the prod (Canadian) QBO company's tax model: **Automated Sales Tax on/off?** manual tax codes? the customer-level default tax code / exempt flag?
 - [ ] Determine which `TaxCodeRef` QBO honors for Canadian GST/HST: **txn-level** (`TxnTaxDetail.TxnTaxCodeRef`) vs **line-level** (`SalesItemLineDetail.TaxCodeRef`).
 - [ ] Decide rate reconciliation: **QBO rate as source of truth** (pull → drive quote tax) vs **validate the 0065 province rate matches**.
