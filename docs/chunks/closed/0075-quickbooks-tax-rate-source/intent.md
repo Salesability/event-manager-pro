@@ -4,7 +4,7 @@
 
 ## Problem
 
-Tax rates live in **two** places: the app's admin-editable `tax_rates` table ([0065](../closed/0065-dealer-province-tax/plan.md)) **and** the connected QuickBooks company. [0074](../closed/0074-quickbooks-tax-alignment/plan.md) linked each province to a QB tax **code** by *rate-equality* — so a *mapped* province happens to be aligned, but:
+Tax rates live in **two** places: the app's admin-editable `tax_rates` table ([0065](../0065-dealer-province-tax/plan.md)) **and** the connected QuickBooks company. [0074](../0074-quickbooks-tax-alignment/plan.md) linked each province to a QB tax **code** by *rate-equality* — so a *mapped* province happens to be aligned, but:
 - a province whose app rate ≠ any QB code's rate never links (stays unmapped → fails the push pre-flight), and
 - editing a rate in the app afterward can drift it from QB.
 
@@ -13,7 +13,7 @@ The owner's call (2026-06-10): **QuickBooks should be the source of truth for ta
 ## Desired outcome
 
 - Pulling from QB **adopts QB's rate** into `tax_rates.rate` for each province it can map — the app no longer hand-maintains rates.
-- The in-app tax-rate **editor becomes read-only** ("managed by QuickBooks"), mirroring how [0071](../closed/0071-quickbooks-item-pull/plan.md) made QB the *item* master and removed in-app item CRUD.
+- The in-app tax-rate **editor becomes read-only** ("managed by QuickBooks"), mirroring how [0071](../0071-quickbooks-item-pull/plan.md) made QB the *item* master and removed in-app item CRUD.
 - A province is matched to its QB code by **jurisdiction/identity**, not by rate (rate-matching is circular once the goal is to pull QB's *possibly-different* rate).
 - Quote tax still computes from `tax_rates.rate` (now QB-driven) — nothing downstream changes; the Estimate push (0074) keeps stamping the per-line `TaxCodeRef`.
 - Provinces QB has **no** code for keep their existing app rate as a **fallback**, clearly marked "not managed by QuickBooks".
@@ -59,6 +59,6 @@ The CA sandbox (realm `9341457252668239`, [[project_qbo_realms]]) **only has Ont
 
 ## Relationship to prior work
 
-- **[0074](../closed/0074-quickbooks-tax-alignment/plan.md)** — the tax-code mapping + per-line `TaxCodeRef` push this builds on; `tax-sync.ts`'s matcher gets replaced with jurisdiction matching + rate adoption.
+- **[0074](../0074-quickbooks-tax-alignment/plan.md)** — the tax-code mapping + per-line `TaxCodeRef` push this builds on; `tax-sync.ts`'s matcher gets replaced with jurisdiction matching + rate adoption.
 - **0065** — the province `tax_rates` table whose `rate` becomes QB-driven.
-- **[0071](../closed/0071-quickbooks-item-pull/plan.md)** — the "QB is master → remove in-app editing" precedent for the read-only rate editor.
+- **[0071](../0071-quickbooks-item-pull/plan.md)** — the "QB is master → remove in-app editing" precedent for the read-only rate editor.

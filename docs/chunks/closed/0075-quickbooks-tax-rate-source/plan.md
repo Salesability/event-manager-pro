@@ -13,7 +13,7 @@
 | 4: Remove the in-app tax-rate editor entirely (QB-managed) | Done | - |
 | 5: Smoke (ON adoption) + wiki ingest | Done | - |
 
-Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10). Extends [0074](../closed/0074-quickbooks-tax-alignment/plan.md): pull QB's rate per province and **adopt it into `tax_rates.rate`**, matching by **jurisdiction** (not rate), and make the in-app rate editor **read-only** (QB-managed) — the tax-rate analogue of 0071 making QB the item master. "Done" = ON's rate is QB-sourced on the CA sandbox, the editor is read-only, unmapped provinces keep a flagged fallback, chunk-end `/eval` PASS. **Phase 1 gate:** the jurisdiction-matching strategy (manual mapping vs name heuristic vs hybrid) is an owner decision; Phases 2–5 are provisional until it lands. **Blocker:** the CA sandbox only has Ontario — multi-province alignment is verified on prod (or a fuller sandbox).
+Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10). Extends [0074](../0074-quickbooks-tax-alignment/plan.md): pull QB's rate per province and **adopt it into `tax_rates.rate`**, matching by **jurisdiction** (not rate), and make the in-app rate editor **read-only** (QB-managed) — the tax-rate analogue of 0071 making QB the item master. "Done" = ON's rate is QB-sourced on the CA sandbox, the editor is read-only, unmapped provinces keep a flagged fallback, chunk-end `/eval` PASS. **Phase 1 gate:** the jurisdiction-matching strategy (manual mapping vs name heuristic vs hybrid) is an owner decision; Phases 2–5 are provisional until it lands. **Blocker:** the CA sandbox only has Ontario — multi-province alignment is verified on prod (or a fuller sandbox).
 
 ## Code Anchors
 
@@ -31,7 +31,7 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — `tax_rates` (0065 + the 0074 `quickbooks_tax_code_id`), the QBO links.
 - Memory: [[project_qbo_realms]] (CA sandbox `9341457252668239`, ON-only) · [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod).
-- Precedent: [`../closed/0071-quickbooks-item-pull/plan.md`](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
+- Precedent: [`../0071-quickbooks-item-pull/plan.md`](../0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../0074-quickbooks-tax-alignment/decision.md`](../0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
 
 **Overall Progress:** 100% (5/5 phases complete) — **all phases shipped 2026-06-10: gate + name-matcher + rate adoption (ON live-verified) + editor removal + wiki ingest. Chunk-end `/eval` pending. See [`decision.md`](decision.md).**
 

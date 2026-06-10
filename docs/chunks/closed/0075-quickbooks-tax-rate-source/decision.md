@@ -5,7 +5,7 @@
 
 ## Context
 
-[0074](../closed/0074-quickbooks-tax-alignment/plan.md) linked each province to a QB tax code by **rate-equality** — circular once the goal is to pull QB's *possibly-different* rate. The owner's call (2026-06-10): **QuickBooks is the source of truth for tax rates** — pull QB's rate per province into `tax_rates.rate`, mirroring how [0071](../closed/0071-quickbooks-item-pull/plan.md) made QB the *item* master.
+[0074](../0074-quickbooks-tax-alignment/plan.md) linked each province to a QB tax code by **rate-equality** — circular once the goal is to pull QB's *possibly-different* rate. The owner's call (2026-06-10): **QuickBooks is the source of truth for tax rates** — pull QB's rate per province into `tax_rates.rate`, mirroring how [0071](../0071-quickbooks-item-pull/plan.md) made QB the *item* master.
 
 ## The crux — jurisdiction matching → NAME HEURISTIC (auto)
 
@@ -19,7 +19,7 @@ Owner steer ("don't map, just sync"): match each province to a QB tax code by **
 ## Owner decisions (2026-06-10)
 
 1. **Unmatched/ambiguous provinces → keep app rate, flag unmanaged.** Non-destructive: the province keeps its existing `tax_rates.rate` as a fallback; `quickbooks_tax_code_id` stays null. Quotes still gate on the existing 0074 push pre-flight (fails closed on an unmapped taxed province). *(Chosen over blocking quotes.)*
-2. **In-app tax-rate editor → removed entirely.** Delete the editor (`updateTaxRate` action, `TaxRatesAdmin` component, `tax-rate-schema` + its test) + drop it from `/admin/lookups` + remove the gate-matrix row — mirroring how 0071 removed in-app item CRUD. *(Chosen over a read-only display.)* Admins no longer see/edit rates on `/admin/lookups`; rates are QB-driven and surfaced via the `/admin/quickbooks` "Pull tax codes" result. A read-only viewer could be added later (the [0072](../closed/0072-service-items-readonly-list/plan.md)-for-items precedent) if the owner misses the at-a-glance view.
+2. **In-app tax-rate editor → removed entirely.** Delete the editor (`updateTaxRate` action, `TaxRatesAdmin` component, `tax-rate-schema` + its test) + drop it from `/admin/lookups` + remove the gate-matrix row — mirroring how 0071 removed in-app item CRUD. *(Chosen over a read-only display.)* Admins no longer see/edit rates on `/admin/lookups`; rates are QB-driven and surfaced via the `/admin/quickbooks` "Pull tax codes" result. A read-only viewer could be added later (the [0072](../0072-service-items-readonly-list/plan.md)-for-items precedent) if the owner misses the at-a-glance view.
 3. **Per-province override UI → deferred.** Ship only the auto name-match + rate adoption now — clean for Ontario's single "HST ON" code, the only thing testable in the CA sandbox. Ambiguous/unmatched provinces are flagged; the manual per-province code-picker that would resolve GST+PST/QST lands when prod (or a fuller sandbox) has multi-province codes to verify against.
 
 ## Resolved sub-questions
@@ -45,4 +45,4 @@ Build + verify **Ontario** rate adoption on the CA sandbox (realm `9341457252668
 
 ## References
 
-- [`intent.md`](intent.md) (this chunk) · [0074 decision](../closed/0074-quickbooks-tax-alignment/decision.md) (rate matcher being replaced) · [0071](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor-removal precedent) · [0072](../closed/0072-service-items-readonly-list/plan.md) (read-only viewer precedent, if a rates viewer is later wanted).
+- [`intent.md`](intent.md) (this chunk) · [0074 decision](../0074-quickbooks-tax-alignment/decision.md) (rate matcher being replaced) · [0071](../0071-quickbooks-item-pull/plan.md) (QB-as-master + editor-removal precedent) · [0072](../0072-service-items-readonly-list/plan.md) (read-only viewer precedent, if a rates viewer is later wanted).
