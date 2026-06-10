@@ -4,11 +4,11 @@
 
 ## Problem
 
-The quote → QBO Estimate push ([0073](../closed/0073-quote-estimate-push/plan.md)) ships, but a **live sandbox smoke proved the tax doesn't make it onto the Estimate.** We send tax as a bare `TxnTaxDetail.TotalTax` override + `GlobalTaxCalculation: TaxExcluded`; QBO's **automated sales tax dropped it** and computed $0 because the lines carry no `TaxCodeRef` (non-taxable). Result on Estimate #1001/#145: **Subtotal $400, Taxable subtotal $0.00, Sales tax $0.00, Total $400** — vs the quote's **$452**. (See [`0073 eval addendum`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md).)
+The quote → QBO Estimate push ([0073](../0073-quote-estimate-push/plan.md)) ships, but a **live sandbox smoke proved the tax doesn't make it onto the Estimate.** We send tax as a bare `TxnTaxDetail.TotalTax` override + `GlobalTaxCalculation: TaxExcluded`; QBO's **automated sales tax dropped it** and computed $0 because the lines carry no `TaxCodeRef` (non-taxable). Result on Estimate #1001/#145: **Subtotal $400, Taxable subtotal $0.00, Sales tax $0.00, Total $400** — vs the quote's **$452**. (See [`0073 eval addendum`](../0073-quote-estimate-push/eval-2026-06-10-0911.md).)
 
 So today **every pushed Estimate omits tax** — its QBO total is the pre-tax subtotal, understated by the tax amount. That's wrong for a commercial document and blocks trusting the push on real (prod) quotes.
 
-The root cause is architectural, not a bug: you can't hand QBO a tax *number* and expect it honored when automated sales tax is on. QBO computes tax itself from **tax codes** (`TaxCodeRef` on the transaction/lines + the customer's tax setup). To get correct tax, the app has to speak QBO's tax-code language — which means pulling QBO's `TaxCode`/`TaxRate` and mapping our province tax model ([0065](../closed/0065-dealer-province-tax/plan.md)) onto it.
+The root cause is architectural, not a bug: you can't hand QBO a tax *number* and expect it honored when automated sales tax is on. QBO computes tax itself from **tax codes** (`TaxCodeRef` on the transaction/lines + the customer's tax setup). To get correct tax, the app has to speak QBO's tax-code language — which means pulling QBO's `TaxCode`/`TaxRate` and mapping our province tax model ([0065](../0065-dealer-province-tax/plan.md)) onto it.
 
 ## Desired outcome
 
@@ -56,6 +56,6 @@ It's the **only remaining piece** of the bidirectional QBO effort (after 0070 de
 
 ## Relationship to prior work
 
-- **[0073](../closed/0073-quote-estimate-push/plan.md)** — the push this fixes; `mapQuoteToEstimate` is where the `TaxCodeRef` replaces the `TotalTax` override.
+- **[0073](../0073-quote-estimate-push/plan.md)** — the push this fixes; `mapQuoteToEstimate` is where the `TaxCodeRef` replaces the `TotalTax` override.
 - **0065** — the app's province `tax_rates` + `quotes.tax_pct` / `tax_override` tax model this maps onto.
-- **[0071](../closed/0071-quickbooks-item-pull/plan.md)** — the read-pull pattern (`fetchItems` → sync) the tax-code pull mirrors.
+- **[0071](../0071-quickbooks-item-pull/plan.md)** — the read-pull pattern (`fetchItems` → sync) the tax-code pull mirrors.

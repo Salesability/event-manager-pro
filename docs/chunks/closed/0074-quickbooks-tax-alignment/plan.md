@@ -30,7 +30,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — `tax_rates` (0065), the QBO `quickbooks_id` links (0069–0073), `quotes.tax_pct`/`tax_override`.
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
-- Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
+- Evidence: [`../0073-quote-estimate-push/eval-2026-06-10-0911.md`](../0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
 **Overall Progress:** 100% (6/6 phases complete) — code + tests + wiki shipped. **Live CA Estimate-with-tax smoke is user-gated (deferred);** prod needs the prod `TaxPrefs`/AST check ([decision.md](decision.md) residual).
 
