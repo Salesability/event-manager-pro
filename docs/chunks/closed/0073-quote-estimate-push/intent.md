@@ -4,7 +4,7 @@
 
 ## Problem
 
-The bidirectional QuickBooks effort has connected **dealers** ([0070](../closed/0070-quickbooks-dealer-push/plan.md) — `dealers.quickbooks_id` = `CustomerRef`) and **items** ([0071](../closed/0071-quickbooks-item-pull/plan.md) — `service_items.quickbooks_id` = `ItemRef`). But the **commercial document** — the quote — still lives only in the app. The business keeps its estimates/A-R in QuickBooks; today every accepted quote has to be re-keyed there by hand.
+The bidirectional QuickBooks effort has connected **dealers** ([0070](../0070-quickbooks-dealer-push/plan.md) — `dealers.quickbooks_id` = `CustomerRef`) and **items** ([0071](../0071-quickbooks-item-pull/plan.md) — `service_items.quickbooks_id` = `ItemRef`). But the **commercial document** — the quote — still lives only in the app. The business keeps its estimates/A-R in QuickBooks; today every accepted quote has to be re-keyed there by hand.
 
 This is **Slice 3, the last build slice**: push a quote → QBO **Estimate**, on-demand, reusing the two reference links the prior slices established. It's unblocked precisely because dealers carry a `CustomerRef` and items carry an `ItemRef`.
 
