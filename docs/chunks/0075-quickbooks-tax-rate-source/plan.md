@@ -7,11 +7,11 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Research/decide — jurisdiction-matching strategy + open questions (GATE) | Pending | - |
-| 2: Jurisdiction matcher (replace the rate matcher) + any mapping storage | Pending | - |
-| 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` | Pending | - |
-| 4: Make the tax-rate editor read-only (QB-managed) | Pending | - |
-| 5: Tests + smoke (ON alignment) + wiki | Pending | - |
+| 1: Research/decide — jurisdiction-matching strategy + open questions (GATE) | Done | - |
+| 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration | Pending | - |
+| 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` (pure write-planner + execute) | Pending | - |
+| 4: Remove the in-app tax-rate editor entirely (QB-managed) | Pending | - |
+| 5: Smoke (ON adoption) + wiki ingest | Pending | - |
 
 Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10). Extends [0074](../closed/0074-quickbooks-tax-alignment/plan.md): pull QB's rate per province and **adopt it into `tax_rates.rate`**, matching by **jurisdiction** (not rate), and make the in-app rate editor **read-only** (QB-managed) — the tax-rate analogue of 0071 making QB the item master. "Done" = ON's rate is QB-sourced on the CA sandbox, the editor is read-only, unmapped provinces keep a flagged fallback, chunk-end `/eval` PASS. **Phase 1 gate:** the jurisdiction-matching strategy (manual mapping vs name heuristic vs hybrid) is an owner decision; Phases 2–5 are provisional until it lands. **Blocker:** the CA sandbox only has Ontario — multi-province alignment is verified on prod (or a fuller sandbox).
 
@@ -19,43 +19,47 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 
 | New / changed code | Anchor (`path:line`) | Why this anchor |
 |--------------------|---------------------|-----------------|
-| Jurisdiction matcher (replaces `matchProvinceTaxCode`) in `src/lib/quickbooks/tax-sync.ts` | `tax-sync.ts` `matchProvinceTaxCode` / `resolveProvinceLinks` (0074, rate-based) | the function being rethought — same shape, jurisdiction key instead of rate |
-| `applyTaxCodeSync` writes `tax_rates.rate` (not just the code id) | `tax-sync.ts` `applyTaxCodeSync` (0074) | extend the existing executor-injected sync |
-| QB rate per code | `client.ts` `fetchTaxRates` + `resolveCodeRatePct` (0074) | already resolve a code's rate; reuse |
-| Optional `tax_rates` schema change (`is_qb_managed`/`source`, or none) | `src/lib/db/schema/tax-rates.ts` (`quickbooks_tax_code_id` add, 0074) + the partial-index idiom | same db-conventions migration shape if a column is added |
-| Read-only tax-rate editor | `src/features/tax-rates/{actions.ts (`updateTaxRate`, gated `lookup:edit`), tax-rates-admin.tsx, tax-rate-schema.ts}` rendered on `src/app/(app)/admin/lookups/page.tsx` | the editor to disable/remove |
-| The "QB is master → remove in-app editing" precedent | `docs/chunks/closed/0071-quickbooks-item-pull/` (removed `services/actions.ts` + `services-admin.tsx` + lookups editor + gate-matrix rows) | mirror its removal/read-only approach + gate-matrix update |
-| Manual-mapping UI (if Phase 1 picks (a)) | `src/features/quickbooks/quickbooks-admin.tsx` "Pull items"/"Pull tax codes" sections (0071/0074) | the admin-surface pattern for a per-province code picker |
+| `codeNamesProvince` + `resolveProvinceLinksByName` (replace `matchProvinceTaxCode` / `resolveProvinceLinks`) in `src/lib/quickbooks/tax-sync.ts` | `tax-sync.ts:44` `matchProvinceTaxCode` / `:70` `resolveProvinceLinks` (0074, rate-based) | the rate matcher being replaced — name-token/full-name match keyed on jurisdiction, not rate |
+| `planTaxRateWrites` (pure) + `applyTaxCodeSync` writes `tax_rates.rate` (not just the code id) | `tax-sync.ts:102` `applyTaxCodeSync` (0074) | split the executor: pure write-planner (testable, no DB) + thin execute; adopt QB's rate on `linked` |
+| QB rate per code (reused) | `client.ts:25` `resolveCodeRatePct` lives in `tax-sync.ts:25`; `client.ts:584` `fetchTaxRates` | already resolve a code's summed sales rate → the rate to adopt; **keep** |
+| Flash + section copy (matching→adoption) | `src/app/(app)/admin/quickbooks/page.tsx:68` flash; `src/features/quickbooks/quickbooks-admin.tsx:301` "Tax codes" section | copy says "map by rate" → update to "adopt rate, match by name" |
+| **No** `tax_rates` schema change | `src/lib/db/schema/tax-rates.ts` | decision: infer "managed" from `quickbooks_tax_code_id IS NOT NULL` — **no new column, no migration** |
+| Remove the tax-rate editor entirely | `src/features/tax-rates/{actions.ts (`updateTaxRate`), tax-rates-admin.tsx, tax-rate-schema.ts, tax-rate-schema.test.ts}` + render at `src/app/(app)/admin/lookups/page.tsx:5,30` + gate-matrix row `src/features/__tests__/action-gate-matrix.ts:18,214` | delete (mirror 0071's CRUD removal); **keep `queries.ts`** (`loadTaxRates`/`dealerTaxRatePct`/`taxRateForProvince` — quote-composer + quote-actions path) |
+| The "QB is master → remove in-app editing" precedent | `docs/chunks/closed/0071-quickbooks-item-pull/` (removed `services/actions.ts` + `services-admin.tsx` + lookups editor + 3 gate-matrix rows) | mirror its removal approach + gate-matrix update; `lookup:edit` capability STAYS (schedule lookups still use it) |
+| Per-province override UI — **DEFERRED** (decision 3) | — | not built this chunk; ambiguous/unmatched provinces are flagged + stay app-managed |
 
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — `tax_rates` (0065 + the 0074 `quickbooks_tax_code_id`), the QBO links.
 - Memory: [[project_qbo_realms]] (CA sandbox `9341457252668239`, ON-only) · [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod).
 - Precedent: [`../closed/0071-quickbooks-item-pull/plan.md`](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
 
-**Overall Progress:** 0% (0/5 phases complete) — **scaffold only; Phase 1 gate unresolved.**
+**Overall Progress:** 20% (1/5 phases complete) — **Phase 1 gate resolved 2026-06-10 (owner decisions); see [`decision.md`](decision.md). Phases 2–5 finalized below.**
 
-**Note:** Phases 2–5 are provisional. Phase 1's matching decision restructures them — e.g. manual mapping adds a per-province code-picker UI + a mapping store; a name heuristic keeps it code-only.
+**Note:** Matching = **name heuristic** (auto, no manual map). Editor **removed entirely** (not read-only). Per-province override **deferred**. **No migration** (managed = `quickbooks_tax_code_id IS NOT NULL`). Unmatched/ambiguous provinces keep their app rate, flagged unmanaged.
 
 ### Phase Checklist
 
 #### Phase 1: Research/decide — jurisdiction-matching strategy (GATE) — research, no code
 - [x] **Probed the bridge problem (2026-06-10):** QB tax codes have **no province field**, and the CA customers have **no `DefaultTaxCodeRef`** (so we can't source a dealer's code from QB's customer record) — but customers **do** carry a province (`BillAddr.CountrySubDivisionCode`). → A pure "delete + mirror QB, no province" model is **not** possible (nothing links a code to who pays it); the province stays the key.
 - [x] **Matching strategy → NAME HEURISTIC (auto), not manual mapping** (owner steer 2026-06-10 — "don't map, just sync"): match each province to a QB code whose **name** encodes the jurisdiction ("HST ON" → ON) on every pull; adopt QB's rate. No manual mapping table/UI. **Caveat:** clean for HST provinces (single "HST XX" code — all the CA sandbox has); **fragile for GST+PST/QST** (BC/QC use multiple/grouped codes) → auto-match the confident ones, **flag the ambiguous/unmatched** for a one-off per-province override (the only manual touch, and only for the tricky provinces).
-- [ ] Finalize: provinces with no confident QB-name match → keep app rate + "unmanaged" flag (vs block); editor read-only (not removed — admins still need to *see* rates); infer "managed" from `quickbooks_tax_code_id` (no new column); keep the 0074 rate-drift guard as a safety net.
-- [ ] Write `decision.md`; **rewrite Phases 2–5** to match (name-matcher + rate adoption + read-only editor + per-province override for ambiguous).
+- [x] **Finalized (owner, 2026-06-10):** unmatched/ambiguous → **keep app rate + unmanaged flag** (not block); editor **removed entirely** (not read-only); **infer** "managed" from `quickbooks_tax_code_id` (no new column → no migration); **keep** the 0074 rate-drift guard; per-province override **deferred**. See [`decision.md`](decision.md).
+- [x] **Wrote `decision.md`; rewrote Phases 2–5** (name-matcher + pure write-planner rate adoption + editor removal + deferred override).
 
-#### Phase 2: Jurisdiction matcher (provisional)
-- [ ] Replace/augment `matchProvinceTaxCode` with jurisdiction matching per Phase 1; add a mapping store if manual (extend `tax_rates`, or a small table). Migration via `db-conventions`, sandbox-first, **verify journal `when`** if a column is added.
-- [ ] Unit tests for the matcher (jurisdiction match, ambiguity, no-code).
+#### Phase 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration
+- [ ] In `tax-sync.ts`, add `codeNamesProvince(name, province)` — true when the code name carries the jurisdiction: the 2-letter province code as a **word token** (`\bON\b`) or the full province name (`CA_PROVINCE_NAMES`), case-insensitive. Federal-only names ("GST", "Exempt") match nothing.
+- [ ] Replace `matchProvinceTaxCode` + `resolveProvinceLinks` with `resolveProvinceLinksByName(appRates, qboCodes, rateById)` → `{ province, taxCodeId, ratePct, status }[]`. Confident 1:1 (one active, rate-resolvable code names the province) → `linked` w/ `ratePct`; zero → `unmatched`; >1 → `ambiguous`. **Keep** `resolveCodeRatePct` (gets the rate to adopt). Delete the old rate-matcher + its tests.
+- [ ] Unit tests: name token match (HST ON → ON, ratePct 13), full-name match (Ontario), federal-only → unmatched (GST), ambiguous (two codes name ON), unresolvable-rate code filtered out, word-boundary false-positive guard.
 
-#### Phase 3: Adopt QB rate (provisional)
-- [ ] Extend `applyTaxCodeSync` to write `tax_rates.rate` = the matched code's QB rate (+ set/clear the managed flag). Executor-injected.
-- [ ] Integration test (rolled-back tx): ON adopts QB's rate; an unmapped province keeps its app rate + unmanaged.
+#### Phase 3: Adopt QB rate — pure write-planner + execute
+- [ ] Add pure `planTaxRateWrites(appRows, links)` → minimal `{ id, quickbooksTaxCodeId, rate? }[]`: `linked` adopts QB's rate (`ratePct.toFixed(3)`) + sets the code id; unmanaged clears a stale code id only (keeps the app rate); no-ops omitted.
+- [ ] Rewire `applyTaxCodeSync` to resolve → plan → execute the writes; keep the `TaxCodeSyncResult` shape (`linked` now = managed + rate adopted). Update the `/admin/quickbooks` flash + "Tax codes" section copy (rate **adoption**, matched **by name**).
+- [ ] Unit tests for `planTaxRateWrites`: linked adopts rate+code (`"13.000"`), unmanaged clears code keeps rate, already-aligned → no write, ambiguous clears code.
 
-#### Phase 4: Read-only editor (provisional)
-- [ ] Make the tax-rate editor read-only (disable/remove `updateTaxRate`; `TaxRatesAdmin` shows rates + "managed by QuickBooks", unmanaged provinces flagged) — mirror 0071's removal. Update the gate-matrix (drop/adjust the `lookup:edit` tax-rate row).
+#### Phase 4: Remove the in-app tax-rate editor entirely
+- [ ] Delete `tax-rates/{actions.ts, tax-rates-admin.tsx, tax-rate-schema.ts, tax-rate-schema.test.ts}`. **Keep** `tax-rates/queries.ts` (quote-composer + quote-actions read `loadTaxRates`/`dealerTaxRatePct`/`taxRateForProvince`).
+- [ ] Remove `TaxRatesAdmin` import + render from `admin/lookups/page.tsx` (+ refresh its description); drop the `updateTaxRate` row + `taxRatesActions` import from `action-gate-matrix.ts`. `lookup:edit` capability STAYS (schedule lookups use it).
 
-#### Phase 5: Tests + smoke + wiki (provisional)
-- [ ] Unit + integration green; gate-matrix updated.
-- [ ] Smoke (web-test): `/admin/lookups` tax-rates section is read-only ("managed by QuickBooks"); `/admin/quickbooks` pull adopts ON's rate. (Live ON-rate-adoption verified on the CA sandbox; multi-province deferred — blocker.)
-- [ ] Ingest into `docs/wiki/data-model.md` (`tax_rates` now QB-sourced) + `docs/wiki/log.md`; note the editor is read-only + the prod multi-province dependency.
+#### Phase 5: Smoke + wiki ingest
+- [ ] `tsc` + `pnpm test` green; gate-matrix green.
+- [ ] Smoke (web-test / chunk-end eval): `/admin/lookups` no longer shows a tax-rate editor; `/admin/quickbooks` "Pull tax codes" present + copy reflects rate adoption by name. (Live ON-rate adoption verified on the CA sandbox; multi-province deferred — blocker.)
+- [ ] Ingest into `docs/wiki/data-model.md` (`tax_rates.rate` now QB-sourced; editor removed; managed = `quickbooks_tax_code_id IS NOT NULL`) + `docs/wiki/log.md`; note the deferred override + the prod multi-province dependency.
