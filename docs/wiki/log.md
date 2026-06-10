@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-10 — QuickBooks is the tax-rate source of truth (0075)
+
+- Updated the **`tax_rates`** row in [`data-model.md`](data-model.md): `rate` is now **QB-sourced**, not admin-editable. The "Pull tax codes" sync **name-matches** each province to the QBO `TaxCode` whose name identifies it ("HST ON" → ON; `resolveProvinceLinksByName`, **replacing** the 0074 match-by-rate, which was circular once the goal is to pull QB's possibly-different rate) and **adopts** that code's rate into `tax_rates.rate`. Unmatched/ambiguous provinces keep their app rate, **unmanaged** (`quickbooks_tax_code_id` null — the managed flag is inferred, **no new column / no migration**).
+- The **in-app tax-rate editor was removed** (`updateTaxRate` action + `TaxRatesAdmin` + `tax-rate-schema` + the `/admin/lookups` render + the gate-matrix row) — mirrors 0071 making QB the item master. `loadTaxRates`/`dealerTaxRatePct` stay (quote pricing still reads them). `lookup:edit` capability stays (schedule lookups use it).
+- **ON rate adoption live-verified** on the CA sandbox `9341457252668239` (the rolled-back DB integration test forces ON→11.000, syncs "HST ON", asserts ON adopts **13.000** + code `5`, BC keeps its app rate). Owner decisions + the replaced rate-matcher: [`../chunks/0075-quickbooks-tax-rate-source/decision.md`](../chunks/0075-quickbooks-tax-rate-source/decision.md). **Deferred:** a per-province manual override for ambiguous GST+PST/QST provinces; **multi-province adoption is verified on prod** (the CA sandbox has only Ontario). The 0074 rate-drift push pre-flight is **kept** as a safety net. See [[project_qbo_realms]].
+
 ## 2026-06-10 — QBO tax alignment: Estimate tax via province → TaxCode (0074)
 
 - Ingested **`tax_rates.quickbooks_tax_code_id`** (nullable text, migration `0035`) into [`data-model.md`](data-model.md) (`tax_rates` row) — the QBO `TaxCode.Id` each province maps to, set by the admin **"Pull tax codes"** sync (`src/lib/quickbooks/tax-sync.ts`, match by rate, unambiguous-only).
