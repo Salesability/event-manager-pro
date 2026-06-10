@@ -10,7 +10,7 @@
 | 1: Research/decide — jurisdiction-matching strategy + open questions (GATE) | Done | - |
 | 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration | Done | - |
 | 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` (pure write-planner + execute) | Done | - |
-| 4: Remove the in-app tax-rate editor entirely (QB-managed) | Pending | - |
+| 4: Remove the in-app tax-rate editor entirely (QB-managed) | Done | - |
 | 5: Smoke (ON adoption) + wiki ingest | Pending | - |
 
 Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10). Extends [0074](../closed/0074-quickbooks-tax-alignment/plan.md): pull QB's rate per province and **adopt it into `tax_rates.rate`**, matching by **jurisdiction** (not rate), and make the in-app rate editor **read-only** (QB-managed) — the tax-rate analogue of 0071 making QB the item master. "Done" = ON's rate is QB-sourced on the CA sandbox, the editor is read-only, unmapped provinces keep a flagged fallback, chunk-end `/eval` PASS. **Phase 1 gate:** the jurisdiction-matching strategy (manual mapping vs name heuristic vs hybrid) is an owner decision; Phases 2–5 are provisional until it lands. **Blocker:** the CA sandbox only has Ontario — multi-province alignment is verified on prod (or a fuller sandbox).
@@ -33,7 +33,7 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - Memory: [[project_qbo_realms]] (CA sandbox `9341457252668239`, ON-only) · [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod).
 - Precedent: [`../closed/0071-quickbooks-item-pull/plan.md`](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
 
-**Overall Progress:** 60% (3/5 phases complete) — **Phase 1 gate + Phase 2 name-matcher + Phase 3 rate adoption shipped (2026-06-10); ON adoption live-verified on the CA sandbox. See [`decision.md`](decision.md).**
+**Overall Progress:** 80% (4/5 phases complete) — **Phases 1–4 shipped (2026-06-10): gate + name-matcher + rate adoption (ON live-verified) + editor removal. See [`decision.md`](decision.md).**
 
 **Note:** Matching = **name heuristic** (auto, no manual map). Editor **removed entirely** (not read-only). Per-province override **deferred**. **No migration** (managed = `quickbooks_tax_code_id IS NOT NULL`). Unmatched/ambiguous provinces keep their app rate, flagged unmanaged.
 
@@ -56,8 +56,8 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - [x] Unit tests for `planTaxRateWrites` (5): adopts rate+code (`"13.000"`), code-only when rate aligned, no-op when already in state, unmanaged clears code + keeps rate, already-unmanaged untouched. **Integration test rewritten** (`tests/integration/tax-sync.test.ts`) — forces ON→11.000, syncs "HST ON", asserts ON adopts **13.000** + code `5`; BC stale link cleared, BC rate kept. **Live-verified on the CA sandbox** (DB integration ran + passed in the serial suite).
 
 #### Phase 4: Remove the in-app tax-rate editor entirely
-- [ ] Delete `tax-rates/{actions.ts, tax-rates-admin.tsx, tax-rate-schema.ts, tax-rate-schema.test.ts}`. **Keep** `tax-rates/queries.ts` (quote-composer + quote-actions read `loadTaxRates`/`dealerTaxRatePct`/`taxRateForProvince`).
-- [ ] Remove `TaxRatesAdmin` import + render from `admin/lookups/page.tsx` (+ refresh its description); drop the `updateTaxRate` row + `taxRatesActions` import from `action-gate-matrix.ts`. `lookup:edit` capability STAYS (schedule lookups use it).
+- [x] Deleted `tax-rates/{actions.ts, tax-rates-admin.tsx, tax-rate-schema.ts, tax-rate-schema.test.ts}`. **Kept** `tax-rates/queries.ts` (quote-composer `quotes/new`+`quotes/[id]` read `loadTaxRates`; quote actions read `dealerTaxRatePct`).
+- [x] Removed `TaxRatesAdmin` import + render + `loadTaxRates` import from `admin/lookups/page.tsx` (description now says service items **and** tax rates are QB-mastered); dropped the `updateTaxRate` row + `taxRatesActions` import from `action-gate-matrix.ts` (source-scan assertion stays consistent — action + row both gone). `lookup:edit` capability STAYS (schedule lookups use it). tsc clean, gate-matrix 295/295.
 
 #### Phase 5: Smoke + wiki ingest
 - [ ] `tsc` + `pnpm test` green; gate-matrix green.
