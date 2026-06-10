@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | In Progress | - |
+| 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | Done | (research — [decision.md](decision.md)) |
 | 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Pending | - |
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Pending | - |
 | 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Pending | - |
@@ -32,16 +32,17 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
 - Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
-**Overall Progress:** 0% (0/6 phases complete) — **scaffold only; Phase 1 gate unresolved.**
+**Overall Progress:** 17% (1/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 2–6 ready to build against the CA sandbox.**
 
-**Note:** Phases 2–6 are provisional. Phase 1's decision (Canadian sandbox vs defer vs inspect-prod) may restructure them — e.g. if AST ignores supplied tax codes, the approach changes from "set `TaxCodeRef`" to "configure the customer's tax setup," and the schema/mapping phases shift accordingly.
+**Note:** Phase 1 settled the approach (manual sales tax → set **txn-level** `TxnTaxDetail.TxnTaxCodeRef`, mapped province→`TaxCode.Id`; the AST-would-have-broken-it risk is retired *for the sandbox*). Phase-checklist summaries below reflect the decided shape. Residual to confirm before prod: the **prod** company's `TaxPrefs` (if AST, revisit Phase 4).
 
 ### Phase Checklist
 
 #### Phase 1: Research/decide — Canadian-sandbox blocker + tax-code shape (GATE) — research, no code
 - [x] ~~Resolve the Canadian-vs-US blocker~~ — **DECIDED: path (a)** (2026-06-10). Owner created a **Canadian QBO sandbox, Company ID `9341457252668239`** (vs the US sample sandbox `9341457209207248`; prod Canadian `193514766730959`). Build+verify against the CA sandbox.
-- [ ] **Connect the app to the CA sandbox** — `/admin/quickbooks` → Disconnect (US `…209207248`) → Connect → pick Company ID `…252668239` (owner does the OAuth). ⚠️ **Reconnecting changes the realm → existing dealer/item `quickbooks_id` links (US company ids) go STALE.** Fine for tax-code research; before a full CA Estimate smoke, re-sync dealers + re-pull items from the CA company.
-- [ ] Inspect the CA company's tax model (read-only): list its `TaxCode`/`TaxRate` (GST/HST/PST per province), AST on/off, the customer default tax code / exempt flag. This answers the design Qs below.
+- [x] **Connected the app to the CA sandbox** (owner did the OAuth 2026-06-10; `quickbooks_connection.realm_id` now `9341457252668239`). ⚠️ Existing dealer/item `quickbooks_id` links are now **STALE** (hold the US company's entity ids) — fine for tax-code research; before a CA Estimate smoke (Phase 6) re-sync dealers + re-pull items against the CA company.
+- [x] Inspect the CA company's tax model (read-only `scripts/0074-tax-probe.mjs`) → **[decision.md](decision.md)**. Findings: **manual sales tax, NOT AST** (`TaxPrefs = {UsingSalesTax:true}`, no `PartnerTaxEnabled`) → QBO honors a supplied tax code; **txn-level** `TxnTaxDetail.TxnTaxCodeRef` is the unit; the taxable code is **"HST ON" #5 = 13%** (sandbox is an Ontario company — only HST ON configured); QBO HST ON 13% matches the app's ON rate.
+- [x] Design Qs answered (see [decision.md](decision.md)): (1) manual not AST; (2) txn-level `TxnTaxCodeRef`; (3) pull `TaxCode` (Id = ref, rate from its `SalesTaxRateList`); (4) map province→`TaxCode.Id`, fail-closed when none; (5) validate app-rate↔QBO-rate parity; (6) `tax_override` → flag/skip for v1. **Residual: verify prod's `TaxPrefs` (AST?) before prod.**
 - [ ] Determine the prod (Canadian) QBO company's tax model: **Automated Sales Tax on/off?** manual tax codes? the customer-level default tax code / exempt flag?
 - [ ] Determine which `TaxCodeRef` QBO honors for Canadian GST/HST: **txn-level** (`TxnTaxDetail.TxnTaxCodeRef`) vs **line-level** (`SalesItemLineDetail.TaxCodeRef`).
 - [ ] Decide rate reconciliation: **QBO rate as source of truth** (pull → drive quote tax) vs **validate the 0065 province rate matches**.
