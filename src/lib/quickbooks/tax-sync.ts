@@ -38,18 +38,21 @@ export function resolveCodeRatePct(
 }
 
 // Does this QB tax-code name identify a specific province? Matches the province's
-// 2-letter code as an UPPERCASE word token against the original name ("HST ON" →
-// ON) or its full name ("Ontario …" → ON, case-insensitive). The abbreviation
-// match is CASE-SENSITIVE on purpose: "ON" is also the English word "on", so a
-// case-insensitive token would wrongly link a code like "GST on sales" to Ontario
-// — province abbreviations in QBO Canadian tax-code names are uppercase by
-// convention. Federal-only names ("GST", "Exempt", "Out of scope") and shared HST
-// names name no province → those provinces stay app-managed. The word boundary
-// avoids false hits (e.g. "ON" inside "Non-").
+// 2-letter code as the FINAL whitespace-delimited token of the name ("HST ON" →
+// ON, "GST/PST BC" → BC — QBO's Canadian convention puts the jurisdiction code
+// last), or matches the full province name anywhere ("Ontario …" → ON, case-
+// insensitive). Anchoring the abbreviation at the END is what distinguishes the
+// jurisdiction code "ON" from the English word "on" mid-name: "GST ON SALES" and
+// "ON HOLD" don't END in the bare code, so they don't match (a plain word-token
+// would wrongly link them to Ontario). Federal/shared names ("GST", "Exempt",
+// "Out of scope") name no province. Decorated/non-standard names ("HST ON (13%)",
+// "HSTON") fall through to unmatched — fail-safe per the name-heuristic decision
+// (flag, don't guess; see decision.md).
 export function codeNamesProvince(name: string | undefined | null, province: string): boolean {
   if (!name) return false;
   const code = province.toUpperCase();
-  if (new RegExp(`\\b${code}\\b`).test(name)) return true;
+  const tokens = name.trim().split(/\s+/);
+  if (tokens[tokens.length - 1].toUpperCase() === code) return true;
   const full = CA_PROVINCE_NAMES[province as CaProvinceCode]?.toLowerCase();
   return full != null && name.toLowerCase().includes(full);
 }

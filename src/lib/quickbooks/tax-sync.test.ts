@@ -106,11 +106,14 @@ describe('codeNamesProvince', () => {
     expect(codeNamesProvince(undefined, 'ON')).toBe(false);
   });
 
-  it('does NOT treat the English word "on" as Ontario (case-sensitive abbr)', () => {
-    // Regression: a lowercase-"on" code name must not false-match ON.
+  it('does NOT treat the English word "on" as Ontario (abbr must be the final token)', () => {
+    // Regression: "on" as a preposition — any case — must not false-match ON,
+    // including all-caps labels. Only a name ENDING in the bare code matches.
     expect(codeNamesProvince('GST on sales', 'ON')).toBe(false);
     expect(codeNamesProvince('Tax on purchases', 'ON')).toBe(false);
-    expect(codeNamesProvince('HST ON', 'ON')).toBe(true); // uppercase token still matches
+    expect(codeNamesProvince('GST ON SALES', 'ON')).toBe(false); // all-caps "ON" mid-name
+    expect(codeNamesProvince('ON HOLD', 'ON')).toBe(false);
+    expect(codeNamesProvince('HST ON', 'ON')).toBe(true); // trailing code still matches
   });
 });
 
@@ -126,7 +129,7 @@ describe('resolveProvinceLinksByName', () => {
   });
 
   it('ambiguous when >1 active code names the province', () => {
-    const dup = code('99', ['12'], { Name: 'HST ON (old)' });
+    const dup = code('99', ['12'], { Name: 'HST ON' }); // same trailing-token name as hstOn
     const links = resolveProvinceLinksByName([{ province: 'ON' }], [hstOn, dup], rateById);
     expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'ambiguous' });
   });
