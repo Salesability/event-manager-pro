@@ -10,7 +10,7 @@
 | 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration | Done | `0f4a1df` |
 | 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Done | `788ea03` |
 | 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Done | `d2cc9c7` |
-| 4: Server Action + gate-matrix row + quote-page button + flash | Pending | - |
+| 4: Server Action + gate-matrix row + quote-page button + flash | Done | `9a589fb` |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
 
 **Slice 3 (final build slice) of the bidirectional QuickBooks effort.** Push a quote → QBO **Estimate** on demand, reusing 0070's `CustomerRef` (`dealers.quickbooks_id`) + 0071's `ItemRef` (`service_items.quickbooks_id`). Mirrors the 0070 dealer-push shape (read-before-write SyncToken on update, guarded create-then-backfill) but for the quote→Estimate mapping, gated behind a pre-flight check that **every** line SKU + the dealer are QBO-linked. "Done" = the column ships to sandbox; a fully-linked quote creates/updates a matching Estimate; the pre-flight fails closed otherwise; chunk-end `/eval` PASS. Sandbox-first (prod push gated on a prod catalog pull).
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → Conventions — mutations are Server Actions; invoke `db-conventions` before schema/migrations.
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]] (accepted Quote IS the contract).
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests; the `applyItemSync`-style DB integration test (the backfill write) comes in Phase 5 against a real DB in rolled-back transactions, with the QBO Estimate calls mocked.
@@ -61,9 +61,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test `checkQuotePushReadiness` (linked/unlinked dealer, unlinked-SKU-naming, empty) + `mapQuoteToEstimate` (CustomerRef, ItemRef/qty/override-unit/amount, tax override + omit-on-zero) — 6 cases, pure. (`quote-push.test.ts`)
 
 #### Phase 4: Server Action + gate-matrix + quote-page button + flash
-- [ ] `pushQuoteToQuickbooks(formData)` Server Action in `src/features/quickbooks/actions.ts`: `assertCan('admin:access')` → Zod `quoteId` → load quote + lines + dealer → `getValidAccessToken()` → push core → `revalidatePath('/quotes/<id>')` → `redirect('/quotes/<id>?qbpush=created|updated')`. A `QuotePushNotReadyError` → redirect `?qberror=<message>` (friendly, since the pre-flight is a user-actionable state, unlike the propagate-rationale for connection errors). Register in `action-gate-matrix.ts` (ADMIN_ONLY).
-- [ ] Quote page (`src/app/(app)/quotes/[id]/page.tsx`): load the QBO connection + the quote's `quickbooks_estimate_id`; render a "Push to QuickBooks" `<form action>` button (admin-only, only when connected) + the link-state ("Estimate #N" / not pushed); decode `?qbpush=`/`?qberror=` into a notice. Mirror the dealer-page button.
-- [ ] No-JS server component + `<form action>`.
+- [x] `pushQuoteToQuickbooks(formData)` Server Action: `assertCan('admin:access')` → Zod `quoteId` → `loadQuoteEstimatePushData` (new assembly loader in `quotes/queries.ts`: quote + dealer link + lines with each SKU's `service_items.quickbooks_id` left-joined) → **status gate** (only `accepted`/`sent` → else `?qberror`) → `getValidAccessToken` → core (imported aliased `pushQuoteToEstimate`) → `revalidatePath` + `redirect(?qbpush=created|updated)`. `QuotePushNotReadyError` → `?qberror=<msg>` (user-actionable); connection/transport errors propagate. Registered in `action-gate-matrix.ts` (ADMIN_ONLY, passes 7 roles).
+- [x] Quote page (`quotes/[id]/page.tsx`): added `quickbooksEstimateId` to `loadQuote` (additive — Quote type/projection/mapRow), loaded `getConnection()`, gated a **"Push to QuickBooks"** `<form action>` button on **QBO-connected + `can(profile,'admin:access')`** (the page admits coaches, so a fresh admin check), with link-state ("Estimate #N" / not pushed) + `?qbpush`/`?qberror` flash. Drive-by: added `quickbooksEstimateId: null` to the `status-display.test.ts` Quote fixture (new required field).
+- [x] No-JS server component + `<form action>`.
 
 #### Phase 5: Tests + smoke verification + wiki ingest
 - [ ] Integration test (`tests/integration/quote-push.test.ts`, rolled-back txns, QBO Estimate calls mocked): **create path** — fully-linked quote → `createEstimate` returns `Id` → assert `quickbooks_estimate_id` backfilled; **update path** — linked quote → `fetchEstimateById` + `updateEstimate` with the read SyncToken; **pre-flight fail** — unlinked dealer / unlinked SKU → `QuotePushNotReadyError`, no write, no `createEstimate` call.
