@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration | Done | `0f4a1df` |
-| 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Pending | - |
+| 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Done | `788ea03` |
 | 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Pending | - |
 | 4: Server Action + gate-matrix row + quote-page button + flash | Pending | - |
 | 5: Tests + smoke verification + wiki ingest | Pending | - |
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → Conventions — mutations are Server Actions; invoke `db-conventions` before schema/migrations.
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]] (accepted Quote IS the contract).
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests; the `applyItemSync`-style DB integration test (the backfill write) comes in Phase 5 against a real DB in rolled-back transactions, with the QBO Estimate calls mocked.
@@ -50,9 +50,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Applied to **sandbox** (5432 pooler `aws-1-us-west-2`); verified col (`text`, nullable) + partial index via `pg_indexes`. (Prod deferred.)
 
 #### Phase 2: `client.ts` Estimate helpers
-- [ ] `QboEstimate` type (Id, SyncToken?, CustomerRef, Line[], TxnTaxDetail?, TotalAmt?, …) + `QboEstimateInput` write type.
-- [ ] `fetchEstimateById` (GET `/v3/company/{realm}/estimate/{id}`), `createEstimate` (POST `/estimate`), `updateEstimate` (sparse POST with `Id`+`SyncToken`) — reuse the `readCustomerResponse`-style 401/error handling (generalize it or add a sibling).
-- [ ] Unit test request shaping (URL `/estimate`, Bearer, sparse flag, SyncToken) with `fetch` mocked — mirror the customer-helper tests.
+- [x] `QboEstimate` + `QboEstimateLine` (read) + `QboEstimateInput` (write) types.
+- [x] `fetchEstimateById` / `createEstimate` / `updateEstimate` (sparse POST with `Id`+`SyncToken`) + a `readEstimateResponse` sibling (401→QboAuthError, !ok→throw, returns `json.Estimate`; no 6240 — estimates have no name-uniqueness).
+- [x] Unit test request shaping (URL `/estimate`, Bearer, no-Id-on-create, sparse+Id+SyncToken on update, 401) — 4 cases in `client.test.ts`.
 
 #### Phase 3: `quote-push.ts` — pre-flight + map + push core
 - [ ] `checkQuotePushReadiness(quote, lines, dealer)` → `{ ok: true } | { ok: false, reason }`: dealer must have `quickbooks_id`; every line's `service_items.quickbooks_id` must be set (load the SKUs' link state). Clear messages: "dealer not linked — Sync dealers first" / "items not linked: <codes> — Pull items first". (Resolve the `quotes.fee`/`quotes.travel` vs line-items question here.)
