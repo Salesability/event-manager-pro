@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Research/decide — jurisdiction-matching strategy + open questions (GATE) | Done | - |
 | 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration | Done | - |
-| 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` (pure write-planner + execute) | Pending | - |
+| 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` (pure write-planner + execute) | Done | - |
 | 4: Remove the in-app tax-rate editor entirely (QB-managed) | Pending | - |
 | 5: Smoke (ON adoption) + wiki ingest | Pending | - |
 
@@ -33,7 +33,7 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - Memory: [[project_qbo_realms]] (CA sandbox `9341457252668239`, ON-only) · [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod).
 - Precedent: [`../closed/0071-quickbooks-item-pull/plan.md`](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
 
-**Overall Progress:** 40% (2/5 phases complete) — **Phase 1 gate resolved + Phase 2 name-matcher shipped (2026-06-10). See [`decision.md`](decision.md).**
+**Overall Progress:** 60% (3/5 phases complete) — **Phase 1 gate + Phase 2 name-matcher + Phase 3 rate adoption shipped (2026-06-10); ON adoption live-verified on the CA sandbox. See [`decision.md`](decision.md).**
 
 **Note:** Matching = **name heuristic** (auto, no manual map). Editor **removed entirely** (not read-only). Per-province override **deferred**. **No migration** (managed = `quickbooks_tax_code_id IS NOT NULL`). Unmatched/ambiguous provinces keep their app rate, flagged unmanaged.
 
@@ -51,9 +51,9 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - [x] Unit tests (`tax-sync.test.ts`, +8): name token match (HST ON → ON, ratePct 13), full-name match (Ontario/Quebec), federal-only/substring → no match (GST/Exempt/Non-taxable/shared HST), ambiguous (two codes name ON), unresolvable-rate code filtered → unmatched, inactive ignored.
 
 #### Phase 3: Adopt QB rate — pure write-planner + execute
-- [ ] Add pure `planTaxRateWrites(appRows, links)` → minimal `{ id, quickbooksTaxCodeId, rate? }[]`: `linked` adopts QB's rate (`ratePct.toFixed(3)`) + sets the code id; unmanaged clears a stale code id only (keeps the app rate); no-ops omitted.
-- [ ] Rewire `applyTaxCodeSync` to resolve → plan → execute the writes; keep the `TaxCodeSyncResult` shape (`linked` now = managed + rate adopted). Update the `/admin/quickbooks` flash + "Tax codes" section copy (rate **adoption**, matched **by name**).
-- [ ] Unit tests for `planTaxRateWrites`: linked adopts rate+code (`"13.000"`), unmanaged clears code keeps rate, already-aligned → no write, ambiguous clears code.
+- [x] Added pure `planTaxRateWrites(appRows, links)` → minimal `{ id, quickbooksTaxCodeId, rate? }[]`: `linked` adopts QB's rate (`ratePct.toFixed(3)`) + sets the code id; unmanaged clears a stale code id only (keeps the app rate — `rate` omitted, column is NOT NULL); no-ops omitted.
+- [x] Rewired `applyTaxCodeSync` to resolve (`resolveProvinceLinksByName`) → plan → execute; deleted the old rate-matcher (`matchProvinceTaxCode`/`resolveProvinceLinks`/types) + its unit tests; updated the module header + the `pullTaxCodesFromQuickbooks` action comment. Updated the `/admin/quickbooks` flash ("Adopted province tax rates … managed/unmatched/ambiguous") + the QB-admin section ("Tax rates", adopt **from** QB, matched **by name**). `TaxCodeSyncResult` shape unchanged (`linked` now = managed + rate adopted).
+- [x] Unit tests for `planTaxRateWrites` (5): adopts rate+code (`"13.000"`), code-only when rate aligned, no-op when already in state, unmanaged clears code + keeps rate, already-unmanaged untouched. **Integration test rewritten** (`tests/integration/tax-sync.test.ts`) — forces ON→11.000, syncs "HST ON", asserts ON adopts **13.000** + code `5`; BC stale link cleared, BC rate kept. **Live-verified on the CA sandbox** (DB integration ran + passed in the serial suite).
 
 #### Phase 4: Remove the in-app tax-rate editor entirely
 - [ ] Delete `tax-rates/{actions.ts, tax-rates-admin.tsx, tax-rate-schema.ts, tax-rate-schema.test.ts}`. **Keep** `tax-rates/queries.ts` (quote-composer + quote-actions read `loadTaxRates`/`dealerTaxRatePct`/`taxRateForProvince`).
