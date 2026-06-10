@@ -10,6 +10,8 @@ import {
   fetchCustomers,
   fetchEstimateById,
   fetchItems,
+  fetchTaxCodes,
+  fetchTaxRates,
   qboConfig,
   quickbooksRedirectUri,
   refreshTokens,
@@ -310,6 +312,36 @@ describe('single-Estimate read/write (0073)', () => {
   it('raises QboAuthError on a 401 from the estimate endpoint', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
     await expect(fetchEstimateById('realm-123', 'expired', '7')).rejects.toBeInstanceOf(QboAuthError);
+  });
+});
+
+describe('tax-entity reads (0074)', () => {
+  it('fetchTaxCodes queries TaxCode and returns the list', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ QueryResponse: { TaxCode: [{ Id: '5', Name: 'HST ON', Taxable: true }] } }),
+    );
+    const codes = await fetchTaxCodes('realm-123', 'access-1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(decodeURIComponent(url)).toContain('SELECT * FROM TaxCode');
+    expect(url).toContain('/v3/company/realm-123/query');
+    expect(init.headers.Authorization).toBe('Bearer access-1');
+    expect(codes).toHaveLength(1);
+    expect(codes[0]).toMatchObject({ Id: '5', Name: 'HST ON' });
+  });
+
+  it('fetchTaxRates queries TaxRate and returns the list', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ QueryResponse: { TaxRate: [{ Id: '12', Name: 'HST ON', RateValue: 13 }] } }),
+    );
+    const rates = await fetchTaxRates('realm-123', 'access-1');
+    const [url] = fetchMock.mock.calls[0];
+    expect(decodeURIComponent(url)).toContain('SELECT * FROM TaxRate');
+    expect(rates[0]).toMatchObject({ Id: '12', RateValue: 13 });
+  });
+
+  it('raises QboAuthError on a 401 from the tax-code query', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+    await expect(fetchTaxCodes('realm-123', 'expired')).rejects.toBeInstanceOf(QboAuthError);
   });
 });
 

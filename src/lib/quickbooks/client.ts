@@ -508,3 +508,103 @@ export async function updateEstimate(
   });
   return readEstimateResponse(res);
 }
+
+// ---------- Accounting API: read TaxCode / TaxRate (chunk 0074) ----------
+
+export type QboTaxRateDetail = {
+  TaxRateRef?: { value: string; name?: string };
+  TaxTypeApplicable?: string;
+  TaxOrder?: number;
+};
+
+export type QboTaxCode = {
+  Id: string;
+  Name?: string;
+  Description?: string;
+  Active?: boolean;
+  Taxable?: boolean;
+  TaxGroup?: boolean;
+  /** Sales-side rate refs; the rate value comes from the referenced `TaxRate`. */
+  SalesTaxRateList?: { TaxRateDetail?: QboTaxRateDetail[] };
+};
+
+export type QboTaxRate = {
+  Id: string;
+  Name?: string;
+  Active?: boolean;
+  /** Percent (e.g. 13 for HST ON); absent on adjustment rates. */
+  RateValue?: number;
+};
+
+// Read-only paginated fetch of the connected company's TaxCodes — the unit the
+// Estimate push references via `TxnTaxDetail.TxnTaxCodeRef` (0074). Same shape as
+// `fetchItems`. The rate of a code comes from its `SalesTaxRateList` → the
+// `TaxRate` it points at (see `fetchTaxRates`). No DB writes here.
+export async function fetchTaxCodes(realmId: string, accessToken: string): Promise<QboTaxCode[]> {
+  const cfg = qboConfig();
+  const all: QboTaxCode[] = [];
+  const pageSize = 100;
+  let start = 1;
+
+  for (;;) {
+    const query = `SELECT * FROM TaxCode ORDER BY Id STARTPOSITION ${start} MAXRESULTS ${pageSize}`;
+    const url = `${cfg.apiBase}/v3/company/${realmId}/query?query=${encodeURIComponent(
+      query,
+    )}&minorversion=${MINOR_VERSION}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+
+    if (res.status === 401) {
+      throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+    }
+    if (!res.ok) {
+      throw new Error(`QBO query ${res.status}: ${await res.text()}`);
+    }
+
+    const json = (await res.json()) as { QueryResponse?: { TaxCode?: QboTaxCode[] } };
+    const batch = json.QueryResponse?.TaxCode ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    start += pageSize;
+  }
+
+  return all;
+}
+
+// Read-only paginated fetch of the connected company's TaxRates — the percent
+// (`RateValue`) behind each TaxCode's `TaxRateRef` (0074). Same shape as
+// `fetchTaxCodes`.
+export async function fetchTaxRates(realmId: string, accessToken: string): Promise<QboTaxRate[]> {
+  const cfg = qboConfig();
+  const all: QboTaxRate[] = [];
+  const pageSize = 100;
+  let start = 1;
+
+  for (;;) {
+    const query = `SELECT * FROM TaxRate ORDER BY Id STARTPOSITION ${start} MAXRESULTS ${pageSize}`;
+    const url = `${cfg.apiBase}/v3/company/${realmId}/query?query=${encodeURIComponent(
+      query,
+    )}&minorversion=${MINOR_VERSION}`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+    });
+
+    if (res.status === 401) {
+      throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+    }
+    if (!res.ok) {
+      throw new Error(`QBO query ${res.status}: ${await res.text()}`);
+    }
+
+    const json = (await res.json()) as { QueryResponse?: { TaxRate?: QboTaxRate[] } };
+    const batch = json.QueryResponse?.TaxRate ?? [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    start += pageSize;
+  }
+
+  return all;
+}
