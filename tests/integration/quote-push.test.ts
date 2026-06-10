@@ -132,6 +132,8 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       const [, , payload] = vi.mocked(createEstimate).mock.calls[0];
       expect(payload.CustomerRef.value).toBe('42');
       expect(payload.Line[0].SalesItemLineDetail?.ItemRef.value).toBe('7');
+      // tax goes via the province's QBO tax code (0074), not a TotalTax override
+      expect(payload.TxnTaxDetail).toEqual({ TxnTaxCodeRef: { value: '5' } });
 
       const [row] = await tx.select().from(quotes).where(eq(quotes.id, quoteId));
       expect(row.quickbooksEstimateId).toBe(newId);
