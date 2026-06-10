@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | Done | (research — [decision.md](decision.md)) |
-| 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Pending | - |
+| 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Done | `3bb47b4` |
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Pending | - |
 | 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Pending | - |
 | 5: Reconcile rate so Estimate total == quote total | Pending | - |
@@ -32,7 +32,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
 - Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
-**Overall Progress:** 17% (1/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 2–6 ready to build against the CA sandbox.**
+**Overall Progress:** 33% (2/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 3–6 in progress against the CA sandbox.**
 
 **Note:** Phase 1 settled the approach (manual sales tax → set **txn-level** `TxnTaxDetail.TxnTaxCodeRef`, mapped province→`TaxCode.Id`; the AST-would-have-broken-it risk is retired *for the sandbox*). Phase-checklist summaries below reflect the decided shape. Residual to confirm before prod: the **prod** company's `TaxPrefs` (if AST, revisit Phase 4).
 
@@ -43,15 +43,15 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - [x] **Connected the app to the CA sandbox** (owner did the OAuth 2026-06-10; `quickbooks_connection.realm_id` now `9341457252668239`). ⚠️ Existing dealer/item `quickbooks_id` links are now **STALE** (hold the US company's entity ids) — fine for tax-code research; before a CA Estimate smoke (Phase 6) re-sync dealers + re-pull items against the CA company.
 - [x] Inspect the CA company's tax model (read-only `scripts/0074-tax-probe.mjs`) → **[decision.md](decision.md)**. Findings: **manual sales tax, NOT AST** (`TaxPrefs = {UsingSalesTax:true}`, no `PartnerTaxEnabled`) → QBO honors a supplied tax code; **txn-level** `TxnTaxDetail.TxnTaxCodeRef` is the unit; the taxable code is **"HST ON" #5 = 13%** (sandbox is an Ontario company — only HST ON configured); QBO HST ON 13% matches the app's ON rate.
 - [x] Design Qs answered (see [decision.md](decision.md)): (1) manual not AST; (2) txn-level `TxnTaxCodeRef`; (3) pull `TaxCode` (Id = ref, rate from its `SalesTaxRateList`); (4) map province→`TaxCode.Id`, fail-closed when none; (5) validate app-rate↔QBO-rate parity; (6) `tax_override` → flag/skip for v1. **Residual: verify prod's `TaxPrefs` (AST?) before prod.**
-- [ ] Determine the prod (Canadian) QBO company's tax model: **Automated Sales Tax on/off?** manual tax codes? the customer-level default tax code / exempt flag?
-- [ ] Determine which `TaxCodeRef` QBO honors for Canadian GST/HST: **txn-level** (`TxnTaxDetail.TxnTaxCodeRef`) vs **line-level** (`SalesItemLineDetail.TaxCodeRef`).
-- [ ] Decide rate reconciliation: **QBO rate as source of truth** (pull → drive quote tax) vs **validate the 0065 province rate matches**.
-- [ ] Decide `tax_override` handling when QBO computes tax (keep the `TotalTax` path for tax-exempt/manual edge cases?).
-- [ ] Write `decision.md`; **rewrite Phases 2–6** to match the chosen path before building.
+- [x] ~~Determine the **prod** company's tax model~~ — **DEFERRED residual** (can't probe prod — gated; verify `TaxPrefs` at prod cutover, decision.md #1).
+- [x] ~~txn vs line `TaxCodeRef`~~ → **txn-level** (decision.md #2).
+- [x] ~~rate reconciliation~~ → **validate parity** app↔QBO (decision.md #5).
+- [x] ~~`tax_override` handling~~ → **flag/skip for v1** (decision.md #6).
+- [x] Wrote [`decision.md`](decision.md); phase summaries below reflect the decided shape.
 
-#### Phase 2: `client.ts` tax-entity reads (provisional)
-- [ ] `QboTaxCode` (+ `QboTaxRate`) types; `fetchTaxCodes` / `fetchTaxRates` (paginated `SELECT * FROM TaxCode|TaxRate`, Bearer, 401→`QboAuthError`) mirroring `fetchItems`.
-- [ ] Unit-test request shaping (URL/entity, Bearer, 401) with `fetch` mocked.
+#### Phase 2: `client.ts` tax-entity reads
+- [x] `QboTaxCode` / `QboTaxRate` / `QboTaxRateDetail` types; `fetchTaxCodes` / `fetchTaxRates` (paginated `SELECT * FROM TaxCode|TaxRate`, Bearer, 401→`QboAuthError`) mirroring `fetchItems`.
+- [x] Unit-tested request shaping (query text, URL, Bearer, returns the list, 401→`QboAuthError`) with `fetch` mocked — 3 cases in `client.test.ts`.
 
 #### Phase 3: Mapping + storage (provisional)
 - [ ] Province ↔ QBO `TaxCode` link (extend `tax_rates` with a `quickbooks_tax_code_id` + the pulled rate, or a small mapping table — decided in Phase 1). Migration via `db-conventions`, sandbox-first, **verify journal `when`**.
