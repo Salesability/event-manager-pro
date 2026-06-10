@@ -54,10 +54,46 @@ export function matchProvinceTaxCode(
   return { taxCodeId: null, ambiguous: matches.length > 1 };
 }
 
+export type ProvinceLink = {
+  province: string;
+  taxCodeId: string | null;
+  status: 'linked' | 'unmatched' | 'ambiguous';
+};
+
+// Pure: resolve every province's final link, accounting for collisions BOTH ways.
+// A province is `ambiguous` (→ unlinked) when either >1 QBO code matches its rate
+// (matchProvinceTaxCode) OR the single matched code is also claimed by another
+// province at the same rate (e.g. BC + MB both 12% but only one 12% code exists)
+// — rate alone can't say which province owns the code, so we link neither and
+// leave it for a manual mapping (follow-up). Only a 1:1 province↔code rate match
+// auto-links.
+export function resolveProvinceLinks(
+  appRates: { province: string; rate: string | number }[],
+  qboCodes: QboTaxCode[],
+  rateById: Map<string, number>,
+): ProvinceLink[] {
+  const tentative = appRates.map((ar) => ({
+    province: ar.province,
+    match: matchProvinceTaxCode(Number(ar.rate), qboCodes, rateById),
+  }));
+  const claims = new Map<string, number>();
+  for (const t of tentative) {
+    if (t.match.taxCodeId) claims.set(t.match.taxCodeId, (claims.get(t.match.taxCodeId) ?? 0) + 1);
+  }
+  return tentative.map((t) => {
+    const collision = t.match.taxCodeId != null && (claims.get(t.match.taxCodeId) ?? 0) > 1;
+    if (collision || t.match.ambiguous) {
+      return { province: t.province, taxCodeId: null, status: 'ambiguous' };
+    }
+    if (t.match.taxCodeId) return { province: t.province, taxCodeId: t.match.taxCodeId, status: 'linked' };
+    return { province: t.province, taxCodeId: null, status: 'unmatched' };
+  });
+}
+
 export type TaxCodeSyncResult = {
   linked: number;
   unmatched: string[]; // province codes with no matching QBO code
-  ambiguous: string[]; // province codes where >1 QBO code matched the rate
+  ambiguous: string[]; // >1 QBO code matched the rate, OR >1 province claimed one code
 };
 
 // Reconcile `tax_rates.quickbooks_tax_code_id` against the connected company's
@@ -82,20 +118,24 @@ export async function applyTaxCodeSync(
     })
     .from(taxRates);
 
+  const links = resolveProvinceLinks(appRates, qboCodes, rateById);
+  const byProvince = new Map<string, (typeof appRates)[number]>(
+    appRates.map((ar) => [ar.province, ar]),
+  );
+
   const result: TaxCodeSyncResult = { linked: 0, unmatched: [], ambiguous: [] };
-  for (const ar of appRates) {
-    const match = matchProvinceTaxCode(Number(ar.rate), qboCodes, rateById);
-    const newId = match.taxCodeId;
-    if (newId !== ar.current) {
-      await exec.update(taxRates).set({ quickbooksTaxCodeId: newId }).where(eq(taxRates.id, ar.id));
+  for (const link of links) {
+    const ar = byProvince.get(link.province);
+    if (!ar) continue;
+    if (link.taxCodeId !== ar.current) {
+      await exec
+        .update(taxRates)
+        .set({ quickbooksTaxCodeId: link.taxCodeId })
+        .where(eq(taxRates.id, ar.id));
     }
-    if (newId) {
-      result.linked += 1;
-    } else if (match.ambiguous) {
-      result.ambiguous.push(ar.province);
-    } else {
-      result.unmatched.push(ar.province);
-    }
+    if (link.status === 'linked') result.linked += 1;
+    else if (link.status === 'ambiguous') result.ambiguous.push(link.province);
+    else result.unmatched.push(link.province);
   }
   return result;
 }

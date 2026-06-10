@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { QboTaxCode } from '@/lib/quickbooks/client';
-import { decodeTaxSyncSummary, matchProvinceTaxCode, resolveCodeRatePct } from './tax-sync';
+import {
+  decodeTaxSyncSummary,
+  matchProvinceTaxCode,
+  resolveCodeRatePct,
+  resolveProvinceLinks,
+} from './tax-sync';
 
 // `tax-sync` imports `@/lib/db` + `./client` (server-only). Stub so the module
 // loads; the functions tested here are pure.
@@ -63,6 +68,37 @@ describe('matchProvinceTaxCode', () => {
       taxCodeId: null,
       ambiguous: false,
     });
+  });
+});
+
+describe('resolveProvinceLinks', () => {
+  it('links a 1:1 province↔code rate match', () => {
+    const links = resolveProvinceLinks([{ province: 'ON', rate: '13.000' }], [hstOn], rateById);
+    expect(links).toEqual([{ province: 'ON', taxCodeId: '5', status: 'linked' }]);
+  });
+
+  it('marks BOTH provinces ambiguous when they share a rate but only one code exists', () => {
+    // BC + MB both 12%, only the GST+PST (12%) code exists → neither auto-links
+    // (rate alone can't say which province owns the code).
+    const links = resolveProvinceLinks(
+      [
+        { province: 'BC', rate: '12.000' },
+        { province: 'MB', rate: '12.000' },
+        { province: 'ON', rate: '13.000' },
+      ],
+      [hstOn, gstPstBc],
+      rateById,
+    );
+    const byProv = Object.fromEntries(links.map((l) => [l.province, l]));
+    expect(byProv.BC.status).toBe('ambiguous');
+    expect(byProv.BC.taxCodeId).toBeNull();
+    expect(byProv.MB.status).toBe('ambiguous');
+    expect(byProv.ON).toEqual({ province: 'ON', taxCodeId: '5', status: 'linked' });
+  });
+
+  it('marks a province unmatched when no code matches its rate', () => {
+    const links = resolveProvinceLinks([{ province: 'QC', rate: '14.975' }], [hstOn], rateById);
+    expect(links[0]).toEqual({ province: 'QC', taxCodeId: null, status: 'unmatched' });
   });
 });
 
