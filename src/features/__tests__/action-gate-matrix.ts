@@ -15,7 +15,6 @@ import * as scheduleActions from '@/features/schedule/actions';
 import * as emailActions from '@/features/email/actions';
 import * as quotesActions from '@/features/quotes/actions';
 import * as reportsActions from '@/features/reports/actions';
-import * as taxRatesActions from '@/features/tax-rates/actions';
 import * as msaActions from '@/features/msa/actions';
 import * as quickbooksActions from '@/features/quickbooks/actions';
 import { GET as productionExportGET } from '@/app/(app)/production/export/route';
@@ -210,13 +209,9 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
   // in-app create/update/archive item actions were deleted. Items are synced
   // read-only via `pullItemsFromQuickbooks` (below).
 
-  // ---- Sales tax rates (1) — admin-only (lookup:edit) -------------------
-  {
-    label: 'updateTaxRate',
-    invoke: () => taxRatesActions.updateTaxRate(fd()),
-    expectedByRole: ADMIN_ONLY,
-    note: 'lookup:edit — admin-only (0065 province sales-tax-rate editor)',
-  },
+  // ---- Sales tax rates — REMOVED (0075): QuickBooks is the tax-rate master;
+  // the in-app `updateTaxRate` editor was deleted. Rates are adopted read-only
+  // via `pullTaxCodesFromQuickbooks` (gated admin:access, below).
 
   // ---- Email send (4) — admin-only --------------------------------------
   {
