@@ -19,7 +19,12 @@ import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quic
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
 import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
 import { applyItemSync, encodeItemSyncSummary } from '@/lib/quickbooks/item-sync';
+import {
+  QuotePushNotReadyError,
+  pushQuoteToQuickbooks as pushQuoteToEstimate,
+} from '@/lib/quickbooks/quote-push';
 import { loadDealer } from '@/features/schedule/queries';
+import { loadQuoteEstimatePushData } from '@/features/quotes/queries';
 
 // Connect-initiation + disconnect for the QuickBooks OAuth connection (chunk
 // 0068). Both are admin-gated Server Actions per repo conventions (the Intuit
@@ -160,4 +165,50 @@ export async function pushDealerToQuickbooks(formData: FormData) {
 
   revalidatePath(`/dealerships/${dealerId}`);
   redirect(`/dealerships/${dealerId}?qbpush=${result.action}`);
+}
+
+const pushQuoteSchema = z.object({
+  quoteId: z.coerce.number().int().positive(),
+});
+
+const PUSHABLE_QUOTE_STATUSES = new Set(['accepted', 'sent']);
+
+// authz: admin:access
+// validation: Zod — `quoteId` (positive int) from the quote-page form.
+//
+// Push a quote → QBO Estimate (chunk 0073 — Slice 3): linked quote → update the
+// Estimate (freshly-read SyncToken); unlinked → create one + backfill the `Id`.
+// A not-pushable status or a pre-flight failure (dealer / any line SKU not
+// QBO-linked → `QuotePushNotReadyError`) redirects to `?qberror=<msg>` — these
+// are user-actionable states, unlike connection/transport errors which propagate
+// (same gate-matrix rationale as the other QBO actions). Success →
+// `?qbpush=created|updated`.
+export async function pushQuoteToQuickbooks(formData: FormData) {
+  await assertCan('admin:access');
+  const parsed = pushQuoteSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) throw new Error('Push to QuickBooks requires a valid quoteId.');
+  const { quoteId } = parsed.data;
+
+  const data = await loadQuoteEstimatePushData(quoteId);
+  if (!data) throw new Error(`Quote ${quoteId} not found.`);
+
+  if (!PUSHABLE_QUOTE_STATUSES.has(data.quote.status)) {
+    redirect(
+      `/quotes/${quoteId}?qberror=${encodeURIComponent('Only sent or accepted quotes can be pushed to QuickBooks.')}`,
+    );
+  }
+
+  const { realmId, accessToken } = await getValidAccessToken();
+  let result;
+  try {
+    result = await pushQuoteToEstimate(data.quote, data.lines, data.dealer, realmId, accessToken);
+  } catch (err) {
+    if (err instanceof QuotePushNotReadyError) {
+      redirect(`/quotes/${quoteId}?qberror=${encodeURIComponent(err.message)}`);
+    }
+    throw err;
+  }
+
+  revalidatePath(`/quotes/${quoteId}`);
+  redirect(`/quotes/${quoteId}?qbpush=${result.action}`);
 }

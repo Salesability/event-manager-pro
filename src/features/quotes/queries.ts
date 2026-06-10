@@ -1,7 +1,14 @@
 import 'server-only';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { audienceSources, auditLog, dealers, quoteLineItems, quotes } from '@/lib/db/schema';
+import {
+  audienceSources,
+  auditLog,
+  dealers,
+  quoteLineItems,
+  quotes,
+  serviceItems,
+} from '@/lib/db/schema';
 import type { PickedLine, QuoteInputs } from '@/lib/quotes/pricing';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 
@@ -53,6 +60,8 @@ export type Quote = {
   isExpired: boolean;
   createdAt: Date;
   createdById: string | null;
+  /** QBO `Estimate.Id` this quote was pushed to (0073), or null if never pushed. */
+  quickbooksEstimateId: string | null;
 };
 
 const projection = {
@@ -79,6 +88,7 @@ const projection = {
   quoteValidDays: quotes.quoteValidDays,
   createdAt: quotes.createdAt,
   createdById: quotes.createdById,
+  quickbooksEstimateId: quotes.quickbooksEstimateId,
 };
 
 type QuoteRow = {
@@ -105,6 +115,7 @@ type QuoteRow = {
   quoteValidDays: number;
   createdAt: Date;
   createdById: string | null;
+  quickbooksEstimateId: string | null;
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -141,6 +152,7 @@ function mapRow(row: QuoteRow): Quote {
     isExpired,
     createdAt: row.createdAt,
     createdById: row.createdById,
+    quickbooksEstimateId: row.quickbooksEstimateId,
   };
 }
 
@@ -212,6 +224,71 @@ export async function loadQuote(id: number): Promise<Quote | null> {
   const quote = mapRow(row);
   const pickedLines = await loadPickedLines(id);
   return { ...quote, pickedLines };
+}
+
+// Assembled data for the QBO Estimate push (0073): the quote's push-relevant
+// fields, the dealer's QBO link, and each line with its SKU's QBO link
+// (left-joined `service_items.quickbooks_id`, null when the SKU is unlinked or
+// the line's `service_item_id` is null). Shapes match `quote-push.ts`'s
+// `QuotePush{Quote,Dealer,Line}`; the Server Action passes them to the core.
+export type QuoteEstimatePushData = {
+  quote: { id: number; status: QuoteStatus; tax: string; quickbooksEstimateId: string | null };
+  dealer: { id: number; name: string; quickbooksId: string | null };
+  lines: {
+    code: string;
+    label: string;
+    qty: number;
+    unitPrice: string;
+    overrideUnitPrice: string | null;
+    lineTotal: string;
+    itemQuickbooksId: string | null;
+  }[];
+};
+
+export async function loadQuoteEstimatePushData(
+  quoteId: number,
+): Promise<QuoteEstimatePushData | null> {
+  const [q] = await db
+    .select({
+      id: quotes.id,
+      status: quotes.status,
+      tax: quotes.tax,
+      quickbooksEstimateId: quotes.quickbooksEstimateId,
+      dealerId: dealers.id,
+      dealerName: dealers.name,
+      dealerQuickbooksId: dealers.quickbooksId,
+    })
+    .from(quotes)
+    .innerJoin(dealers, eq(dealers.id, quotes.dealerId))
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  if (!q) return null;
+
+  const lines = await db
+    .select({
+      code: quoteLineItems.code,
+      label: quoteLineItems.label,
+      qty: quoteLineItems.qty,
+      unitPrice: quoteLineItems.unitPrice,
+      overrideUnitPrice: quoteLineItems.overrideUnitPrice,
+      lineTotal: quoteLineItems.lineTotal,
+      itemQuickbooksId: serviceItems.quickbooksId,
+    })
+    .from(quoteLineItems)
+    .leftJoin(serviceItems, eq(serviceItems.id, quoteLineItems.serviceItemId))
+    .where(eq(quoteLineItems.quoteId, quoteId))
+    .orderBy(asc(quoteLineItems.displayOrder));
+
+  return {
+    quote: {
+      id: q.id,
+      status: q.status,
+      tax: q.tax,
+      quickbooksEstimateId: q.quickbooksEstimateId,
+    },
+    dealer: { id: q.dealerId, name: q.dealerName, quickbooksId: q.dealerQuickbooksId },
+    lines,
+  };
 }
 
 export type QuoteSendReceipt = {

@@ -283,6 +283,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0071 QBO item pull; mirrors QBO Items into service_items)',
   },
+  {
+    label: 'pushQuoteToQuickbooks',
+    invoke: () => quickbooksActions.pushQuoteToQuickbooks(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0073 quote→QBO Estimate push)',
+  },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------
   // Coach is admitted at the role layer; row-ownership (own coach_unavailable

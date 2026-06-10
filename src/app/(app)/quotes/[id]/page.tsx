@@ -14,6 +14,10 @@ import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
+import { can } from '@/lib/auth/capabilities';
+import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
+import { getConnection } from '@/lib/quickbooks/connection';
+import { pushQuoteToQuickbooks } from '@/features/quickbooks/actions';
 import { signedUrl } from '@/lib/storage/gcs';
 
 // Edit-mode quote page. Mirrors `/quotes/new` but hydrates the composer from
@@ -55,10 +59,12 @@ function recipientLabel(firstName: string | null, email: string | null): string 
 
 export default async function QuoteEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await assertCan('quote:edit'); // expected: server-only — admin || coach
+  const user = await assertCan('quote:edit'); // expected: server-only — admin || coach
   const { id: idParam } = await params;
   const id = parsePositiveIntPathSegment(idParam);
   if (id == null) notFound();
@@ -66,18 +72,40 @@ export default async function QuoteEditPage({
   const quote = await loadQuote(id);
   if (!quote) notFound();
 
-  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa] = await Promise.all([
-    loadDealers(),
-    loadServiceItems(),
-    loadTaxRates(),
-    resolveQuoteRecipient(quote.dealerId),
-    loadQuoteSendHistory(quote.id),
+  // QBO Estimate push is admin-only (0073) — the page itself admits coaches, so
+  // gate the button on a fresh `admin:access` check. `loadCurrentMembership` is
+  // request-cached, so this shares the round-trip with `assertCan` above.
+  const membership = await loadCurrentMembership();
+  const isQbAdmin = can(
+    { user, roles: membership?.roles ?? [], coachContactId: membership?.coachContactId ?? null },
+    'admin:access',
+  );
+
+  // Flash from the push action: ?qbpush=created|updated (success) / ?qberror=… .
+  const sp = await searchParams;
+  const qbNotice =
+    sp.qbpush === 'created'
+      ? { kind: 'success' as const, msg: 'Created this quote as a QuickBooks Estimate.' }
+      : sp.qbpush === 'updated'
+        ? { kind: 'success' as const, msg: "Pushed this quote to its QuickBooks Estimate." }
+        : typeof sp.qberror === 'string'
+          ? { kind: 'error' as const, msg: sp.qberror }
+          : null;
+
+  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa, qbConnection] =
+    await Promise.all([
+      loadDealers(),
+      loadServiceItems(),
+      loadTaxRates(),
+      resolveQuoteRecipient(quote.dealerId),
+      loadQuoteSendHistory(quote.id),
     // 0046 Phase 5: when the dealer\'s MSA envelope is with BoldSign awaiting
     // signature, the server-side `sendQuote` action refuses re-send. The
     // composer mirrors this state so the button reads as disabled rather
-    // than firing then surfacing the server-side error.
-    loadActiveOrPendingMsa(quote.dealerId),
-  ]);
+      // than firing then surfacing the server-side error.
+      loadActiveOrPendingMsa(quote.dealerId),
+      getConnection(),
+    ]);
   // 0061: drive the composer toolbar's MSA-aware send action. The four flags
   // (active / expiresAt / bundleEligible / envelopeInFlight) are derived in one
   // tested helper so the lifecycle rules aren't re-encoded in the page.
@@ -169,6 +197,19 @@ export default async function QuoteEditPage({
       >
         ← Quotes
       </Link>
+
+      {qbNotice && (
+        <p
+          className={
+            qbNotice.kind === 'error'
+              ? 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800'
+              : 'rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800'
+          }
+        >
+          {qbNotice.msg}
+        </p>
+      )}
+
       <QuoteComposer
         dealers={dealers}
         taxRates={taxRates}
@@ -210,6 +251,36 @@ export default async function QuoteEditPage({
         ]}
         sendHistorySlot={sendHistoryNode}
       />
+
+      {qbConnection && isQbAdmin && (
+        <Section title="QuickBooks" variant="card">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              {quote.quickbooksEstimateId ? (
+                <>
+                  Pushed to QuickBooks Estimate{' '}
+                  <code className="font-mono text-zinc-700">#{quote.quickbooksEstimateId}</code> —
+                  pushing again updates it.
+                </>
+              ) : (
+                <>
+                  Not in QuickBooks yet. Pushing creates an Estimate (the dealer and every line
+                  item must be linked to QuickBooks first).
+                </>
+              )}
+            </p>
+            <form action={pushQuoteToQuickbooks}>
+              <input type="hidden" name="quoteId" value={quote.id} />
+              <button
+                type="submit"
+                className="rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
+              >
+                Push to QuickBooks
+              </button>
+            </form>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

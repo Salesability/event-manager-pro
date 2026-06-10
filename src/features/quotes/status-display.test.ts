@@ -30,6 +30,7 @@ function makeQuote(overrides: Partial<Quote>): Quote {
     isExpired: false,
     createdAt: new Date(),
     createdById: null,
+    quickbooksEstimateId: null,
     ...overrides,
   };
 }
