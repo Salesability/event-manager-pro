@@ -410,6 +410,11 @@ export type QboEstimateLine = {
     ItemRef: { value: string; name?: string };
     Qty?: number;
     UnitPrice?: number;
+    // Per-line sales tax code (0074) — QBO Canada requires every line to carry a
+    // GST/HST rate (error 6000 otherwise), so the province's tax code goes here,
+    // not (only) at the transaction level. A line-level code also overrides a
+    // non-taxable item's default, ensuring the line is taxed.
+    TaxCodeRef?: { value: string };
   };
 };
 

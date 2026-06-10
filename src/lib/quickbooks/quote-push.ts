@@ -134,6 +134,14 @@ export function mapQuoteToEstimate(
 ): QboEstimateInput {
   if (!dealer.quickbooksId) throw new Error('mapQuoteToEstimate: dealer not linked (pre-flight not run).');
 
+  // Tax (0074): QBO (Canada, manual sales tax) requires the tax code on EVERY
+  // line — a transaction-level `TxnTaxCodeRef` alone fails with error 6000
+  // ("Make sure all your transactions have a GST/HST rate"). So the province's
+  // code goes on each `SalesItemLineDetail.TaxCodeRef`; QBO then computes the
+  // tax. Omitted when the quote isn't taxed. The pre-flight guarantees a code is
+  // present when tax > 0, so the Estimate matches the quote when rates align.
+  const taxCodeId = Number(quote.tax) > 0 && quote.taxCodeId != null ? quote.taxCodeId : null;
+
   const estimateLines: QboEstimateLine[] = lines.map((l) => {
     if (!l.itemQuickbooksId) {
       throw new Error(`mapQuoteToEstimate: line "${l.code}" not linked (pre-flight not run).`);
@@ -153,19 +161,18 @@ export function mapQuoteToEstimate(
       DetailType: 'SalesItemLineDetail',
       Amount: amount,
       Description: l.label,
-      SalesItemLineDetail: { ItemRef: { value: l.itemQuickbooksId }, Qty: l.qty, UnitPrice: unit },
+      SalesItemLineDetail: {
+        ItemRef: { value: l.itemQuickbooksId },
+        Qty: l.qty,
+        UnitPrice: unit,
+        ...(taxCodeId ? { TaxCodeRef: { value: taxCodeId } } : {}),
+      },
     };
   });
 
-  // Tax (0074): set the province's QBO tax code so QBO computes the tax itself
-  // (a bare `TotalTax` override is dropped by QBO — see the 0073 smoke). Omitted
-  // when the quote isn't taxed. The pre-flight guarantees a code is present when
-  // tax > 0, so this matches the quote's tax as long as the rates are aligned.
-  const taxed = Number(quote.tax) > 0 && quote.taxCodeId != null;
   return {
     CustomerRef: { value: dealer.quickbooksId },
     Line: estimateLines,
-    ...(taxed ? { TxnTaxDetail: { TxnTaxCodeRef: { value: quote.taxCodeId as string } } } : {}),
   };
 }
 

@@ -133,18 +133,25 @@ describe('mapQuoteToEstimate', () => {
       dealer({ quickbooksId: '42' }),
     );
     expect(est.CustomerRef.value).toBe('42');
-    // tax via the QBO tax code (QBO computes), not a TotalTax override
-    expect(est.TxnTaxDetail).toEqual({ TxnTaxCodeRef: { value: '5' } });
-    expect(est.GlobalTaxCalculation).toBeUndefined();
+    // tax via a PER-LINE TaxCodeRef (QBO Canada requires it; QBO computes), not
+    // a txn-level code or a TotalTax override
+    expect(est.TxnTaxDetail).toBeUndefined();
     expect(est.Line).toHaveLength(1);
     const l = est.Line[0];
     expect(l.DetailType).toBe('SalesItemLineDetail');
     expect(l.Amount).toBe(180);
-    // override (90) wins over unitPrice (100) per effectiveUnit
-    expect(l.SalesItemLineDetail).toEqual({ ItemRef: { value: '7' }, Qty: 2, UnitPrice: 90 });
+    // override (90) wins over unitPrice (100) per effectiveUnit; line carries the code
+    expect(l.SalesItemLineDetail).toEqual({
+      ItemRef: { value: '7' },
+      Qty: 2,
+      UnitPrice: 90,
+      TaxCodeRef: { value: '5' },
+    });
   });
 
-  it('omits TxnTaxDetail when the quote tax is zero', () => {
-    expect(mapQuoteToEstimate(quote({ tax: '0' }), [line()], dealer()).TxnTaxDetail).toBeUndefined();
+  it('omits the line TaxCodeRef + TxnTaxDetail when the quote tax is zero', () => {
+    const est = mapQuoteToEstimate(quote({ tax: '0' }), [line()], dealer());
+    expect(est.TxnTaxDetail).toBeUndefined();
+    expect(est.Line[0].SalesItemLineDetail?.TaxCodeRef).toBeUndefined();
   });
 });
