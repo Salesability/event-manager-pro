@@ -11,6 +11,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { actors, bigIdentity, timestamps } from './_columns';
@@ -87,6 +88,12 @@ export const quotes = pgTable(
       (): AnyPgColumn => quotes.id,
       { onDelete: 'set null' }
     ),
+    // Durable link to the QBO `Estimate.Id` this quote was pushed to (0073).
+    // Nullable: set only by the "Push to QuickBooks" action — present → update
+    // the existing Estimate (read-before-write SyncToken); null → create one
+    // and backfill this. The partial unique index gives push idempotency
+    // (at most one Estimate per quote).
+    quickbooksEstimateId: text('quickbooks_estimate_id'),
     ...timestamps,
     ...actors,
   },
@@ -98,6 +105,10 @@ export const quotes = pgTable(
     index('quotes_previous_quote_id_idx').on(table.previousQuoteId),
     index('quotes_created_by_id_idx').on(table.createdById),
     index('quotes_updated_by_id_idx').on(table.updatedById),
+    // Unique only among pushed quotes — at most one quote per QBO Estimate (0073).
+    uniqueIndex('quotes_quickbooks_estimate_id_idx')
+      .on(table.quickbooksEstimateId)
+      .where(sql`${table.quickbooksEstimateId} IS NOT NULL`),
     check(
       'quotes_deposit_pct_range',
       sql`${table.depositPct} >= 0 AND ${table.depositPct} <= 100`

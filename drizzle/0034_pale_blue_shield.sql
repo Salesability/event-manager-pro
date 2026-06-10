@@ -1,0 +1,2 @@
+ALTER TABLE "quotes" ADD COLUMN "quickbooks_estimate_id" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "quotes_quickbooks_estimate_id_idx" ON "quotes" USING btree ("quickbooks_estimate_id") WHERE "quotes"."quickbooks_estimate_id" IS NOT NULL;

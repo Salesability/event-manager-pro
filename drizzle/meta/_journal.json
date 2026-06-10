@@ -239,6 +239,13 @@
       "when": 1781027979333,
       "tag": "0033_bored_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1781095215115,
+      "tag": "0034_pale_blue_shield",
+      "breakpoints": true
     }
   ]
 }
