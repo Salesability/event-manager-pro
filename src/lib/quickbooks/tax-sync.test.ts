@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { QboTaxCode } from '@/lib/quickbooks/client';
 import {
+  applyTaxCodeSync,
   codeNamesProvince,
   decodeTaxSyncSummary,
   planTaxRateWrites,
@@ -104,6 +105,13 @@ describe('codeNamesProvince', () => {
     expect(codeNamesProvince('HST', 'NB')).toBe(false); // shared Atlantic HST names no province
     expect(codeNamesProvince(undefined, 'ON')).toBe(false);
   });
+
+  it('does NOT treat the English word "on" as Ontario (case-sensitive abbr)', () => {
+    // Regression: a lowercase-"on" code name must not false-match ON.
+    expect(codeNamesProvince('GST on sales', 'ON')).toBe(false);
+    expect(codeNamesProvince('Tax on purchases', 'ON')).toBe(false);
+    expect(codeNamesProvince('HST ON', 'ON')).toBe(true); // uppercase token still matches
+  });
 });
 
 describe('resolveProvinceLinksByName', () => {
@@ -123,16 +131,34 @@ describe('resolveProvinceLinksByName', () => {
     expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'ambiguous' });
   });
 
-  it('filters a naming code whose rate cannot be resolved (→ unmatched)', () => {
+  it('a lone naming code whose rate cannot be resolved → unmatched', () => {
     const broken = code('7', ['999'], { Name: 'HST ON' }); // rate ref 999 unknown
     const links = resolveProvinceLinksByName([{ province: 'ON' }], [broken], rateById);
     expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'unmatched' });
+  });
+
+  it('ambiguous when 2 codes name a province even if only one rate resolves', () => {
+    // Regression: ambiguity is counted by NAME before rate-resolvability, so a
+    // broken duplicate does not let the resolvable one silently win.
+    const broken = code('99', ['999'], { Name: 'HST ON' }); // names ON, rate unresolvable
+    const links = resolveProvinceLinksByName([{ province: 'ON' }], [hstOn, broken], rateById);
+    expect(links[0]).toEqual({ province: 'ON', taxCodeId: null, ratePct: null, status: 'ambiguous' });
   });
 
   it('ignores inactive codes', () => {
     const inactive = code('5', ['12'], { Name: 'HST ON', Active: false });
     const links = resolveProvinceLinksByName([{ province: 'ON' }], [inactive], rateById);
     expect(links[0].status).toBe('unmatched');
+  });
+});
+
+describe('applyTaxCodeSync — empty-read guard', () => {
+  it('fails closed (throws) on empty codes or rates, never clearing links', async () => {
+    const rates = [{ Id: '12', RateValue: 13 }];
+    // exec is never reached — the guard throws first — so a dummy is safe.
+    const exec = {} as never;
+    await expect(applyTaxCodeSync([], rates, exec)).rejects.toThrow(/no tax codes or rates/i);
+    await expect(applyTaxCodeSync([hstOn], [], exec)).rejects.toThrow(/no tax codes or rates/i);
   });
 });
 

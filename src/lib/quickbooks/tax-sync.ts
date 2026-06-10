@@ -38,17 +38,20 @@ export function resolveCodeRatePct(
 }
 
 // Does this QB tax-code name identify a specific province? Matches the province's
-// 2-letter code as a WORD TOKEN ("HST ON" → ON) or its full name ("Ontario …" →
-// ON), case-insensitive. Federal-only names ("GST", "Exempt", "Out of scope")
-// and shared HST names name no province → those provinces stay app-managed. The
-// word boundary on the abbreviation avoids false hits (e.g. "ON" inside "Non-").
+// 2-letter code as an UPPERCASE word token against the original name ("HST ON" →
+// ON) or its full name ("Ontario …" → ON, case-insensitive). The abbreviation
+// match is CASE-SENSITIVE on purpose: "ON" is also the English word "on", so a
+// case-insensitive token would wrongly link a code like "GST on sales" to Ontario
+// — province abbreviations in QBO Canadian tax-code names are uppercase by
+// convention. Federal-only names ("GST", "Exempt", "Out of scope") and shared HST
+// names name no province → those provinces stay app-managed. The word boundary
+// avoids false hits (e.g. "ON" inside "Non-").
 export function codeNamesProvince(name: string | undefined | null, province: string): boolean {
   if (!name) return false;
-  const hay = name.toLowerCase();
-  const abbr = province.toLowerCase();
-  if (new RegExp(`\\b${abbr}\\b`).test(hay)) return true;
+  const code = province.toUpperCase();
+  if (new RegExp(`\\b${code}\\b`).test(name)) return true;
   const full = CA_PROVINCE_NAMES[province as CaProvinceCode]?.toLowerCase();
-  return full != null && hay.includes(full);
+  return full != null && name.toLowerCase().includes(full);
 }
 
 export type ProvinceTaxLink = {
@@ -61,10 +64,13 @@ export type ProvinceTaxLink = {
 };
 
 // Pure: match each province to the single ACTIVE QB tax code whose NAME identifies
-// it (`codeNamesProvince`) AND whose sales rate resolves (`resolveCodeRatePct`) —
-// a confident 1:1 match `linked`s the province and carries QB's rate to adopt.
-// Zero naming codes → `unmatched`; >1 → `ambiguous` (the deferred per-province
-// override territory). Replaces the rate-based `resolveProvinceLinks`.
+// it (`codeNamesProvince`). A confident 1:1 NAME match whose rate also resolves
+// `linked`s the province and carries QB's rate to adopt. >1 active code naming the
+// province → `ambiguous` (the deferred per-province override territory) — counted
+// by NAME first, BEFORE rate-resolvability, so two like-named codes (one with a
+// broken rate ref) don't silently collapse to a single "clean" link. A lone name
+// match whose rate can't resolve, or zero naming codes → `unmatched`. Replaces the
+// rate-based `resolveProvinceLinks`.
 export function resolveProvinceLinksByName(
   appRates: { province: string }[],
   qboCodes: QboTaxCode[],
@@ -72,23 +78,18 @@ export function resolveProvinceLinksByName(
 ): ProvinceTaxLink[] {
   const active = qboCodes.filter((c) => c.Active !== false);
   return appRates.map((ar) => {
-    const candidates = active
-      .filter((c) => codeNamesProvince(c.Name, ar.province))
-      .map((c) => ({ id: c.Id, rate: resolveCodeRatePct(c, rateById) }))
-      .filter((c): c is { id: string; rate: number } => c.rate != null);
-    if (candidates.length === 1) {
-      return {
-        province: ar.province,
-        taxCodeId: candidates[0].id,
-        ratePct: candidates[0].rate,
-        status: 'linked',
-      };
+    const named = active.filter((c) => codeNamesProvince(c.Name, ar.province));
+    if (named.length === 1) {
+      const ratePct = resolveCodeRatePct(named[0], rateById);
+      if (ratePct != null) {
+        return { province: ar.province, taxCodeId: named[0].Id, ratePct, status: 'linked' };
+      }
     }
     return {
       province: ar.province,
       taxCodeId: null,
       ratePct: null,
-      status: candidates.length > 1 ? 'ambiguous' : 'unmatched',
+      status: named.length > 1 ? 'ambiguous' : 'unmatched',
     };
   });
 }
@@ -152,6 +153,17 @@ export async function applyTaxCodeSync(
   qboRates: QboTaxRate[],
   exec: Executor,
 ): Promise<TaxCodeSyncResult> {
+  // Fail closed on an empty read: a transient QBO query/parse issue returning no
+  // codes (or no rates) would name-match nothing, mark every province unmatched,
+  // and CLEAR all existing `quickbooks_tax_code_id` links — breaking later taxed
+  // Estimate pushes. A company with sales tax always has codes + rates, so treat
+  // an empty set as an error rather than a destructive no-op sync.
+  if (qboCodes.length === 0 || qboRates.length === 0) {
+    throw new Error(
+      'QuickBooks returned no tax codes or rates — skipping the sync to avoid clearing existing province tax mappings. Please retry.',
+    );
+  }
+
   const rateById = new Map<string, number>();
   for (const r of qboRates) {
     if (r.RateValue != null) rateById.set(r.Id, r.RateValue);
