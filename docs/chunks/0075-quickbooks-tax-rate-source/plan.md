@@ -39,10 +39,10 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 ### Phase Checklist
 
 #### Phase 1: Research/decide — jurisdiction-matching strategy (GATE) — research, no code
-- [ ] **Decide the matching strategy** (intent.md crux): (a) manual admin mapping, (b) name heuristic, (c) hybrid. **Owner decision.**
-- [ ] Inspect the CA sandbox's tax-code names/jurisdictions (read-only, extend `scripts/0074-tax-probe.mjs`) to judge how reliable a name heuristic would be.
-- [ ] Decide: provinces with no QB code → fallback to app rate + "unmanaged" flag (vs block); editor read-only vs removed; `is_qb_managed` column vs infer from `quickbooks_tax_code_id`; keep/drop the 0074 rate-drift guard.
-- [ ] Write `decision.md`; **rewrite Phases 2–5** to match.
+- [x] **Probed the bridge problem (2026-06-10):** QB tax codes have **no province field**, and the CA customers have **no `DefaultTaxCodeRef`** (so we can't source a dealer's code from QB's customer record) — but customers **do** carry a province (`BillAddr.CountrySubDivisionCode`). → A pure "delete + mirror QB, no province" model is **not** possible (nothing links a code to who pays it); the province stays the key.
+- [x] **Matching strategy → NAME HEURISTIC (auto), not manual mapping** (owner steer 2026-06-10 — "don't map, just sync"): match each province to a QB code whose **name** encodes the jurisdiction ("HST ON" → ON) on every pull; adopt QB's rate. No manual mapping table/UI. **Caveat:** clean for HST provinces (single "HST XX" code — all the CA sandbox has); **fragile for GST+PST/QST** (BC/QC use multiple/grouped codes) → auto-match the confident ones, **flag the ambiguous/unmatched** for a one-off per-province override (the only manual touch, and only for the tricky provinces).
+- [ ] Finalize: provinces with no confident QB-name match → keep app rate + "unmanaged" flag (vs block); editor read-only (not removed — admins still need to *see* rates); infer "managed" from `quickbooks_tax_code_id` (no new column); keep the 0074 rate-drift guard as a safety net.
+- [ ] Write `decision.md`; **rewrite Phases 2–5** to match (name-matcher + rate adoption + read-only editor + per-province override for ambiguous).
 
 #### Phase 2: Jurisdiction matcher (provisional)
 - [ ] Replace/augment `matchProvinceTaxCode` with jurisdiction matching per Phase 1; add a mapping store if manual (extend `tax_rates`, or a small table). Migration via `db-conventions`, sandbox-first, **verify journal `when`** if a column is added.
