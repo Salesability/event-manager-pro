@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Research/decide — jurisdiction-matching strategy + open questions (GATE) | Done | - |
-| 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration | Pending | - |
+| 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration | Done | - |
 | 3: `applyTaxCodeSync` adopts QB's rate into `tax_rates.rate` (pure write-planner + execute) | Pending | - |
 | 4: Remove the in-app tax-rate editor entirely (QB-managed) | Pending | - |
 | 5: Smoke (ON adoption) + wiki ingest | Pending | - |
@@ -33,7 +33,7 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - Memory: [[project_qbo_realms]] (CA sandbox `9341457252668239`, ON-only) · [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod).
 - Precedent: [`../closed/0071-quickbooks-item-pull/plan.md`](../closed/0071-quickbooks-item-pull/plan.md) (QB-as-master + editor removal) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (the rate-matcher being replaced).
 
-**Overall Progress:** 20% (1/5 phases complete) — **Phase 1 gate resolved 2026-06-10 (owner decisions); see [`decision.md`](decision.md). Phases 2–5 finalized below.**
+**Overall Progress:** 40% (2/5 phases complete) — **Phase 1 gate resolved + Phase 2 name-matcher shipped (2026-06-10). See [`decision.md`](decision.md).**
 
 **Note:** Matching = **name heuristic** (auto, no manual map). Editor **removed entirely** (not read-only). Per-province override **deferred**. **No migration** (managed = `quickbooks_tax_code_id IS NOT NULL`). Unmatched/ambiguous provinces keep their app rate, flagged unmanaged.
 
@@ -46,9 +46,9 @@ Make **QuickBooks the source of truth for tax rates** (owner decision 2026-06-10
 - [x] **Wrote `decision.md`; rewrote Phases 2–5** (name-matcher + pure write-planner rate adoption + editor removal + deferred override).
 
 #### Phase 2: Name-heuristic matcher (replaces the rate matcher) — pure, no migration
-- [ ] In `tax-sync.ts`, add `codeNamesProvince(name, province)` — true when the code name carries the jurisdiction: the 2-letter province code as a **word token** (`\bON\b`) or the full province name (`CA_PROVINCE_NAMES`), case-insensitive. Federal-only names ("GST", "Exempt") match nothing.
-- [ ] Replace `matchProvinceTaxCode` + `resolveProvinceLinks` with `resolveProvinceLinksByName(appRates, qboCodes, rateById)` → `{ province, taxCodeId, ratePct, status }[]`. Confident 1:1 (one active, rate-resolvable code names the province) → `linked` w/ `ratePct`; zero → `unmatched`; >1 → `ambiguous`. **Keep** `resolveCodeRatePct` (gets the rate to adopt). Delete the old rate-matcher + its tests.
-- [ ] Unit tests: name token match (HST ON → ON, ratePct 13), full-name match (Ontario), federal-only → unmatched (GST), ambiguous (two codes name ON), unresolvable-rate code filtered out, word-boundary false-positive guard.
+- [x] In `tax-sync.ts`, added `codeNamesProvince(name, province)` — true when the code name carries the jurisdiction: the 2-letter province code as a **word token** (`\bON\b`) or the full province name (`CA_PROVINCE_NAMES`), case-insensitive. Federal-only names ("GST", "Exempt") match nothing.
+- [x] Added `resolveProvinceLinksByName(appRates, qboCodes, rateById)` → `{ province, taxCodeId, ratePct, status }[]` (new `ProvinceTaxLink` type). Confident 1:1 (one active, rate-resolvable code names the province) → `linked` w/ `ratePct`; zero → `unmatched`; >1 → `ambiguous`. **Kept** `resolveCodeRatePct`. *(Old rate-matcher `matchProvinceTaxCode`/`resolveProvinceLinks` kept alive this phase — still wired into `applyTaxCodeSync`; deleted in Phase 3 when the executor swaps over, keeping tsc green per phase.)*
+- [x] Unit tests (`tax-sync.test.ts`, +8): name token match (HST ON → ON, ratePct 13), full-name match (Ontario/Quebec), federal-only/substring → no match (GST/Exempt/Non-taxable/shared HST), ambiguous (two codes name ON), unresolvable-rate code filtered → unmatched, inactive ignored.
 
 #### Phase 3: Adopt QB rate — pure write-planner + execute
 - [ ] Add pure `planTaxRateWrites(appRows, links)` → minimal `{ id, quickbooksTaxCodeId, rate? }[]`: `linked` adopts QB's rate (`ratePct.toFixed(3)`) + sets the code id; unmanaged clears a stale code id only (keeps the app rate); no-ops omitted.
