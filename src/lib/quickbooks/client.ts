@@ -398,3 +398,113 @@ export async function fetchItems(
 
   return all;
 }
+
+// ---------- Accounting API: read/write a single Estimate (chunk 0073) ----------
+
+export type QboEstimateLine = {
+  Id?: string;
+  DetailType: string; // 'SalesItemLineDetail'
+  Amount: number;
+  Description?: string;
+  SalesItemLineDetail?: {
+    ItemRef: { value: string; name?: string };
+    Qty?: number;
+    UnitPrice?: number;
+  };
+};
+
+export type QboEstimate = {
+  Id: string;
+  SyncToken?: string;
+  CustomerRef: { value: string; name?: string };
+  Line: QboEstimateLine[];
+  TxnTaxDetail?: { TotalTax?: number };
+  GlobalTaxCalculation?: string;
+  TotalAmt?: number;
+};
+
+// Write payload for create/update (chunk 0073). A create omits `Id`/`SyncToken`;
+// an update requires them. `sparse: true` merges posted fields.
+export type QboEstimateInput = {
+  CustomerRef: { value: string };
+  Line: QboEstimateLine[];
+  TxnTaxDetail?: { TotalTax?: number };
+  GlobalTaxCalculation?: string; // 'TaxExcluded' — we push our own computed tax
+  Id?: string;
+  SyncToken?: string;
+  sparse?: boolean;
+};
+
+function estimateUrl(cfg: QboConfig, realmId: string, suffix = ''): string {
+  return `${cfg.apiBase}/v3/company/${realmId}/estimate${suffix}?minorversion=${MINOR_VERSION}`;
+}
+
+// Same shape as `readCustomerResponse` minus the 6240 case (estimates have no
+// DisplayName-uniqueness constraint): 401 → QboAuthError, other non-OK → throw,
+// success body is `{ Estimate: {...} }`.
+async function readEstimateResponse(res: Response): Promise<QboEstimate> {
+  if (res.status === 401) {
+    throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+  }
+  if (!res.ok) {
+    throw new Error(`QBO estimate ${res.status}: ${await res.text()}`);
+  }
+  const json = (await res.json()) as { Estimate?: QboEstimate };
+  if (!json.Estimate) {
+    throw new Error('QBO estimate response missing the Estimate body.');
+  }
+  return json.Estimate;
+}
+
+// Read one Estimate by Id — used right before an update to grab the current
+// `SyncToken` (read-before-write; QBO rotates it on every edit).
+export async function fetchEstimateById(
+  realmId: string,
+  accessToken: string,
+  id: string,
+): Promise<QboEstimate> {
+  const cfg = qboConfig();
+  const res = await fetch(estimateUrl(cfg, realmId, `/${encodeURIComponent(id)}`), {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  return readEstimateResponse(res);
+}
+
+// Create a new Estimate. Returns the created entity (carrying its new `Id`),
+// which the caller backfills onto `quotes.quickbooks_estimate_id`.
+export async function createEstimate(
+  realmId: string,
+  accessToken: string,
+  payload: QboEstimateInput,
+): Promise<QboEstimate> {
+  const cfg = qboConfig();
+  const res = await fetch(estimateUrl(cfg, realmId), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return readEstimateResponse(res);
+}
+
+// Sparse-update an existing Estimate. Requires `Id` + a fresh `SyncToken`.
+export async function updateEstimate(
+  realmId: string,
+  accessToken: string,
+  payload: QboEstimateInput & { Id: string; SyncToken: string },
+): Promise<QboEstimate> {
+  const cfg = qboConfig();
+  const res = await fetch(estimateUrl(cfg, realmId), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ ...payload, sparse: true }),
+  });
+  return readEstimateResponse(res);
+}

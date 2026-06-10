@@ -4,14 +4,17 @@ import {
   QboDuplicateNameError,
   buildAuthorizeUrl,
   createCustomer,
+  createEstimate,
   exchangeCodeForTokens,
   fetchCustomerById,
   fetchCustomers,
+  fetchEstimateById,
   fetchItems,
   qboConfig,
   quickbooksRedirectUri,
   refreshTokens,
   updateCustomer,
+  updateEstimate,
   verifyState,
 } from './client';
 
@@ -248,6 +251,65 @@ describe('fetchItems (0071)', () => {
   it('raises QboAuthError on a 401', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
     await expect(fetchItems('realm-123', 'expired')).rejects.toBeInstanceOf(QboAuthError);
+  });
+});
+
+describe('single-Estimate read/write (0073)', () => {
+  const line = {
+    DetailType: 'SalesItemLineDetail',
+    Amount: 100,
+    SalesItemLineDetail: { ItemRef: { value: '5' }, Qty: 1, UnitPrice: 100 },
+  };
+
+  it('fetchEstimateById GETs /estimate/{id} and returns the SyncToken', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Estimate: { Id: '7', SyncToken: '3', CustomerRef: { value: '42' }, Line: [line] } }),
+    );
+    const est = await fetchEstimateById('realm-123', 'access-1', '7');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('https://sandbox-quickbooks.api.intuit.com/v3/company/realm-123/estimate/7');
+    expect(init.headers.Authorization).toBe('Bearer access-1');
+    expect(est.SyncToken).toBe('3');
+  });
+
+  it('createEstimate POSTs JSON (no Id) and returns the created Estimate', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Estimate: { Id: '999', SyncToken: '0', CustomerRef: { value: '42' }, Line: [line] } }),
+    );
+    const created = await createEstimate('realm-123', 'access-1', {
+      CustomerRef: { value: '42' },
+      Line: [line],
+      GlobalTaxCalculation: 'TaxExcluded',
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/v3/company/realm-123/estimate');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
+    expect(body.CustomerRef.value).toBe('42');
+    expect(body.Id).toBeUndefined();
+    expect(created.Id).toBe('999');
+  });
+
+  it('updateEstimate POSTs a sparse update carrying Id + SyncToken', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ Estimate: { Id: '7', SyncToken: '4', CustomerRef: { value: '42' }, Line: [line] } }),
+    );
+    const updated = await updateEstimate('realm-123', 'access-1', {
+      Id: '7',
+      SyncToken: '3',
+      CustomerRef: { value: '42' },
+      Line: [line],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.sparse).toBe(true);
+    expect(body.Id).toBe('7');
+    expect(body.SyncToken).toBe('3');
+    expect(updated.SyncToken).toBe('4');
+  });
+
+  it('raises QboAuthError on a 401 from the estimate endpoint', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+    await expect(fetchEstimateById('realm-123', 'expired', '7')).rejects.toBeInstanceOf(QboAuthError);
   });
 });
 
