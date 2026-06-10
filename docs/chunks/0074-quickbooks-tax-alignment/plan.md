@@ -10,7 +10,7 @@
 | 1: Research/decide — Canadian-sandbox blocker + AST/tax-code shape (GATE) | Done | (research — [decision.md](decision.md)) |
 | 2: `client.ts` — `fetchTaxCodes` / `fetchTaxRates` (+ types) | Done | `3bb47b4` |
 | 3: Tax-code mapping + storage (province ↔ QBO `TaxCode`, pulled rate) | Done | `4ae5708` |
-| 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Pending | - |
+| 4: Wire `mapQuoteToEstimate` — set `TaxCodeRef`, drop the `TotalTax` override | Done | `19e0c5f` |
 | 5: Reconcile rate so Estimate total == quote total | Pending | - |
 | 6: Tests + Canadian smoke + wiki | Pending | - |
 
@@ -32,7 +32,7 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - Memory: [[project_prod_db]] (sandbox-first 5432 · prod QBO realm `193514766730959` is Canadian) · [[project_drizzle_journal_when_gotcha]] (verify journal `when` on any schema) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]].
 - Evidence: [`../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md`](../closed/0073-quote-estimate-push/eval-2026-06-10-0911.md) addendum (the confirmed tax-dropped smoke).
 
-**Overall Progress:** 50% (3/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 4–6 against the CA sandbox.**
+**Overall Progress:** 67% (4/6 phases complete) — **Phase 1 gate RESOLVED ([decision.md](decision.md)); Phases 5–6 against the CA sandbox.**
 
 **Note:** Phase 1 settled the approach (manual sales tax → set **txn-level** `TxnTaxDetail.TxnTaxCodeRef`, mapped province→`TaxCode.Id`; the AST-would-have-broken-it risk is retired *for the sandbox*). Phase-checklist summaries below reflect the decided shape. Residual to confirm before prod: the **prod** company's `TaxPrefs` (if AST, revisit Phase 4).
 
@@ -58,9 +58,9 @@ The QBO tax-alignment slice — make a pushed Estimate's tax correct + matching,
 - [x] `tax-sync.ts`: `resolveCodeRatePct` (sum a code's referenced `TaxRate`s) + `matchProvinceTaxCode` (unambiguous rate-match, pure) + `applyTaxCodeSync` (executor-injected; sets each province's link or null, clears stale) + `encode/decodeTaxSyncSummary`. **Match strategy: by summed rate, unambiguous-only** — rate-collision provinces (e.g. the 15% HST group) won't auto-link (→ manual-mapping follow-up). 10 matcher unit tests.
 - [x] Admin action `pullTaxCodesFromQuickbooks` (admin-gated, `fetchTaxCodes`+`fetchTaxRates` → `db.transaction(applyTaxCodeSync)` → `?taxsynced=` flash) + gate-matrix row + "Pull tax codes" button on `/admin/quickbooks` + the flash decode.
 
-#### Phase 4: Wire the Estimate push (provisional)
-- [ ] Replace `mapQuoteToEstimate`'s `TxnTaxDetail.TotalTax`/`GlobalTaxCalculation: TaxExcluded` block with the resolved `TaxCodeRef` (txn/line per Phase 1).
-- [ ] Pre-flight: a quote whose province has no mapped QBO tax code fails *closed* with a clear message (mirror 0073's readiness check). Handle `tax_override` per Phase 1.
+#### Phase 4: Wire the Estimate push
+- [x] `mapQuoteToEstimate` now emits `TxnTaxDetail.TxnTaxCodeRef = { value: quote.taxCodeId }` (QBO computes the tax) instead of the dropped `TotalTax`/`TaxExcluded`; omitted when untaxed. `QboEstimate(Input).TxnTaxDetail` type extended with `TxnTaxCodeRef`.
+- [x] Pre-flight (`checkQuotePushReadiness(quote, dealer, lines)`): a **manual `tax_override`** fails closed (v1 — can't represent as a code); a **taxed quote with no mapped province code** fails closed ("run Pull tax codes"). `loadQuoteEstimatePushData` now left-joins `tax_rates` on the dealer's province → `taxCodeId` + selects `taxOverride`. 0073 unit + integration tests updated for the new signature/fields.
 
 #### Phase 5: Reconciliation (provisional)
 - [ ] Ensure the app's quote tax and QBO's computed tax use the **same rate** so the Estimate total equals the quote total (adopt or validate per Phase 1).
