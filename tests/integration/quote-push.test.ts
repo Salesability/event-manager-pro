@@ -113,8 +113,10 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       const quote: QuotePushQuote = {
         id: quoteId,
         quickbooksEstimateId: null,
-        tax: '897.00',
+        subtotal: '6900.00',
+        tax: '897.00', // 6900 × 13% = 897 → matches provinceRatePct
         taxCodeId: '5',
+        provinceRatePct: '13.000',
         taxOverride: null,
       };
       const result = await pushQuoteToQuickbooks(
@@ -146,8 +148,10 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       const quote: QuotePushQuote = {
         id: quoteId,
         quickbooksEstimateId: linkedId,
+        subtotal: '6900.00',
         tax: '0',
         taxCodeId: null,
+        provinceRatePct: null,
         taxOverride: null,
       };
       const result = await pushQuoteToQuickbooks(
@@ -173,8 +177,10 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       const quote: QuotePushQuote = {
         id: quoteId,
         quickbooksEstimateId: null,
+        subtotal: '0',
         tax: '0',
         taxCodeId: null,
+        provinceRatePct: null,
         taxOverride: null,
       };
 

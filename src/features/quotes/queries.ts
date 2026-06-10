@@ -236,10 +236,14 @@ export type QuoteEstimatePushData = {
   quote: {
     id: number;
     status: QuoteStatus;
+    subtotal: string;
     tax: string;
     quickbooksEstimateId: string | null;
     // QBO tax code for the dealer's province (0074), or null when unmapped.
     taxCodeId: string | null;
+    // The province's current rate (%) — equals the matched code's rate; used for
+    // the push's rate-drift guard. Null when the province has no `tax_rates` row.
+    provinceRatePct: string | null;
     taxOverride: string | null;
   };
   dealer: { id: number; name: string; quickbooksId: string | null };
@@ -261,6 +265,7 @@ export async function loadQuoteEstimatePushData(
     .select({
       id: quotes.id,
       status: quotes.status,
+      subtotal: quotes.subtotal,
       tax: quotes.tax,
       taxOverride: quotes.taxOverride,
       quickbooksEstimateId: quotes.quickbooksEstimateId,
@@ -269,6 +274,7 @@ export async function loadQuoteEstimatePushData(
       dealerQuickbooksId: dealers.quickbooksId,
       // QBO tax code for the dealer's province (0074), via the province→code map.
       taxCodeId: taxRates.quickbooksTaxCodeId,
+      provinceRatePct: taxRates.rate,
     })
     .from(quotes)
     .innerJoin(dealers, eq(dealers.id, quotes.dealerId))
@@ -296,9 +302,11 @@ export async function loadQuoteEstimatePushData(
     quote: {
       id: q.id,
       status: q.status,
+      subtotal: q.subtotal,
       tax: q.tax,
       quickbooksEstimateId: q.quickbooksEstimateId,
       taxCodeId: q.taxCodeId,
+      provinceRatePct: q.provinceRatePct,
       taxOverride: q.taxOverride,
     },
     dealer: { id: q.dealerId, name: q.dealerName, quickbooksId: q.dealerQuickbooksId },

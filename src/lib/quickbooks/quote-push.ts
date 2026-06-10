@@ -41,15 +41,29 @@ export type QuotePushLine = {
 export type QuotePushQuote = {
   id: number;
   quickbooksEstimateId: string | null;
+  subtotal: string; // pre-tax subtotal (numeric string)
   tax: string; // the quote's computed tax (numeric string)
   // QBO tax code for the quote's province (0074) — `tax_rates.quickbooks_tax_code_id`
   // for the dealer's province. Drives `TxnTaxDetail.TxnTaxCodeRef` so QBO computes
   // the tax. Null when the province isn't mapped → push fails the pre-flight.
   taxCodeId: string | null;
+  // The province's CURRENT rate (`tax_rates.rate`, %), which equals the matched
+  // QBO code's rate (the matcher links by rate). Used to detect rate drift: the
+  // quote's `tax` was computed from a SNAPSHOT rate at save time, so if the rate
+  // changed since, QBO (current rate) and the quote would disagree. Null = unmapped.
+  provinceRatePct: string | null;
   // Coach's manual tax override (0065), or null. Can't be faithfully represented
   // as a QBO tax code yet → pushing an overridden quote fails the pre-flight (v1).
   taxOverride: string | null;
 };
+
+// Pure: does the quote's tax equal what QBO will compute (subtotal × rate)?
+// Tolerates a cent of rounding. Used to catch a province-rate change between
+// quote-save (snapshot) and push (QBO uses the current rate).
+export function quoteTaxMatchesRate(subtotal: number, tax: number, ratePct: number): boolean {
+  const expected = Math.round(subtotal * ratePct) / 100; // = roundCents(subtotal × ratePct/100)
+  return Math.abs(expected - tax) <= 0.01;
+}
 
 export type QuotePushReadiness = { ok: true } | { ok: false; reason: string };
 
@@ -92,6 +106,20 @@ export function checkQuotePushReadiness(
       ok: false,
       reason:
         "This quote's province isn't mapped to a QuickBooks tax code — run Pull tax codes first.",
+    };
+  }
+  // Rate-drift guard: the quote's tax was snapshotted at save time; QBO will
+  // compute from the province's CURRENT rate. If they disagree, the Estimate
+  // total wouldn't match the quote — fail closed rather than push a mismatch.
+  if (
+    Number(quote.tax) > 0 &&
+    quote.provinceRatePct != null &&
+    !quoteTaxMatchesRate(Number(quote.subtotal), Number(quote.tax), Number(quote.provinceRatePct))
+  ) {
+    const expected = (Math.round(Number(quote.subtotal) * Number(quote.provinceRatePct)) / 100).toFixed(2);
+    return {
+      ok: false,
+      reason: `This quote's tax ($${quote.tax}) no longer matches QuickBooks' rate (${quote.provinceRatePct}% → $${expected}) — the province rate changed since the quote was created. Re-create the quote to push it.`,
     };
   }
   return { ok: true };

@@ -5,6 +5,7 @@ import {
   type QuotePushQuote,
   checkQuotePushReadiness,
   mapQuoteToEstimate,
+  quoteTaxMatchesRate,
 } from './quote-push';
 
 // `quote-push` imports `@/lib/db` + `./client` (which pulls in `server-only`).
@@ -31,8 +32,10 @@ const line = (over: Partial<QuotePushLine> = {}): QuotePushLine => ({
 const quote = (over: Partial<QuotePushQuote> = {}): QuotePushQuote => ({
   id: 10,
   quickbooksEstimateId: null,
+  subtotal: '0',
   tax: '0',
   taxCodeId: null,
+  provinceRatePct: null,
   taxOverride: null,
   ...over,
 });
@@ -42,9 +45,13 @@ describe('checkQuotePushReadiness', () => {
     expect(checkQuotePushReadiness(quote(), dealer(), [line()])).toEqual({ ok: true });
   });
 
-  it('ok when a taxed quote has a mapped tax code', () => {
+  it('ok when a taxed quote has a mapped tax code whose rate matches', () => {
     expect(
-      checkQuotePushReadiness(quote({ tax: '52.00', taxCodeId: '5' }), dealer(), [line()]),
+      checkQuotePushReadiness(
+        quote({ subtotal: '400.00', tax: '52.00', taxCodeId: '5', provinceRatePct: '13.000' }),
+        dealer(),
+        [line()],
+      ),
     ).toEqual({ ok: true });
   });
 
@@ -84,6 +91,29 @@ describe('checkQuotePushReadiness', () => {
     );
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/override/i);
+  });
+
+  it('fails when the quote tax no longer matches the current province rate (drift)', () => {
+    // subtotal 400 × 15% = $60, but the quote's snapshot tax is $52 (was 13%).
+    const r = checkQuotePushReadiness(
+      quote({ subtotal: '400.00', tax: '52.00', taxCodeId: '5', provinceRatePct: '15.000' }),
+      dealer(),
+      [line()],
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/rate changed|no longer matches/i);
+  });
+});
+
+describe('quoteTaxMatchesRate', () => {
+  it('true when tax == round(subtotal × rate)', () => {
+    expect(quoteTaxMatchesRate(400, 52, 13)).toBe(true);
+    expect(quoteTaxMatchesRate(6900, 897, 13)).toBe(true);
+    expect(quoteTaxMatchesRate(100, 14.975, 14.975)).toBe(true);
+  });
+  it('false on a rate mismatch beyond a cent', () => {
+    expect(quoteTaxMatchesRate(400, 52, 15)).toBe(false);
+    expect(quoteTaxMatchesRate(400, 60, 13)).toBe(false);
   });
 });
 
