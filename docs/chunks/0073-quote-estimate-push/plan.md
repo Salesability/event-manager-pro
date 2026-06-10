@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration | Pending | - |
+| 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration | Done | `0f4a1df` |
 | 2: `client.ts` Estimate helpers (`createEstimate` / `updateEstimate` / `fetchEstimateById`) | Pending | - |
 | 3: `quote-push.ts` — pre-flight link check + `mapQuoteToEstimate` + `pushQuoteToQuickbooks` core | Pending | - |
 | 4: Server Action + gate-matrix row + quote-page button + flash | Pending | - |
@@ -35,7 +35,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `CLAUDE.md` → Conventions — mutations are Server Actions; invoke `db-conventions` before schema/migrations.
 - Memory [[project_drizzle_journal_when_gotcha]] · [[project_prod_db]] (sandbox-first 5432) · [[feedback_no_yup]] (Zod) · [[project_msa_structure]] (accepted Quote IS the contract).
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes its own tests; the `applyItemSync`-style DB integration test (the backfill write) comes in Phase 5 against a real DB in rolled-back transactions, with the QBO Estimate calls mocked.
@@ -43,11 +43,11 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Schema — `quotes.quickbooks_estimate_id` + unique partial index + migration
-- [ ] Invoke `db-conventions` before editing schema.
-- [ ] Add `quickbooksEstimateId: text('quickbooks_estimate_id')` (nullable) to `quotes` + a comment (durable link to the QBO `Estimate.Id`; set only by the push; idempotency).
-- [ ] Add unique partial index `quotes_quickbooks_estimate_id_idx` on `(quickbooks_estimate_id) WHERE quickbooks_estimate_id IS NOT NULL`.
-- [ ] `pnpm db:generate` → `drizzle/0034_*.sql`; confirm `ADD COLUMN` + `CREATE UNIQUE INDEX … WHERE`. **Verify journal `when` (0034 > 0033).**
-- [ ] Apply to **sandbox** (5432 pooler); verify col + partial index via `pg_indexes`. (Prod deferred.)
+- [x] ~~Invoke `db-conventions`~~ — already loaded this session for 0071's identical schema work; same partial-unique-index idiom + journal-`when` gotcha + sandbox-first-on-5432 rules applied.
+- [x] Added `quickbooksEstimateId: text('quickbooks_estimate_id')` (nullable) to `quotes` with a comment (QBO `Estimate.Id` link; set only by the push; idempotency).
+- [x] Added unique partial index `quotes_quickbooks_estimate_id_idx` on `(quickbooks_estimate_id) WHERE quickbooks_estimate_id IS NOT NULL`.
+- [x] `pnpm db:generate` → `drizzle/0034_pale_blue_shield.sql` (clean `ADD COLUMN` + `CREATE UNIQUE INDEX … WHERE`, no stray auth statements). **Journal `when` verified ascending** (0034 `1781095215115` > 0033 `1781027979333`).
+- [x] Applied to **sandbox** (5432 pooler `aws-1-us-west-2`); verified col (`text`, nullable) + partial index via `pg_indexes`. (Prod deferred.)
 
 #### Phase 2: `client.ts` Estimate helpers
 - [ ] `QboEstimate` type (Id, SyncToken?, CustomerRef, Line[], TxnTaxDetail?, TotalAmt?, …) + `QboEstimateInput` write type.
