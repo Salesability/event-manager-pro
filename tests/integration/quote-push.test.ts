@@ -110,7 +110,13 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       vi.mocked(createEstimate).mockResolvedValue({ Id: newId, SyncToken: '0', CustomerRef: { value: '42' }, Line: [] });
       const quoteId = await seedQuote(tx, null);
 
-      const quote: QuotePushQuote = { id: quoteId, quickbooksEstimateId: null, tax: '897.00' };
+      const quote: QuotePushQuote = {
+        id: quoteId,
+        quickbooksEstimateId: null,
+        tax: '897.00',
+        taxCodeId: '5',
+        taxOverride: null,
+      };
       const result = await pushQuoteToQuickbooks(
         quote,
         [line({ itemQuickbooksId: '7' })],
@@ -137,7 +143,13 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
       vi.mocked(updateEstimate).mockResolvedValue({ Id: linkedId, SyncToken: '6', CustomerRef: { value: '42' }, Line: [] });
       const quoteId = await seedQuote(tx, linkedId);
 
-      const quote: QuotePushQuote = { id: quoteId, quickbooksEstimateId: linkedId, tax: '0' };
+      const quote: QuotePushQuote = {
+        id: quoteId,
+        quickbooksEstimateId: linkedId,
+        tax: '0',
+        taxCodeId: null,
+        taxOverride: null,
+      };
       const result = await pushQuoteToQuickbooks(
         quote,
         [line()],
@@ -158,7 +170,13 @@ describe.skipIf(!dbUrl)('pushQuoteToQuickbooks DB writes (0073)', () => {
   it('pre-flight: unlinked dealer or SKU throws QuotePushNotReadyError and writes nothing', async () => {
     await inRolledBackTx(async (tx) => {
       const quoteId = await seedQuote(tx, null);
-      const quote: QuotePushQuote = { id: quoteId, quickbooksEstimateId: null, tax: '0' };
+      const quote: QuotePushQuote = {
+        id: quoteId,
+        quickbooksEstimateId: null,
+        tax: '0',
+        taxCodeId: null,
+        taxOverride: null,
+      };
 
       // Unlinked dealer.
       await expect(

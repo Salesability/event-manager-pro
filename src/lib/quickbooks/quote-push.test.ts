@@ -32,22 +32,30 @@ const quote = (over: Partial<QuotePushQuote> = {}): QuotePushQuote => ({
   id: 10,
   quickbooksEstimateId: null,
   tax: '0',
+  taxCodeId: null,
+  taxOverride: null,
   ...over,
 });
 
 describe('checkQuotePushReadiness', () => {
-  it('ok when the dealer and every line are linked', () => {
-    expect(checkQuotePushReadiness(dealer(), [line()])).toEqual({ ok: true });
+  it('ok when dealer + lines are linked (untaxed quote)', () => {
+    expect(checkQuotePushReadiness(quote(), dealer(), [line()])).toEqual({ ok: true });
+  });
+
+  it('ok when a taxed quote has a mapped tax code', () => {
+    expect(
+      checkQuotePushReadiness(quote({ tax: '52.00', taxCodeId: '5' }), dealer(), [line()]),
+    ).toEqual({ ok: true });
   });
 
   it('fails when the dealer is not linked', () => {
-    const r = checkQuotePushReadiness(dealer({ quickbooksId: null }), [line()]);
+    const r = checkQuotePushReadiness(quote(), dealer({ quickbooksId: null }), [line()]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/Sync dealers/i);
   });
 
   it('fails when a line SKU is unlinked, naming the codes', () => {
-    const r = checkQuotePushReadiness(dealer(), [
+    const r = checkQuotePushReadiness(quote(), dealer(), [
       line(),
       line({ code: 'travel', itemQuickbooksId: null }),
     ]);
@@ -59,14 +67,30 @@ describe('checkQuotePushReadiness', () => {
   });
 
   it('fails on a quote with no lines', () => {
-    expect(checkQuotePushReadiness(dealer(), []).ok).toBe(false);
+    expect(checkQuotePushReadiness(quote(), dealer(), []).ok).toBe(false);
+  });
+
+  it('fails a taxed quote whose province has no mapped tax code', () => {
+    const r = checkQuotePushReadiness(quote({ tax: '52.00', taxCodeId: null }), dealer(), [line()]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/Pull tax codes/i);
+  });
+
+  it('fails a quote with a manual tax override', () => {
+    const r = checkQuotePushReadiness(
+      quote({ tax: '60.00', taxCodeId: '5', taxOverride: '60.00' }),
+      dealer(),
+      [line()],
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/override/i);
   });
 });
 
 describe('mapQuoteToEstimate', () => {
-  it('maps CustomerRef, line ItemRef/qty/unit/amount, and a tax override', () => {
+  it('maps CustomerRef, line ItemRef/qty/unit/amount, and the tax code', () => {
     const est = mapQuoteToEstimate(
-      quote({ tax: '897.00' }),
+      quote({ tax: '897.00', taxCodeId: '5' }),
       [
         line({
           qty: 2,
@@ -79,8 +103,9 @@ describe('mapQuoteToEstimate', () => {
       dealer({ quickbooksId: '42' }),
     );
     expect(est.CustomerRef.value).toBe('42');
-    expect(est.GlobalTaxCalculation).toBe('TaxExcluded');
-    expect(est.TxnTaxDetail).toEqual({ TotalTax: 897 });
+    // tax via the QBO tax code (QBO computes), not a TotalTax override
+    expect(est.TxnTaxDetail).toEqual({ TxnTaxCodeRef: { value: '5' } });
+    expect(est.GlobalTaxCalculation).toBeUndefined();
     expect(est.Line).toHaveLength(1);
     const l = est.Line[0];
     expect(l.DetailType).toBe('SalesItemLineDetail');

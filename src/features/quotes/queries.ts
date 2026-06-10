@@ -8,6 +8,7 @@ import {
   quoteLineItems,
   quotes,
   serviceItems,
+  taxRates,
 } from '@/lib/db/schema';
 import type { PickedLine, QuoteInputs } from '@/lib/quotes/pricing';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
@@ -232,7 +233,15 @@ export async function loadQuote(id: number): Promise<Quote | null> {
 // the line's `service_item_id` is null). Shapes match `quote-push.ts`'s
 // `QuotePush{Quote,Dealer,Line}`; the Server Action passes them to the core.
 export type QuoteEstimatePushData = {
-  quote: { id: number; status: QuoteStatus; tax: string; quickbooksEstimateId: string | null };
+  quote: {
+    id: number;
+    status: QuoteStatus;
+    tax: string;
+    quickbooksEstimateId: string | null;
+    // QBO tax code for the dealer's province (0074), or null when unmapped.
+    taxCodeId: string | null;
+    taxOverride: string | null;
+  };
   dealer: { id: number; name: string; quickbooksId: string | null };
   lines: {
     code: string;
@@ -253,13 +262,17 @@ export async function loadQuoteEstimatePushData(
       id: quotes.id,
       status: quotes.status,
       tax: quotes.tax,
+      taxOverride: quotes.taxOverride,
       quickbooksEstimateId: quotes.quickbooksEstimateId,
       dealerId: dealers.id,
       dealerName: dealers.name,
       dealerQuickbooksId: dealers.quickbooksId,
+      // QBO tax code for the dealer's province (0074), via the province→code map.
+      taxCodeId: taxRates.quickbooksTaxCodeId,
     })
     .from(quotes)
     .innerJoin(dealers, eq(dealers.id, quotes.dealerId))
+    .leftJoin(taxRates, eq(taxRates.province, dealers.province))
     .where(eq(quotes.id, quoteId))
     .limit(1);
   if (!q) return null;
@@ -285,6 +298,8 @@ export async function loadQuoteEstimatePushData(
       status: q.status,
       tax: q.tax,
       quickbooksEstimateId: q.quickbooksEstimateId,
+      taxCodeId: q.taxCodeId,
+      taxOverride: q.taxOverride,
     },
     dealer: { id: q.dealerId, name: q.dealerName, quickbooksId: q.dealerQuickbooksId },
     lines,

@@ -42,13 +42,23 @@ export type QuotePushQuote = {
   id: number;
   quickbooksEstimateId: string | null;
   tax: string; // the quote's computed tax (numeric string)
+  // QBO tax code for the quote's province (0074) — `tax_rates.quickbooks_tax_code_id`
+  // for the dealer's province. Drives `TxnTaxDetail.TxnTaxCodeRef` so QBO computes
+  // the tax. Null when the province isn't mapped → push fails the pre-flight.
+  taxCodeId: string | null;
+  // Coach's manual tax override (0065), or null. Can't be faithfully represented
+  // as a QBO tax code yet → pushing an overridden quote fails the pre-flight (v1).
+  taxOverride: string | null;
 };
 
 export type QuotePushReadiness = { ok: true } | { ok: false; reason: string };
 
-// Pure pre-flight: the dealer must be QBO-linked and every line SKU must be
-// QBO-linked, else there's no CustomerRef/ItemRef to build a valid Estimate.
+// Pure pre-flight: the dealer must be QBO-linked, every line SKU must be
+// QBO-linked, and (if the quote is taxed) its province must map to a QBO tax
+// code — else there's no CustomerRef / ItemRef / TxnTaxCodeRef to build a valid,
+// correctly-taxed Estimate.
 export function checkQuotePushReadiness(
+  quote: QuotePushQuote,
   dealer: QuotePushDealer,
   lines: QuotePushLine[],
 ): QuotePushReadiness {
@@ -66,6 +76,22 @@ export function checkQuotePushReadiness(
     return {
       ok: false,
       reason: `These items aren't linked to QuickBooks yet — run Pull items first: ${unlinked.join(', ')}.`,
+    };
+  }
+  // Tax (0074): a manual override can't be represented as a QBO tax code yet;
+  // a taxed quote needs its province mapped (QBO computes from the code).
+  if (quote.taxOverride != null) {
+    return {
+      ok: false,
+      reason:
+        "This quote has a manual tax override, which can't be pushed to QuickBooks yet — remove the override or push without it.",
+    };
+  }
+  if (Number(quote.tax) > 0 && !quote.taxCodeId) {
+    return {
+      ok: false,
+      reason:
+        "This quote's province isn't mapped to a QuickBooks tax code — run Pull tax codes first.",
     };
   }
   return { ok: true };
@@ -103,12 +129,15 @@ export function mapQuoteToEstimate(
     };
   });
 
-  const totalTax = Number(quote.tax);
+  // Tax (0074): set the province's QBO tax code so QBO computes the tax itself
+  // (a bare `TotalTax` override is dropped by QBO — see the 0073 smoke). Omitted
+  // when the quote isn't taxed. The pre-flight guarantees a code is present when
+  // tax > 0, so this matches the quote's tax as long as the rates are aligned.
+  const taxed = Number(quote.tax) > 0 && quote.taxCodeId != null;
   return {
     CustomerRef: { value: dealer.quickbooksId },
     Line: estimateLines,
-    GlobalTaxCalculation: 'TaxExcluded',
-    ...(totalTax > 0 ? { TxnTaxDetail: { TotalTax: totalTax } } : {}),
+    ...(taxed ? { TxnTaxDetail: { TxnTaxCodeRef: { value: quote.taxCodeId as string } } } : {}),
   };
 }
 
@@ -127,7 +156,7 @@ export async function pushQuoteToQuickbooks(
   accessToken: string,
   exec: Executor = db,
 ): Promise<QuotePushResult> {
-  const ready = checkQuotePushReadiness(dealer, lines);
+  const ready = checkQuotePushReadiness(quote, dealer, lines);
   if (!ready.ok) throw new QuotePushNotReadyError(ready.reason);
 
   const payload = mapQuoteToEstimate(quote, lines, dealer);

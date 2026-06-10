@@ -418,7 +418,7 @@ export type QboEstimate = {
   SyncToken?: string;
   CustomerRef: { value: string; name?: string };
   Line: QboEstimateLine[];
-  TxnTaxDetail?: { TotalTax?: number };
+  TxnTaxDetail?: { TotalTax?: number; TxnTaxCodeRef?: { value: string } };
   GlobalTaxCalculation?: string;
   TotalAmt?: number;
 };
@@ -428,7 +428,7 @@ export type QboEstimate = {
 export type QboEstimateInput = {
   CustomerRef: { value: string };
   Line: QboEstimateLine[];
-  TxnTaxDetail?: { TotalTax?: number };
+  TxnTaxDetail?: { TotalTax?: number; TxnTaxCodeRef?: { value: string } };
   GlobalTaxCalculation?: string; // 'TaxExcluded' — we push our own computed tax
   Id?: string;
   SyncToken?: string;
