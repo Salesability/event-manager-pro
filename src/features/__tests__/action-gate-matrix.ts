@@ -289,6 +289,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0073 quote→QBO Estimate push)',
   },
+  {
+    label: 'pullTaxCodesFromQuickbooks',
+    invoke: () => quickbooksActions.pullTaxCodesFromQuickbooks(),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0074 QBO tax-code pull → province mapping)',
+  },
 
   // ---- Availability blocks (3) — admin OR coach -------------------------
   // Coach is admitted at the role layer; row-ownership (own coach_unavailable

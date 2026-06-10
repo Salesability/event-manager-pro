@@ -1,0 +1,1 @@
+ALTER TABLE "tax_rates" ADD COLUMN "quickbooks_tax_code_id" text;

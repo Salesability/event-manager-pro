@@ -13,5 +13,10 @@ export const taxRates = pgTable('tax_rates', {
   province: caProvince('province').notNull().unique(),
   label: text('label').notNull(),
   rate: numeric('rate', { precision: 6, scale: 3 }).notNull(),
+  // QBO `TaxCode.Id` this province maps to (0074), or null when no QBO tax code
+  // matches the province's rate. Set by the "Pull tax codes" sync; drives the
+  // Estimate push's `TxnTaxDetail.TxnTaxCodeRef`. Null → a quote on this province
+  // fails the push pre-flight (no code → QBO can't compute tax).
+  quickbooksTaxCodeId: text('quickbooks_tax_code_id'),
   ...timestamps,
 });

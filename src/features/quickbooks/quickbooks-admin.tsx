@@ -14,6 +14,7 @@ import {
   connectQuickbooks,
   disconnectQuickbooks,
   pullItemsFromQuickbooks,
+  pullTaxCodesFromQuickbooks,
   syncDealersFromQuickbooks,
 } from './actions';
 
@@ -295,6 +296,24 @@ export function QuickbooksAdmin({
                 </Table>
               </>
             )}
+          </div>
+
+          {/* Tax codes — map each province's rate to a QBO tax code (0074) so a
+              pushed quote Estimate carries the right tax (QBO computes it from
+              the code). Match is by rate; unmatched provinces stay unlinked. */}
+          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-zinc-900">Tax codes</h3>
+              <form action={pullTaxCodesFromQuickbooks}>
+                <Button type="submit" color="green">
+                  Pull tax codes
+                </Button>
+              </form>
+            </div>
+            <p className="text-sm text-zinc-500">
+              Maps each province&apos;s tax rate to a QuickBooks tax code (by rate) so a pushed
+              quote Estimate carries the right tax. Provinces with no matching code stay unlinked.
+            </p>
           </div>
         </div>
       )}

@@ -12,6 +12,8 @@ import {
   buildAuthorizeUrl,
   fetchCustomers,
   fetchItems,
+  fetchTaxCodes,
+  fetchTaxRates,
   quickbooksRedirectUri,
   revokeToken,
 } from '@/lib/quickbooks/client';
@@ -19,6 +21,7 @@ import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quic
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
 import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
 import { applyItemSync, encodeItemSyncSummary } from '@/lib/quickbooks/item-sync';
+import { applyTaxCodeSync, encodeTaxSyncSummary } from '@/lib/quickbooks/tax-sync';
 import {
   QuotePushNotReadyError,
   pushQuoteToQuickbooks as pushQuoteToEstimate,
@@ -133,6 +136,28 @@ export async function pullItemsFromQuickbooks() {
 
   revalidatePath('/admin/quickbooks');
   redirect(`/admin/quickbooks?itemsynced=${encodeItemSyncSummary(result)}`);
+}
+
+// authz: admin:access
+// validation: skip — no FormData input; reads the live QB TaxCode/TaxRate list
+// and maps the app's province tax rates onto QBO tax codes (chunk 0074).
+//
+// Reconciles `tax_rates.quickbooks_tax_code_id` against the connected company's
+// TaxCodes (match by rate, unambiguous-only — see `tax-sync.ts`). The Estimate
+// push reads this link to set `TxnTaxDetail.TxnTaxCodeRef` so QBO computes tax.
+// Wrapped in a transaction; errors propagate (same rationale as the other pulls).
+export async function pullTaxCodesFromQuickbooks() {
+  await assertCan('admin:access');
+
+  const { realmId, accessToken } = await getValidAccessToken();
+  const [codes, rates] = await Promise.all([
+    fetchTaxCodes(realmId, accessToken),
+    fetchTaxRates(realmId, accessToken),
+  ]);
+  const result = await db.transaction((tx) => applyTaxCodeSync(codes, rates, tx));
+
+  revalidatePath('/admin/quickbooks');
+  redirect(`/admin/quickbooks?taxsynced=${encodeTaxSyncSummary(result)}`);
 }
 
 const pushDealerSchema = z.object({

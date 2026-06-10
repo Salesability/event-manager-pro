@@ -246,6 +246,13 @@
       "when": 1781095215115,
       "tag": "0034_pale_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1781109079808,
+      "tag": "0035_nebulous_sumo",
+      "breakpoints": true
     }
   ]
 }
