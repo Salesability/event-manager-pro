@@ -9,8 +9,8 @@
 |-------|--------|--------|
 | 1: Row-model decision + any schema (db-conventions) — GATE | Done | - |
 | 2: QBO-codes loader + per-province mapping view-model (suggestion via demoted matcher) | Done | - |
-| 3: `/admin/lookups` mapping UI (province → code dropdown, "managed by QB" badge, Add province) | Pending | - |
-| 4: Server actions — `assignProvinceTaxCode` + `refreshTaxRates`; retire heuristic; gate-matrix | Pending | - |
+| 3: `/admin/lookups` mapping UI + `assignProvinceTaxCode` action (+ gate-matrix) | Done | - |
+| 4: `refreshTaxRates` action + retire the heuristic "Pull tax codes" button (+ gate-matrix) | Pending | - |
 | 5: Unmapped-province quote guard (+ optional QC per-line PDF breakdown) | Pending | - |
 | 6: Tests + smoke + group-code (QC/BC) Estimate-push verification + wiki | Pending | - |
 
@@ -37,7 +37,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
 - Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
-**Overall Progress:** 33% (2/6 phases complete) — **Phase 1 gate + Phase 2 mapping view-model shipped 2026-06-11. See [`decision.md`](decision.md).**
+**Overall Progress:** 50% (3/6 phases complete) — **Phases 1–3 shipped 2026-06-11: gate + view-model + mapping UI/action. See [`decision.md`](decision.md).**
 
 **Note:**
 - **Phase 1 is a decision gate** — the row model (keep the 13 seeded rows vs QB-derived rows) shapes Phases 2–6; resolve it (write `decision.md`) before building. Leaning: keep rows, drive "usable" off the mapping + the unmapped-province guard, **no migration**.
@@ -57,17 +57,16 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - [x] `buildProvinceMappingRows(appRows, qboCodes, qboRates)` → `ProvinceMappingRow[]`: managed flag, current code name/rate, **drift** (linked code rate ≠ app rate), **brokenLink** (mapped id absent from live set), and a **suggestion** (demoted `resolveProvinceLinksByName` — pre-select only, never auto-applied).
 - [x] Unit tests (`mapping.test.ts`, +6): group-code summing (BC 5+7=12) surfaces; unresolvable → n/a; inactive dropped; managed/unmanaged; drift; broken link; suggestion pre-select.
 
-#### Phase 3: `/admin/lookups` mapping UI
-- [ ] `tax-rate-mapping.tsx`: per-province row — label · app rate · QB-code `<select>` (live codes; suggestion pre-selected) · "managed by QuickBooks" badge when mapped · "unmanaged" when not.
-- [ ] "Add province" affordance (map a not-yet-mapped province to an available code). Connection-dependent: disconnected → read-only rates + mappings + "connect QuickBooks to change mappings" hint.
-- [ ] Render on `admin/lookups/page.tsx` (re-add the section 0075 removed; update the page description).
-- [ ] Smoke (web-test): `goto /admin/lookups`; "Sales Tax Rates" section renders with per-province code `<select>` + "managed by QuickBooks" badges.
+#### Phase 3: `/admin/lookups` mapping UI + `assignProvinceTaxCode`
+- [x] `tax-rate-mapping.tsx`: per-province row — label · app rate · QB-code `<select>` (live codes; the name-match **suggestion** annotated "(suggested)" on an unmanaged province, not auto-applied) · status badge (managed / unmanaged / ⚠ drift / ⚠ broken-link). On select → `assignProvinceTaxCode` via transition + toast + refresh. Disconnected → read-only list + "connect QuickBooks to change mappings" hint.
+- [x] ~~"Add province" affordance~~ — collapsed into the table: with all 13 seeded rows shown (per the Phase-1 decision), "adding a province to QB" = picking a code for an **unmanaged** row (no separate INSERT/button).
+- [x] `assignProvinceTaxCode` Server Action (`actions.ts` recreated; `lookup:edit`, `safeParse`): empty `taxCodeId` unmaps (clears link, keeps rate); a set id is **re-validated against the live company** + the code's group-aware rate adopted into `tax_rates.rate`. Gate-matrix row re-added (`taxRatesActions` import restored). `loadTaxMappingAdmin` loader (connected → view-model + options; disconnected/QBO-error → read-only).
+- [x] Render on `admin/lookups/page.tsx` (re-added the section + refreshed the page description). *(Smoke deferred to the chunk-end `/eval`.)*
 
-#### Phase 4: Mapping + refresh Server Actions; retire heuristic
-- [ ] `assignProvinceTaxCode` (Zod: province + taxCodeId): explicit override → set `quickbooks_tax_code_id` + adopt the code's summed rate. `lookup:edit`, `safeParse`.
-- [ ] `refreshTaxRates`: re-sync rates of already-linked provinces only (rate-only `planTaxRateWrites`); never re-maps; flag (don't clear) a broken linked code. `lookup:edit`.
-- [ ] Retire the auto-apply "Pull tax codes" button on `/admin/quickbooks` (remove or repurpose to `refreshTaxRates`); demote `resolveProvinceLinksByName` to suggestion-only (no auto-apply caller).
-- [ ] Add gate-matrix rows for the new actions; integration test (rolled-back tx): assign adopts a group code's rate; refresh updates rate only.
+#### Phase 4: `refreshTaxRates` action + retire the heuristic
+- [ ] `refreshTaxRates`: re-sync rates of already-linked provinces only (rate-only writes via `planTaxRateWrites`); never re-maps; flag (don't clear) a broken linked code. `lookup:edit`; gate-matrix row.
+- [ ] Retire the auto-apply "Pull tax codes" button on `/admin/quickbooks` (remove `pullTaxCodesFromQuickbooks` + its gate-matrix row + the QB-admin "Tax rates" section + the `taxsynced` flash); the name matcher stays as a suggestion only (no auto-apply caller).
+- [ ] Integration test (rolled-back tx): assign adopts a group code's rate; refresh updates rate only (never the code link).
 
 #### Phase 5: Unmapped-province quote guard
 - [ ] At quote save/push, a dealer in a province with no mapping → flag/block ("province not set up for tax — add it in QB + map it"), not a silent $0; align with `quote-push.ts` pre-flight.
