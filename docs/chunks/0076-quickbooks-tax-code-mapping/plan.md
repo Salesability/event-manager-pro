@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Row-model decision + any schema (db-conventions) — GATE | Done | - |
-| 2: QBO-codes loader + per-province mapping view-model (suggestion via demoted matcher) | Pending | - |
+| 2: QBO-codes loader + per-province mapping view-model (suggestion via demoted matcher) | Done | - |
 | 3: `/admin/lookups` mapping UI (province → code dropdown, "managed by QB" badge, Add province) | Pending | - |
 | 4: Server actions — `assignProvinceTaxCode` + `refreshTaxRates`; retire heuristic; gate-matrix | Pending | - |
 | 5: Unmapped-province quote guard (+ optional QC per-line PDF breakdown) | Pending | - |
@@ -37,7 +37,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
 - Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
-**Overall Progress:** 17% (1/6 phases complete) — **Phase 1 gate resolved 2026-06-11 (row model locked: keep seeded rows, managed via mapping, no migration). See [`decision.md`](decision.md).**
+**Overall Progress:** 33% (2/6 phases complete) — **Phase 1 gate + Phase 2 mapping view-model shipped 2026-06-11. See [`decision.md`](decision.md).**
 
 **Note:**
 - **Phase 1 is a decision gate** — the row model (keep the 13 seeded rows vs QB-derived rows) shapes Phases 2–6; resolve it (write `decision.md`) before building. Leaning: keep rows, drive "usable" off the mapping + the unmapped-province guard, **no migration**.
@@ -53,9 +53,9 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - [x] Wrote `decision.md`; Phases 2–6 already match (UI presents managed/unmanaged; actions set/clear the code; guard keys off `quickbooks_tax_code_id IS NULL`).
 
 #### Phase 2: QBO-codes loader + mapping view-model
-- [ ] Loader: fetch the connected company's live `TaxCode` + `TaxRate` (reuse `fetchTaxCodes`/`fetchTaxRates`); build a per-code `{ id, name, ratePct (via resolveCodeRatePct, group-aware), active }` list for the dropdown.
-- [ ] Per-province mapping view-model: current mapped code + app rate + the linked code's current QB rate (drift?) + broken-link flag (linked id absent from live set) + a **suggestion** (demoted `resolveProvinceLinksByName`).
-- [ ] Unit tests: group-code rate summing surfaces in the list; suggestion pre-selects; drift + broken-link detection.
+- [x] `src/features/tax-rates/mapping.ts` (server; client imports types only): `buildTaxCodeOptions(qboCodes, qboRates)` → `TaxCodeOption[]` (every active code + its summed group-aware rate via `resolveCodeRatePct`, `"name — rate%"` label, n/a when unresolvable). `loadTaxRatesForMapping()` added to `queries.ts` (rows incl. `quickbooks_tax_code_id`). *(The live QB fetch loader lands in Phase 3 with the page.)*
+- [x] `buildProvinceMappingRows(appRows, qboCodes, qboRates)` → `ProvinceMappingRow[]`: managed flag, current code name/rate, **drift** (linked code rate ≠ app rate), **brokenLink** (mapped id absent from live set), and a **suggestion** (demoted `resolveProvinceLinksByName` — pre-select only, never auto-applied).
+- [x] Unit tests (`mapping.test.ts`, +6): group-code summing (BC 5+7=12) surfaces; unresolvable → n/a; inactive dropped; managed/unmanaged; drift; broken link; suggestion pre-select.
 
 #### Phase 3: `/admin/lookups` mapping UI
 - [ ] `tax-rate-mapping.tsx`: per-province row — label · app rate · QB-code `<select>` (live codes; suggestion pre-selected) · "managed by QuickBooks" badge when mapped · "unmanaged" when not.
