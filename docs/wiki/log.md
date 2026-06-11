@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-11 — Province → QB-tax-code mapping UI on /admin/lookups (0076)
+
+- Updated the **`tax_rates`** row in [`data-model.md`](data-model.md): the province → QB-tax-code **mapping is now explicit on `/admin/lookups`** (a per-province dropdown of live QBO codes — single **or group**), replacing 0075's auto-apply name heuristic. Picking a code sets `quickbooks_tax_code_id` + **adopts the code's group-aware rate** (`assignProvinceTaxCode`); a **"Refresh rates"** action re-syncs mapped provinces' rates only (`refreshTaxRates`, never re-maps). The 0075 matcher (`resolveProvinceLinksByName`) is demoted to a dropdown **suggestion**.
+- **Retired the "Pull tax codes" button** (`pullTaxCodesFromQuickbooks` + its gate-matrix row + the `/admin/quickbooks` section + the `taxsynced` flash) — it mis-mapped real prod data (NS stale `HST NS` 15% vs `HST NS 2025` 14%; the shared `HST Atlantic 15%` code). `applyTaxCodeSync`/encode-decode remain in `tax-sync.ts` (still tested) but are unwired.
+- **Row model (`../chunks/0076-quickbooks-tax-code-mapping/decision.md`):** keep all 13 seeded rows; **managed ⇔ `quickbooks_tax_code_id` non-null** (no migration); unmanaged provinces keep their seeded `rate` (no silent $0). The 0074 push pre-flight still blocks a **taxed** quote in an unmanaged province — its stale "run Pull tax codes" message now points at the Lookup Admin page.
+- **Quebec dual-tax confirmed:** QC = GST 5% + QST 9.975% = 14.975%, **not compound since 2013** (both on the same pre-tax base), via a QBO **group code**; the app's flat 14.975% is correct, and QBO posts GST/QST to separate GL accounts at invoice (Estimates are non-posting). **Pending:** a live group-code (QC) Estimate-push verification once QC is set up in the QB company (0074 only live-tested single-rate ON). See [[project_qbo_realms]].
+
 ## 2026-06-10 — QuickBooks is the tax-rate source of truth (0075)
 
 - Updated the **`tax_rates`** row in [`data-model.md`](data-model.md): `rate` is now **QB-sourced**, not admin-editable. The "Pull tax codes" sync **name-matches** each province to the QBO `TaxCode` whose name identifies it ("HST ON" → ON; `resolveProvinceLinksByName`, **replacing** the 0074 match-by-rate, which was circular once the goal is to pull QB's possibly-different rate) and **adopts** that code's rate into `tax_rates.rate`. Unmatched/ambiguous provinces keep their app rate, **unmanaged** (`quickbooks_tax_code_id` null — the managed flag is inferred, **no new column / no migration**).
