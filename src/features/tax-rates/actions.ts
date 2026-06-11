@@ -75,6 +75,7 @@ export const assignProvinceTaxCode = capabilityClient('lookup:edit')
 // province it re-reads its linked code's current rate and updates `tax_rates.rate`
 // if it changed; it NEVER changes a code link (so it can't clobber the mapping). A
 // mapped code missing from the live set is reported, not cleared. `lookup:edit`.
+// validation: skip — no FormData input (a no-arg refresh trigger).
 export const refreshTaxRates = capabilityClient('lookup:edit')
   .schema(formDataSchema)
   .action(async (): Promise<RefreshResult> => {
