@@ -56,8 +56,9 @@ PROD_SITE_URL="${PROD_SITE_URL:-}"
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"
 
 # Project is environment-keyed (2026-06-03): production ships to its own
-# business-owned GCP project (eventpro-498313); any other env stays on the
-# developer 'nnwweb' project (stage), so a stage deploy can never touch prod and
+# business-owned GCP project (eventpro-498313); any other env goes to the
+# 'eventpro-stage' project (stage; repointed from the old 'nnwweb' developer
+# project 2026-06-08, commit e695f4e), so a stage deploy can never touch prod and
 # vice versa. One script, one knob (DEPLOY_APP_ENV) drives project + service +
 # URL + DB secret. Override the project with GCP_PROJECT_ID.
 if [ -z "${PROJECT_ID}" ]; then
