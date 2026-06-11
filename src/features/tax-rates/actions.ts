@@ -6,12 +6,15 @@ import { z } from 'zod';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
 import { taxRates } from '@/lib/db/schema';
-import { CA_PROVINCE_CODES } from '@/lib/ca-provinces';
+import { CA_PROVINCE_CODES, type CaProvinceCode } from '@/lib/ca-provinces';
 import { fetchTaxCodes, fetchTaxRates } from '@/lib/quickbooks/client';
 import { getValidAccessToken } from '@/lib/quickbooks/connection';
 import { resolveCodeRatePct } from '@/lib/quickbooks/tax-sync';
+import { planRateRefresh } from './mapping';
+import { loadTaxRatesForMapping } from './queries';
 
 type ActionResult = { ok: true } | { error: string };
+type RefreshResult = { ok: true; updated: number; broken: number } | { error: string };
 
 // 0076 — map a province to a QuickBooks tax code (the explicit per-province
 // override that replaces 0075's auto-apply name heuristic). `lookup:edit`
@@ -65,4 +68,37 @@ export const assignProvinceTaxCode = capabilityClient('lookup:edit')
 
     revalidatePath('/admin/lookups');
     return { ok: true };
+  });
+
+// 0076 — re-sync the rates of already-mapped provinces from QuickBooks (the safe
+// replacement for 0075's auto-apply "Pull tax codes"). Rate-ONLY: for each mapped
+// province it re-reads its linked code's current rate and updates `tax_rates.rate`
+// if it changed; it NEVER changes a code link (so it can't clobber the mapping). A
+// mapped code missing from the live set is reported, not cleared. `lookup:edit`.
+export const refreshTaxRates = capabilityClient('lookup:edit')
+  .schema(formDataSchema)
+  .action(async (): Promise<RefreshResult> => {
+    const { realmId, accessToken } = await getValidAccessToken();
+    const [codes, rates, appRows] = await Promise.all([
+      fetchTaxCodes(realmId, accessToken),
+      fetchTaxRates(realmId, accessToken),
+      loadTaxRatesForMapping(),
+    ]);
+    const { writes, broken } = planRateRefresh(appRows, codes, rates);
+
+    if (writes.length) {
+      await db.transaction(async (tx) => {
+        for (const w of writes) {
+          // w.province is a DB-sourced ca_province value (widened to string by the
+          // pure planner) — narrow back for the typed `eq`.
+          await tx
+            .update(taxRates)
+            .set({ rate: w.rate })
+            .where(eq(taxRates.province, w.province as CaProvinceCode));
+        }
+      });
+    }
+
+    revalidatePath('/admin/lookups');
+    return { ok: true, updated: writes.length, broken: broken.length };
   });

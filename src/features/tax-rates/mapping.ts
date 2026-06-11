@@ -70,6 +70,42 @@ export function buildTaxCodeOptions(qboCodes: QboTaxCode[], qboRates: QboTaxRate
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export type RateRefreshResult = {
+  /** Rate-only updates for mapped provinces whose linked code's rate changed. */
+  writes: { province: string; rate: string }[];
+  /** Provinces whose mapped code is absent from the live set — left untouched. */
+  broken: string[];
+};
+
+// Pure: rate-ONLY refresh for already-mapped provinces — re-reads each linked
+// code's current (group-aware) rate and updates `tax_rates.rate` when it changed.
+// It NEVER changes a code link (so it can't clobber the mapping — the safe
+// replacement for 0075's auto-apply pull). A mapped code absent from the live set
+// is reported `broken` (left as-is, not cleared); unmapped provinces are ignored.
+export function planRateRefresh(
+  appRows: ProvinceMappingInput[],
+  qboCodes: QboTaxCode[],
+  qboRates: QboTaxRate[],
+): RateRefreshResult {
+  const rmap = rateById(qboRates);
+  const byId = new Map(qboCodes.filter((c) => c.Active !== false).map((c) => [c.Id, c]));
+  const writes: { province: string; rate: string }[] = [];
+  const broken: string[] = [];
+  for (const ar of appRows) {
+    if (ar.quickbooksTaxCodeId == null) continue; // only mapped provinces
+    const code = byId.get(ar.quickbooksTaxCodeId);
+    if (!code) {
+      broken.push(ar.province);
+      continue;
+    }
+    const ratePct = resolveCodeRatePct(code, rmap);
+    if (ratePct == null) continue; // unresolvable → leave the rate
+    const newRate = ratePct.toFixed(3);
+    if (newRate !== ar.rate) writes.push({ province: ar.province, rate: newRate });
+  }
+  return { writes, broken };
+}
+
 // Pure: one row per province — its current mapping, drift/broken-link flags, and a
 // name-match suggestion for the dropdown pre-select.
 export function buildProvinceMappingRows(

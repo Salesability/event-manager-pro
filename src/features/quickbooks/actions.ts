@@ -12,8 +12,6 @@ import {
   buildAuthorizeUrl,
   fetchCustomers,
   fetchItems,
-  fetchTaxCodes,
-  fetchTaxRates,
   quickbooksRedirectUri,
   revokeToken,
 } from '@/lib/quickbooks/client';
@@ -21,7 +19,6 @@ import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quic
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
 import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
 import { applyItemSync, encodeItemSyncSummary } from '@/lib/quickbooks/item-sync';
-import { applyTaxCodeSync, encodeTaxSyncSummary } from '@/lib/quickbooks/tax-sync';
 import {
   QuotePushNotReadyError,
   pushQuoteToQuickbooks as pushQuoteToEstimate,
@@ -138,29 +135,10 @@ export async function pullItemsFromQuickbooks() {
   redirect(`/admin/quickbooks?itemsynced=${encodeItemSyncSummary(result)}`);
 }
 
-// authz: admin:access
-// validation: skip — no FormData input; reads the live QB TaxCode/TaxRate list
-// and adopts QB's rates into the app's province `tax_rates` (chunk 0075 — QB is
-// the tax-rate source of truth).
-//
-// Name-matches each province to the QBO TaxCode whose name identifies it and
-// writes QB's rate + the code id into `tax_rates` (`applyTaxCodeSync` — see
-// `tax-sync.ts`). The Estimate push reads the linked code to set
-// `TxnTaxDetail.TxnTaxCodeRef` so QBO computes tax. Wrapped in a transaction;
-// errors propagate (same rationale as the other pulls).
-export async function pullTaxCodesFromQuickbooks() {
-  await assertCan('admin:access');
-
-  const { realmId, accessToken } = await getValidAccessToken();
-  const [codes, rates] = await Promise.all([
-    fetchTaxCodes(realmId, accessToken),
-    fetchTaxRates(realmId, accessToken),
-  ]);
-  const result = await db.transaction((tx) => applyTaxCodeSync(codes, rates, tx));
-
-  revalidatePath('/admin/quickbooks');
-  redirect(`/admin/quickbooks?taxsynced=${encodeTaxSyncSummary(result)}`);
-}
+// Tax-code sync RETIRED (0076): the auto-apply "Pull tax codes" heuristic could
+// mis-map provinces (e.g. NS's stale 15% code) and clobber the mapping. Province
+// → QB-tax-code mapping is now explicit on /admin/lookups (`assignProvinceTaxCode`)
+// + a rate-only `refreshTaxRates`; see `src/features/tax-rates/`.
 
 const pushDealerSchema = z.object({
   dealerId: z.coerce.number().int().positive(),

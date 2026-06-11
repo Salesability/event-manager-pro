@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { QboTaxCode, QboTaxRate } from '@/lib/quickbooks/client';
-import { buildProvinceMappingRows, buildTaxCodeOptions } from './mapping';
+import { buildProvinceMappingRows, buildTaxCodeOptions, planRateRefresh } from './mapping';
 
 // `mapping` imports `@/lib/quickbooks/tax-sync` → `@/lib/db` (server-only). Stub so
 // the module loads; the functions tested here are pure.
@@ -94,5 +94,51 @@ describe('buildProvinceMappingRows', () => {
       rates,
     );
     expect(rows[0]).toMatchObject({ managed: true, currentCodeRatePct: 12, drift: false });
+  });
+});
+
+describe('planRateRefresh', () => {
+  const codes = [hstOn, gstPstBc];
+
+  it('writes the new rate for a mapped province whose linked code rate changed', () => {
+    const result = planRateRefresh(
+      [{ province: 'ON', label: 'Ontario', rate: '11.000', quickbooksTaxCodeId: '5' }],
+      codes,
+      rates,
+    );
+    expect(result.writes).toEqual([{ province: 'ON', rate: '13.000' }]);
+    expect(result.broken).toEqual([]);
+  });
+
+  it('no write when the rate is already aligned; ignores unmapped provinces', () => {
+    const result = planRateRefresh(
+      [
+        { province: 'ON', label: 'Ontario', rate: '13.000', quickbooksTaxCodeId: '5' }, // aligned
+        { province: 'QC', label: 'Quebec', rate: '14.975', quickbooksTaxCodeId: null }, // unmapped
+      ],
+      codes,
+      rates,
+    );
+    expect(result.writes).toEqual([]);
+    expect(result.broken).toEqual([]);
+  });
+
+  it('reports a mapped code missing from the live set as broken (never clears it)', () => {
+    const result = planRateRefresh(
+      [{ province: 'ON', label: 'Ontario', rate: '13.000', quickbooksTaxCodeId: '404' }],
+      codes,
+      rates,
+    );
+    expect(result.writes).toEqual([]);
+    expect(result.broken).toEqual(['ON']);
+  });
+
+  it('never changes the code link — only the rate (group code refresh)', () => {
+    const result = planRateRefresh(
+      [{ province: 'BC', label: 'British Columbia', rate: '10.000', quickbooksTaxCodeId: '9' }],
+      codes,
+      rates,
+    );
+    expect(result.writes).toEqual([{ province: 'BC', rate: '12.000' }]); // 5+7 group; no code-id field
   });
 });

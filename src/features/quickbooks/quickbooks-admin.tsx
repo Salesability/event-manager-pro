@@ -14,7 +14,6 @@ import {
   connectQuickbooks,
   disconnectQuickbooks,
   pullItemsFromQuickbooks,
-  pullTaxCodesFromQuickbooks,
   syncDealersFromQuickbooks,
 } from './actions';
 
@@ -298,27 +297,9 @@ export function QuickbooksAdmin({
             )}
           </div>
 
-          {/* Tax rates — QuickBooks is the source of truth (0075). Match each
-              province to the QBO tax code whose NAME identifies it ("HST ON" →
-              ON) and adopt that code's rate into the app; the pushed quote
-              Estimate then carries QBO's own code. Provinces with no confident
-              name match keep their app rate (unmanaged). */}
-          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-zinc-900">Tax rates</h3>
-              <form action={pullTaxCodesFromQuickbooks}>
-                <Button type="submit" color="green">
-                  Pull tax codes
-                </Button>
-              </form>
-            </div>
-            <p className="text-sm text-zinc-500">
-              Adopts each province&apos;s sales-tax rate <strong>from</strong> QuickBooks — a
-              province is matched to the tax code whose name identifies it (&ldquo;HST ON&rdquo; →
-              ON) and takes that code&apos;s rate. Provinces with no confident match keep their
-              app rate (unmanaged). Tax rates are no longer edited in-app.
-            </p>
-          </div>
+          {/* Tax rates — province → QB-tax-code mapping moved to /admin/lookups
+              (0076). The auto-apply "Pull tax codes" heuristic was retired (it
+              could mis-map provinces); map codes explicitly + refresh rates there. */}
         </div>
       )}
     </div>

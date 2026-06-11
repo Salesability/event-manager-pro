@@ -12,7 +12,6 @@ import {
   decodeItemSyncSummary,
   type ItemSyncPlanRow,
 } from '@/lib/quickbooks/item-sync';
-import { decodeTaxSyncSummary } from '@/lib/quickbooks/tax-sync';
 import {
   QuickbooksAdmin,
   type ConnectionView,
@@ -48,7 +47,6 @@ export default async function QuickbooksAdminPage({
   // with ?error=<message>.
   const synced = typeof sp.synced === 'string' ? decodeSyncSummary(sp.synced) : null;
   const itemSynced = typeof sp.itemsynced === 'string' ? decodeItemSyncSummary(sp.itemsynced) : null;
-  const taxSynced = typeof sp.taxsynced === 'string' ? decodeTaxSyncSummary(sp.taxsynced) : null;
   const notice: Notice =
     typeof sp.error === 'string'
       ? { kind: 'error', message: sp.error }
@@ -62,14 +60,9 @@ export default async function QuickbooksAdminPage({
               kind: 'success',
               message: `Synced items from QuickBooks — created ${itemSynced.created} · updated ${itemSynced.updated} · archived ${itemSynced.archived} · purged ${itemSynced.purged}.`,
             }
-          : taxSynced
-            ? {
-                kind: 'success',
-                message: `Adopted province tax rates from QuickBooks — managed ${taxSynced.linked} · unmatched ${taxSynced.unmatched} · ambiguous ${taxSynced.ambiguous}.`,
-              }
-            : sp.connected === '1'
-              ? { kind: 'success', message: 'Connected to QuickBooks.' }
-              : null;
+          : sp.connected === '1'
+            ? { kind: 'success', message: 'Connected to QuickBooks.' }
+            : null;
 
   const conn = await getConnection();
 

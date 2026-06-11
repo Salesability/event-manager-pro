@@ -219,6 +219,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'lookup:edit — admin-only (0076 province → QBO tax-code mapping)',
   },
+  {
+    label: 'refreshTaxRates',
+    invoke: () => taxRatesActions.refreshTaxRates(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'lookup:edit — admin-only (0076 rate-only refresh of mapped provinces)',
+  },
 
   // ---- Email send (4) — admin-only --------------------------------------
   {
@@ -291,12 +297,9 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0073 quote→QBO Estimate push)',
   },
-  {
-    label: 'pullTaxCodesFromQuickbooks',
-    invoke: () => quickbooksActions.pullTaxCodesFromQuickbooks(),
-    expectedByRole: ADMIN_ONLY,
-    note: 'admin:access — admin-only (0074 QBO tax-code pull → province mapping)',
-  },
+  // pullTaxCodesFromQuickbooks REMOVED (0076) — the auto-apply tax-code heuristic
+  // is retired; province→code mapping is now `assignProvinceTaxCode` /
+  // `refreshTaxRates` (lookup:edit, above).
 
   // ---- Availability blocks (3) — admin OR coach -------------------------
   // Coach is admitted at the role layer; row-ownership (own coach_unavailable
