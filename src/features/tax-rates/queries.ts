@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { dealers, taxRates } from '@/lib/db/schema';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 import { rateForProvince, type TaxRate } from '@/lib/tax-rates';
+import type { ProvinceMappingInput } from './mapping';
 
 // Province → sales-tax rate loaders (0065). One row per province, seeded; the
 // admin edits rates via `/admin/lookups` (Phase 3); the quote pricing path reads
@@ -15,6 +16,20 @@ export async function loadTaxRates(): Promise<TaxRate[]> {
       province: taxRates.province,
       label: taxRates.label,
       rate: taxRates.rate,
+    })
+    .from(taxRates)
+    .orderBy(asc(taxRates.label));
+}
+
+/** Province tax rows incl. the QBO `quickbooks_tax_code_id` — the input to the
+ *  0076 `/admin/lookups` mapping view-model (`buildProvinceMappingRows`). */
+export async function loadTaxRatesForMapping(): Promise<ProvinceMappingInput[]> {
+  return db
+    .select({
+      province: taxRates.province,
+      label: taxRates.label,
+      rate: taxRates.rate,
+      quickbooksTaxCodeId: taxRates.quickbooksTaxCodeId,
     })
     .from(taxRates)
     .orderBy(asc(taxRates.label));
