@@ -64,13 +64,13 @@ describe('buildProvinceMappingRows', () => {
     expect(rows[0]).toMatchObject({ managed: true, drift: true, currentCodeRatePct: 13 });
   });
 
-  it('marks an unmapped province unmanaged + offers a name-match suggestion', () => {
+  it('marks an unmapped province unmanaged (no code link)', () => {
     const rows = buildProvinceMappingRows(
       [{ province: 'ON', label: 'Ontario', rate: '13.000', quickbooksTaxCodeId: null }],
       codes,
       rates,
     );
-    expect(rows[0]).toMatchObject({ managed: false, currentCodeId: null, suggestionCodeId: '5' });
+    expect(rows[0]).toMatchObject({ managed: false, currentCodeId: null });
   });
 
   it('flags a broken link when the mapped code is absent from the live active set', () => {

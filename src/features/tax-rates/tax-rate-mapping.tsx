@@ -132,7 +132,6 @@ function ConnectedRow({ row, options }: { row: ProvinceMappingRow; options: TaxC
           {options.map((o) => (
             <option key={o.id} value={o.id}>
               {o.label}
-              {o.id === row.suggestionCodeId && !row.managed ? ' (suggested)' : ''}
             </option>
           ))}
         </select>

@@ -1,4 +1,4 @@
-import { resolveCodeRatePct, resolveProvinceLinksByName } from '@/lib/quickbooks/tax-sync';
+import { resolveCodeRatePct } from '@/lib/quickbooks/tax-sync';
 import type { QboTaxCode, QboTaxRate } from '@/lib/quickbooks/client';
 
 // View-model for the /admin/lookups tax-code mapping UI (0076). Built SERVER-SIDE
@@ -37,7 +37,6 @@ export type ProvinceMappingRow = {
   managed: boolean; // currentCodeId != null
   brokenLink: boolean; // mapped to an id absent from the live active set
   drift: boolean; // managed + the linked code's QB rate differs from the app rate
-  suggestionCodeId: string | null; // demoted name-matcher suggestion (UI pre-select)
 };
 
 // Loader result for the `/admin/lookups` mapping section. When QuickBooks is
@@ -124,9 +123,6 @@ export function buildProvinceMappingRows(
   const rmap = rateById(qboRates);
   const active = qboCodes.filter((c) => c.Active !== false);
   const byId = new Map(active.map((c) => [c.Id, c]));
-  const suggByProvince = new Map(
-    resolveProvinceLinksByName(appRows, active, rmap).map((s) => [s.province, s.taxCodeId]),
-  );
 
   return appRows.map((ar) => {
     const currentCodeId = ar.quickbooksTaxCodeId;
@@ -145,7 +141,6 @@ export function buildProvinceMappingRows(
       managed: currentCodeId != null,
       brokenLink,
       drift,
-      suggestionCodeId: suggByProvince.get(ar.province) ?? null,
     };
   });
 }
