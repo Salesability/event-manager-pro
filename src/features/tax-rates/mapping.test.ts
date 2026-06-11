@@ -26,13 +26,13 @@ const noRate = code('8', [], { Name: 'GST 5%' }); // no resolvable sales rate
 const inactive = code('99', ['12'], { Name: 'Old', Active: false });
 
 describe('buildTaxCodeOptions', () => {
-  it('lists active codes with summed (group-aware) rates; unresolvable → n/a; inactive dropped', () => {
+  it('lists active codes with resolvable (group-aware) rates; n/a + inactive dropped', () => {
     const opts = buildTaxCodeOptions([gstPstBc, hstOn, noRate, inactive], rates);
-    expect(opts).toHaveLength(3); // inactive dropped
-    expect(opts.map((o) => o.id).sort()).toEqual(['5', '8', '9']);
+    expect(opts).toHaveLength(2); // inactive + rate-n/a both dropped
+    expect(opts.map((o) => o.id).sort()).toEqual(['5', '9']);
     expect(opts.find((o) => o.id === '5')).toMatchObject({ ratePct: 13, label: 'HST ON — 13%' });
     expect(opts.find((o) => o.id === '9')).toMatchObject({ ratePct: 12, label: 'GST+PST BC — 12%' }); // group sums
-    expect(opts.find((o) => o.id === '8')).toMatchObject({ ratePct: null, label: 'GST 5% — rate n/a' });
+    expect(opts.find((o) => o.id === '8')).toBeUndefined(); // rate n/a → not assignable (0076 Codex High)
   });
 });
 
@@ -100,13 +100,13 @@ describe('buildProvinceMappingRows', () => {
 describe('planRateRefresh', () => {
   const codes = [hstOn, gstPstBc];
 
-  it('writes the new rate for a mapped province whose linked code rate changed', () => {
+  it('writes the new rate (+ the expected code id) for a mapped province whose rate changed', () => {
     const result = planRateRefresh(
       [{ province: 'ON', label: 'Ontario', rate: '11.000', quickbooksTaxCodeId: '5' }],
       codes,
       rates,
     );
-    expect(result.writes).toEqual([{ province: 'ON', rate: '13.000' }]);
+    expect(result.writes).toEqual([{ province: 'ON', rate: '13.000', quickbooksTaxCodeId: '5' }]);
     expect(result.broken).toEqual([]);
   });
 
@@ -133,12 +133,12 @@ describe('planRateRefresh', () => {
     expect(result.broken).toEqual(['ON']);
   });
 
-  it('never changes the code link — only the rate (group code refresh)', () => {
+  it('carries the expected code id (compare-and-set) — only the rate changes (group code)', () => {
     const result = planRateRefresh(
       [{ province: 'BC', label: 'British Columbia', rate: '10.000', quickbooksTaxCodeId: '9' }],
       codes,
       rates,
     );
-    expect(result.writes).toEqual([{ province: 'BC', rate: '12.000' }]); // 5+7 group; no code-id field
+    expect(result.writes).toEqual([{ province: 'BC', rate: '12.000', quickbooksTaxCodeId: '9' }]); // 5+7 group
   });
 });

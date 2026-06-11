@@ -57,7 +57,10 @@ function fmtPct(n: number | null): string {
   return n == null ? 'rate n/a' : `${parseFloat(n.toFixed(3))}%`;
 }
 
-// Pure: the dropdown options — every ACTIVE code with its summed sales rate.
+// Pure: the dropdown options — every ACTIVE code whose sales rate RESOLVES (so it
+// can be adopted). Codes with no resolvable sales rate (adjustment/non-sales
+// codes) are excluded so an admin can't map a province to a code that would leave
+// a stale `tax_rates.rate` (0076 — the action enforces this too, defense-in-depth).
 export function buildTaxCodeOptions(qboCodes: QboTaxCode[], qboRates: QboTaxRate[]): TaxCodeOption[] {
   const rmap = rateById(qboRates);
   return qboCodes
@@ -67,12 +70,15 @@ export function buildTaxCodeOptions(qboCodes: QboTaxCode[], qboRates: QboTaxRate
       const name = c.Name ?? `#${c.Id}`;
       return { id: c.Id, name, ratePct, label: `${name} — ${fmtPct(ratePct)}` };
     })
+    .filter((o) => o.ratePct != null)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type RateRefreshResult = {
-  /** Rate-only updates for mapped provinces whose linked code's rate changed. */
-  writes: { province: string; rate: string }[];
+  /** Rate-only updates for mapped provinces whose linked code's rate changed.
+   *  `quickbooksTaxCodeId` is the code the rate was computed from — the executor
+   *  compare-and-sets on it so a concurrent re-map can't get the wrong rate. */
+  writes: { province: string; rate: string; quickbooksTaxCodeId: string }[];
   /** Provinces whose mapped code is absent from the live set — left untouched. */
   broken: string[];
 };
@@ -89,7 +95,7 @@ export function planRateRefresh(
 ): RateRefreshResult {
   const rmap = rateById(qboRates);
   const byId = new Map(qboCodes.filter((c) => c.Active !== false).map((c) => [c.Id, c]));
-  const writes: { province: string; rate: string }[] = [];
+  const writes: { province: string; rate: string; quickbooksTaxCodeId: string }[] = [];
   const broken: string[] = [];
   for (const ar of appRows) {
     if (ar.quickbooksTaxCodeId == null) continue; // only mapped provinces
@@ -101,7 +107,9 @@ export function planRateRefresh(
     const ratePct = resolveCodeRatePct(code, rmap);
     if (ratePct == null) continue; // unresolvable → leave the rate
     const newRate = ratePct.toFixed(3);
-    if (newRate !== ar.rate) writes.push({ province: ar.province, rate: newRate });
+    if (newRate !== ar.rate) {
+      writes.push({ province: ar.province, rate: newRate, quickbooksTaxCodeId: ar.quickbooksTaxCodeId });
+    }
   }
   return { writes, broken };
 }

@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
@@ -61,10 +61,19 @@ export const assignProvinceTaxCode = capabilityClient('lookup:edit')
     const rateById = new Map<string, number>();
     for (const r of rates) if (r.RateValue != null) rateById.set(r.Id, r.RateValue);
     const ratePct = resolveCodeRatePct(code, rateById);
+    if (ratePct == null) {
+      // No resolvable sales rate (adjustment/non-sales code) → mapping it would
+      // leave a stale `tax_rates.rate`. Reject (the dropdown excludes these too).
+      return {
+        error: `"${code.Name ?? taxCodeId}" has no sales-tax rate in QuickBooks and can't be mapped to a province.`,
+      };
+    }
 
-    const set: { quickbooksTaxCodeId: string; rate?: string } = { quickbooksTaxCodeId: taxCodeId };
-    if (ratePct != null) set.rate = ratePct.toFixed(3); // adopt QB's rate (column is NOT NULL → only when resolvable)
-    await db.update(taxRates).set(set).where(eq(taxRates.province, province));
+    // rate is always adopted now (we reject an unresolvable rate above).
+    await db
+      .update(taxRates)
+      .set({ quickbooksTaxCodeId: taxCodeId, rate: ratePct.toFixed(3) })
+      .where(eq(taxRates.province, province));
 
     revalidatePath('/admin/lookups');
     return { ok: true };
@@ -90,12 +99,19 @@ export const refreshTaxRates = capabilityClient('lookup:edit')
     if (writes.length) {
       await db.transaction(async (tx) => {
         for (const w of writes) {
-          // w.province is a DB-sourced ca_province value (widened to string by the
-          // pure planner) — narrow back for the typed `eq`.
+          // Compare-and-set on the expected code id: if a concurrent re-map changed
+          // the province's code between planning and now, this updates 0 rows rather
+          // than writing the old code's rate onto the new mapping (TOCTOU guard).
+          // w.province is a DB-sourced ca_province value widened to string — narrow back.
           await tx
             .update(taxRates)
             .set({ rate: w.rate })
-            .where(eq(taxRates.province, w.province as CaProvinceCode));
+            .where(
+              and(
+                eq(taxRates.province, w.province as CaProvinceCode),
+                eq(taxRates.quickbooksTaxCodeId, w.quickbooksTaxCodeId),
+              ),
+            );
         }
       });
     }
