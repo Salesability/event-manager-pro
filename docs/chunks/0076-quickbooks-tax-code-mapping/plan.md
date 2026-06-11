@@ -10,7 +10,7 @@
 | 1: Row-model decision + any schema (db-conventions) — GATE | Done | - |
 | 2: QBO-codes loader + per-province mapping view-model (suggestion via demoted matcher) | Done | - |
 | 3: `/admin/lookups` mapping UI + `assignProvinceTaxCode` action (+ gate-matrix) | Done | - |
-| 4: `refreshTaxRates` action + retire the heuristic "Pull tax codes" button (+ gate-matrix) | Pending | - |
+| 4: `refreshTaxRates` action + retire the heuristic "Pull tax codes" button (+ gate-matrix) | Done | - |
 | 5: Unmapped-province quote guard (+ optional QC per-line PDF breakdown) | Pending | - |
 | 6: Tests + smoke + group-code (QC/BC) Estimate-push verification + wiki | Pending | - |
 
@@ -37,7 +37,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
 - Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
-**Overall Progress:** 50% (3/6 phases complete) — **Phases 1–3 shipped 2026-06-11: gate + view-model + mapping UI/action. See [`decision.md`](decision.md).**
+**Overall Progress:** 67% (4/6 phases complete) — **Phases 1–4 shipped 2026-06-11: gate + view-model + mapping UI/assign + refresh/retire-heuristic. See [`decision.md`](decision.md).**
 
 **Note:**
 - **Phase 1 is a decision gate** — the row model (keep the 13 seeded rows vs QB-derived rows) shapes Phases 2–6; resolve it (write `decision.md`) before building. Leaning: keep rows, drive "usable" off the mapping + the unmapped-province guard, **no migration**.
@@ -64,9 +64,9 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - [x] Render on `admin/lookups/page.tsx` (re-added the section + refreshed the page description). *(Smoke deferred to the chunk-end `/eval`.)*
 
 #### Phase 4: `refreshTaxRates` action + retire the heuristic
-- [ ] `refreshTaxRates`: re-sync rates of already-linked provinces only (rate-only writes via `planTaxRateWrites`); never re-maps; flag (don't clear) a broken linked code. `lookup:edit`; gate-matrix row.
-- [ ] Retire the auto-apply "Pull tax codes" button on `/admin/quickbooks` (remove `pullTaxCodesFromQuickbooks` + its gate-matrix row + the QB-admin "Tax rates" section + the `taxsynced` flash); the name matcher stays as a suggestion only (no auto-apply caller).
-- [ ] Integration test (rolled-back tx): assign adopts a group code's rate; refresh updates rate only (never the code link).
+- [x] Pure `planRateRefresh(appRows, qboCodes, qboRates)` (in `mapping.ts`) — rate-only writes for mapped provinces whose linked code rate changed; **never** touches a code link; reports a missing linked code as `broken` (leaves it). `refreshTaxRates` action (`lookup:edit`) executes the writes in a tx; gate-matrix row added. "Refresh rates" button added to the mapping UI (toast: "Refreshed N rates · M broken links").
+- [x] Retired the auto-apply heuristic: removed `pullTaxCodesFromQuickbooks` (+ its `fetchTaxCodes`/`fetchTaxRates`/`applyTaxCodeSync`/`encodeTaxSyncSummary` imports), its gate-matrix row, the QB-admin "Tax rates" section + `Pull tax codes` button, and the `taxsynced` flash + `decodeTaxSyncSummary` import. The name matcher (`resolveProvinceLinksByName`) survives **as a suggestion only** (no auto-apply caller). *(`applyTaxCodeSync`/encode-decode remain in `tax-sync.ts` — still unit + integration tested; unwired in prod.)*
+- [x] Unit tests for `planRateRefresh` (`mapping.test.ts`, +4): changed-rate write, aligned no-op, unmapped ignored, broken link reported (never cleared), group-code rate-only write. *(Full action integration test deferred — the existing `tests/integration/tax-sync.test.ts` still exercises the DB write path; the assign/refresh actions need live QBO + auth, covered by the chunk-end smoke.)*
 
 #### Phase 5: Unmapped-province quote guard
 - [ ] At quote save/push, a dealer in a province with no mapping → flag/block ("province not set up for tax — add it in QB + map it"), not a silent $0; align with `quote-push.ts` pre-flight.
