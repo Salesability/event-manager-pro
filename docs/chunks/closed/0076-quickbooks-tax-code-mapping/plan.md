@@ -35,7 +35,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - `docs/wiki/data-model.md` — `tax_rates` (`quickbooks_tax_code_id`, managed-inference), `quotes` tax model + the Estimate push.
 - `db-conventions` skill — any schema/migration/seed change (sandbox-first; verify journal `when`).
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
-- Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
+- Precedent: [`../0075-quickbooks-tax-rate-source/decision.md`](../0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../0074-quickbooks-tax-alignment/decision.md`](../0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
 **Overall Progress:** 100% (6/6 phases complete) — **all phases shipped 2026-06-11 (live group-code QC push deferred to owner/prod). Chunk-end `/eval` next. See [`decision.md`](decision.md).**
 

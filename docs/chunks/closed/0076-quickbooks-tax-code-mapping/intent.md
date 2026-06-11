@@ -4,7 +4,7 @@
 
 ## Problem
 
-[0075](../closed/0075-quickbooks-tax-rate-source/plan.md) made QuickBooks the source of truth for province tax rates, but it did so with a **name heuristic** ("HST ON" → ON) auto-applied by a **"Pull tax codes" button** — and removed the in-app tax editor entirely. Real prod data (QBO realm `193514766730959`) breaks the heuristic:
+[0075](../0075-quickbooks-tax-rate-source/plan.md) made QuickBooks the source of truth for province tax rates, but it did so with a **name heuristic** ("HST ON" → ON) auto-applied by a **"Pull tax codes" button** — and removed the in-app tax editor entirely. Real prod data (QBO realm `193514766730959`) breaks the heuristic:
 
 - **Nova Scotia has two active codes** — `HST NS` (15%, the pre-2025 rate) and `HST NS 2025` (14%, current). The trailing-token matcher picks the **stale** `HST NS` → would set NS to 15% (over-charge).
 - **NB/NL/PE share one `HST Atlantic 15%` code** that names no single province → the matcher can't link them at all.
@@ -55,7 +55,7 @@ We just deployed 0073/0074/0075 to prod and connected the real prod QBO company,
 
 ## Relationship to prior work
 
-- **[0075](../closed/0075-quickbooks-tax-rate-source/plan.md)** — established QB-as-tax-rate-source + the name matcher; this chunk replaces its auto-apply heuristic with explicit mapping and restores an (mapping) editor. Reuses `resolveCodeRatePct` (group-aware) and demotes `resolveProvinceLinksByName` to a suggester.
-- **[0074](../closed/0074-quickbooks-tax-alignment/plan.md)** — the per-line `TaxCodeRef` push + pre-flight; this chunk feeds it correct mappings and adds the group-code push verification.
+- **[0075](../0075-quickbooks-tax-rate-source/plan.md)** — established QB-as-tax-rate-source + the name matcher; this chunk replaces its auto-apply heuristic with explicit mapping and restores an (mapping) editor. Reuses `resolveCodeRatePct` (group-aware) and demotes `resolveProvinceLinksByName` to a suggester.
+- **[0074](../0074-quickbooks-tax-alignment/plan.md)** — the per-line `TaxCodeRef` push + pre-flight; this chunk feeds it correct mappings and adds the group-code push verification.
 - **0072** — the read-only service-items list precedent (restoring a view on an admin page after a CRUD removal).
 - Interim: `scripts/0075-tax-map.mjs` (staged ON/NS/NB/NL/PE override) unblocks pushes until this UI ships.

@@ -33,4 +33,4 @@ The "QB-derived tax lookup" the owner wants is a **presentation + semantics** la
 
 ## References
 
-- [`intent.md`](intent.md) · [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (managed-inference precedent; the matcher being demoted).
+- [`intent.md`](intent.md) · [`../0075-quickbooks-tax-rate-source/decision.md`](../0075-quickbooks-tax-rate-source/decision.md) (managed-inference precedent; the matcher being demoted).
