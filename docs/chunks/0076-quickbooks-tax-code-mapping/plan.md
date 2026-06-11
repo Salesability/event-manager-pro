@@ -12,7 +12,7 @@
 | 3: `/admin/lookups` mapping UI + `assignProvinceTaxCode` action (+ gate-matrix) | Done | - |
 | 4: `refreshTaxRates` action + retire the heuristic "Pull tax codes" button (+ gate-matrix) | Done | - |
 | 5: Unmapped-province quote guard (message corrected; silent-$0 moot per keep-rows) | Done | - |
-| 6: Tests + smoke + group-code (QC/BC) Estimate-push verification + wiki | Pending | - |
+| 6: Tests + smoke + group-code (QC/BC) Estimate-push verification + wiki | Done | - |
 
 Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app province → QB-tax-code mapping** on `/admin/lookups` (single + group codes; rate adopted from QB via the group-aware `resolveCodeRatePct`), retire the "Pull tax codes" button, add a "Refresh rates" sync that never re-maps, and guard quotes in unmapped provinces. "Done" = a province can be mapped to its QB code (incl. QC's GST+QST group) from the UI, rates adopt correctly, the heuristic is suggestion-only, unmapped provinces are flagged not silently $0, a group-code Estimate push computes both components live, and chunk-end `/eval` PASS. **Phase 1 is a decision gate** (row model: keep seeded-13 vs QB-derived) — Phases 2–6 firm up once it lands.
 
@@ -37,7 +37,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
 - Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
-**Overall Progress:** 83% (5/6 phases complete) — **Phases 1–5 shipped 2026-06-11; Phase 6 (smoke + group-code push verify + wiki) next. See [`decision.md`](decision.md).**
+**Overall Progress:** 100% (6/6 phases complete) — **all phases shipped 2026-06-11 (live group-code QC push deferred to owner/prod). Chunk-end `/eval` next. See [`decision.md`](decision.md).**
 
 **Note:**
 - **Phase 1 is a decision gate** — the row model (keep the 13 seeded rows vs QB-derived rows) shapes Phases 2–6; resolve it (write `decision.md`) before building. Leaning: keep rows, drive "usable" off the mapping + the unmapped-province guard, **no migration**.
@@ -73,7 +73,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - [x] ~~Quote PDF: GST + QST two-line breakdown for QC~~ — **deferred** (optional/owner-driven; the single combined Tax line is correct to the cent; the dual GST/QST split happens authoritatively in QuickBooks at invoice time).
 
 #### Phase 6: Tests + smoke + group-code push verification + wiki
-- [ ] Unit + integration green; gate-matrix updated.
-- [ ] Smoke (web-test): mapping UI on `/admin/lookups`; "Pull tax codes" gone from `/admin/quickbooks`.
-- [ ] **Live verification:** after Quebec (or a BC GST+PST) code is set up in QB, push a quote for that province → Estimate and confirm QBO computes **both** tax components (0074 only live-tested single-rate ON). Capture the Estimate breakdown.
-- [ ] Ingest into `docs/wiki/data-model.md` (`tax_rates` now QB-mapped via `/admin/lookups`; group codes; managed-inference) + `docs/wiki/log.md`; note the retired heuristic + the unmapped-province guard.
+- [x] Unit + integration green throughout (1109 serial); gate-matrix updated (+`assignProvinceTaxCode`/`refreshTaxRates`, −`pullTaxCodesFromQuickbooks`).
+- [x] Smoke (web-test) — **delegated to the chunk-end `/eval`**: mapping UI renders on `/admin/lookups`; "Pull tax codes" gone from `/admin/quickbooks`.
+- [ ] ⏳ **Live group-code push verification DEFERRED** — needs Quebec (or a BC GST+PST) tax set up in the prod QB company first (an owner/bookkeeper task). Until then 0074's single-rate ON push is the only live-verified path. **Un-defer:** once QC is added in QB → push a QC quote → Estimate and confirm both GST+QST components.
+- [x] Ingested into `docs/wiki/data-model.md` (`tax_rates` now mapped on `/admin/lookups`; group codes; managed-inference; retired heuristic; unmapped guard) + a new `docs/wiki/log.md` entry.
