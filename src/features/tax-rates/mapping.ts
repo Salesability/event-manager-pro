@@ -40,6 +40,13 @@ export type ProvinceMappingRow = {
   suggestionCodeId: string | null; // demoted name-matcher suggestion (UI pre-select)
 };
 
+// Loader result for the `/admin/lookups` mapping section. When QuickBooks is
+// connected, the full view-model + dropdown options; when not, a read-only list
+// (the dropdown needs live codes), rendered with a "connect QuickBooks" hint.
+export type TaxMappingAdminData =
+  | { connected: true; rows: ProvinceMappingRow[]; options: TaxCodeOption[] }
+  | { connected: false; rows: ProvinceMappingInput[] };
+
 function rateById(qboRates: QboTaxRate[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const r of qboRates) if (r.RateValue != null) m.set(r.Id, r.RateValue);

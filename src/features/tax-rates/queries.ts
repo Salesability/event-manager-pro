@@ -4,7 +4,14 @@ import { db } from '@/lib/db';
 import { dealers, taxRates } from '@/lib/db/schema';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 import { rateForProvince, type TaxRate } from '@/lib/tax-rates';
-import type { ProvinceMappingInput } from './mapping';
+import { getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
+import { fetchTaxCodes, fetchTaxRates } from '@/lib/quickbooks/client';
+import {
+  buildProvinceMappingRows,
+  buildTaxCodeOptions,
+  type ProvinceMappingInput,
+  type TaxMappingAdminData,
+} from './mapping';
 
 // Province → sales-tax rate loaders (0065). One row per province, seeded; the
 // admin edits rates via `/admin/lookups` (Phase 3); the quote pricing path reads
@@ -33,6 +40,30 @@ export async function loadTaxRatesForMapping(): Promise<ProvinceMappingInput[]> 
     })
     .from(taxRates)
     .orderBy(asc(taxRates.label));
+}
+
+/** Loader for the `/admin/lookups` tax-code mapping section (0076). Connected →
+ *  the full per-province view-model + the live QBO code dropdown options; not
+ *  connected (or a QBO read failed) → a read-only list with a connect hint, so a
+ *  QB hiccup never breaks the rest of the lookups page. */
+export async function loadTaxMappingAdmin(): Promise<TaxMappingAdminData> {
+  const appRows = await loadTaxRatesForMapping();
+  const conn = await getConnection();
+  if (!conn) return { connected: false, rows: appRows };
+  try {
+    const { realmId, accessToken } = await getValidAccessToken();
+    const [codes, rates] = await Promise.all([
+      fetchTaxCodes(realmId, accessToken),
+      fetchTaxRates(realmId, accessToken),
+    ]);
+    return {
+      connected: true,
+      rows: buildProvinceMappingRows(appRows, codes, rates),
+      options: buildTaxCodeOptions(codes, rates),
+    };
+  } catch {
+    return { connected: false, rows: appRows };
+  }
 }
 
 /** Combined sales-tax percent for a single province (number), or null if the
