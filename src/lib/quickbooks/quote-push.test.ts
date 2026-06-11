@@ -80,7 +80,9 @@ describe('checkQuotePushReadiness', () => {
   it('fails a taxed quote whose province has no mapped tax code', () => {
     const r = checkQuotePushReadiness(quote({ tax: '52.00', taxCodeId: null }), dealer(), [line()]);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toMatch(/Pull tax codes/i);
+    // 0076: the guard now points at the /admin/lookups mapping UI, not the
+    // retired "Pull tax codes" button.
+    if (!r.ok) expect(r.reason).toMatch(/isn't mapped to a QuickBooks tax code.*Lookup Admin/i);
   });
 
   it('fails a quote with a manual tax override', () => {

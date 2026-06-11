@@ -105,7 +105,7 @@ export function checkQuotePushReadiness(
     return {
       ok: false,
       reason:
-        "This quote's province isn't mapped to a QuickBooks tax code — run Pull tax codes first.",
+        "This quote's province isn't mapped to a QuickBooks tax code — map it under Sales Tax Rates on the Lookup Admin page first.",
     };
   }
   // Rate-drift guard: the quote's tax was snapshotted at save time; QBO will
