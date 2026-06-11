@@ -11,7 +11,7 @@
 | 2: QBO-codes loader + per-province mapping view-model (suggestion via demoted matcher) | Done | - |
 | 3: `/admin/lookups` mapping UI + `assignProvinceTaxCode` action (+ gate-matrix) | Done | - |
 | 4: `refreshTaxRates` action + retire the heuristic "Pull tax codes" button (+ gate-matrix) | Done | - |
-| 5: Unmapped-province quote guard (+ optional QC per-line PDF breakdown) | Pending | - |
+| 5: Unmapped-province quote guard (message corrected; silent-$0 moot per keep-rows) | Done | - |
 | 6: Tests + smoke + group-code (QC/BC) Estimate-push verification + wiki | Pending | - |
 
 Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app province → QB-tax-code mapping** on `/admin/lookups` (single + group codes; rate adopted from QB via the group-aware `resolveCodeRatePct`), retire the "Pull tax codes" button, add a "Refresh rates" sync that never re-maps, and guard quotes in unmapped provinces. "Done" = a province can be mapped to its QB code (incl. QC's GST+QST group) from the UI, rates adopt correctly, the heuristic is suggestion-only, unmapped provinces are flagged not silently $0, a group-code Estimate push computes both components live, and chunk-end `/eval` PASS. **Phase 1 is a decision gate** (row model: keep seeded-13 vs QB-derived) — Phases 2–6 firm up once it lands.
@@ -37,7 +37,7 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - Memory: [[project_qbo_realms]] (prod realm `193514766730959`) · [[feedback_no_yup]] (Zod) · [[project_prod_db]].
 - Precedent: [`../closed/0075-quickbooks-tax-rate-source/decision.md`](../closed/0075-quickbooks-tax-rate-source/decision.md) (the matcher being demoted) · [`../closed/0074-quickbooks-tax-alignment/decision.md`](../closed/0074-quickbooks-tax-alignment/decision.md) (per-line `TaxCodeRef`).
 
-**Overall Progress:** 67% (4/6 phases complete) — **Phases 1–4 shipped 2026-06-11: gate + view-model + mapping UI/assign + refresh/retire-heuristic. See [`decision.md`](decision.md).**
+**Overall Progress:** 83% (5/6 phases complete) — **Phases 1–5 shipped 2026-06-11; Phase 6 (smoke + group-code push verify + wiki) next. See [`decision.md`](decision.md).**
 
 **Note:**
 - **Phase 1 is a decision gate** — the row model (keep the 13 seeded rows vs QB-derived rows) shapes Phases 2–6; resolve it (write `decision.md`) before building. Leaning: keep rows, drive "usable" off the mapping + the unmapped-province guard, **no migration**.
@@ -69,9 +69,8 @@ Replace 0075's fragile auto-apply name heuristic with an **explicit, in-app prov
 - [x] Unit tests for `planRateRefresh` (`mapping.test.ts`, +4): changed-rate write, aligned no-op, unmapped ignored, broken link reported (never cleared), group-code rate-only write. *(Full action integration test deferred — the existing `tests/integration/tax-sync.test.ts` still exercises the DB write path; the assign/refresh actions need live QBO + auth, covered by the chunk-end smoke.)*
 
 #### Phase 5: Unmapped-province quote guard
-- [ ] At quote save/push, a dealer in a province with no mapping → flag/block ("province not set up for tax — add it in QB + map it"), not a silent $0; align with `quote-push.ts` pre-flight.
-- [ ] Unit/integration test for the guard.
-- [ ] (Optional) Quote PDF: GST + QST as two lines for QC (group code) instead of one combined Tax line — mark optional/owner-driven.
+- [x] **Silent-$0 is moot under the keep-rows decision** — every province always has a seeded `tax_rates.rate`, so `dealerTaxRatePct` never returns a surprise $0 for an unmapped province (it uses the seeded/fallback rate). The real guard is at PUSH time and **pre-existed (0074)**: `checkQuotePushReadiness` already blocks a taxed quote whose province has no `quickbooks_tax_code_id`. Updated its now-stale message ("run Pull tax codes first" → "map it under Sales Tax Rates on the Lookup Admin page first") since 0076 retired the pull. Updated the asserting unit test.
+- [x] ~~Quote PDF: GST + QST two-line breakdown for QC~~ — **deferred** (optional/owner-driven; the single combined Tax line is correct to the cent; the dual GST/QST split happens authoritatively in QuickBooks at invoice time).
 
 #### Phase 6: Tests + smoke + group-code push verification + wiki
 - [ ] Unit + integration green; gate-matrix updated.
