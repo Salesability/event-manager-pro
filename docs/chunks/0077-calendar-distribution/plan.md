@@ -13,7 +13,7 @@
 | 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | `dc733e0` |
 | 3: Schema (`gcal_event_id` + sync status) | ✅ Done — migration `0037`, applied to sandbox; tsc + test green | `dc255a5` |
 | 4: Wire into campaign Server Actions | ✅ Done — `calendar-sync.ts` reconcile + 3 mutation hooks + `resyncCampaign` + event-detail UI; tsc + test green | `1529c2f` |
-| 5: Tests + smoke verification | ✅ Done — integration 6/6 + live smoke script + wiki; tsc + test 1136 green | - |
+| 5: Tests + smoke verification | ✅ Done — integration 6/6 + live smoke script + wiki; tsc + test 1136 green | `ae6bb45` |
 
 This chunk projects booked campaigns from the app (the source of truth) into real calendars via the Google Calendar API — coach + dealer as guests on each event, plus a shared read-only **EventPro Calendar** team calendar. Organizer is `shannon@salesability.ca`, impersonated by a service account via domain-wide delegation, held as a single config value so a later `events@` rebrand is a config flip (see `decision.md`). "Done" = booking/editing/cancelling a campaign creates/updates/removes one clean Google event everywhere, with the app never blocked by a Google failure. Structurally this mirrors a QuickBooks push slice (`0070`/`0073`): external-API client wrapper → pure domain→payload mapper → a nullable durable-link column → wiring into the existing mutation actions → tests.
 
