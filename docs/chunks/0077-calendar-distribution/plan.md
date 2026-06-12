@@ -11,7 +11,7 @@
 | 0: Owner setup (SA → DWD → calendar) | ✅ Done — keyless pipeline smoke **PASSED** 2026-06-12 | - |
 | 1: Google client wrapper | ✅ Done — `src/lib/google/calendar.ts`, test 7/7, tsc clean (uncommitted) | - |
 | 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | `dc733e0` |
-| 3: Schema (`gcal_event_id` + coach colour) | Pending | - |
+| 3: Schema (`gcal_event_id` + sync status) | ✅ Done — migration `0037`, applied to sandbox; tsc + test green | `dc255a5` |
 | 4: Wire into campaign Server Actions | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -32,7 +32,7 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - `CLAUDE.md` → Conventions — Server Actions for mutations; invoke `db-conventions` before the schema/migration in Phase 3.
 - `docs/wiki/go-live-accounts.md` — the Phase 0 SA/DWD/calendar provisioning belongs in the provisioning runbook. **Auth is keyless (Path 2 — see `decision.md` §4a):** no secret, no `deploy.sh` mount; the Cloud Run runtime SA impersonates `eventpro-calendar` via `signJwt` (org policy `iam.disableServiceAccountKeyCreation` blocks downloadable keys).
 
-**Overall Progress:** 50% (3/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅)
+**Overall Progress:** 67% (4/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅ · Phase 3 schema ✅)
 
 **Note:**
 - Phase 0 is **owner/console setup**, not code — partially started this session (service account `eventpro-calendar` provisioning begun in `eventpro-498313`; blocked on `gcloud auth login` reauth). The DWD authorization is a one-time Admin-console step (admin@salesability.ca).
@@ -66,10 +66,10 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - [x] `reminders` (email 1440m, popup 120m); `extendedProperties.private.campaignId` back-link; `source` → `appLink` (caller-provided absolute URL; there's no per-campaign deep route today, so Phase 4 links to `/calendar`)
 - [x] Unit test (`calendar-event.test.ts`, 12 cases): end-date +1 (+ month/year/leap boundaries), clean description (asserts no ops fields), attendee list, colorId, sparse-field drops
 
-#### Phase 3: Schema (`gcal_event_id` + coach colour)
-- [ ] **Invoke `db-conventions`.** Add `campaigns.gcal_event_id` (nullable text) + a "needs sync" signal if best-effort chosen
-- [ ] Coach → `colorId` source (column on `team_member_roles` or lookup); decide + migrate
-- [ ] Generate + verify migration (watch the Drizzle journal `when` gotcha)
+#### Phase 3: Schema (`gcal_event_id` + sync status)
+- [x] **Invoked `db-conventions`.** Added to `campaigns`: `gcal_event_id` (nullable text durable link, partial-unique `WHERE NOT NULL` like `dealers.quickbooks_id`), `gcal_sync_status` enum `campaign_gcal_sync_status` (`pending`/`synced`/`failed`, NOT NULL default `pending`), `gcal_synced_at` timestamptz — the best-effort "needs sync" signal (owner chose a status column over link-only)
+- [x] Coach → `colorId` source: **owner chose auto-derive (no column)** → `coachGcalColorId(id) = (id % 11) + 1` in `calendar-event.ts` (stable per coach, Google palette 1..11). No `team_member_roles`/lookup migration. Decisions recorded in [decision.md §7](decision.md)
+- [x] Generated + verified migration `0037_minor_stryfe.sql` (journal `when` 1781292323550 > prev 1781204355861 — monotonic, no silent-skip), applied to **sandbox**; columns + partial unique index + enum labels confirmed via `information_schema`
 
 #### Phase 4: Wire into campaign Server Actions
 - [ ] `src/features/schedule/actions.ts`: on create → `createEvent` + store returned id; on update → `patchEvent` by stored id; on cancel/delete → `deleteEvent`

@@ -67,3 +67,10 @@ Each campaign → **one** Google event. The dealer is a guest on it, so the desc
 ## 6. Best-effort sync (leaning) — the app is never blocked by Google
 
 Because the app is the source of truth and the calendar is distribution, a Google API failure should **not fail the booking**. Plan: the mutation succeeds, the campaign is flagged "needs sync," and a manual re-sync is offered. (Confirm vs. block-on-failure during build — `intent.md` Open question.)
+
+## 7. Schema-shape resolutions (Phase 3, owner-confirmed 2026-06-12)
+
+Two `intent.md` Open Questions blocked the Phase 3 migration; the owner resolved both:
+
+- **Coach → `colorId` source = auto-derive, no column.** `coachGcalColorId(id) = (id % 11) + 1` (`src/lib/google/calendar-event.ts`) maps a coach to a *stable* Google palette id (1..11) by their row id. Chosen over a stored `gcal_color_id` on `team_member_roles` + admin UI: it satisfies the "colour-by-coach" success criterion with **zero schema and zero admin surface**. Trade-off: colours aren't hand-picked and ids 11 apart collide — acceptable for an at-a-glance overlay. Departs from the legacy *encounter-order* assignment (which shifts when coaches change) precisely so a projected event's colour is durable. Revisit only if the owner wants to choose/lock specific colours.
+- **"Needs sync" signal = a status column, not link-only.** `campaigns.gcal_sync_status` (`pending`/`synced`/`failed`, NOT NULL default `pending`) + `gcal_synced_at` timestamptz, alongside the `gcal_event_id` durable link. Chosen over inferring "needs sync" from `gcal_event_id IS NULL`: the explicit status distinguishes *never attempted* from *failed* from *stale-after-edit*, giving a precise admin "needs sync" list + targeted manual re-sync (§6). Cost: one enum + two columns to keep in lockstep with the Phase-4 wiring. Migration `0037` (additive, NOT NULL via constant default — Postgres backfills existing rows to `pending`).
