@@ -12,7 +12,7 @@
 | 1: Google client wrapper | ✅ Done — `src/lib/google/calendar.ts`, test 7/7, tsc clean (uncommitted) | - |
 | 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | `dc733e0` |
 | 3: Schema (`gcal_event_id` + sync status) | ✅ Done — migration `0037`, applied to sandbox; tsc + test green | `dc255a5` |
-| 4: Wire into campaign Server Actions | Pending | - |
+| 4: Wire into campaign Server Actions | ✅ Done — `calendar-sync.ts` reconcile + 3 mutation hooks + `resyncCampaign` + event-detail UI; tsc + test green | `1529c2f` |
 | 5: Tests + smoke verification | Pending | - |
 
 This chunk projects booked campaigns from the app (the source of truth) into real calendars via the Google Calendar API — coach + dealer as guests on each event, plus a shared read-only **EventPro Calendar** team calendar. Organizer is `shannon@salesability.ca`, impersonated by a service account via domain-wide delegation, held as a single config value so a later `events@` rebrand is a config flip (see `decision.md`). "Done" = booking/editing/cancelling a campaign creates/updates/removes one clean Google event everywhere, with the app never blocked by a Google failure. Structurally this mirrors a QuickBooks push slice (`0070`/`0073`): external-API client wrapper → pure domain→payload mapper → a nullable durable-link column → wiring into the existing mutation actions → tests.
@@ -26,13 +26,15 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 | `campaigns.gcal_event_id` (nullable text, durable external link) + migration | `quotes.quickbooks_estimate_id` (added in `0073`, migration `0034`) | Same pattern: nullable text column linking a domain row to its external object, with create→backfill / present→update idempotency. Use the **`db-conventions` skill**. |
 | Coach → `colorId` source (column on `team_member_roles` or lookup) | `src/lib/db/schema/_columns.ts` mixins + `team_member_roles` in `src/lib/db/schema/` | Schema convention for adding a per-role attribute (cf. `specialty` on `team_member_roles`). |
 | Sync hooks in `src/features/schedule/actions.ts` (create/update/cancel → emit) | existing campaign mutation in `src/features/schedule/actions.ts` + the QBO push Server Action (`0073`) | Same file = nearest sibling for the mutation shape; the QBO push gives the linked-vs-unlinked (create+backfill / update) idempotency template. **Mutations stay Server Actions** (CLAUDE.md). |
+| `src/features/schedule/calendar-sync.ts` — `reconcileCampaignCalendar` + `resyncCampaign` (Phase 4, built) | `src/lib/quickbooks/quote-push.ts` `pushQuoteToQuickbooks` | Same pattern: DB read → external upsert → guarded backfill, best-effort. New module so the I/O reconcile sits beside (not inside) the thin `actions.ts` mutations. |
+| `Campaign` read shape + `event-detail.tsx` Calendar badge / Re-sync button (Phase 4, built) | `src/features/schedule/queries.ts` `loadCampaign(s)` + the existing Status badge in `event-detail.tsx` | Extends the existing read + detail surface rather than adding a new page. |
 
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — `campaigns` carries the day-of dealer contact inline (`contact` / `phone` / `email`, `campaigns.ts:47-49`) → the dealer attendee email is `campaigns.email`; coach is `campaigns.coach_id` → `contacts`.
 - `CLAUDE.md` → Conventions — Server Actions for mutations; invoke `db-conventions` before the schema/migration in Phase 3.
 - `docs/wiki/go-live-accounts.md` — the Phase 0 SA/DWD/calendar provisioning belongs in the provisioning runbook. **Auth is keyless (Path 2 — see `decision.md` §4a):** no secret, no `deploy.sh` mount; the Cloud Run runtime SA impersonates `eventpro-calendar` via `signJwt` (org policy `iam.disableServiceAccountKeyCreation` blocks downloadable keys).
 
-**Overall Progress:** 67% (4/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅ · Phase 3 schema ✅)
+**Overall Progress:** 83% (5/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅ · Phase 3 schema ✅ · Phase 4 wiring ✅)
 
 **Note:**
 - Phase 0 is **owner/console setup**, not code — partially started this session (service account `eventpro-calendar` provisioning begun in `eventpro-498313`; blocked on `gcloud auth login` reauth). The DWD authorization is a one-time Admin-console step (admin@salesability.ca).
@@ -72,10 +74,10 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - [x] Generated + verified migration `0037_minor_stryfe.sql` (journal `when` 1781292323550 > prev 1781204355861 — monotonic, no silent-skip), applied to **sandbox**; columns + partial unique index + enum labels confirmed via `information_schema`
 
 #### Phase 4: Wire into campaign Server Actions
-- [ ] `src/features/schedule/actions.ts`: on create → `createEvent` + store returned id; on update → `patchEvent` by stored id; on cancel/delete → `deleteEvent`
-- [ ] Create-vs-patch idempotency (linked = `gcal_event_id` set → patch; unlinked → create + backfill), mirroring the QBO push
-- [ ] **Best-effort failure handling** — app succeeds even if Google fails; set a "needs sync" flag + surface a manual re-sync (confirm stance per intent Open question)
-- [ ] Manual re-sync action for a single campaign
+- [x] Single status-driven entry point `reconcileCampaignCalendar(campaignId, userId)` in new `src/features/schedule/calendar-sync.ts` (server-only): booked/completed → upsert event, draft/cancelled → remove. `createCampaign` (now `.returning({id})`) / `updateCampaign` / `cancelCampaign` each `await` it after their DB write
+- [x] Create-vs-patch idempotency: linked (`gcal_event_id` set) → `patchEvent`; unlinked → `createEvent` + **guarded backfill** (`WHERE gcal_event_id IS NULL`); a lost race best-effort `deleteEvent`s the duplicate. Mirrors the QBO push
+- [x] **Best-effort** — reconcile never throws (catches all, marks `gcal_sync_status='failed'`, logs); the mutation always returns ok. `skipped` when Google/SITE_URL unconfigured (status untouched). Confirmed best-effort stance (decision.md §6/§7)
+- [x] Manual re-sync: `resyncCampaign` Server Action (capability `campaign:edit`) + a **"Re-sync"** button + **Calendar** status badge (`Synced`/`Sync failed`/`Not synced`) in `event-detail.tsx`; `Campaign` read shape extended with `gcalSyncStatus`/`gcalEventId`
 
 #### Phase 5: Tests + smoke verification
 - [ ] Mapper unit tests (Phase 2) green
