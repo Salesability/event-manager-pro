@@ -38,6 +38,16 @@ export type GcalCampaignCoach = {
   colorId: string | null;
 };
 
+// Google's calendar palette is a fixed 1..11. There's no stored per-coach
+// colour (0077 Phase 3 decision: auto-derive, no schema column), so map a coach
+// to a STABLE palette id by their row id — an event's colour never shifts when
+// other coaches are added (unlike the legacy encounter-order assignment). Ids
+// start at 1, so the result is always 1..11; collisions (ids 11 apart) are
+// acceptable for an at-a-glance colour-by-coach overlay.
+export function coachGcalColorId(coachId: number): string {
+  return String((coachId % 11) + 1);
+}
+
 /** Add `days` to a 'YYYY-MM-DD' date in UTC (timezone-safe, no DST drift). */
 export function addDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split('-').map(Number);

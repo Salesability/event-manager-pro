@@ -4,6 +4,7 @@ import {
   type GcalCampaignCoach,
   type GcalCampaignDealer,
   addDaysIso,
+  coachGcalColorId,
   mapCampaignToGcalEvent,
 } from './calendar-event';
 
@@ -31,6 +32,22 @@ const coach = (over: Partial<GcalCampaignCoach> = {}): GcalCampaignCoach => ({
 });
 
 const APP_LINK = 'https://app.example.test/calendar';
+
+describe('coachGcalColorId', () => {
+  it('maps coach ids into the Google 1..11 palette', () => {
+    expect(coachGcalColorId(1)).toBe('2');
+    expect(coachGcalColorId(10)).toBe('11');
+    expect(coachGcalColorId(11)).toBe('1');
+  });
+  it('is stable + collides only every 11 ids (acceptable)', () => {
+    expect(coachGcalColorId(22)).toBe(coachGcalColorId(11));
+    for (let id = 1; id <= 50; id++) {
+      const n = Number(coachGcalColorId(id));
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(11);
+    }
+  });
+});
 
 describe('addDaysIso', () => {
   it('adds a day within a month', () => {

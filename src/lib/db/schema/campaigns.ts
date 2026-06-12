@@ -8,6 +8,8 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { actors, bigIdentity, timestamps } from './_columns';
 import { campaignStyles } from './campaign-styles';
@@ -21,6 +23,17 @@ export const campaignStatus = pgEnum('campaign_status', [
   'booked',
   'cancelled',
   'completed',
+]);
+
+// Best-effort Google Calendar projection state (0077). The app is the source of
+// truth and is never blocked by a Google failure (decision.md §6): a booked
+// campaign starts `pending`, flips to `synced` on a successful push (recording
+// `gcal_synced_at`) or `failed` on a Google error, and an edit drops it back to
+// `pending`. The admin "needs sync" list + manual re-sync filter on this.
+export const campaignGcalSyncStatus = pgEnum('campaign_gcal_sync_status', [
+  'pending',
+  'synced',
+  'failed',
 ]);
 
 export const campaigns = pgTable(
@@ -54,6 +67,14 @@ export const campaigns = pgTable(
       { onDelete: 'restrict' }
     ),
     status: campaignStatus('status').notNull().default('draft'),
+    // Google Calendar projection (0077). `gcalEventId` is the durable link to
+    // the projected event (nullable: unset until the first successful push, like
+    // dealers.quickbooks_id / quotes.quickbooks_estimate_id). `gcalSyncStatus` +
+    // `gcalSyncedAt` track best-effort sync state. Coach colour is NOT stored —
+    // it's derived from coach id at map time (coachGcalColorId).
+    gcalEventId: text('gcal_event_id'),
+    gcalSyncStatus: campaignGcalSyncStatus('gcal_sync_status').notNull().default('pending'),
+    gcalSyncedAt: timestamp('gcal_synced_at', { withTimezone: true }),
     ...timestamps,
     ...actors,
   },
@@ -66,6 +87,11 @@ export const campaigns = pgTable(
     index('campaigns_start_date_idx').on(table.startDate),
     index('campaigns_created_by_id_idx').on(table.createdById),
     index('campaigns_updated_by_id_idx').on(table.updatedById),
+    // One campaign per projected event (and vice-versa) — partial unique so the
+    // many unlinked NULLs stay out of the constraint (cf. dealers.quickbooks_id).
+    uniqueIndex('campaigns_gcal_event_id_idx')
+      .on(table.gcalEventId)
+      .where(sql`${table.gcalEventId} IS NOT NULL`),
     check('campaigns_date_range_check', sql`${table.endDate} >= ${table.startDate}`),
   ]
 );

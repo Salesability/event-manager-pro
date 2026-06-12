@@ -260,6 +260,13 @@
       "when": 1781204355861,
       "tag": "0036_qbo_quote_lines_tax_rates_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781292323550,
+      "tag": "0037_minor_stryfe",
+      "breakpoints": true
     }
   ]
 }
