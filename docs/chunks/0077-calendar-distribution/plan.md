@@ -10,7 +10,7 @@
 |-------|--------|--------|
 | 0: Owner setup (SA → DWD → calendar) | ✅ Done — keyless pipeline smoke **PASSED** 2026-06-12 | - |
 | 1: Google client wrapper | ✅ Done — `src/lib/google/calendar.ts`, test 7/7, tsc clean (uncommitted) | - |
-| 2: Campaign → event mapper | Pending | - |
+| 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | - |
 | 3: Schema (`gcal_event_id` + coach colour) | Pending | - |
 | 4: Wire into campaign Server Actions | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -32,7 +32,7 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - `CLAUDE.md` → Conventions — Server Actions for mutations; invoke `db-conventions` before the schema/migration in Phase 3.
 - `docs/wiki/go-live-accounts.md` — the Phase 0 SA/DWD/calendar provisioning belongs in the provisioning runbook. **Auth is keyless (Path 2 — see `decision.md` §4a):** no secret, no `deploy.sh` mount; the Cloud Run runtime SA impersonates `eventpro-calendar` via `signJwt` (org policy `iam.disableServiceAccountKeyCreation` blocks downloadable keys).
 
-**Overall Progress:** 33% (2/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅)
+**Overall Progress:** 50% (3/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅)
 
 **Note:**
 - Phase 0 is **owner/console setup**, not code — partially started this session (service account `eventpro-calendar` provisioning begun in `eventpro-498313`; blocked on `gcloud auth login` reauth). The DWD authorization is a one-time Admin-console step (admin@salesability.ca).
@@ -60,11 +60,11 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - [ ] Local-dev prerequisite: grant the developer's identity (`admin@`) `tokenCreator` on `eventpro-calendar` — **done 2026-06-12**
 
 #### Phase 2: Campaign → event mapper
-- [ ] `mapCampaignToGcalEvent` — summary (`🚗 <dealer> — SaleDay Event`), `location` from dealer address, `start.date`/`end.date` with **end EXCLUSIVE (+1)**, `colorId` by coach
-- [ ] Attendees: coach (`responseStatus: accepted`) + dealer contact (`campaigns.email`); `guestsCanSeeOtherGuests:false` / `guestsCanInviteOthers:false`
-- [ ] **Customer-safe description** — coach, format, contact/phone, app deep-link; **omit** `qty_records` / `sms_email` / `letters` / `bdc` / data source
-- [ ] `reminders` (email 1440m, popup 120m); `extendedProperties.private.campaignId` back-link; `source` deep-link to `/campaigns/<public_id>`
-- [ ] Unit test: end-date +1, clean description (no ops fields), attendee list, colorId
+- [x] `mapCampaignToGcalEvent` (`src/lib/google/calendar-event.ts`, pure/DB-free like `mapQuoteToEstimate`) — summary (`🚗 <dealer> — SaleDay Event`), `location` from dealer address, `start.date`/`end.date` with **end EXCLUSIVE (+1)** via `addDaysIso` (UTC, DST-safe), `colorId` by coach
+- [x] Attendees: coach (`responseStatus: accepted`) + dealer contact (`campaigns.email`); `guestsCanSeeOtherGuests:false` / `guestsCanInviteOthers:false`. `attendees` always an array (empty ok) so a Phase-4 patch reconciles the guest list
+- [x] **Customer-safe description** — coach, format, contact/phone, app link; **omits** `qty_records` / `sms_email` / `letters` / `bdc` / data source by construction (mapper only sees safe inputs)
+- [x] `reminders` (email 1440m, popup 120m); `extendedProperties.private.campaignId` back-link; `source` → `appLink` (caller-provided absolute URL; there's no per-campaign deep route today, so Phase 4 links to `/calendar`)
+- [x] Unit test (`calendar-event.test.ts`, 12 cases): end-date +1 (+ month/year/leap boundaries), clean description (asserts no ops fields), attendee list, colorId, sparse-field drops
 
 #### Phase 3: Schema (`gcal_event_id` + coach colour)
 - [ ] **Invoke `db-conventions`.** Add `campaigns.gcal_event_id` (nullable text) + a "needs sync" signal if best-effort chosen
