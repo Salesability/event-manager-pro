@@ -164,11 +164,16 @@ export async function reconcileCampaignCalendar(
           .where(eq(campaigns.id, campaignId));
       } catch (err) {
         if (err instanceof GoogleCalendarError && (err.status === 404 || err.status === 410)) {
-          await exec
+          // Clear the link ONLY if it's still the stale id we observed (CAS) — a
+          // concurrent reconcile may have already relinked it to a fresh event,
+          // in which case we must NOT clear+recreate (that would null its valid
+          // link and duplicate the Google event). Lost race → leave it synced.
+          const cleared = await exec
             .update(campaigns)
             .set({ gcalEventId: null })
-            .where(eq(campaigns.id, campaignId));
-          needsCreate = true;
+            .where(and(eq(campaigns.id, campaignId), eq(campaigns.gcalEventId, row.gcalEventId)))
+            .returning({ id: campaigns.id });
+          needsCreate = cleared.length > 0;
         } else {
           throw err; // a real failure → outer catch marks `failed`
         }
