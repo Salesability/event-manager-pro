@@ -253,6 +253,13 @@
       "when": 1781109079808,
       "tag": "0035_nebulous_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781204355861,
+      "tag": "0036_qbo_quote_lines_tax_rates_rls",
+      "breakpoints": true
     }
   ]
 }

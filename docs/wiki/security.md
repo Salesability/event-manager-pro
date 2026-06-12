@@ -43,18 +43,30 @@ All three flows route the predicate through `src/lib/auth/capabilities.ts`'s pur
 
 Special case: **`*AvailabilityBlock` actions also call `ensureAvailabilityOwnership(user, ...facets)`** to enforce row-level "is this your own block?" — admin bypasses; non-admin coach can only mutate `kind='coach_unavailable'` rows where `coach_id` matches their own contact. Post-0029 the predicate delegates to `can(profile, 'coach-availability:edit-own', facet)` so the rule lives in capabilities.ts; the soft-error `{ error }` return contract is preserved because "you tried to edit another coach's row" is a validation error, not an auth error. The non-admin UPDATE/archive `WHERE` also pins `kind` + `coach_id` for TOCTOU safety. See `src/features/schedule/availability-authz.ts`.
 
-### 4. RLS — `drizzle/0003_enable_rls.sql`
+### 4. RLS — `drizzle/0003_enable_rls.sql` (+ per-table follow-ups)
 
-Postgres Row Level Security on every public domain table. Two policies per table:
+Postgres Row Level Security on **every** public table. The baseline is `0003_enable_rls.sql`; each table added since gets its own RLS migration that mirrors the pattern: `0004` (`audit_log`), `0009` (`master_service_agreements`), `0010` (`quotes`), `0014` (`service_items`), `0023` (`billing_adjustments`), `0036` (`quote_line_items`, `tax_rates`, `quickbooks_connection`). Standard shape is two policies per table:
 
 - `<table>_service_role_all` (FOR ALL TO `service_role` USING true) — for `supabase-js`'s admin client.
 - `<table>_staff_all` (FOR ALL TO `authenticated` USING `public.is_staff_member()`) — what enforces "staff sees all, non-staff sees nothing" the day a JWT-bearing path exists.
+
+**Exception — `quickbooks_connection` (secrets table).** It holds encrypted QBO OAuth tokens that no JWT-bearing path should ever read, so it gets the `service_role` policy *only*. RLS-on with no `authenticated` policy = default-deny for both `anon` and `authenticated`; the app reaches it solely via Drizzle (BYPASSRLS).
+
+**Maintenance invariant — every new public table needs an RLS migration.** `0003`'s `ENABLE` statements only covered the tables that existed in 2026-05. Tables created later (`quote_line_items` in 0024, `tax_rates`, `quickbooks_connection`) shipped RLS-*disabled* and were caught by Supabase's `rls_disabled_in_public` advisor on prod (2026-06-08), closed by `0036` (2026-06-11). When adding a `pgTable`, add the matching `enable row level security` + policies in the same chunk. Audit at any time with the query in *Where to look* below — `rowsecurity = false` rows are the gap.
 
 `is_staff_member()` is `STABLE, SECURITY DEFINER, search_path=''` so it can answer the question even when its underlying tables are RLS-locked against the calling role. anon falls through to default-deny (no policy).
 
 **Drizzle's `postgres` connection role has `BYPASSRLS=t` (verified at write time)**, so policies are inert on the staff app's data path today. They light up the day the portal queries via `supabase-js` + JWT through PostgREST. The existing `/share/coach/[id]` public surface goes through Drizzle (BYPASSRLS), not anon — so no anon read policies are needed.
 
 `audit_log` itself has RLS too: `audit_log_service_role_all` (FOR ALL) and `audit_log_authenticated_read_own` (FOR SELECT, `actor_user_id = auth.uid()`). No anon, default-deny.
+
+#### The Data API (PostgREST) is the only reason RLS matters here
+
+The anon key (`NEXT_PUBLIC_SUPABASE_ANON_KEY`) is exposed in the browser bundle and edge middleware, and it must be — it powers **Supabase Auth only**: `signInWithOtp`, `signInWithOAuth`, `exchangeCodeForSession`, `signOut`, `getUser`, session refresh (`src/lib/supabase/{client,server,session,middleware}.ts`). It is *designed* to be public; alone it grants nothing. Its two distinct powers are (1) reach the Auth service (`/auth/v1/*`) — needed; (2) reach the **Data API / PostgREST** (`/rest/v1/*`) as the `anon`/`authenticated` Postgres role, gated only by RLS — **not used by this app at all.**
+
+Verified: the codebase makes **zero** `supabase.from()/.rpc()/.storage/.channel()` calls. 100% of data access is Drizzle (BYPASSRLS); the service-role client is server-only for `auth.admin.*` user management. So PostgREST serving the `public` schema is pure attack surface — it's exactly what made the RLS-off tables reachable in the `0036` incident.
+
+**Recommended structural hardening — disable the Data API (status: pending dashboard action).** Project Settings → API → *Data API* (toggle off) or remove `public` from *Exposed schemas*, on **both prod and stage**. Auth is a separate service and is unaffected. With the Data API off, the anon key is auth-only and no table is reachable through the API *regardless of RLS state* — which closes the entire *class* of bug (a forgotten per-table RLS migration) rather than relying on the maintenance invariant above, which is the discipline that failed in `0036`. Keep RLS enabled too (belt-and-suspenders; keeps the advisor green). The only future consumer that would want PostgREST back is the not-yet-built dealer portal sketched below — and that portal can equally run on Drizzle + Server Actions, the app's actual pattern.
 
 ### 5. Forensic — `src/features/audit/actions.ts:recordAudit()`
 
@@ -122,3 +134,5 @@ The helper is **best-effort**: insert failures log via `console.error('audit ins
 - **0019 Phase 6 (parked 2026-05-06):** MFA opt-in v1 doesn't earn its keep with a single-admin team. Revisit before public launch.
 - **0019 Phase 7 (2026-05-06):** Email-send hardening — SITE_URL-only origin, booked-only status gate, inverted dev-redirect with case-normalised APP_ENV.
 - **0019 Phase 8 (2026-05-06):** This page + `auth.md` + `conventions.md` updates. Manual security walk-through verifying three Server Actions reject unauth calls and three RLS-enabled tables return 0 rows for a forged `authenticated` JWT.
+- **RLS gap close (0036, 2026-06-11):** Supabase's advisor flagged `rls_disabled_in_public` (Critical) on prod for `quote_line_items`, `tax_rates`, `quickbooks_connection` — three tables added after the last RLS migration (`0023`) that shipped RLS-disabled. The `anon` role had full DML GRANTs, so with RLS off they were readable/writable through PostgREST by anyone with the public anon key. `0036_qbo_quote_lines_tax_rates_rls.sql` enabled RLS on all three; the first two got the standard `service_role` + staff policies, `quickbooks_connection` got `service_role`-only (secrets table). Applied to prod via `pnpm db:migrate:prod`; verified `pg_tables.rowsecurity = true` on all 19 public tables. DB-only change — no Cloud Run redeploy needed (Drizzle bypasses RLS). Stage (`qppenapeguwevcheqwpz`) had the identical gap; `0036` applied there too **2026-06-12** via `pnpm db:migrate` against the sandbox session pooler (`aws-1-us-west-2…:5432`) — verified `rowsecurity = true` on all 3 tables, zero public tables left RLS-off.
+- **Data API exposure analysis (2026-06-11):** Established that the anon key is needed for **Auth only** and the app makes **zero** PostgREST Data API calls (all data via Drizzle). Recommended hardening: disable the Data API (or unexpose `public`) on prod + stage so the anon key is auth-only and forgotten-RLS tables can't be reached through the API at all — structurally closing the `0036` bug class. Status: pending dashboard toggle (operator action). See *The Data API (PostgREST) is the only reason RLS matters here* under Layer 4.

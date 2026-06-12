@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-11 — Closed prod RLS gap on 3 post-0023 tables (0036)
+
+- Supabase advisor flagged `rls_disabled_in_public` (Critical) on prod for `quote_line_items`, `tax_rates`, `quickbooks_connection` — three tables created after the last RLS migration (`0023`) that shipped RLS-disabled. The `anon` role had full DML GRANTs, so they were readable/writable through PostgREST by anyone holding the public anon key.
+- Fix: `drizzle/0036_qbo_quote_lines_tax_rates_rls.sql` enables RLS on all three (standard `service_role` + staff policies on the first two; `service_role`-only on `quickbooks_connection` since it's an encrypted-secrets table). Applied to prod via `pnpm db:migrate:prod`; verified all 19 public tables now report `rowsecurity = true`.
+- Updated [`security.md`](security.md) Layer 4: added the per-table follow-up migration list, the `quickbooks_connection` secrets-table exception, a **"every new public table needs an RLS migration"** maintenance invariant, and a decision-history entry.
+- **Data API analysis:** verified the anon key powers **Auth only** (zero `supabase.from()/.rpc()/.storage/.channel()` calls — all data via Drizzle), and added a *"The Data API (PostgREST) is the only reason RLS matters here"* subsection to [`security.md`](security.md) Layer 4 recommending the Data API be disabled (anon-key-auth-only) on prod + stage as the structural fix. Stage had the same RLS gap as prod's pre-fix state; `0036` applied to stage 2026-06-12 (verified all 3 tables RLS-on, no public table left RLS-off). The Data API toggle remains the pending operator action on both projects.
+
 ## 2026-06-11 — Province → QB-tax-code mapping UI on /admin/lookups (0076)
 
 - Updated the **`tax_rates`** row in [`data-model.md`](data-model.md): the province → QB-tax-code **mapping is now explicit on `/admin/lookups`** (a per-province dropdown of live QBO codes — single **or group**), replacing 0075's auto-apply name heuristic. Picking a code sets `quickbooks_tax_code_id` + **adopts the code's group-aware rate** (`assignProvinceTaxCode`); a **"Refresh rates"** action re-syncs mapped provinces' rates only (`refreshTaxRates`, never re-maps). The 0075 matcher (`resolveProvinceLinksByName`) is demoted to a dropdown **suggestion**.
