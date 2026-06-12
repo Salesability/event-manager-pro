@@ -194,9 +194,10 @@ invite and no per-seat `events@` mailbox is ever needed (decision `../chunks/clo
 - `GOOGLE_CALENDAR_SUBJECT=shannon@salesability.ca`
 - (`SITE_URL` must also be set — the event's back-link needs an absolute origin.)
 
-**Owner steps still pending:** (1) rename the calendar's dealer-visible **display name** to **"SaleDay Events"**
-(it *is* the organizer guests see); (2) **share the calendar read-only** to staff (coaches + admin) so they can
-overlay it; (3) set the three env vars on the deploy. Verify with the live round-trip:
+The dealer-visible **display name is "EventPro"** — the owner's chosen organizer brand (confirmed 2026-06-12); no rename needed.
+
+**Owner steps still pending:** (1) **share the calendar read-only** to staff (coaches + admin) so they can
+overlay it; (2) set the three env vars on the deploy (prod-only, already wired in `deploy.sh`). Verify with the live round-trip:
 `NODE_OPTIONS='--conditions=react-server' pnpm dlx tsx scripts/0077-calendar-smoke.ts`.
 
 ---

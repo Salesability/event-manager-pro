@@ -50,7 +50,7 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - [x] Authorize the Client ID `101571815389036082153` in Admin console DWD for scope `https://www.googleapis.com/auth/calendar.events` (admin@salesability.ca) — done 2026-06-12
 - [x] Create the calendar owned by `shannon@salesability.ca` — done 2026-06-12; ID `c_eb45f29a4477f0e879861e24e1cdfaeed04ad140a1f5172919e22b82a57943c5@group.calendar.google.com`
 - [x] **Keyless pipeline smoke PASSED 2026-06-12** — impersonate `shannon@` via `signJwt` → create/delete event round-trip on the calendar. **Finding: organizer = the calendar's display name** (`"EventPro"` + the `c_…@group` address), creator = `shannon@` → overturns the §3 organizer plan (see decision.md §3).
-- [ ] **OPEN — dealer-visible calendar name:** currently "EventPro"; recommend Shannon rename the calendar's display name to **"SaleDay Events"** (it *is* the organizer dealers see) — pending owner decision. Also add the local-dev `tokenCreator` grant for `user:admin@salesability.ca` (done 2026-06-12) to the runbook.
+- [x] **RESOLVED — dealer-visible calendar name = "EventPro"** (owner's chosen brand, "EventPro was requested" 2026-06-12; no rename — see [decision.md §3](decision.md)). Also added the local-dev `tokenCreator` grant for `user:admin@salesability.ca` (done 2026-06-12) to the runbook.
 - [ ] Share the calendar **read-only** to staff (coaches + admin) for the overlay
 - [ ] Record SA / Client ID / calendar ID / keyless-grant in `docs/wiki/go-live-accounts.md`
 

@@ -31,8 +31,8 @@ Delegation"*).
 **Organizer = the calendar's display name, not the subject.** A test event came back with
 `organizer: { email: "c_…@group…", displayName: "EventPro" }` and `creator: { email: "shannon@…" }` — so guests see
 the *calendar*, and the impersonated user is only the (invisible) creator. Consequences: the dealer-facing brand is
-the calendar's display name (rename it to **"SaleDay Events"**), it costs no per-seat mailbox, and it survives the
-organizer leaving. The future `events@` rebrand is just flipping `GOOGLE_CALENDAR_SUBJECT` — no schema change, no
+the calendar's display name (**"EventPro"** — the owner's chosen name, confirmed 2026-06-12), it costs no per-seat
+mailbox, and it survives the organizer leaving. The future `events@` rebrand is just flipping `GOOGLE_CALENDAR_SUBJECT` — no schema change, no
 data migration (old events keep their organizer; only new ones switch).
 
 Provisioning details (SA email, Client ID, calendar ID, the `tokenCreator` grant, the three env vars) live in the

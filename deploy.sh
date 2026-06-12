@@ -291,8 +291,9 @@ fi
 # and only prod's runtime SA has that grant — setting these on stage would just
 # mark every campaign sync 'failed' (signJwt denied). With these set, prod projects
 # booked campaigns into Google Calendar; sendUpdates is gated on APP_ENV so prod
-# (APP_ENV=production) emails real guest invites. Set only after the calendar's
-# display name is finalised ("SaleDay Events") and it's shared read-only to staff.
+# (APP_ENV=production) emails real guest invites. The calendar's dealer-visible
+# display name is "EventPro" (owner's chosen brand). Ideally shared read-only to
+# staff for the overlay first, but that doesn't gate the guest-invite projection.
 if [ "${DEPLOY_APP_ENV}" = "production" ]; then
     ENV_VARS+="${ENV_DELIM}GOOGLE_CALENDAR_SA_EMAIL=eventpro-calendar@eventpro-498313.iam.gserviceaccount.com"
     ENV_VARS+="${ENV_DELIM}GOOGLE_CALENDAR_ID=c_eb45f29a4477f0e879861e24e1cdfaeed04ad140a1f5172919e22b82a57943c5@group.calendar.google.com"
