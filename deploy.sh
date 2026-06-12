@@ -284,6 +284,21 @@ if [ -n "${QBO_SECRET_MOUNTS}" ]; then
     ENV_VARS+="${ENV_DELIM}QBO_ENV=${QBO_ENV:-production}"
 fi
 
+# Google Calendar projection (chunk 0077) — non-secret config; auth is KEYLESS
+# (no key/secret): the prod runtime SA holds roles/iam.serviceAccountTokenCreator
+# on the eventpro-calendar SA, so it signs the DWD assertion at runtime. PRODUCTION
+# ONLY: the SA + the EventPro calendar live in the prod project (eventpro-498313)
+# and only prod's runtime SA has that grant — setting these on stage would just
+# mark every campaign sync 'failed' (signJwt denied). With these set, prod projects
+# booked campaigns into Google Calendar; sendUpdates is gated on APP_ENV so prod
+# (APP_ENV=production) emails real guest invites. Set only after the calendar's
+# display name is finalised ("SaleDay Events") and it's shared read-only to staff.
+if [ "${DEPLOY_APP_ENV}" = "production" ]; then
+    ENV_VARS+="${ENV_DELIM}GOOGLE_CALENDAR_SA_EMAIL=eventpro-calendar@eventpro-498313.iam.gserviceaccount.com"
+    ENV_VARS+="${ENV_DELIM}GOOGLE_CALENDAR_ID=c_eb45f29a4477f0e879861e24e1cdfaeed04ad140a1f5172919e22b82a57943c5@group.calendar.google.com"
+    ENV_VARS+="${ENV_DELIM}GOOGLE_CALENDAR_SUBJECT=shannon@salesability.ca"
+fi
+
 BOLDSIGN_HOST="${BOLDSIGN_API_BASE_URL:-https://api.boldsign.com (US default)}"
 if [ "${DEPLOY_APP_ENV}" = "production" ]; then
     BOLDSIGN_MODE="production (isSandbox=false — key must be a production-tier key)"
