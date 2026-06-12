@@ -69,6 +69,10 @@ export type Campaign = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  // Google Calendar projection state (0077). `gcalSyncStatus` drives the
+  // event-detail "Calendar" badge + the manual re-sync affordance.
+  gcalSyncStatus: 'pending' | 'synced' | 'failed';
+  gcalEventId: string | null;
 };
 
 // 0059: billing-adjustment overlay on the /reports surface. `BillingField`
@@ -427,6 +431,8 @@ export async function loadCampaigns(): Promise<Campaign[]> {
       phone: campaigns.phone,
       email: campaigns.email,
       notes: campaigns.notes,
+      gcalSyncStatus: campaigns.gcalSyncStatus,
+      gcalEventId: campaigns.gcalEventId,
     })
     .from(campaigns)
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
@@ -461,6 +467,8 @@ export async function loadCampaigns(): Promise<Campaign[]> {
     phone: r.phone,
     email: r.email,
     notes: r.notes,
+    gcalSyncStatus: r.gcalSyncStatus,
+    gcalEventId: r.gcalEventId,
   }));
 }
 
@@ -490,6 +498,8 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
       phone: campaigns.phone,
       email: campaigns.email,
       notes: campaigns.notes,
+      gcalSyncStatus: campaigns.gcalSyncStatus,
+      gcalEventId: campaigns.gcalEventId,
     })
     .from(campaigns)
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
@@ -525,6 +535,8 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
     phone: row.phone,
     email: row.email,
     notes: row.notes,
+    gcalSyncStatus: row.gcalSyncStatus,
+    gcalEventId: row.gcalEventId,
   };
 }
 

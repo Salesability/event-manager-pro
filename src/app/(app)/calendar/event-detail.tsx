@@ -6,7 +6,7 @@ import { Can } from '@/components/auth/can';
 import { Badge } from '@/components/catalyst/badge';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { cancelCampaign } from '@/features/schedule/actions';
+import { cancelCampaign, resyncCampaign } from '@/features/schedule/actions';
 import {
   sendClientCampaignConfirmation,
   sendCoachCampaignConfirmation,
@@ -35,6 +35,16 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
       } else {
         toast.error(result.error);
       }
+    });
+  }
+
+  function onResync() {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('id', String(campaign.id));
+      const result = toLegacyResult(await resyncCampaign(fd));
+      if ('ok' in result) toast.success('Calendar synced');
+      else toast.error(result.error);
     });
   }
 
@@ -108,6 +118,16 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
           label="Status"
           value={<Badge color={statusBadgeColor(campaign.status)}>{campaign.status}</Badge>}
         />
+        {(campaign.status === 'booked' || campaign.status === 'completed') && (
+          <Row
+            label="Calendar"
+            value={
+              <Badge color={gcalBadge(campaign.gcalSyncStatus).color}>
+                {gcalBadge(campaign.gcalSyncStatus).label}
+              </Badge>
+            }
+          />
+        )}
       </dl>
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4">
@@ -154,6 +174,19 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
             </button>
           </Can>
         )}
+        {(campaign.status === 'booked' || campaign.status === 'completed') && (
+          <Can capability="campaign:edit">
+            <button
+              type="button"
+              onClick={onResync}
+              disabled={pending}
+              title="Re-push this event to Google Calendar (coach + dealer invites)"
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Re-sync
+            </button>
+          </Can>
+        )}
         <Can capability="campaign:edit">
           <button
             type="button"
@@ -194,6 +227,21 @@ function formatDate(iso: string) {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+function gcalBadge(status: Campaign['gcalSyncStatus']): {
+  color: 'green' | 'zinc' | 'red';
+  label: string;
+} {
+  switch (status) {
+    case 'synced':
+      return { color: 'green', label: 'Synced' };
+    case 'failed':
+      return { color: 'red', label: 'Sync failed' };
+    case 'pending':
+    default:
+      return { color: 'zinc', label: 'Not synced' };
+  }
 }
 
 function statusBadgeColor(status: Campaign['status']): 'green' | 'zinc' | 'red' | 'brand' {

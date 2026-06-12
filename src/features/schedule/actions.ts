@@ -20,6 +20,7 @@ import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
 import { ensureAvailabilityOwnership } from './availability-authz';
+import { reconcileCampaignCalendar } from './calendar-sync';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
 import { availabilityFormSchema } from './availability-schema';
 import { lookupFormSchema } from './lookup-schema';
@@ -461,13 +462,19 @@ export const createCampaign = capabilityClient('campaign:create')
       .limit(1);
     if (!dealerExists.length) return { error: 'Dealer not found.' };
 
-    await db.insert(campaigns).values({
-      publicId: generatePublicId(),
-      status: 'booked',
-      createdById: userId,
-      updatedById: userId,
-      ...input,
-    });
+    const [created] = await db
+      .insert(campaigns)
+      .values({
+        publicId: generatePublicId(),
+        status: 'booked',
+        createdById: userId,
+        updatedById: userId,
+        ...input,
+      })
+      .returning({ id: campaigns.id });
+
+    // Best-effort Google Calendar projection (0077) — never blocks the booking.
+    await reconcileCampaignCalendar(created.id, userId);
 
     revalidateCampaignViews();
     return { ok: true };
@@ -497,6 +504,9 @@ export const updateCampaign = capabilityClient('campaign:edit')
       .where(eq(campaigns.id, id))
       .returning({ id: campaigns.id });
     if (!result.length) return { error: 'Campaign not found.' };
+
+    // Re-project the edited event (date/coach/dealer changes patch in place).
+    await reconcileCampaignCalendar(id, userId);
 
     revalidateCampaignViews();
     return { ok: true };
@@ -528,7 +538,34 @@ export const cancelCampaign = capabilityClient('campaign:cancel')
       payload: null,
     });
 
+    // Remove the projected event everywhere (best-effort).
+    await reconcileCampaignCalendar(id, userId);
+
     revalidateCampaignViews();
+    return { ok: true };
+  });
+
+// Manual re-sync of a single campaign's calendar event — the recovery path when
+// a best-effort sync failed (`gcal_sync_status = 'failed'`). Idempotent: it just
+// re-runs the same reconcile the mutations call. Admin/editor-gated like edit.
+// validation: skip — id-only action; `parseId` is the only input check.
+export const resyncCampaign = capabilityClient('campaign:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid campaign id.' };
+
+    const outcome = await reconcileCampaignCalendar(id, ctx.user.id);
+    revalidateCampaignViews();
+    if (outcome === 'failed') {
+      return {
+        error:
+          'Calendar sync failed — the campaign is saved, but Google Calendar could not be updated. Try again shortly.',
+      };
+    }
+    if (outcome === 'skipped') {
+      return { error: 'Google Calendar sync is not configured for this environment.' };
+    }
     return { ok: true };
   });
 
