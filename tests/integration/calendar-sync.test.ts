@@ -192,7 +192,7 @@ describe.skipIf(!dbUrl)('reconcileCampaignCalendar DB writes (0077)', () => {
 
       expect(outcome).toBe('synced');
       expect(vi.mocked(createEvent)).not.toHaveBeenCalled();
-      expect(vi.mocked(patchEvent)).toHaveBeenCalledWith(linkedId, expect.objectContaining({ summary: expect.any(String) }));
+      expect(vi.mocked(patchEvent)).toHaveBeenCalledWith(linkedId, expect.objectContaining({ summary: expect.any(String) }), 'none');
       const [row] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId));
       expect(row.gcalEventId).toBe(linkedId); // unchanged
       expect(row.gcalSyncStatus).toBe('synced');
@@ -208,7 +208,7 @@ describe.skipIf(!dbUrl)('reconcileCampaignCalendar DB writes (0077)', () => {
       const outcome = await reconcileCampaignCalendar(campaignId, userId, tx);
 
       expect(outcome).toBe('removed');
-      expect(vi.mocked(deleteEvent)).toHaveBeenCalledWith(linkedId);
+      expect(vi.mocked(deleteEvent)).toHaveBeenCalledWith(linkedId, 'none');
       expect(vi.mocked(createEvent)).not.toHaveBeenCalled();
       const [row] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId));
       expect(row.gcalEventId).toBeNull();
@@ -297,6 +297,36 @@ describe.skipIf(!dbUrl)('reconcileCampaignCalendar DB writes (0077)', () => {
       const outcome = await reconcileCampaignCalendar(999_000_001, userId, tx);
       expect(outcome).toBe('missing');
       expect(vi.mocked(createEvent)).not.toHaveBeenCalled();
+    });
+  });
+
+  it('sendUpdates gate: non-prod env does NOT email real guests (sendUpdates=none)', async () => {
+    await inRolledBackTx(async (tx) => {
+      const prev = process.env.APP_ENV;
+      process.env.APP_ENV = 'sandbox';
+      try {
+        vi.mocked(createEvent).mockResolvedValue({ id: eventId(), summary: 'x', start: {}, end: {} });
+        const id = await seedCampaign(tx, { status: 'booked' });
+        await reconcileCampaignCalendar(id, userId, tx);
+        expect(vi.mocked(createEvent).mock.calls[0][1]).toBe('none');
+      } finally {
+        process.env.APP_ENV = prev;
+      }
+    });
+  });
+
+  it('sendUpdates gate: production env DOES notify guests (sendUpdates=all)', async () => {
+    await inRolledBackTx(async (tx) => {
+      const prev = process.env.APP_ENV;
+      process.env.APP_ENV = 'production';
+      try {
+        vi.mocked(createEvent).mockResolvedValue({ id: eventId(), summary: 'x', start: {}, end: {} });
+        const id = await seedCampaign(tx, { status: 'booked' });
+        await reconcileCampaignCalendar(id, userId, tx);
+        expect(vi.mocked(createEvent).mock.calls[0][1]).toBe('all');
+      } finally {
+        process.env.APP_ENV = prev;
+      }
     });
   });
 });

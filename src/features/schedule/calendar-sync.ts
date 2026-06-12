@@ -10,6 +10,7 @@ import {
 } from '@/lib/db/schema';
 import {
   GoogleCalendarError,
+  type SendUpdates,
   createEvent,
   deleteEvent,
   googleCalendarConfigured,
@@ -80,6 +81,14 @@ async function loadCampaignSyncInput(campaignId: number, exec: Executor) {
   return row ?? null;
 }
 
+// Only PRODUCTION notifies guests. In dev/sandbox the projection still runs
+// (events created/patched/deleted on the calendar) but `sendUpdates: 'none'`
+// keeps real coaches/dealers from being emailed invites/cancellations from a
+// non-prod environment (0077 follow-up a). Mirrors boldsign's `isProductionEnv`.
+function calendarSendUpdates(): SendUpdates {
+  return process.env.APP_ENV?.trim().toLowerCase() === 'production' ? 'all' : 'none';
+}
+
 async function markFailed(campaignId: number, userId: string, exec: Executor) {
   await exec
     .update(campaigns)
@@ -105,6 +114,9 @@ export async function reconcileCampaignCalendar(
     return 'skipped'; // SITE_URL unset → can't build an absolute event link
   }
 
+  // Real guest emails only in production (see calendarSendUpdates).
+  const notify = calendarSendUpdates();
+
   try {
     const row = await loadCampaignSyncInput(campaignId, exec);
     if (!row) return 'missing';
@@ -113,7 +125,7 @@ export async function reconcileCampaignCalendar(
     const wantsEvent = row.status === 'booked' || row.status === 'completed';
     if (!wantsEvent) {
       if (row.gcalEventId) {
-        await deleteEvent(row.gcalEventId); // idempotent: a 404/410 counts as removed
+        await deleteEvent(row.gcalEventId, notify); // idempotent: a 404/410 counts as removed
       }
       await exec
         .update(campaigns)
@@ -157,7 +169,7 @@ export async function reconcileCampaignCalendar(
     let needsCreate = !row.gcalEventId;
     if (row.gcalEventId) {
       try {
-        await patchEvent(row.gcalEventId, event);
+        await patchEvent(row.gcalEventId, event, notify);
         await exec
           .update(campaigns)
           .set({ gcalSyncStatus: 'synced', gcalSyncedAt: new Date(), updatedById: userId })
@@ -181,7 +193,7 @@ export async function reconcileCampaignCalendar(
     }
 
     if (needsCreate) {
-      const created = await createEvent(event);
+      const created = await createEvent(event, notify);
       // Guarded backfill (mirrors the QBO push): a concurrent reconcile that
       // already linked this campaign wins. The event was sent BEFORE the durable
       // link is stored, so a backfill exception (or a lost race) must clean the
@@ -199,11 +211,11 @@ export async function reconcileCampaignCalendar(
           .where(and(eq(campaigns.id, campaignId), isNull(campaigns.gcalEventId)))
           .returning({ id: campaigns.id });
       } catch (dbErr) {
-        await deleteEvent(created.id).catch(() => {}); // don't orphan the event
+        await deleteEvent(created.id, notify).catch(() => {}); // don't orphan the event
         throw dbErr;
       }
       if (!linked.length) {
-        await deleteEvent(created.id).catch(() => {});
+        await deleteEvent(created.id, notify).catch(() => {});
       }
     }
     return 'synced';
