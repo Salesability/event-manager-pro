@@ -26,7 +26,7 @@ Tracks progress against the migration order set in `docs/chunks/closed/0001-port
 
 **Note:**
 - Phase order follows `docs/chunks/closed/0001-port-stack-analysis/notes.md` §"Migration order", with the data-model work pulled out into its own phase, and Phase 5 inserted to gap-close the legacy feature surface (Phase 4 only ported the three read-only views).
-- The original Phase 7 (Q→C→I→P loop) was promoted to its own epic on 2026-05-07 — see [`../../0025-quote-to-payment/plan.md`](../../0025-quote-to-payment/plan.md) — because each leaf is its own external-integration chunk and the loop will outlive this port-migration tracker.
+- The original Phase 7 (Q→C→I→P loop) was promoted to its own epic on 2026-05-07 — see [`../0025-quote-to-payment/plan.md`](../0025-quote-to-payment/plan.md) — because each leaf is its own external-integration chunk and the loop will outlive this port-migration tracker.
 - The original Phase 6 (domain cutover) and Phase 8 (legacy-secret rotation + spreadsheet lockdown) were also dropped from this tracker on 2026-05-07 — those tasks live outside the port-migration umbrella.
 - `docs/wiki/data-model.md` is the schema source of truth; `docs/wiki/auth.md`, `docs/wiki/architecture.md`, `docs/wiki/conventions.md` cover the rest.
 
@@ -82,7 +82,7 @@ Status/Commit per chunk live in the top-level Progress Tracker; this table is th
 | ~~5.8~~ | ~~Calendar share: full-calendar share link variant of `shareModal`~~ | ~~lines 489–516~~ | ~~[`0010-calendar-share-full/plan.md`](../0010-calendar-share-full/plan.md)~~ — **Dropped 2026-05-11** (per-coach share covers the use case) |
 
 Sequencing:
-- 5.2 (Campaign CRUD) is the prerequisite for the Q→C→I→P loop ([`../../0025-quote-to-payment/plan.md`](../../0025-quote-to-payment/plan.md)) — quotes/contracts attach to campaigns.
+- 5.2 (Campaign CRUD) is the prerequisite for the Q→C→I→P loop ([`../0025-quote-to-payment/plan.md`](../0025-quote-to-payment/plan.md)) — quotes/contracts attach to campaigns.
 - 5.3 (Lookup admin) is reachable inline from 5.2's booking modal; the two are tempting to merge, but the lookup admin has its own surface (callable from anywhere) so keep it separate.
 - 5.5 (Email) shipped on Resend ahead of the Q→C→I→P loop; the same `src/lib/email/send.ts` helper will carry quote/invoice sends.
 - 5.6 + 5.7 are self-contained and can land in any order.

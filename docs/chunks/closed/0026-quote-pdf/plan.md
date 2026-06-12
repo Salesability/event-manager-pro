@@ -2,7 +2,7 @@
 
 **Started:** 2026-05-07
 
-Sub-plan 7.1 of [`../../0025-quote-to-payment/plan.md`](../../0025-quote-to-payment/plan.md). Stand up the Quote document end-to-end: data model on top of `campaigns`, branded PDF built programmatically with `pdf-lib`, email send via Resend, accept/decline state. Done = a coach can click "Send quote" on a campaign, the client receives a branded quote PDF + email, and clicking the accept link flips the quote to `accepted` (which becomes the trigger for 7.2 contract send).
+Sub-plan 7.1 of [`../0025-quote-to-payment/plan.md`](../0025-quote-to-payment/plan.md). Stand up the Quote document end-to-end: data model on top of `campaigns`, branded PDF built programmatically with `pdf-lib`, email send via Resend, accept/decline state. Done = a coach can click "Send quote" on a campaign, the client receives a branded quote PDF + email, and clicking the accept link flips the quote to `accepted` (which becomes the trigger for 7.2 contract send).
 
 This chunk also lays the **PDF rendering + GCS storage foundation** that 7.2 (MSA) and 7.3 (invoice PDF) reuse — so Phase 1 here is foundation work, not quote-specific. **Strategy decided 2026-05-08: code-built layout, not template-fill.** Code is the source of truth for the document look; GCS holds rendered output only.
 
