@@ -167,6 +167,38 @@ This is the most technical account — but your part is just billing and ownersh
 - *(The developer chooses the bucket name → `GCS_BUCKET`, and uses workload identity in production so no
   credential file is needed.)*
 
+### 4a. Google Calendar — event distribution (chunk 0077)
+
+**What it's for.** Booked campaigns project from the app into real calendars — the **coach** and **dealer contact**
+get the event as guest invites, plus a shared **read-only team calendar** that carries the whole schedule
+colour-by-coach. The app stays the source of truth; the calendar is a one-way projection. See the concept page
+[`calendar-distribution.md`](calendar-distribution.md).
+
+**Auth model — keyless (no key file).** The org blocks downloadable service-account keys, so the app authenticates
+keyless: the Cloud Run runtime SA impersonates a dedicated calendar SA via IAM `signJwt`, which signs a
+domain-wide-delegation (DWD) assertion to act as a licensed Workspace user (DWD is **required** to invite guests).
+The dealer-facing **organizer** is the calendar's **display name**, not that user — so no person's name is on the
+invite and no per-seat `events@` mailbox is ever needed (decision `../chunks/0077-calendar-distribution/decision.md` §3/§4a).
+
+**Provisioned (project `eventpro-498313`, 2026-06-12):**
+- SA **`eventpro-calendar@eventpro-498313.iam.gserviceaccount.com`** (Client ID `101571815389036082153`) — the keyless signer; never dealer-visible.
+- Calendar API enabled (`calendar-json.googleapis.com`).
+- Runtime SA `1094204863648-compute@developer.gserviceaccount.com` granted `roles/iam.serviceAccountTokenCreator` **on** `eventpro-calendar` (resource-scoped — it can impersonate only this one SA). The developer's own identity (`admin@`) needs the same grant for local dev.
+- DWD authorized in the Workspace Admin console: Client ID `101571815389036082153` → scope `https://www.googleapis.com/auth/calendar.events` (minimal).
+- Shared calendar created on `shannon@salesability.ca`: ID **`c_eb45f29a4477f0e879861e24e1cdfaeed04ad140a1f5172919e22b82a57943c5@group.calendar.google.com`**.
+
+**Three env vars** (single source — flipping the subject is the entire future `events@` rebrand): set in `.env.local`
+(dev) and `deploy.sh` (prod):
+- `GOOGLE_CALENDAR_SA_EMAIL=eventpro-calendar@eventpro-498313.iam.gserviceaccount.com`
+- `GOOGLE_CALENDAR_ID=c_eb45…@group.calendar.google.com`
+- `GOOGLE_CALENDAR_SUBJECT=shannon@salesability.ca`
+- (`SITE_URL` must also be set — the event's back-link needs an absolute origin.)
+
+**Owner steps still pending:** (1) rename the calendar's dealer-visible **display name** to **"SaleDay Events"**
+(it *is* the organizer guests see); (2) **share the calendar read-only** to staff (coaches + admin) so they can
+overlay it; (3) set the three env vars on the deploy. Verify with the live round-trip:
+`NODE_OPTIONS='--conditions=react-server' pnpm dlx tsx scripts/0077-calendar-smoke.ts`.
+
 ---
 
 ## 5. Domain & DNS — the app's address

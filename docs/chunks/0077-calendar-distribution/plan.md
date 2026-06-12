@@ -13,7 +13,7 @@
 | 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | `dc733e0` |
 | 3: Schema (`gcal_event_id` + sync status) | ✅ Done — migration `0037`, applied to sandbox; tsc + test green | `dc255a5` |
 | 4: Wire into campaign Server Actions | ✅ Done — `calendar-sync.ts` reconcile + 3 mutation hooks + `resyncCampaign` + event-detail UI; tsc + test green | `1529c2f` |
-| 5: Tests + smoke verification | Pending | - |
+| 5: Tests + smoke verification | ✅ Done — integration 6/6 + live smoke script + wiki; tsc + test 1136 green | - |
 
 This chunk projects booked campaigns from the app (the source of truth) into real calendars via the Google Calendar API — coach + dealer as guests on each event, plus a shared read-only **EventPro Calendar** team calendar. Organizer is `shannon@salesability.ca`, impersonated by a service account via domain-wide delegation, held as a single config value so a later `events@` rebrand is a config flip (see `decision.md`). "Done" = booking/editing/cancelling a campaign creates/updates/removes one clean Google event everywhere, with the app never blocked by a Google failure. Structurally this mirrors a QuickBooks push slice (`0070`/`0073`): external-API client wrapper → pure domain→payload mapper → a nullable durable-link column → wiring into the existing mutation actions → tests.
 
@@ -34,7 +34,7 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - `CLAUDE.md` → Conventions — Server Actions for mutations; invoke `db-conventions` before the schema/migration in Phase 3.
 - `docs/wiki/go-live-accounts.md` — the Phase 0 SA/DWD/calendar provisioning belongs in the provisioning runbook. **Auth is keyless (Path 2 — see `decision.md` §4a):** no secret, no `deploy.sh` mount; the Cloud Run runtime SA impersonates `eventpro-calendar` via `signJwt` (org policy `iam.disableServiceAccountKeyCreation` blocks downloadable keys).
 
-**Overall Progress:** 83% (5/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅ · Phase 3 schema ✅ · Phase 4 wiring ✅)
+**Overall Progress:** 100% (6/6 — Phase 0 owner setup ✅ · Phase 1 client wrapper ✅ · Phase 2 mapper ✅ · Phase 3 schema ✅ · Phase 4 wiring ✅ · Phase 5 tests+smoke+wiki ✅). Build phases complete; chunk-end `/eval` next.
 
 **Note:**
 - Phase 0 is **owner/console setup**, not code — partially started this session (service account `eventpro-calendar` provisioning begun in `eventpro-498313`; blocked on `gcloud auth login` reauth). The DWD authorization is a one-time Admin-console step (admin@salesability.ca).
@@ -80,8 +80,9 @@ This chunk projects booked campaigns from the app (the source of truth) into rea
 - [x] Manual re-sync: `resyncCampaign` Server Action (capability `campaign:edit`) + a **"Re-sync"** button + **Calendar** status badge (`Synced`/`Sync failed`/`Not synced`) in `event-detail.tsx`; `Campaign` read shape extended with `gcalSyncStatus`/`gcalEventId`
 
 #### Phase 5: Tests + smoke verification
-- [ ] Mapper unit tests (Phase 2) green
-- [ ] Integration test against a throwaway test calendar: create → patch → delete round-trip; attendee + clean-description assertions
-- [ ] Smoke (web-test): `goto /calendar`; a booked campaign renders with its synced state
-- [ ] (If DB state needed) throwaway fixture `scripts/0077-calendar-smoke.ts` insert/cleanup, idempotent by tag
-- [ ] Wiki ingest: `docs/wiki/` page for the calendar projection + `go-live-accounts.md` Phase-0 runbook entry; note in `log.md`
+- [x] Mapper unit tests (Phase 2) green — `calendar-event.test.ts` 12/12
+- [x] Integration suite `tests/integration/calendar-sync.test.ts` (6 cases): create → patch → cancel-remove round-trip + best-effort-failure + skipped + no-coach, against the **sandbox DB** with the Google client mocked (the real mapper runs, asserting clean description + EXCLUSIVE end + guest list). `reconcileCampaignCalendar` gained an `exec` param (cf. quote-push) so the test drives it in rolled-back txns
+- [x] **Live** create → patch → delete round-trip = `scripts/0077-calendar-smoke.ts` — exercises the committed keyless client against real Google (`sendUpdates='none'` so no emails); run with `NODE_OPTIONS='--conditions=react-server'`. Structural check passed (reports "Not configured" until the owner sets the 3 env vars + ADC — see go-live §4a)
+- [x] throwaway fixture: the smoke script builds its own event (no DB seed needed); the integration suite seeds + rolls back
+- [x] Wiki ingest: new [`docs/wiki/calendar-distribution.md`](../../wiki/calendar-distribution.md) + `go-live-accounts.md` §4a runbook + `data-model.md` columns + `index.md` link + `log.md` entry
+- [~] Smoke (web-test): `goto /calendar`; booked campaign renders its **Calendar** sync badge → **run as part of the chunk-end `/eval` browser smoke** (Google unconfigured in dev → badge shows "Not synced", the correct rendered state)

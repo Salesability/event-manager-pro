@@ -28,7 +28,9 @@ Cross-cutting topics that span multiple tables/features.
 
 ## Entity / feature pages
 
-One per substantial feature. None yet.
+One per substantial feature.
+
+- [calendar-distribution.md](calendar-distribution.md) — booked campaigns project one-way into Google Calendar (coach + dealer as guests + a shared colour-by-coach team calendar). Keyless DWD auth, customer-safe event body, best-effort status-driven sync. Chunk `0077`.
 
 ## How this wiki is maintained
 

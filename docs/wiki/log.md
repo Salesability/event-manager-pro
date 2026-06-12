@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-12 — Google Calendar distribution for booked campaigns (0077)
+
+- New feature page [`calendar-distribution.md`](calendar-distribution.md): booked campaigns project **one-way** into Google Calendar (coach + dealer as guests + a shared colour-by-coach team calendar). Keyless DWD auth (signJwt impersonation — no key file), customer-safe event body (no ops-field leak), best-effort status-driven `reconcileCampaignCalendar` (booked/completed → upsert, draft/cancelled → remove; never blocks the mutation). Linked from [`index.md`](index.md) (first Entity/feature page).
+- [`data-model.md`](data-model.md): added the `campaigns` projection columns (migration `0037`) — `gcal_event_id` (nullable text, partial-UNIQUE), `gcal_sync_status` enum (`pending\|synced\|failed`), `gcal_synced_at` — to both the summary table and the `campaigns` section.
+- [`go-live-accounts.md`](go-live-accounts.md): new **§4a** provisioning runbook — the `eventpro-calendar` SA + Client ID, the resource-scoped `tokenCreator` grant, the DWD scope, the shared calendar ID, the three `GOOGLE_CALENDAR_*` env vars, and the owner steps still pending (rename display name → "SaleDay Events", share read-only, set env). Organizer = the calendar's display name, not the impersonated subject (so no per-seat `events@` mailbox is ever needed).
+
 ## 2026-06-11 — Closed prod RLS gap on 3 post-0023 tables (0036)
 
 - Supabase advisor flagged `rls_disabled_in_public` (Critical) on prod for `quote_line_items`, `tax_rates`, `quickbooks_connection` — three tables created after the last RLS migration (`0023`) that shipped RLS-disabled. The `anon` role had full DML GRANTs, so they were readable/writable through PostgREST by anyone holding the public anon key.
