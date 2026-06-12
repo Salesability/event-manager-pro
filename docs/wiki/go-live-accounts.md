@@ -39,7 +39,7 @@ Each section below is marked **You do** / **Developer does** so the boundary is 
 | **Google Cloud** | Hosting + PDF storage + "Sign in with Google" | Business | Pay-as-you-go; **likely under ~US$10–20/mo** at this scale, plus a card on file |
 | **Domain / DNS** | The app's web address (`eventpro.salesability.ca`) | Business | Already owned (salesability.ca); just DNS records |
 
-> **Not needed for launch:** QuickBooks (one-time dealer import — see [`../chunks/0060-quickbooks-integration/`](../chunks/0060-quickbooks-integration/intent.md))
+> **Not needed for launch:** QuickBooks (one-time dealer import — see [`../chunks/closed/0060-quickbooks-integration/`](../chunks/closed/0060-quickbooks-integration/intent.md))
 > and the shareable Google Sheet (deferred — see [`../chunks/future/0058-production-sheet-and-date-range/`](../chunks/future/0058-production-sheet-and-date-range/plan.md)).
 > Skip those for now.
 

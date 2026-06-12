@@ -36,7 +36,7 @@ customer list, and a working Disconnect — all behind `admin:access`.
 - `docs/wiki/auth.md` — admin gating: `assertCan('admin:access')` on the page + `ADMIN_PATHS` in `src/lib/supabase/middleware.ts:14` (already covers `/admin/*` — no middleware edit needed).
 - `CLAUDE.md` → Conventions — **mutations are Server Actions; route handlers are for external callers only.** Connect/Disconnect = actions; the Intuit callback = route handler.
 - `db-conventions` skill — **invoke before** writing the schema file + migration (Phase 1). ID/type defaults, audit columns, direct-vs-pooled migration rule.
-- `docs/chunks/0060-quickbooks-integration/research.md` — OAuth flow, `realmId` gotcha, token lifetimes/rotation, sandbox host; `scripts/import-from-quickbooks.ts` — the existing hand-rolled QBO fetch to lift.
+- `docs/chunks/closed/0060-quickbooks-integration/research.md` — OAuth flow, `realmId` gotcha, token lifetimes/rotation, sandbox host; `scripts/import-from-quickbooks.ts` — the existing hand-rolled QBO fetch to lift.
 
 **Overall Progress:** 100% (4/4 phases complete) — browser smoke + Codex run in the chunk-end `/eval`; the owner round-trip is manual.
 

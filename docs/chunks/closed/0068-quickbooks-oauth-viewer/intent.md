@@ -2,7 +2,7 @@
 
 **Created:** 2026-06-08
 
-> Sibling slice of [`../../0060-quickbooks-integration/`](../../0060-quickbooks-integration/intent.md). 0060 shipped the
+> Sibling slice of [`../0060-quickbooks-integration/`](../0060-quickbooks-integration/intent.md). 0060 shipped the
 > **one-time seed** (a script using a hand-minted Playground access token — no client secret, no in-app flow;
 > 146 customers → 137 dealers on prod 2026-06-05). 0060's plan explicitly listed *"In-app OAuth connection
 > (callback route + encrypted token store + refresh)"* as a **later slice — out of scope**. **This chunk is

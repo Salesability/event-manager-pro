@@ -13,7 +13,7 @@ companies have to be re-entered into this app as `dealers` by hand. We want to c
 1. **(First slice)** existing QBO customers are **imported as `dealers`** (+ their contact people), so the
    app's client list is seeded from the real book of business instead of manual entry.
 2. **(Later)** the commercial spine flows back the other way — an accepted **Quote → QBO Estimate/Invoice**,
-   so invoicing isn't double-keyed. See [`../../wiki/commercial-spine.md`](../../wiki/commercial-spine.md).
+   so invoicing isn't double-keyed. See [`../../../wiki/commercial-spine.md`](../../../wiki/commercial-spine.md).
 
 This `intent.md` anchors both, but the **first shippable slice is the import + the OAuth connection** that
 everything else depends on.
@@ -21,7 +21,7 @@ everything else depends on.
 ## Vocabulary bridge (the crux)
 
 QBO's data model calls the company-you-invoice a **`Customer`**. This app calls that a **`dealer`** (the
-schema noun for what the business calls a "client" — see [`../../wiki/data-model.md`](../../wiki/data-model.md)
+schema noun for what the business calls a "client" — see [`../../../wiki/data-model.md`](../../../wiki/data-model.md)
 §Dealers). So the import is `QBO Customer → dealers`, and the person on the QBO customer record maps to a
 `dealer_contacts(role='staff')` (our point of contact *at* the dealership), **not** `role='customer'` (that
 role is reserved for the dealership's own car-buyers, which don't come from QBO).

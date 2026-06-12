@@ -79,7 +79,7 @@ external-id column**, so a re-import can't tell update-existing from create-new.
 ## Idempotency / dedup (mostly free)
 
 - `contact_identifiers` already has a **partial unique on `(kind, value) WHERE archived_at IS NULL`** — the
-  documented match-or-create dedup boundary ([`../../wiki/data-model.md`](../../wiki/data-model.md) §contact_identifiers).
+  documented match-or-create dedup boundary ([`../../../wiki/data-model.md`](../../../wiki/data-model.md) §contact_identifiers).
   Two QBO customers sharing a contact email won't double-create the person.
 - The external-link table gives dealer-level idempotency.
 - Net: import is safe to run repeatedly — exactly what an ongoing sync needs.
@@ -104,5 +104,5 @@ external-id column**, so a re-import can't tell update-existing from create-new.
   `…/openid_sandbox_configuration` (sandbox).
 - Token revoke: `https://developer.api.intuit.com/v2/oauth2/tokens/revoke`.
 - npm: `intuit-oauth`, `node-quickbooks`.
-- Repo precedent: `scripts/import-from-sheets.ts`; data model [`../../wiki/data-model.md`](../../wiki/data-model.md);
-  commercial spine [`../../wiki/commercial-spine.md`](../../wiki/commercial-spine.md).
+- Repo precedent: `scripts/import-from-sheets.ts`; data model [`../../../wiki/data-model.md`](../../../wiki/data-model.md);
+  commercial spine [`../../../wiki/commercial-spine.md`](../../../wiki/commercial-spine.md).
