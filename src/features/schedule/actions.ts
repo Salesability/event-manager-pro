@@ -557,6 +557,7 @@ export const resyncCampaign = capabilityClient('campaign:edit')
 
     const outcome = await reconcileCampaignCalendar(id, ctx.user.id);
     revalidateCampaignViews();
+    if (outcome === 'missing') return { error: 'Campaign not found.' };
     if (outcome === 'failed') {
       return {
         error:

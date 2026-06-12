@@ -13,6 +13,7 @@ import {
 } from '@/lib/db/schema';
 import { reconcileCampaignCalendar } from '@/features/schedule/calendar-sync';
 import {
+  GoogleCalendarError,
   createEvent,
   deleteEvent,
   googleCalendarConfigured,
@@ -27,12 +28,23 @@ import {
 // `pnpm test` skips this file when DATABASE_URL is unset.
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/google/calendar', () => ({
-  createEvent: vi.fn(),
-  patchEvent: vi.fn(),
-  deleteEvent: vi.fn(),
-  googleCalendarConfigured: vi.fn(() => true),
-}));
+vi.mock('@/lib/google/calendar', () => {
+  // A real class so `err instanceof GoogleCalendarError` works in reconcile.
+  class GoogleCalendarError extends Error {
+    status?: number;
+    constructor(message: string, status?: number) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return {
+    GoogleCalendarError,
+    createEvent: vi.fn(),
+    patchEvent: vi.fn(),
+    deleteEvent: vi.fn(),
+    googleCalendarConfigured: vi.fn(() => true),
+  };
+});
 
 try {
   process.loadEnvFile('.env.local');
@@ -243,6 +255,48 @@ describe.skipIf(!dbUrl)('reconcileCampaignCalendar DB writes (0077)', () => {
       const [event] = vi.mocked(createEvent).mock.calls[0];
       expect(event.attendees).toHaveLength(1); // dealer only
       expect(event.colorId).toBeUndefined(); // no coach → no colour
+    });
+  });
+
+  it('self-heals a stale link: a 404 on patch clears it and recreates the event', async () => {
+    await inRolledBackTx(async (tx) => {
+      const staleId = eventId();
+      const freshId = eventId();
+      vi.mocked(patchEvent).mockRejectedValue(new GoogleCalendarError('gone (404)', 404));
+      vi.mocked(createEvent).mockResolvedValue({ id: freshId, summary: 'x', start: {}, end: {} });
+      const campaignId = await seedCampaign(tx, { status: 'booked', gcalEventId: staleId });
+
+      const outcome = await reconcileCampaignCalendar(campaignId, userId, tx);
+
+      expect(outcome).toBe('synced');
+      expect(vi.mocked(createEvent)).toHaveBeenCalledTimes(1); // recreated, not failed
+      const [row] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId));
+      expect(row.gcalEventId).toBe(freshId); // relinked to the new event
+      expect(row.gcalSyncStatus).toBe('synced');
+    });
+  });
+
+  it('a non-404 patch error fails (does not blindly recreate a duplicate)', async () => {
+    await inRolledBackTx(async (tx) => {
+      const linkedId = eventId();
+      vi.mocked(patchEvent).mockRejectedValue(new GoogleCalendarError('server error (500)', 500));
+      const campaignId = await seedCampaign(tx, { status: 'booked', gcalEventId: linkedId });
+
+      const outcome = await reconcileCampaignCalendar(campaignId, userId, tx);
+
+      expect(outcome).toBe('failed');
+      expect(vi.mocked(createEvent)).not.toHaveBeenCalled(); // no duplicate on a transient error
+      const [row] = await tx.select().from(campaigns).where(eq(campaigns.id, campaignId));
+      expect(row.gcalEventId).toBe(linkedId); // link preserved
+      expect(row.gcalSyncStatus).toBe('failed');
+    });
+  });
+
+  it('missing: a nonexistent campaign returns "missing", not "skipped"', async () => {
+    await inRolledBackTx(async (tx) => {
+      const outcome = await reconcileCampaignCalendar(999_000_001, userId, tx);
+      expect(outcome).toBe('missing');
+      expect(vi.mocked(createEvent)).not.toHaveBeenCalled();
     });
   });
 });

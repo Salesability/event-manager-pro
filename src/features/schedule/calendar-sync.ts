@@ -9,6 +9,7 @@ import {
   dealers,
 } from '@/lib/db/schema';
 import {
+  GoogleCalendarError,
   createEvent,
   deleteEvent,
   googleCalendarConfigured,
@@ -27,7 +28,7 @@ import { siteUrl } from '@/lib/url';
 // event removed. Coach + dealer ride as guests; the description is customer-safe
 // by construction (the mapper only sees safe fields).
 
-export type CalendarSyncOutcome = 'synced' | 'removed' | 'failed' | 'skipped';
+export type CalendarSyncOutcome = 'synced' | 'removed' | 'failed' | 'skipped' | 'missing';
 
 // Accept either the app pool or a transaction so the integration test can drive
 // reconcile inside a rolled-back tx (cf. quote-push.ts). Server Actions call
@@ -87,9 +88,10 @@ async function markFailed(campaignId: number, userId: string, exec: Executor) {
 }
 
 // Reconcile one campaign's calendar event to match its current state. Always
-// best-effort: returns an outcome, never throws. `skipped` = Google isn't
-// configured (or no SITE_URL to build links / row gone), so the row's status is
-// left untouched.
+// best-effort: returns an outcome, NEVER throws (the whole body — including the
+// DB read — is inside the try). `skipped` = Google/SITE_URL unconfigured (status
+// untouched); `missing` = no such campaign; `failed` = a Google/DB error (status
+// marked `failed`).
 export async function reconcileCampaignCalendar(
   campaignId: number,
   userId: string,
@@ -103,13 +105,12 @@ export async function reconcileCampaignCalendar(
     return 'skipped'; // SITE_URL unset → can't build an absolute event link
   }
 
-  const row = await loadCampaignSyncInput(campaignId, exec);
-  if (!row) return 'skipped';
-
-  // booked/completed → the calendar should carry an event; draft/cancelled → none.
-  const wantsEvent = row.status === 'booked' || row.status === 'completed';
-
   try {
+    const row = await loadCampaignSyncInput(campaignId, exec);
+    if (!row) return 'missing';
+
+    // booked/completed → the calendar should carry an event; draft/cancelled → none.
+    const wantsEvent = row.status === 'booked' || row.status === 'completed';
     if (!wantsEvent) {
       if (row.gcalEventId) {
         await deleteEvent(row.gcalEventId); // idempotent: a 404/410 counts as removed
@@ -150,27 +151,52 @@ export async function reconcileCampaignCalendar(
       appLink,
     );
 
+    // Try to patch the linked event. If Google says it's gone (deleted
+    // out-of-band → 404/410), clear the stale link and fall through to recreate
+    // — so a re-sync is a real recovery path rather than failing forever.
+    let needsCreate = !row.gcalEventId;
     if (row.gcalEventId) {
-      await patchEvent(row.gcalEventId, event);
-      await exec
-        .update(campaigns)
-        .set({ gcalSyncStatus: 'synced', gcalSyncedAt: new Date(), updatedById: userId })
-        .where(eq(campaigns.id, campaignId));
-    } else {
+      try {
+        await patchEvent(row.gcalEventId, event);
+        await exec
+          .update(campaigns)
+          .set({ gcalSyncStatus: 'synced', gcalSyncedAt: new Date(), updatedById: userId })
+          .where(eq(campaigns.id, campaignId));
+      } catch (err) {
+        if (err instanceof GoogleCalendarError && (err.status === 404 || err.status === 410)) {
+          await exec
+            .update(campaigns)
+            .set({ gcalEventId: null })
+            .where(eq(campaigns.id, campaignId));
+          needsCreate = true;
+        } else {
+          throw err; // a real failure → outer catch marks `failed`
+        }
+      }
+    }
+
+    if (needsCreate) {
       const created = await createEvent(event);
       // Guarded backfill (mirrors the QBO push): a concurrent reconcile that
-      // already linked this campaign wins; our freshly-created event would be a
-      // duplicate invite, so best-effort delete it to keep one event per campaign.
-      const linked = await exec
-        .update(campaigns)
-        .set({
-          gcalEventId: created.id,
-          gcalSyncStatus: 'synced',
-          gcalSyncedAt: new Date(),
-          updatedById: userId,
-        })
-        .where(and(eq(campaigns.id, campaignId), isNull(campaigns.gcalEventId)))
-        .returning({ id: campaigns.id });
+      // already linked this campaign wins. The event was sent BEFORE the durable
+      // link is stored, so a backfill exception (or a lost race) must clean the
+      // event up, else it orphans in Google and the next sync sends a duplicate.
+      let linked: { id: number }[];
+      try {
+        linked = await exec
+          .update(campaigns)
+          .set({
+            gcalEventId: created.id,
+            gcalSyncStatus: 'synced',
+            gcalSyncedAt: new Date(),
+            updatedById: userId,
+          })
+          .where(and(eq(campaigns.id, campaignId), isNull(campaigns.gcalEventId)))
+          .returning({ id: campaigns.id });
+      } catch (dbErr) {
+        await deleteEvent(created.id).catch(() => {}); // don't orphan the event
+        throw dbErr;
+      }
       if (!linked.length) {
         await deleteEvent(created.id).catch(() => {});
       }

@@ -34,8 +34,16 @@ export type GoogleCalendarConfig = {
   subject: string;
 };
 
+/** A Calendar API error. `status` carries the HTTP status when one is available
+ *  (e.g. 404/410 lets a caller treat a patched-but-deleted event as "gone"). */
+export class GoogleCalendarError extends Error {
+  readonly status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 /** Thrown when the keyless token exchange fails (vs. a generic Calendar API error). */
-export class GoogleCalendarError extends Error {}
 export class GoogleCalendarAuthError extends GoogleCalendarError {}
 
 /** Non-throwing presence check — lets callers hint "not configured" before invoking. */
@@ -171,7 +179,7 @@ export function eventsUrl(calendarId: string, eventId?: string, sendUpdates: Sen
 
 async function asEvent(res: Response): Promise<GcalEvent> {
   if (!res.ok) {
-    throw new GoogleCalendarError(`calendar API error (${res.status}): ${await res.text()}`);
+    throw new GoogleCalendarError(`calendar API error (${res.status}): ${await res.text()}`, res.status);
   }
   return (await res.json()) as GcalEvent;
 }
@@ -216,6 +224,6 @@ export async function deleteEvent(eventId: string, sendUpdates: SendUpdates = 'a
     headers: { authorization: `Bearer ${token}` },
   });
   if (!res.ok && res.status !== 404 && res.status !== 410) {
-    throw new GoogleCalendarError(`deleteEvent failed (${res.status}): ${await res.text()}`);
+    throw new GoogleCalendarError(`deleteEvent failed (${res.status}): ${await res.text()}`, res.status);
   }
 }
