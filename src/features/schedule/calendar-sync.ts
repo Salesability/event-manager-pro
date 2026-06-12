@@ -29,11 +29,18 @@ import { siteUrl } from '@/lib/url';
 
 export type CalendarSyncOutcome = 'synced' | 'removed' | 'failed' | 'skipped';
 
+// Accept either the app pool or a transaction so the integration test can drive
+// reconcile inside a rolled-back tx (cf. quote-push.ts). Server Actions call
+// with the default (the app pool) — reconcile runs after their own tx commits.
+type Database = typeof db;
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type Executor = Database | Transaction;
+
 // One-shot read of everything the mapper needs: the campaign, its dealer, the
 // coach (name + primary email, joined from contact_identifiers), and the format
 // label. Coach colour is derived, not stored (decision.md §7).
-async function loadCampaignSyncInput(campaignId: number) {
-  const [row] = await db
+async function loadCampaignSyncInput(campaignId: number, exec: Executor) {
+  const [row] = await exec
     .select({
       id: campaigns.id,
       publicId: campaigns.publicId,
@@ -72,8 +79,8 @@ async function loadCampaignSyncInput(campaignId: number) {
   return row ?? null;
 }
 
-async function markFailed(campaignId: number, userId: string) {
-  await db
+async function markFailed(campaignId: number, userId: string, exec: Executor) {
+  await exec
     .update(campaigns)
     .set({ gcalSyncStatus: 'failed', updatedById: userId })
     .where(eq(campaigns.id, campaignId));
@@ -86,6 +93,7 @@ async function markFailed(campaignId: number, userId: string) {
 export async function reconcileCampaignCalendar(
   campaignId: number,
   userId: string,
+  exec: Executor = db,
 ): Promise<CalendarSyncOutcome> {
   if (!googleCalendarConfigured()) return 'skipped';
   let appLink: string;
@@ -95,7 +103,7 @@ export async function reconcileCampaignCalendar(
     return 'skipped'; // SITE_URL unset → can't build an absolute event link
   }
 
-  const row = await loadCampaignSyncInput(campaignId);
+  const row = await loadCampaignSyncInput(campaignId, exec);
   if (!row) return 'skipped';
 
   // booked/completed → the calendar should carry an event; draft/cancelled → none.
@@ -106,7 +114,7 @@ export async function reconcileCampaignCalendar(
       if (row.gcalEventId) {
         await deleteEvent(row.gcalEventId); // idempotent: a 404/410 counts as removed
       }
-      await db
+      await exec
         .update(campaigns)
         .set({
           gcalEventId: null,
@@ -144,7 +152,7 @@ export async function reconcileCampaignCalendar(
 
     if (row.gcalEventId) {
       await patchEvent(row.gcalEventId, event);
-      await db
+      await exec
         .update(campaigns)
         .set({ gcalSyncStatus: 'synced', gcalSyncedAt: new Date(), updatedById: userId })
         .where(eq(campaigns.id, campaignId));
@@ -153,7 +161,7 @@ export async function reconcileCampaignCalendar(
       // Guarded backfill (mirrors the QBO push): a concurrent reconcile that
       // already linked this campaign wins; our freshly-created event would be a
       // duplicate invite, so best-effort delete it to keep one event per campaign.
-      const linked = await db
+      const linked = await exec
         .update(campaigns)
         .set({
           gcalEventId: created.id,
@@ -170,7 +178,7 @@ export async function reconcileCampaignCalendar(
     return 'synced';
   } catch (err) {
     console.error(`[calendar-sync] campaign ${campaignId} sync failed:`, err);
-    await markFailed(campaignId, userId).catch(() => {});
+    await markFailed(campaignId, userId, exec).catch(() => {});
     return 'failed';
   }
 }
