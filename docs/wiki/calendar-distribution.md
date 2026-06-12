@@ -5,7 +5,7 @@ truth**; Google Calendar is a **one-way projection** (app → calendar), not a r
 Google are not read back. This replaces the legacy failure mode — the whole schedule living on one person's
 *personal* calendar, with internal ops data leaked into the invite description.
 
-Built in chunk [`0077-calendar-distribution`](../chunks/0077-calendar-distribution/plan.md). Structurally it mirrors
+Built in chunk [`0077-calendar-distribution`](../chunks/closed/0077-calendar-distribution/plan.md). Structurally it mirrors
 a QuickBooks push slice (`0070`/`0073`): external-API client wrapper → pure domain→payload mapper → a nullable
 durable-link column → wiring into the existing mutation Server Actions → tests.
 
@@ -37,7 +37,7 @@ data migration (old events keep their organizer; only new ones switch).
 
 Provisioning details (SA email, Client ID, calendar ID, the `tokenCreator` grant, the three env vars) live in the
 go-live runbook: [`go-live-accounts.md` §4a](go-live-accounts.md). Auth model rationale:
-[chunk decision.md §3/§4a](../chunks/0077-calendar-distribution/decision.md).
+[chunk decision.md §3/§4a](../chunks/closed/0077-calendar-distribution/decision.md).
 
 ## The event body
 

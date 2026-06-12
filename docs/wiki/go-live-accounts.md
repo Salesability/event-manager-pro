@@ -178,7 +178,7 @@ colour-by-coach. The app stays the source of truth; the calendar is a one-way pr
 keyless: the Cloud Run runtime SA impersonates a dedicated calendar SA via IAM `signJwt`, which signs a
 domain-wide-delegation (DWD) assertion to act as a licensed Workspace user (DWD is **required** to invite guests).
 The dealer-facing **organizer** is the calendar's **display name**, not that user — so no person's name is on the
-invite and no per-seat `events@` mailbox is ever needed (decision `../chunks/0077-calendar-distribution/decision.md` §3/§4a).
+invite and no per-seat `events@` mailbox is ever needed (decision `../chunks/closed/0077-calendar-distribution/decision.md` §3/§4a).
 
 **Provisioned (project `eventpro-498313`, 2026-06-12):**
 - SA **`eventpro-calendar@eventpro-498313.iam.gserviceaccount.com`** (Client ID `101571815389036082153`) — the keyless signer; never dealer-visible.
