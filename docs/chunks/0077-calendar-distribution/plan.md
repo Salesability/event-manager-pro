@@ -10,7 +10,7 @@
 |-------|--------|--------|
 | 0: Owner setup (SA → DWD → calendar) | ✅ Done — keyless pipeline smoke **PASSED** 2026-06-12 | - |
 | 1: Google client wrapper | ✅ Done — `src/lib/google/calendar.ts`, test 7/7, tsc clean (uncommitted) | - |
-| 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | - |
+| 2: Campaign → event mapper | ✅ Done — `src/lib/google/calendar-event.ts`, test 12/12, tsc clean | `dc733e0` |
 | 3: Schema (`gcal_event_id` + coach colour) | Pending | - |
 | 4: Wire into campaign Server Actions | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
