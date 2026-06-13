@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema + storage scheme (`quote_attachments` spine) | Done | `42d8259` |
-| 2: Send-dialog upload UI + upload action | Pending | - |
+| 2: Send-dialog upload UI + upload action | Done | `bbb03be` |
 | 3: Wire uploaded attachments into `sendQuote` | Pending | - |
 | 4: Tests + smoke + wiki | Pending | - |
 
@@ -41,7 +41,12 @@ anchor is the nearest sibling in that same file.
 | Upload + remove (detach) Server Actions | `src/features/quotes/actions.ts` (`sendQuote` + sibling guarded actions) | Same layer — capability-gated Server Action, zod input, `recordAudit`, `revalidate*`. Mutations are Server Actions, not route handlers (CLAUDE.md). |
 | Append uploads into the send | `src/features/quotes/actions.ts:1064` (the `attachments: [...]` array) | The exact array we extend; `SendAttachment` already accepts N files — no email-layer change. |
 | Upload section in the send dialog | `src/features/quotes/quote-composer.tsx` (the `confirmSendOpen` dialog) | The dialog we extend; RHF + zod + shadcn `<Field>` per [`forms.md`](../../wiki/forms.md); dialog submit stays in `<DialogFooter>`. |
-| File-upload control (`<input type="file">` → upload action) | *(no existing anchor — first file input in the repo)* | **Net-new for this codebase.** No drag-drop/file-picker exists yet. Decide route: Server Action with the file in `FormData`, or a signed-upload URL from `signedUrl()`. Flag in review. |
+| File-upload control (`<input type="file">` → upload action) | *(no existing anchor — first file input in the repo)* | **Net-new for this codebase.** Landed as a `FormData`-with-`File` Server Action (not a signed-upload URL — the bytes are small, ≤10 MB, and the action already owns validation + the `quote_attachments` insert in one round-trip). Styled with Tailwind `file:` variants. |
+
+**Landed in Phase 2 (not in the original map):**
+| `src/features/quotes/attachments.ts` — shared MIME allowlist + caps + key/filename helpers + `QuoteAttachmentView` | `src/features/quotes/constants.ts` | A pure (no `'server-only'`) sibling module so the client pre-check and the server enforcement share one source of truth. |
+| `deleteObject` in `src/lib/storage/gcs.ts` | `getObject` / `putObject` in the same file | Same `{ ok } \| { error }` union shape; `ignoreNotFound` so a re-delete is a no-op success. |
+| `audit_action` enum append (`quote.attachment_*`) — `0039_quiet_blur.sql` | `drizzle/0019`, `0020` (`ALTER TYPE ADD VALUE`) | `recordAudit` writes a `pgEnum`; the two new actions needed the enum extended. Append-only, applied to sandbox. |
 
 **Conventions referenced:**
 - `docs/wiki/data-model.md` — column conventions (`bigIdentity`, `timestamps`, `actors`); FK `onDelete` discipline.
@@ -51,7 +56,7 @@ anchor is the nearest sibling in that same file.
 - `src/lib/storage/gcs.ts` — `putObject` / `getObject` / `signedUrl` (GCS, **not** Supabase Storage). Max signed-URL TTL is 7 days.
 - `src/lib/email/send.ts:4` — `SendAttachment { filename, content: Buffer, contentType? }`; `sendEmail` already maps an N-element array into Resend.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -68,11 +73,13 @@ anchor is the nearest sibling in that same file.
 - [x] Generate migration (`0038_daily_azazel.sql`); verify journal `when` ordering (1781309007600 > 0037's 1781292323550 ✓); append standard RLS (service_role + staff, matching `quote_line_items`); apply to **sandbox** (✓ applied).
 
 #### Phase 2: Send-dialog upload UI + upload action
-- [ ] Server Action: accept an uploaded file (`FormData`) → validate type (PDF / PNG / JPG / WEBP / docx / xlsx) + size (≤ **10 MB/file**) → `putObject` to GCS → insert `quote_attachments` row (gated by the same capability as send-quote, `recordAudit`, `revalidate`). Define a shared MIME allowlist + caps constant reused by the client + the send-time total guard.
-- [ ] Server Action: remove an attachment (delete the row; optionally delete the GCS object) before send.
-- [ ] Loader: list a quote's `quote_attachments` for the dialog.
-- [ ] Extend the `confirmSendOpen` dialog in `quote-composer.tsx`: a "Documents" section with `<input type="file">` (multi), the current upload list, and a remove affordance; enforce type/size caps client-side too.
-- [ ] Test: upload inserts a row + GCS key; remove deletes the row; list reflects both.
+- [x] Shared MIME allowlist + caps + key/filename helpers in `src/features/quotes/attachments.ts` (no `'server-only'` — client + server both import it so the pre-check can't drift). Added `deleteObject` to `src/lib/storage/gcs.ts`.
+- [x] Server Action `uploadQuoteAttachment` (`actions.ts`): validate type + size (≤ 10 MB) + terminal-status guard + running-total cap → `putObject` → insert `quote_attachments` row (gated `quote:edit`, `recordAudit('quote.attachment_added')`, `revalidate`). Returns the inserted view-model row.
+- [x] Server Action `removeQuoteAttachment` (`actions.ts`): guarded `DELETE … RETURNING` (by `id` + `quoteId`) → best-effort `deleteObject` → `recordAudit('quote.attachment_removed')`.
+- [x] Loader `loadQuoteAttachments` in `queries.ts` for the dialog.
+- [x] Extend the `confirmSendOpen` dialog in `quote-composer.tsx`: a "Documents" section with a multi `<input type="file">`, the current upload list (filename · size · Remove), client-side type/size/total pre-check, and a running total hint. Send disabled while uploading. Wired `initialAttachments` from `/quotes/[id]/page.tsx`.
+- [x] **Audit enum:** `recordAudit` writes a `pgEnum` value — added `quote.attachment_added` / `quote.attachment_removed` to `audit_action` (migration `0039_quiet_blur.sql`, `ALTER TYPE ADD VALUE`, applied to **sandbox**). Mirrors the 0019/0020 enum-append precedent.
+- [x] Test: 6 cases in `actions.test.ts` (upload happy-path inserts row + GCS key + audit; rejects unsupported type / over-cap / terminal quote; remove deletes row + object + audit; remove-not-found). Loader/list-reflects covered by the Phase 4 integration test.
 
 #### Phase 3: Wire uploaded attachments into `sendQuote`
 - [ ] In `sendQuote` (`actions.ts:820`), after the quote PDF is assembled, load this quote's `quote_attachments`.
