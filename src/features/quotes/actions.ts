@@ -1294,6 +1294,18 @@ export const removeQuoteAttachment = capabilityClient('quote:edit')
       return { error: 'Invalid id.' };
     }
 
+    // Symmetry with uploadQuoteAttachment: a terminal contract's attachment set
+    // is locked — refuse removal on accepted/declined (Codex 0078 review).
+    const [quote] = await db
+      .select({ status: quotes.status })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!quote) return { error: 'Quote not found.' };
+    if (quote.status === 'accepted' || quote.status === 'declined') {
+      return { error: `This quote has been ${quote.status} — attachments are locked.` };
+    }
+
     const [removed] = await db
       .delete(quoteAttachments)
       .where(

@@ -63,11 +63,16 @@ export function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Strip path separators + cap length on a user filename for display + the email
-// attachment name. Keeps the original spelling (spaces included) — the GCS key
-// gets the stricter `attachmentStorageKey` sanitizer instead.
+// Strip path separators + control/format chars + cap length on a user filename
+// for display + the email attachment name. Keeps the original spelling (spaces
+// included) — the GCS key gets the stricter `attachmentStorageKey` sanitizer
+// instead. `\p{Cc}` removes control chars (CR/LF/NUL); `\p{Cf}` removes format
+// chars (Unicode bidi overrides) so a crafted filename can't smuggle line
+// breaks or misleading direction into the outgoing email's attachment name.
 export function cleanDisplayFilename(name: string): string {
-  const base = (name.split(/[/\\]/).pop() ?? name).trim();
+  const base = (name.split(/[/\\]/).pop() ?? name)
+    .replace(/[\p{Cc}\p{Cf}]/gu, '')
+    .trim();
   return base.slice(0, 200) || 'file';
 }
 

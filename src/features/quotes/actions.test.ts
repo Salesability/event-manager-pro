@@ -1425,6 +1425,7 @@ describe('uploadQuoteAttachment', () => {
 describe('removeQuoteAttachment', () => {
   it('deletes the row, best-effort deletes the object, emits audit', async () => {
     mocks.dbResults = [
+      [{ status: 'draft' }], // terminal-status guard
       [
         {
           id: 5,
@@ -1451,12 +1452,24 @@ describe('removeQuoteAttachment', () => {
   });
 
   it('returns an error when the attachment is not found (no audit)', async () => {
-    mocks.dbResults = [[]]; // delete matched nothing
+    mocks.dbResults = [[{ status: 'draft' }], []]; // status ok, delete matched nothing
     const f = new FormData();
     f.set('quoteId', '7');
     f.set('attachmentId', '999');
     const result = await call(removeQuoteAttachment(f));
     expect((result as { error: string }).error).toContain('not found');
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('refuses to remove an attachment from a terminal (accepted) quote', async () => {
+    mocks.dbResults = [[{ status: 'accepted' }]];
+    const f = new FormData();
+    f.set('quoteId', '7');
+    f.set('attachmentId', '5');
+    const result = await call(removeQuoteAttachment(f));
+    expect((result as { error: string }).error).toContain('accepted');
+    expect(mocks.deletes).toHaveLength(0);
     expect(mocks.deleteObject).not.toHaveBeenCalled();
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
