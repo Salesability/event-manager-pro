@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema + storage scheme (`quote_attachments` spine) | Done | `42d8259` |
 | 2: Send-dialog upload UI + upload action | Done | `bbb03be` |
-| 3: Wire uploaded attachments into `sendQuote` | Pending | - |
+| 3: Wire uploaded attachments into `sendQuote` | Done | `49cba17` |
 | 4: Tests + smoke + wiki | Pending | - |
 
 **Resolved owner decisions (2026-06-12):** file types = PDF + images (PNG/JPG/WEBP) + Office docs
@@ -56,7 +56,7 @@ anchor is the nearest sibling in that same file.
 - `src/lib/storage/gcs.ts` — `putObject` / `getObject` / `signedUrl` (GCS, **not** Supabase Storage). Max signed-URL TTL is 7 days.
 - `src/lib/email/send.ts:4` — `SendAttachment { filename, content: Buffer, contentType? }`; `sendEmail` already maps an N-element array into Resend.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -82,12 +82,12 @@ anchor is the nearest sibling in that same file.
 - [x] Test: 6 cases in `actions.test.ts` (upload happy-path inserts row + GCS key + audit; rejects unsupported type / over-cap / terminal quote; remove deletes row + object + audit; remove-not-found). Loader/list-reflects covered by the Phase 4 integration test.
 
 #### Phase 3: Wire uploaded attachments into `sendQuote`
-- [ ] In `sendQuote` (`actions.ts:820`), after the quote PDF is assembled, load this quote's `quote_attachments`.
-- [ ] For each, `getObject` the bytes from GCS and push `{ filename, content, contentType }` onto the `attachments` array (`actions.ts:1064`).
-- [ ] **Total-size guard:** sum quote PDF + all attachments; if over **20 MB total**, fail closed with a clear message **before** the status transition (don't half-send).
-- [ ] A missing/failed GCS fetch fails the send with a repairable error (mirror the existing "PDF upload failed" degraded-state handling), not a silent drop.
-- [ ] Extend the `quote.sent` audit payload to denorm the attachment filenames/count that went out.
-- [ ] Test: a quote with 2 uploads sends an email whose `attachments` array has 3 entries (PDF + 2); over-size set fails closed.
+- [x] In `sendQuote`, after the quote PDF renders, load this quote's `quote_attachments` (ordered by `displayOrder`, id) — **before** the guarded UPDATE.
+- [x] For each, `getObject` the bytes from GCS and push `{ filename, content, contentType }` onto the email `attachments` array (quote PDF first, uploads after).
+- [x] **Total-size guard:** sum quote PDF byteLength + all attachment `byteSize`; if over **20 MB total**, fail closed **before** the status transition (no half-send). Checked from row sizes (cheap) before any byte fetch.
+- [x] A missing/unreadable GCS object fails the send with a repairable "remove and re-upload" message — and, being pre-transition, leaves the row sendable (better than the post-transition degraded PDF-upload path).
+- [x] Extended the `quote.sent` audit payload with `attachmentCount` + `attachments[]` (filename + byteSize) denorm.
+- [x] Test: 2 new `sendQuote` cases (PDF + 2 uploads → 3 email attachments + audit denorm; over-cap set fails closed before the transition). Made the db mock's `select` table-aware so `quote_attachments` reads pull from a dedicated `attachmentResults` queue (zero churn to the 15 existing sendQuote tests).
 
 #### Phase 4: Tests + smoke + wiki
 - [ ] Integration test: end-to-end send with uploads against a real DB (rolled back) — assert the `sendEmail` payload + audit denorm.
