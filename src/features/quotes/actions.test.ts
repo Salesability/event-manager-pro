@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   renderQuotePdf: vi.fn(),
   putObject: vi.fn(),
+  deleteObject: vi.fn(),
   resolveQuoteRecipient: vi.fn(),
   sendEmail: vi.fn(),
   quoteEmail: vi.fn(),
@@ -54,6 +55,7 @@ vi.mock('@/lib/pdf/render-quote', () => ({
 }));
 vi.mock('@/lib/storage/gcs', () => ({
   putObject: mocks.putObject,
+  deleteObject: mocks.deleteObject,
 }));
 vi.mock('./recipient', () => ({
   resolveQuoteRecipient: mocks.resolveQuoteRecipient,
@@ -90,7 +92,14 @@ vi.mock('@/lib/db', () => {
     delete: (table: unknown) => ({
       where: () => {
         mocks.deletes.push({ table: tableName(table) });
-        return Promise.resolve([]);
+        // Two shapes: the 0062 line-items path awaits `.where()` directly
+        // (resolves to [], no dbResults consume); the 0078 attachment-remove
+        // path calls `.returning()` (consumes one dbResults entry).
+        return {
+          returning: () => Promise.resolve(mocks.dbResults.shift() ?? []),
+          then: (onFulfilled: (v: unknown[]) => unknown) =>
+            Promise.resolve([]).then(onFulfilled),
+        };
       },
     }),
     update: (table: unknown) => ({
@@ -142,12 +151,15 @@ import {
   acceptQuote,
   createQuote,
   declineQuote,
+  removeQuoteAttachment,
   sendQuote,
   setQuoteDealer,
   setQuoteInputs,
   setQuoteTax,
+  uploadQuoteAttachment,
 } from './actions';
 import { MAX_ADDRESS_LINES } from './constants';
+import { MAX_TOTAL_ATTACHMENT_BYTES } from './attachments';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 
 // Unwrap the next-safe-action envelope into the legacy ActionResult shape.
@@ -186,6 +198,7 @@ beforeEach(() => {
   mocks.loadCurrentMembership.mockResolvedValue(null);
   mocks.renderQuotePdf.mockResolvedValue({ ok: true, body: Buffer.from('%PDF-1.7 stub') });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'stub' });
+  mocks.deleteObject.mockResolvedValue({ ok: true });
   mocks.resolveQuoteRecipient.mockResolvedValue({
     ok: true,
     recipient: { email: 'buyer@dealer.test', firstName: 'Pat' },
@@ -1228,5 +1241,141 @@ describe('createQuote (0062 picker path)', () => {
     );
     expect((result as { error: string }).error).toContain('catalogue');
     expect(mocks.inserts).toHaveLength(0);
+  });
+});
+
+// 0078 — quote attachments. Build a FormData carrying a real File so the action
+// exercises the same `formData.get('file') instanceof File` path the dialog hits.
+function uploadFd(
+  quoteId: string,
+  file: { name: string; type: string; bytes: number },
+): FormData {
+  const f = new FormData();
+  f.set('quoteId', quoteId);
+  f.set('file', new File([new Uint8Array(file.bytes)], file.name, { type: file.type }));
+  return f;
+}
+
+describe('uploadQuoteAttachment', () => {
+  it('stores the file in GCS + inserts a row + emits audit', async () => {
+    mocks.dbResults = [
+      [{ status: 'draft' }], // quote status lookup
+      [], // existing attachments (none)
+      [
+        {
+          id: 5,
+          filename: 'Banking Info.pdf',
+          contentType: 'application/pdf',
+          byteSize: 1234,
+        },
+      ], // insert ... returning
+    ];
+
+    const result = await call(
+      uploadQuoteAttachment(
+        uploadFd('7', { name: 'Banking Info.pdf', type: 'application/pdf', bytes: 1234 }),
+      ),
+    );
+
+    expect(result).toMatchObject({ ok: true, attachment: { id: 5 } });
+    // GCS key is uuid-prefixed under the quote's attachments path; the display
+    // name's space is sanitized to `_` in the key (kept as-is in the row).
+    expect(mocks.putObject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bucket: 'test-bucket',
+        contentType: 'application/pdf',
+        key: expect.stringMatching(/^quotes\/7\/attachments\/[0-9a-f-]+-Banking_Info\.pdf$/),
+      }),
+    );
+    expect(mocks.inserts).toHaveLength(1);
+    expect(mocks.inserts[0].table).toBe('quote_attachments');
+    expect(mocks.inserts[0].values).toMatchObject({
+      quoteId: 7,
+      filename: 'Banking Info.pdf',
+      contentType: 'application/pdf',
+      byteSize: 1234,
+      displayOrder: 1,
+    });
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote.attachment_added', targetId: 7 }),
+    );
+  });
+
+  it('rejects an unsupported file type before any side effect', async () => {
+    const result = await call(
+      uploadQuoteAttachment(
+        uploadFd('7', { name: 'notes.txt', type: 'text/plain', bytes: 10 }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('Unsupported file type');
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.inserts).toHaveLength(0);
+  });
+
+  it('fails closed when the running total would exceed the payload cap', async () => {
+    mocks.dbResults = [
+      [{ status: 'draft' }],
+      [{ byteSize: MAX_TOTAL_ATTACHMENT_BYTES, displayOrder: 1 }], // already at the cap
+    ];
+    const result = await call(
+      uploadQuoteAttachment(
+        uploadFd('7', { name: 'extra.pdf', type: 'application/pdf', bytes: 100 }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('exceed');
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.inserts).toHaveLength(0);
+  });
+
+  it('refuses to attach to a terminal (accepted) quote', async () => {
+    mocks.dbResults = [[{ status: 'accepted' }]];
+    const result = await call(
+      uploadQuoteAttachment(
+        uploadFd('7', { name: 'late.pdf', type: 'application/pdf', bytes: 100 }),
+      ),
+    );
+    expect((result as { error: string }).error).toContain('accepted');
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.inserts).toHaveLength(0);
+  });
+});
+
+describe('removeQuoteAttachment', () => {
+  it('deletes the row, best-effort deletes the object, emits audit', async () => {
+    mocks.dbResults = [
+      [
+        {
+          id: 5,
+          storageKey: 'quotes/7/attachments/uuid-file.pdf',
+          filename: 'file.pdf',
+        },
+      ], // delete ... returning
+    ];
+
+    const f = new FormData();
+    f.set('quoteId', '7');
+    f.set('attachmentId', '5');
+    const result = await call(removeQuoteAttachment(f));
+
+    expect(result).toEqual({ ok: true, attachmentId: 5 });
+    expect(mocks.deletes).toContainEqual({ table: 'quote_attachments' });
+    expect(mocks.deleteObject).toHaveBeenCalledWith(
+      'test-bucket',
+      'quotes/7/attachments/uuid-file.pdf',
+    );
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'quote.attachment_removed', targetId: 7 }),
+    );
+  });
+
+  it('returns an error when the attachment is not found (no audit)', async () => {
+    mocks.dbResults = [[]]; // delete matched nothing
+    const f = new FormData();
+    f.set('quoteId', '7');
+    f.set('attachmentId', '999');
+    const result = await call(removeQuoteAttachment(f));
+    expect((result as { error: string }).error).toContain('not found');
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 });

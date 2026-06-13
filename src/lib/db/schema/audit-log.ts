@@ -19,8 +19,10 @@ import { bigIdentity } from './_columns';
 // audit rows have a single `occurredAt` and never archive.
 // Order matches the live Postgres enum (snapshot at drizzle/meta/0020_snapshot.json).
 // The 0019 migration inserted `msa.*` BEFORE `campaign.cancelled` (ALTER TYPE ADD VALUE BEFORE),
-// and 0020 inserted `quote.edited` AFTER `quote.sent`. Keeping the TS array in lock-step
-// with the database order keeps drizzle-kit diffs quiet around this enum.
+// and 0020 inserted `quote.edited` AFTER `quote.sent`. 0078 appended the two
+// `quote.attachment_*` values at the end (ALTER TYPE ADD VALUE, migration 0039).
+// Keeping the TS array in lock-step with the database order keeps drizzle-kit
+// diffs quiet around this enum.
 export const auditAction = pgEnum('audit_action', [
   'user.role_changed',
   'user.deactivated',
@@ -36,6 +38,8 @@ export const auditAction = pgEnum('audit_action', [
   'quote.edited',
   'quote.accepted',
   'quote.declined',
+  'quote.attachment_added',
+  'quote.attachment_removed',
 ]);
 
 export const auditLog = pgTable(

@@ -14,6 +14,7 @@ export type PutResult =
   | { ok: true; key: string }
   | { error: string; code?: 'precondition' };
 export type SignedUrlResult = { ok: true; url: string } | { error: string };
+export type DeleteResult = { ok: true } | { error: string };
 
 // 7-day cap on signed-URL TTL — anything customer-facing should be re-issued
 // rather than persisted as a long-lived link.
@@ -88,6 +89,23 @@ export async function getObject(bucket: string, key: string): Promise<GetResult>
     return { ok: true, body };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'GCS getObject failed.' };
+  }
+}
+
+// Delete an object. `ignoreNotFound` so a re-delete (or a delete of an object
+// that never landed) is a no-op success rather than an error — callers use this
+// best-effort to clean up after a removed attachment.
+export async function deleteObject(
+  bucket: string,
+  key: string,
+): Promise<DeleteResult> {
+  const storage = client();
+  if ('error' in storage) return storage;
+  try {
+    await storage.bucket(bucket).file(key).delete({ ignoreNotFound: true });
+    return { ok: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'GCS deleteObject failed.' };
   }
 }
 

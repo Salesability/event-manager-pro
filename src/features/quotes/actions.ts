@@ -1,9 +1,10 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealers, masterServiceAgreements, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
+import { dealers, masterServiceAgreements, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { dealerTaxRatePct } from '@/features/tax-rates/queries';
 import { recordAudit } from '@/features/audit/actions';
@@ -20,7 +21,17 @@ import {
 import { lineFingerprint, mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
 import type { ServiceItem } from '@/features/services/queries';
 import { renderQuotePdf, type QuoteData } from '@/lib/pdf/render-quote';
-import { putObject, signedUrl } from '@/lib/storage/gcs';
+import { deleteObject, putObject, signedUrl } from '@/lib/storage/gcs';
+import {
+  ATTACHMENT_TYPE_LABELS,
+  attachmentStorageKey,
+  cleanDisplayFilename,
+  isAllowedAttachmentType,
+  MAX_ATTACHMENT_BYTES,
+  MAX_TOTAL_ATTACHMENT_BYTES,
+  formatBytes,
+  type QuoteAttachmentView,
+} from './attachments';
 import { sendEmail } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
@@ -1092,6 +1103,179 @@ export const sendQuote = capabilityClient('quote:edit')
 
     revalidateQuoteViews();
     return { ok: true };
+  });
+
+// 0078 — local-upload attachment spine. A coach uploads supporting paperwork
+// (forms, banking info, waivers) from the send dialog; `sendQuote` (Phase 3)
+// fetches each row's bytes and appends them to the outgoing email alongside the
+// quote PDF. Gated by `quote:edit` — the same capability that owns send, so no
+// new gate-matrix row. Type allowlist + per-file/total caps mirror the client
+// pre-check via the shared `./attachments` module so the two can't drift.
+
+type UploadAttachmentResult =
+  | { ok: true; attachment: QuoteAttachmentView }
+  | { error: string };
+
+// validation: skip — FormData carries `quoteId` (parseId) + a `file` Blob; the
+// body validates type/size/quote-status before any side effect.
+export const uploadQuoteAttachment = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<UploadAttachmentResult> => {
+    const userId = ctx.user.id;
+
+    const quoteId = parseId(formData, 'quoteId');
+    if (quoteId == null) return { error: 'Invalid quote id.' };
+
+    const bucket = process.env.GCS_BUCKET;
+    if (!bucket) {
+      return { error: 'GCS_BUCKET is not configured; cannot store attachments.' };
+    }
+
+    const file = formData.get('file');
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: 'No file provided.' };
+    }
+    if (!isAllowedAttachmentType(file.type)) {
+      return { error: `Unsupported file type. Allowed: ${ATTACHMENT_TYPE_LABELS}.` };
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return {
+        error: `File is too large (max ${formatBytes(MAX_ATTACHMENT_BYTES)} per file).`,
+      };
+    }
+
+    // Never attach to a terminal contract — mirror `sendQuote`'s status guard so
+    // a quote accepted/declined between dialog-open and upload fails closed.
+    const [quote] = await db
+      .select({ status: quotes.status })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!quote) return { error: 'Quote not found.' };
+    if (quote.status === 'accepted' || quote.status === 'declined') {
+      return { error: `This quote has been ${quote.status} — attachments are locked.` };
+    }
+
+    // Early total-payload guard: existing attachment bytes + this file. The send
+    // action re-checks against the rendered PDF too (the authoritative ceiling);
+    // this just stops the coach piling on files that can never go out.
+    const existing = await db
+      .select({
+        byteSize: quoteAttachments.byteSize,
+        displayOrder: quoteAttachments.displayOrder,
+      })
+      .from(quoteAttachments)
+      .where(eq(quoteAttachments.quoteId, quoteId));
+    const existingTotal = existing.reduce((sum, r) => sum + r.byteSize, 0);
+    if (existingTotal + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+      return {
+        error: `Total attachments would exceed ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)}. Remove a file first.`,
+      };
+    }
+    const nextOrder =
+      existing.reduce((max, r) => Math.max(max, r.displayOrder), 0) + 1;
+
+    const displayName = cleanDisplayFilename(file.name);
+    const storageKey = attachmentStorageKey(quoteId, randomUUID(), file.name);
+    const body = Buffer.from(await file.arrayBuffer());
+    const uploaded = await putObject({
+      bucket,
+      key: storageKey,
+      body,
+      contentType: file.type,
+    });
+    if ('error' in uploaded) {
+      return { error: 'Attachment upload failed; please retry.' };
+    }
+
+    const [row] = await db
+      .insert(quoteAttachments)
+      .values({
+        quoteId,
+        filename: displayName,
+        storageKey,
+        contentType: file.type,
+        byteSize: file.size,
+        displayOrder: nextOrder,
+        createdById: userId,
+        updatedById: userId,
+      })
+      .returning({
+        id: quoteAttachments.id,
+        filename: quoteAttachments.filename,
+        contentType: quoteAttachments.contentType,
+        byteSize: quoteAttachments.byteSize,
+      });
+
+    await recordAudit({
+      action: 'quote.attachment_added',
+      targetTable: 'quotes',
+      targetId: quoteId,
+      payload: {
+        attachmentId: row.id,
+        filename: row.filename,
+        byteSize: row.byteSize,
+        contentType: row.contentType,
+      },
+    });
+
+    revalidateQuoteViews();
+    return { ok: true, attachment: row };
+  });
+
+type RemoveAttachmentResult =
+  | { ok: true; attachmentId: number }
+  | { error: string };
+
+// Detach an upload before send. Deletes the row (guarded by `quoteId` so an id
+// from a different quote can't be removed) and best-effort deletes the GCS
+// object. A failed object delete doesn't fail the action — the row is already
+// gone and an orphaned object is harmless (retention is keep-forever anyway).
+// validation: skip — id-only (`quoteId` + `attachmentId` via parseId).
+export const removeQuoteAttachment = capabilityClient('quote:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<RemoveAttachmentResult> => {
+    const quoteId = parseId(formData, 'quoteId');
+    const attachmentId = parseId(formData, 'attachmentId');
+    if (quoteId == null || attachmentId == null) {
+      return { error: 'Invalid id.' };
+    }
+
+    const [removed] = await db
+      .delete(quoteAttachments)
+      .where(
+        and(
+          eq(quoteAttachments.id, attachmentId),
+          eq(quoteAttachments.quoteId, quoteId),
+        ),
+      )
+      .returning({
+        id: quoteAttachments.id,
+        storageKey: quoteAttachments.storageKey,
+        filename: quoteAttachments.filename,
+      });
+    if (!removed) return { error: 'Attachment not found.' };
+
+    const bucket = process.env.GCS_BUCKET;
+    if (bucket) {
+      const del = await deleteObject(bucket, removed.storageKey);
+      if ('error' in del) {
+        console.error('attachment object delete failed', {
+          storageKey: removed.storageKey,
+          error: del.error,
+        });
+      }
+    }
+
+    await recordAudit({
+      action: 'quote.attachment_removed',
+      targetTable: 'quotes',
+      targetId: quoteId,
+      payload: { attachmentId: removed.id, filename: removed.filename },
+    });
+
+    revalidateQuoteViews();
+    return { ok: true, attachmentId };
   });
 
 // Staff-side decline. The client-side decline path goes through the public

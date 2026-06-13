@@ -4,7 +4,7 @@ import { assertCan } from '@/lib/auth/assert-can';
 import { RelativeTime } from '@/components/app/relative-time';
 import { Section } from '@/components/app/section';
 import { QuoteStatusBadge } from '@/components/app/status-badge';
-import { loadQuote, loadQuoteSendHistory } from '@/features/quotes/queries';
+import { loadQuote, loadQuoteAttachments, loadQuoteSendHistory } from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { deriveQuoteMsaState } from '@/features/msa/send-state';
 import { displayStatusKey } from '@/features/quotes/status-display';
@@ -92,7 +92,7 @@ export default async function QuoteEditPage({
           ? { kind: 'error' as const, msg: sp.qberror }
           : null;
 
-  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa, qbConnection] =
+  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa, qbConnection, attachments] =
     await Promise.all([
       loadDealers(),
       loadServiceItems(),
@@ -105,6 +105,8 @@ export default async function QuoteEditPage({
       // than firing then surfacing the server-side error.
       loadActiveOrPendingMsa(quote.dealerId),
       getConnection(),
+      // 0078: uploaded attachments seed the send dialog's Documents list.
+      loadQuoteAttachments(quote.id),
     ]);
   // 0061: drive the composer toolbar's MSA-aware send action. The four flags
   // (active / expiresAt / bundleEligible / envelopeInFlight) are derived in one
@@ -250,6 +252,7 @@ export default async function QuoteEditPage({
           { label: 'Total', value: totalMoney },
         ]}
         sendHistorySlot={sendHistoryNode}
+        initialAttachments={attachments}
       />
 
       {qbConnection && isQbAdmin && (

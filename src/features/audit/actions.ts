@@ -34,6 +34,8 @@ export type AuditActionId =
   | 'quote.edited'
   | 'quote.accepted'
   | 'quote.declined'
+  | 'quote.attachment_added'
+  | 'quote.attachment_removed'
   | 'msa.created'
   | 'msa.sent'
   | 'msa.signed'

@@ -5,12 +5,14 @@ import {
   audienceSources,
   auditLog,
   dealers,
+  quoteAttachments,
   quoteLineItems,
   quotes,
   serviceItems,
   taxRates,
 } from '@/lib/db/schema';
 import type { PickedLine, QuoteInputs } from '@/lib/quotes/pricing';
+import type { QuoteAttachmentView } from './attachments';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'declined';
@@ -348,6 +350,24 @@ export async function loadQuoteSendHistory(
       ),
     )
     .orderBy(desc(auditLog.occurredAt));
+}
+
+// Lists a quote's uploaded attachments for the send dialog (0078), ordered by
+// the stored `displayOrder` then id. Returns the display slice only — the
+// `storageKey` stays server-side (the send action resolves bytes from it).
+export async function loadQuoteAttachments(
+  quoteId: number,
+): Promise<QuoteAttachmentView[]> {
+  return db
+    .select({
+      id: quoteAttachments.id,
+      filename: quoteAttachments.filename,
+      contentType: quoteAttachments.contentType,
+      byteSize: quoteAttachments.byteSize,
+    })
+    .from(quoteAttachments)
+    .where(eq(quoteAttachments.quoteId, quoteId))
+    .orderBy(asc(quoteAttachments.displayOrder), asc(quoteAttachments.id));
 }
 
 export async function loadQuotesByDealer(dealerId: number): Promise<Quote[]> {

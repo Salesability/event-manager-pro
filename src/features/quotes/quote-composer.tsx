@@ -30,9 +30,20 @@ import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
   createQuote,
   previewQuotePdf,
+  removeQuoteAttachment,
   sendQuote,
   setQuoteInputs,
+  uploadQuoteAttachment,
 } from '@/features/quotes/actions';
+import {
+  ATTACHMENT_ACCEPT,
+  ATTACHMENT_TYPE_LABELS,
+  formatBytes,
+  isAllowedAttachmentType,
+  MAX_ATTACHMENT_BYTES,
+  MAX_TOTAL_ATTACHMENT_BYTES,
+  type QuoteAttachmentView,
+} from '@/features/quotes/attachments';
 import { MsaSendForSignatureButton } from '@/features/msa/msa-send-button';
 import type { Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
@@ -141,6 +152,9 @@ type Props = {
    *  rows). Rendered between the KeyValueStrip and the form body. Omitted
    *  on create-mode and on drafts. */
   sendHistorySlot?: ReactNode;
+  /** Uploaded attachments already on this quote (0078). Seeds the send dialog's
+   *  Documents list; upload/remove mutate it in place. Empty on create-mode. */
+  initialAttachments?: QuoteAttachmentView[];
 };
 
 const labelClass = 'text-xs font-medium text-zinc-500';
@@ -222,11 +236,14 @@ export function QuoteComposer({
   pageStatusBadge,
   keyValueItems,
   sendHistorySlot,
+  initialAttachments = [],
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [sendPending, startSendTransition] = useTransition();
   const [previewPending, startPreviewTransition] = useTransition();
+  const [attachmentPending, startAttachmentTransition] = useTransition();
+  const [attachments, setAttachments] = useState<QuoteAttachmentView[]>(initialAttachments);
 
   const isEdit = initial != null;
   // 0046: only the terminal contract artifacts lock the composer. `sent`
@@ -445,6 +462,67 @@ export function QuoteComposer({
         // router.refresh() re-hydrates the page with the new `sent` status,
         // which flips `isReadOnly=true` and hides the Save / Send buttons.
         router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  // 0078: upload one or more local files as quote attachments. The client
+  // pre-check mirrors the server (shared `attachments` module): type allowlist,
+  // per-file cap, and the running total cap. Rejected files toast + skip; the
+  // accepted set uploads sequentially and appends to the dialog list on success.
+  function onUploadFiles(files: FileList) {
+    if (!initial?.quoteId) return;
+    const quoteId = initial.quoteId;
+    let runningTotal = attachments.reduce((sum, a) => sum + a.byteSize, 0);
+    const accepted: File[] = [];
+    for (const file of Array.from(files)) {
+      if (!isAllowedAttachmentType(file.type)) {
+        toast.error(`${file.name}: unsupported type (allowed: ${ATTACHMENT_TYPE_LABELS}).`);
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast.error(`${file.name}: too large (max ${formatBytes(MAX_ATTACHMENT_BYTES)} each).`);
+        continue;
+      }
+      if (runningTotal + file.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+        toast.error(
+          `${file.name}: would exceed the ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)} total. Remove a file first.`,
+        );
+        continue;
+      }
+      runningTotal += file.size;
+      accepted.push(file);
+    }
+    if (accepted.length === 0) return;
+    startAttachmentTransition(async () => {
+      for (const file of accepted) {
+        const fd = new FormData();
+        fd.set('quoteId', String(quoteId));
+        fd.set('file', file);
+        const result = toLegacyResult<{ ok: true; attachment: QuoteAttachmentView }>(
+          await uploadQuoteAttachment(fd),
+        );
+        if ('ok' in result) {
+          setAttachments((prev) => [...prev, result.attachment]);
+        } else {
+          toast.error(`${file.name}: ${result.error}`);
+        }
+      }
+    });
+  }
+
+  function onRemoveAttachment(id: number) {
+    if (!initial?.quoteId) return;
+    const quoteId = initial.quoteId;
+    startAttachmentTransition(async () => {
+      const fd = new FormData();
+      fd.set('quoteId', String(quoteId));
+      fd.set('attachmentId', String(id));
+      const result = toLegacyResult(await removeQuoteAttachment(fd));
+      if ('ok' in result) {
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
       } else {
         toast.error(result.error);
       }
@@ -923,6 +1001,10 @@ export function QuoteComposer({
         isResend={isResend}
         quoteValidDays={initial?.quoteValidDays ?? 30}
         onConfirm={onSend}
+        attachments={attachments}
+        attachmentPending={attachmentPending}
+        onUploadFiles={onUploadFiles}
+        onRemoveAttachment={onRemoveAttachment}
       />
     </>
   );
@@ -1015,6 +1097,10 @@ function ConfirmSendDialog({
   isResend,
   quoteValidDays,
   onConfirm,
+  attachments,
+  attachmentPending,
+  onUploadFiles,
+  onRemoveAttachment,
 }: {
   open: boolean;
   onClose: (next: false) => void;
@@ -1025,10 +1111,15 @@ function ConfirmSendDialog({
   isResend: boolean;
   quoteValidDays: number;
   onConfirm: () => void;
+  attachments: QuoteAttachmentView[];
+  attachmentPending: boolean;
+  onUploadFiles: (files: FileList) => void;
+  onRemoveAttachment: (id: number) => void;
 }) {
   // Re-send variant surfaces the new validity deadline so the coach sees
   // exactly what the dealer's "Valid until" line will say after re-send.
   const newValidUntil = isResend ? formatValidUntil(quoteValidDays) : null;
+  const attachmentsTotal = attachments.reduce((sum, a) => sum + a.byteSize, 0);
   return (
     <Dialog open={open} onClose={() => onClose(false)}>
       <DialogTitle>
@@ -1051,6 +1142,67 @@ function ConfirmSendDialog({
           {fmtMoney(total)}
         </dd>
       </dl>
+
+      {/* 0078: Documents section — local-file uploads that ride alongside the
+          quote PDF in the outgoing email. Caps + type allowlist are enforced
+          both here (client pre-check) and in the upload/send actions. */}
+      <div className="mt-6 border-t border-zinc-200 pt-4">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-medium text-zinc-900">Documents</h3>
+          <span className="text-xs tabular-nums text-zinc-500">
+            {formatBytes(attachmentsTotal)} / {formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-zinc-500">
+          Attach forms, banking info, or other paperwork to send with the quote
+          PDF. {ATTACHMENT_TYPE_LABELS} · up to {formatBytes(MAX_ATTACHMENT_BYTES)} each.
+        </p>
+
+        {attachments.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-2">
+            {attachments.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm text-zinc-900" title={a.filename}>
+                  {a.filename}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+                  {formatBytes(a.byteSize)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveAttachment(a.id)}
+                  disabled={attachmentPending}
+                  className="shrink-0 text-xs font-medium text-red-700 hover:underline disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-3">
+          <input
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            disabled={attachmentPending}
+            onChange={(e) => {
+              if (e.target.files?.length) onUploadFiles(e.target.files);
+              // Reset so re-selecting the same file fires onChange again.
+              e.target.value = '';
+            }}
+            className="block w-full text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-900 hover:file:bg-zinc-200 disabled:opacity-50"
+          />
+          {attachmentPending && (
+            <p className="mt-1 text-xs text-zinc-500">Uploading…</p>
+          )}
+        </div>
+      </div>
+
       <div className="mt-6 flex items-center justify-end gap-2">
         <Button type="button" outline onClick={() => onClose(false)}>
           Cancel
@@ -1059,7 +1211,7 @@ function ConfirmSendDialog({
           type="button"
           color="green"
           onClick={onConfirm}
-          disabled={pending || !recipientEmail}
+          disabled={pending || attachmentPending || !recipientEmail}
         >
           {pending ? 'Sending…' : isResend ? 'Re-send' : 'Send'}
         </Button>
