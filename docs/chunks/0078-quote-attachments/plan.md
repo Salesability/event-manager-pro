@@ -10,7 +10,7 @@
 | 1: Schema + storage scheme (`quote_attachments` spine) | Done | `42d8259` |
 | 2: Send-dialog upload UI + upload action | Done | `bbb03be` |
 | 3: Wire uploaded attachments into `sendQuote` | Done | `49cba17` |
-| 4: Tests + smoke + wiki | Pending | - |
+| 4: Tests + smoke + wiki | Done | - |
 
 **Resolved owner decisions (2026-06-12):** file types = PDF + images (PNG/JPG/WEBP) + Office docs
 (docx/xlsx); per-file cap **10 MB**, total-payload cap **20 MB** (quote PDF + all attachments);
@@ -56,7 +56,7 @@ anchor is the nearest sibling in that same file.
 - `src/lib/storage/gcs.ts` — `putObject` / `getObject` / `signedUrl` (GCS, **not** Supabase Storage). Max signed-URL TTL is 7 days.
 - `src/lib/email/send.ts:4` — `SendAttachment { filename, content: Buffer, contentType? }`; `sendEmail` already maps an N-element array into Resend.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -90,8 +90,8 @@ anchor is the nearest sibling in that same file.
 - [x] Test: 2 new `sendQuote` cases (PDF + 2 uploads → 3 email attachments + audit denorm; over-cap set fails closed before the transition). Made the db mock's `select` table-aware so `quote_attachments` reads pull from a dedicated `attachmentResults` queue (zero churn to the 15 existing sendQuote tests).
 
 #### Phase 4: Tests + smoke + wiki
-- [ ] Integration test: end-to-end send with uploads against a real DB (rolled back) — assert the `sendEmail` payload + audit denorm.
-- [ ] Integration test: re-send re-attaches the persisted set without re-uploading.
-- [ ] Smoke (web-test): `goto /quotes/<id>`; click "Send Quote"; dialog "Send Quote" shows a **Documents** section with a file-upload control. *(Read-only — do not click upload/send on the gated surface; those are real GCS/email writes.)*
-- [ ] If DB state is needed: `scripts/0078-quote-attachments-smoke.ts insert` → web-test → `cleanup` (idempotent by tag).
-- [ ] Wiki ingest: update `data-model.md` (new `quote_attachments` table) + note the attachment flow on the quote/commercial-spine page; add a `log.md` entry.
+- [x] Integration test (real DB, rolled back): `tests/integration/quote-attachments.test.ts` — the loader's `ORDER BY display_order` against real Postgres + a re-read returning the same set (re-send re-attaches). *(The full `sendEmail` payload + audit denorm assertions live in the Phase 3 unit tests — richer/faster with mocked GCS+email; the integration test proves the real-DB schema/loader the mocks can't.)*
+- [x] Integration test: re-send re-attaches the persisted set without re-uploading (second read returns the same rows) + FK **CASCADE** drops attachments when the parent quote is deleted.
+- [~] Smoke (web-test): `goto /quotes/<id>`; click "Send Quote"; dialog shows a **Documents** section with a file-upload control — **deferred to the chunk-end `/eval`** (the build skill runs browser smoke there, not per-phase). Read-only; do not click upload/send on the gated surface.
+- [x] ~~Smoke seed script~~ — not needed; the chunk-end `/eval` web-test auth-injects and navigates to an existing sandbox quote. No new DB state required to render the Documents section.
+- [x] Wiki ingest: `data-model.md` (ERD edge + `quote_attachments` entity block + summary row + relationships entry), `commercial-spine.md` (new "Supporting documents on the quote email" subsection), `log.md` entry.
