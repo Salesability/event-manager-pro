@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   renderQuotePdf: vi.fn(),
   putObject: vi.fn(),
+  getObject: vi.fn(),
   deleteObject: vi.fn(),
   resolveQuoteRecipient: vi.fn(),
   sendEmail: vi.fn(),
@@ -15,6 +16,10 @@ const mocks = vi.hoisted(() => ({
   // terminals on the predicate-blind db mock. Push one entry per DB round-trip
   // in the order the code under test will issue them.
   dbResults: [] as unknown[][],
+  // Dedicated FIFO for `select ... from(quote_attachments)` reads so adding the
+  // 0078 attachment select inside `sendQuote` doesn't shift every existing
+  // sendQuote test's `dbResults` alignment. Defaults to [] (no attachments).
+  attachmentResults: [] as unknown[][],
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ table: string; patch: unknown }>,
   deletes: [] as Array<{ table: string }>,
@@ -55,6 +60,7 @@ vi.mock('@/lib/pdf/render-quote', () => ({
 }));
 vi.mock('@/lib/storage/gcs', () => ({
   putObject: mocks.putObject,
+  getObject: mocks.getObject,
   deleteObject: mocks.deleteObject,
 }));
 vi.mock('./recipient', () => ({
@@ -118,8 +124,15 @@ vi.mock('@/lib/db', () => {
       },
     }),
     select: () => ({
-      from: () => {
-        const next = () => Promise.resolve(mocks.dbResults.shift() ?? []);
+      from: (table: unknown) => {
+        // Route quote_attachments reads to their own queue (0078) so the
+        // attachment select added inside sendQuote doesn't disturb the shared
+        // dbResults FIFO the rest of the sendQuote tests depend on.
+        const queue =
+          tableName(table) === 'quote_attachments'
+            ? mocks.attachmentResults
+            : mocks.dbResults;
+        const next = () => Promise.resolve(queue.shift() ?? []);
         const terminal: {
           limit: () => Promise<unknown[]>;
           orderBy: () => Promise<unknown[]>;
@@ -198,6 +211,7 @@ beforeEach(() => {
   mocks.loadCurrentMembership.mockResolvedValue(null);
   mocks.renderQuotePdf.mockResolvedValue({ ok: true, body: Buffer.from('%PDF-1.7 stub') });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'stub' });
+  mocks.getObject.mockResolvedValue({ ok: true, body: Buffer.from('attachment-bytes') });
   mocks.deleteObject.mockResolvedValue({ ok: true });
   mocks.resolveQuoteRecipient.mockResolvedValue({
     ok: true,
@@ -210,6 +224,7 @@ beforeEach(() => {
   });
   mocks.sendEmail.mockResolvedValue({ ok: true, id: 'resend-msg-id' });
   mocks.dbResults = [];
+  mocks.attachmentResults = [];
   mocks.inserts = [];
   mocks.updates = [];
   mocks.deletes = [];
@@ -360,6 +375,9 @@ describe('sendQuote', () => {
         emailId: 'resend-msg-id',
         sentToEmail: 'buyer@dealer.test',
         sentToFirstName: 'Pat',
+        // 0078: no uploads on this quote → empty attachment denorm.
+        attachmentCount: 0,
+        attachments: [],
       },
     });
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
@@ -730,6 +748,70 @@ describe('sendQuote', () => {
     expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.putObject).not.toHaveBeenCalled();
+  });
+
+  // 0078: uploaded attachments ride alongside the quote PDF in the send.
+  it('appends every uploaded attachment to the email (PDF + 2) and denorms them in the audit', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW], [{ id: 42 }]);
+    mocks.attachmentResults.push([
+      {
+        filename: 'form.pdf',
+        storageKey: 'quotes/42/attachments/a-form.pdf',
+        contentType: 'application/pdf',
+        byteSize: 1000,
+      },
+      {
+        filename: 'banking.png',
+        storageKey: 'quotes/42/attachments/b-banking.png',
+        contentType: 'image/png',
+        byteSize: 2000,
+      },
+    ]);
+
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({ ok: true });
+
+    const sendArg = mocks.sendEmail.mock.calls[0][0] as {
+      attachments: Array<{ filename: string; contentType?: string }>;
+    };
+    expect(sendArg.attachments).toHaveLength(3); // quote PDF + 2 uploads
+    expect(sendArg.attachments[0].contentType).toBe('application/pdf'); // the quote PDF
+    expect(sendArg.attachments[1].filename).toBe('form.pdf');
+    expect(sendArg.attachments[2].filename).toBe('banking.png');
+    // Bytes fetched once per attachment, before the transition.
+    expect(mocks.getObject).toHaveBeenCalledTimes(2);
+    // Audit denorms what went out.
+    expect(mocks.recordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'quote.sent',
+        payload: expect.objectContaining({
+          attachmentCount: 2,
+          attachments: [
+            { filename: 'form.pdf', byteSize: 1000 },
+            { filename: 'banking.png', byteSize: 2000 },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('fails closed before the transition when the total payload is over the cap', async () => {
+    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW]); // no UPDATE entry — must not reach it
+    mocks.attachmentResults.push([
+      {
+        filename: 'huge.pdf',
+        storageKey: 'quotes/42/attachments/huge.pdf',
+        contentType: 'application/pdf',
+        byteSize: MAX_TOTAL_ATTACHMENT_BYTES + 1,
+      },
+    ]);
+
+    const result = await call(sendQuote(fd({ quoteId: '42' })));
+    expect((result as { error: string }).error).toContain('exceeds');
+    expect(mocks.updates).toHaveLength(0); // no status transition
+    expect(mocks.getObject).not.toHaveBeenCalled(); // size guard precedes the byte fetch
+    expect(mocks.putObject).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 });
 
@@ -1259,8 +1341,7 @@ function uploadFd(
 describe('uploadQuoteAttachment', () => {
   it('stores the file in GCS + inserts a row + emits audit', async () => {
     mocks.dbResults = [
-      [{ status: 'draft' }], // quote status lookup
-      [], // existing attachments (none)
+      [{ status: 'draft' }], // quote status lookup (quotes)
       [
         {
           id: 5,
@@ -1270,6 +1351,7 @@ describe('uploadQuoteAttachment', () => {
         },
       ], // insert ... returning
     ];
+    mocks.attachmentResults = [[]]; // existing attachments (none)
 
     const result = await call(
       uploadQuoteAttachment(
@@ -1313,8 +1395,8 @@ describe('uploadQuoteAttachment', () => {
   });
 
   it('fails closed when the running total would exceed the payload cap', async () => {
-    mocks.dbResults = [
-      [{ status: 'draft' }],
+    mocks.dbResults = [[{ status: 'draft' }]];
+    mocks.attachmentResults = [
       [{ byteSize: MAX_TOTAL_ATTACHMENT_BYTES, displayOrder: 1 }], // already at the cap
     ];
     const result = await call(

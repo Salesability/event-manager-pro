@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { dealers, masterServiceAgreements, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
@@ -21,7 +21,7 @@ import {
 import { lineFingerprint, mapRenderLines, renderLinesColumn } from '@/lib/quotes/render-lines';
 import type { ServiceItem } from '@/features/services/queries';
 import { renderQuotePdf, type QuoteData } from '@/lib/pdf/render-quote';
-import { deleteObject, putObject, signedUrl } from '@/lib/storage/gcs';
+import { deleteObject, getObject, putObject, signedUrl } from '@/lib/storage/gcs';
 import {
   ATTACHMENT_TYPE_LABELS,
   attachmentStorageKey,
@@ -32,7 +32,7 @@ import {
   formatBytes,
   type QuoteAttachmentView,
 } from './attachments';
-import { sendEmail } from '@/lib/email/send';
+import { sendEmail, type SendAttachment } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 import { MAX_ADDRESS_LINES } from './constants';
@@ -975,6 +975,50 @@ export const sendQuote = capabilityClient('quote:edit')
       return { error: `Quote PDF render failed: ${rendered.error}` };
     }
 
+    // 0078: load + fetch the quote's attachments BEFORE the status transition so
+    // an over-size payload or an unreadable object fails closed without a
+    // half-send (the row would otherwise flip to `sent` with no email out the
+    // door). Bytes ride alongside the quote PDF in the outgoing email.
+    const attachmentRows = await db
+      .select({
+        filename: quoteAttachments.filename,
+        storageKey: quoteAttachments.storageKey,
+        contentType: quoteAttachments.contentType,
+        byteSize: quoteAttachments.byteSize,
+      })
+      .from(quoteAttachments)
+      .where(eq(quoteAttachments.quoteId, quoteId))
+      .orderBy(asc(quoteAttachments.displayOrder), asc(quoteAttachments.id));
+
+    // Total-size guard: quote PDF + every attachment must fit under the cap.
+    // Checked from the row sizes (cheap) before any byte fetch or the transition.
+    const totalBytes =
+      rendered.body.byteLength +
+      attachmentRows.reduce((sum, a) => sum + a.byteSize, 0);
+    if (totalBytes > MAX_TOTAL_ATTACHMENT_BYTES) {
+      return {
+        error: `Total email size (${formatBytes(totalBytes)}) exceeds the ${formatBytes(MAX_TOTAL_ATTACHMENT_BYTES)} limit. Remove an attachment and resend.`,
+      };
+    }
+
+    // Fetch each attachment's bytes. A missing/unreadable object fails the send
+    // with a repairable message (remove + re-upload) rather than silently
+    // dropping the document — and, being pre-transition, the row stays sendable.
+    const attachmentSends: SendAttachment[] = [];
+    for (const att of attachmentRows) {
+      const obj = await getObject(bucket, att.storageKey);
+      if ('error' in obj) {
+        return {
+          error: `Attachment "${att.filename}" could not be loaded — remove and re-upload it, then resend.`,
+        };
+      }
+      attachmentSends.push({
+        filename: att.filename,
+        content: obj.body,
+        contentType: att.contentType,
+      });
+    }
+
     const storageKey = pdfStorageKey(quoteId);
 
     // Atomic guarded UPDATE. The status predicate keeps terminal rows safe
@@ -1072,12 +1116,14 @@ export const sendQuote = capabilityClient('quote:edit')
       subject: email.subject,
       text: email.text,
       html: email.html,
+      // Quote PDF first, then every uploaded attachment (0078) in displayOrder.
       attachments: [
         {
           filename: quoteDownloadFilename(draft.createdAt),
           content: rendered.body,
           contentType: 'application/pdf',
         },
+        ...attachmentSends,
       ],
     });
     if ('error' in emailResult) {
@@ -1093,11 +1139,18 @@ export const sendQuote = capabilityClient('quote:edit')
       // denorm (`sentToEmail`/`sentToFirstName`) rotates to a different
       // contact between sends. Older rows that pre-date this addition
       // fall back to the row-level denorm at render time.
+      // 0078: denorm the attachment set that actually went out (filenames +
+      // count) so the Send history records the supporting paperwork per send.
       payload: {
         pdfStorageKey: storageKey,
         emailId: emailResult.id,
         sentToEmail: recipient.email,
         sentToFirstName: recipient.firstName,
+        attachmentCount: attachmentRows.length,
+        attachments: attachmentRows.map((a) => ({
+          filename: a.filename,
+          byteSize: a.byteSize,
+        })),
       },
     });
 
