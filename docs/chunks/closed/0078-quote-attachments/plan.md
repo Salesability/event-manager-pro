@@ -40,7 +40,7 @@ anchor is the nearest sibling in that same file.
 | GCS put of an uploaded file | `src/features/quotes/actions.ts:1037` (`putObject`) | Same I/O — write a `Buffer` to the bucket, handle the `{ error }` union, then persist the key. |
 | Upload + remove (detach) Server Actions | `src/features/quotes/actions.ts` (`sendQuote` + sibling guarded actions) | Same layer — capability-gated Server Action, zod input, `recordAudit`, `revalidate*`. Mutations are Server Actions, not route handlers (CLAUDE.md). |
 | Append uploads into the send | `src/features/quotes/actions.ts:1064` (the `attachments: [...]` array) | The exact array we extend; `SendAttachment` already accepts N files — no email-layer change. |
-| Upload section in the send dialog | `src/features/quotes/quote-composer.tsx` (the `confirmSendOpen` dialog) | The dialog we extend; RHF + zod + shadcn `<Field>` per [`forms.md`](../../wiki/forms.md); dialog submit stays in `<DialogFooter>`. |
+| Upload section in the send dialog | `src/features/quotes/quote-composer.tsx` (the `confirmSendOpen` dialog) | The dialog we extend; RHF + zod + shadcn `<Field>` per [`forms.md`](../../../wiki/forms.md); dialog submit stays in `<DialogFooter>`. |
 | File-upload control (`<input type="file">` → upload action) | *(no existing anchor — first file input in the repo)* | **Net-new for this codebase.** Landed as a `FormData`-with-`File` Server Action (not a signed-upload URL — the bytes are small, ≤10 MB, and the action already owns validation + the `quote_attachments` insert in one round-trip). Styled with Tailwind `file:` variants. |
 
 **Landed in Phase 2 (not in the original map):**

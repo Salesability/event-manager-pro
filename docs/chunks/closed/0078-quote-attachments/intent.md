@@ -77,6 +77,6 @@ short-lived signed link; library scope — global vs per-coach vs per-client; wh
 The owner asked for it directly: *"when we send a quote off, is it possible to attach additional
 documents like forms and banking information — I could draw from system or from local hard drive."*
 As the quote becomes the contract surface (the accepted quote *is* the contract — see
-[`commercial-spine.md`](../../wiki/commercial-spine.md)), the supporting paperwork that closes a
+[`commercial-spine.md`](../../../wiki/commercial-spine.md)), the supporting paperwork that closes a
 deal needs to ride *with* the quote rather than as a disconnected side email. Local upload is the
 fastest path to that capability and lays the spine the reusable library will sit on.
