@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-12 — Quote attachments: local-file upload on the send dialog (0078)
+
+- New `quote_attachments` table (migration `0038`, sandbox): one row per file a coach uploads to ride alongside the quote PDF in the send email. `quote_id` FK **CASCADE**, snapshot columns (`filename`/`storage_key`/`content_type`/`byte_size`), `display_order`, `(quote_id, display_order)` index, standard RLS (service_role + staff). Added to [`data-model.md`](data-model.md) (ERD + entity block + summary row + relationships list).
+- New audit actions `quote.attachment_added` / `quote.attachment_removed` (`audit_action` pgEnum append, migration `0039`).
+- [`commercial-spine.md`](commercial-spine.md): new **"Supporting documents on the quote email (0078)"** subsection — the upload/remove flow on the Send dialog, the `sendQuote` wiring (PDF + every attachment), the persist-and-re-attach-on-resend behaviour, the size/type guards (≤10 MB/file, ≤20 MB total, fail-closed before the transition), and the pointer to the deferred 0079 library extension (`document_id` FK).
+- Caps + MIME allowlist + key/filename helpers live in `src/features/quotes/attachments.ts` (shared client + server). The reusable "from the system" document library is the deferred **0079** chunk.
+
 ## 2026-06-12 — Google Calendar distribution for booked campaigns (0077)
 
 - New feature page [`calendar-distribution.md`](calendar-distribution.md): booked campaigns project **one-way** into Google Calendar (coach + dealer as guests + a shared colour-by-coach team calendar). Keyless DWD auth (signJwt impersonation — no key file), customer-safe event body (no ops-field leak), best-effort status-driven `reconcileCampaignCalendar` (booked/completed → upsert, draft/cancelled → remove; never blocks the mutation). Linked from [`index.md`](index.md) (first Entity/feature page).

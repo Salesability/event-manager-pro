@@ -73,6 +73,7 @@ erDiagram
 
     master_service_agreements ||--o{ quotes : "msa_id · RESTRICT · nullable"
     quotes ||--o{ quote_line_items : "quote_id · CASCADE"
+    quotes ||--o{ quote_attachments : "quote_id · CASCADE"
     quotes ||--o{ quotes : "previous_quote_id · self · SET NULL"
     service_items ||--o{ quote_line_items : "service_item_id · SET NULL · nullable"
 
@@ -171,6 +172,15 @@ erDiagram
         numeric unit_price
         numeric override_unit_price
         numeric line_total
+        integer display_order
+    }
+    quote_attachments {
+        bigint id PK
+        bigint quote_id FK "CASCADE"
+        text filename
+        text storage_key "GCS object key"
+        text content_type
+        integer byte_size
         integer display_order
     }
     service_items {
@@ -343,6 +353,7 @@ Edges left out of the diagrams for clarity:
 | `billing_adjustments` | `id` bigint | `campaign_id` (FK campaigns, cascade), `field` text (CHECK in `qty_records\|sms_email\|letters\|bdc`), `value` integer (CHECK ≥ 0), UNIQUE(`campaign_id`,`field`) — per-campaign billing override layer for `/reports`; the campaign column stays the source of truth (clear = delete = revert). See `billing_adjustments` section below + [`auth.md`](auth.md) (`reports:edit-billing`). |
 | `master_service_agreements` | `id` bigint | `dealer_id` (FK dealers), `status` enum (`pending\|active\|expired\|terminated`), `signed_at`, `expires_at`, `signed_pdf_storage_key`, `provider_document_id`, `termination_notice_date`, `termination_effective_date`, `template_version` — per-Client 12-month commercial frame; see [`commercial-spine.md`](commercial-spine.md) |
 | `quotes` | `id` bigint | `dealer_id` (FK dealers), `msa_id` (FK MSA, nullable), `status` enum (`draft\|sent\|accepted\|declined`), `accept_token` (uuid UNIQUE), `pdf_storage_key`, `inputs` jsonb, `fee` / `travel` / `deposit_pct` / `quote_valid_days`, `tax_pct` numeric(6,3) (0065: snapshot of the dealer's province rate; widened from 5,2), `tax_override` numeric(12,2) **nullable** (0065: coach's manual tax; NULL = auto from `tax_pct`), `audience_source_id` (FK), `subtotal` / `tax` / `total` numeric(12,2), `previous_quote_id` (self-FK), `sent_at` / `accepted_at` / `declined_at`, `quickbooks_estimate_id` text (nullable, **UNIQUE partial index** `WHERE … IS NOT NULL`, 0073 — durable link to the QBO `Estimate.Id`; set only by the "Push to QuickBooks" action on `/quotes/[id]`; present → update the Estimate, null → create+backfill, giving push idempotency) — per [`commercial-spine.md`](commercial-spine.md); the accepted Quote IS the contract per MSA §1.iii. **Tax model (0065):** `tax = tax_override ?? round(subtotal × tax_pct/100)`; the rate comes from the dealer's `province` → `tax_rates`. **Estimate push (0073 + 0074 tax):** admin-only push of a `sent`/`accepted` quote → QBO Estimate (`src/lib/quickbooks/quote-push.ts`), `CustomerRef` from `dealers.quickbooks_id` + each line's `ItemRef` from `service_items.quickbooks_id` + tax via a **per-line** `SalesItemLineDetail.TaxCodeRef` from the province's `tax_rates.quickbooks_tax_code_id` (QBO computes the tax — a bare `TotalTax` override is dropped per the 0073 smoke, and a txn-level code alone fails QBO-CA error 6000 "every line needs a GST/HST rate" per the 0074 live smoke). Pre-flight (fails closed): dealer + every line SKU QBO-linked; a taxed quote's province must be mapped to a tax code; a manual `tax_override` is rejected (v1); and a rate-drift guard rejects a quote whose snapshotted tax ≠ the current province rate. |
+| `quote_attachments` | `id` bigint | `quote_id` (FK quotes, **CASCADE**), `filename`, `storage_key` (GCS object key, `quotes/{id}/attachments/{uuid}-{filename}`), `content_type`, `byte_size` integer, `display_order` integer — supporting documents a coach uploads on the send dialog to ride alongside the quote PDF in the outgoing email (0078, migration `0038`). Index on `(quote_id, display_order)`. RLS: service_role + staff (matches `quote_line_items`). Caps: ≤10 MB/file, ≤20 MB total payload; allowlist = PDF / PNG / JPG / WEBP / docx / xlsx (`src/features/quotes/attachments.ts`). Retention = keep-forever in GCS (no background GC). See [`commercial-spine.md`](commercial-spine.md). |
 | `availability_blocks` | `id` bigint | `start_date`, `end_date` (inclusive), `kind` enum (`statutory_holiday\|company_closure\|coach_unavailable`), `coach_id` (FK contacts, nullable; required when `kind='coach_unavailable'`), `region` (nullable, e.g. `CA-ON`), `reason`, `source` |
 
 ## Relationships
@@ -367,6 +378,7 @@ Domain edges:
 - `dealers` 1:* `quotes` via `quotes.dealer_id` — every Quote belongs to one Client. `ON DELETE RESTRICT`. Note the FK direction here: Quote knows its Dealer, not the reverse.
 - `master_service_agreements` 0..1:* `quotes` via `quotes.msa_id` — nullable until the Quote is accepted under a specific MSA term. `ON DELETE RESTRICT`.
 - `audience_sources` 0..1:* `quotes` via `quotes.audience_source_id` — the consumer-audience source the Quote priced against; nullable for v1.
+- `quotes` 1:* `quote_attachments` via `quote_attachments.quote_id` — supporting documents a coach uploads to ride alongside the quote PDF in the send email (0078). `ON DELETE CASCADE`. Self-contained snapshot (`filename`/`content_type`/`byte_size`); bytes live in GCS at `storage_key` (`quotes/{id}/attachments/{uuid}-{filename}`); `display_order` sets the email-attachment order. The reusable document-library FK (`document_id`) is 0079's additive extension, not here.
 - `quotes` 0..1:* `quotes` via `quotes.previous_quote_id` — revision chain (self-FK, nullable). `ON DELETE SET NULL`. New revisions are new rows; the prior row is pinned by its rendered PDF.
 - `quotes` 0..1:1 `campaigns` via `campaigns.accepted_quote_id` — **FK lives on `campaigns`, not `quotes`.** Populated when an accepted Quote spawns its operational delivery campaign; the Quote is the commercial record, the campaign is the Event being run. See [`commercial-spine.md`](commercial-spine.md).
 - `campaigns` 1:* `billing_adjustments` via `billing_adjustments.campaign_id` — per-campaign billing overrides for `/reports` (0059). `ON DELETE CASCADE`. At most one row per (`campaign_id`, `field`) (UNIQUE). The campaign column is the source of truth; the adjustment is an additive overlay (`coalesce(override, campaign.value)`), and clearing it deletes the row.
