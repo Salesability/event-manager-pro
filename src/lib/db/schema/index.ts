@@ -11,6 +11,7 @@ export * from './dealer-contacts';
 export * from './dealers';
 export * from './master-service-agreements';
 export * from './quickbooks-connection';
+export * from './quote-attachments';
 export * from './quote-line-items';
 export * from './quotes';
 export * from './service-items';

@@ -267,6 +267,13 @@
       "when": 1781292323550,
       "tag": "0037_minor_stryfe",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1781309007600,
+      "tag": "0038_daily_azazel",
+      "breakpoints": true
     }
   ]
 }
