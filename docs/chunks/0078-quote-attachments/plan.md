@@ -1,0 +1,90 @@
+# Quote Attachments — Local Upload (v1) — Plan
+
+**Intent:** [`intent.md`](intent.md)
+**Started:** 2026-06-12
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: Schema + storage scheme (`quote_attachments` spine) | Done | `42d8259` |
+| 2: Send-dialog upload UI + upload action | Pending | - |
+| 3: Wire uploaded attachments into `sendQuote` | Pending | - |
+| 4: Tests + smoke + wiki | Pending | - |
+
+**Resolved owner decisions (2026-06-12):** file types = PDF + images (PNG/JPG/WEBP) + Office docs
+(docx/xlsx); per-file cap **10 MB**, total-payload cap **20 MB** (quote PDF + all attachments);
+retention = **keep forever in GCS** (no background GC; remove-before-send deletes the row, best-effort
+deletes the object); gate = **same capability as sending the quote** (no new capability). See
+[`intent.md`](intent.md) Open Questions.
+
+When a coach sends a quote, the email should carry the quote PDF **plus** any files the coach
+uploaded from their machine. The email layer already supports N attachments (`SendAttachment[]`,
+`src/lib/email/send.ts:4`), so the work is: a place to store uploaded files (GCS + a
+`quote_attachments` table), a UI on the send dialog to upload + remove them, and code in `sendQuote`
+to fetch the selected bytes and append them to the `attachments` array. "Done" = a sent quote
+arrives with the quote PDF and every uploaded document, the set persists for re-send, and an
+over-size payload fails closed. **This chunk builds the attachment spine the 0079 document-library
+chunk reuses** — so the schema + send-wiring are designed to extend (a nullable `document_id` FK is
+added by 0079, not here).
+
+## Code Anchors
+
+For each new file or method below, the builder reads the anchor first and matches its shape (length,
+error handling, naming, query style, type patterns). For modifications to an existing file, the
+anchor is the nearest sibling in that same file.
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| `src/lib/db/schema/quote-attachments.ts` — one row per uploaded file on a quote | `src/lib/db/schema/quote-line-items.ts:32` | Sibling child-of-`quotes` table: `quoteId` FK `onDelete: cascade`, self-contained snapshot columns, `bigIdentity`/`timestamps`/`actors`, per-quote index. |
+| GCS put of an uploaded file | `src/features/quotes/actions.ts:1037` (`putObject`) | Same I/O — write a `Buffer` to the bucket, handle the `{ error }` union, then persist the key. |
+| Upload + remove (detach) Server Actions | `src/features/quotes/actions.ts` (`sendQuote` + sibling guarded actions) | Same layer — capability-gated Server Action, zod input, `recordAudit`, `revalidate*`. Mutations are Server Actions, not route handlers (CLAUDE.md). |
+| Append uploads into the send | `src/features/quotes/actions.ts:1064` (the `attachments: [...]` array) | The exact array we extend; `SendAttachment` already accepts N files — no email-layer change. |
+| Upload section in the send dialog | `src/features/quotes/quote-composer.tsx` (the `confirmSendOpen` dialog) | The dialog we extend; RHF + zod + shadcn `<Field>` per [`forms.md`](../../wiki/forms.md); dialog submit stays in `<DialogFooter>`. |
+| File-upload control (`<input type="file">` → upload action) | *(no existing anchor — first file input in the repo)* | **Net-new for this codebase.** No drag-drop/file-picker exists yet. Decide route: Server Action with the file in `FormData`, or a signed-upload URL from `signedUrl()`. Flag in review. |
+
+**Conventions referenced:**
+- `docs/wiki/data-model.md` — column conventions (`bigIdentity`, `timestamps`, `actors`); FK `onDelete` discipline.
+- `docs/wiki/forms.md` — RHF + zod + shadcn `<Field>`; dialog-level submit lives in `<DialogFooter>`.
+- `docs/wiki/commercial-spine.md` — where the quote sits in the deal flow (why paperwork rides with it).
+- **`db-conventions` skill** — invoke before writing/altering schema or generating the migration (Phase 1). Watch the Drizzle journal `when` gotcha when generating `--custom`.
+- `src/lib/storage/gcs.ts` — `putObject` / `getObject` / `signedUrl` (GCS, **not** Supabase Storage). Max signed-URL TTL is 7 days.
+- `src/lib/email/send.ts:4` — `SendAttachment { filename, content: Buffer, contentType? }`; `sendEmail` already maps an N-element array into Resend.
+
+**Overall Progress:** 25% (1/4 phases complete)
+
+**Note:**
+- Each phase includes both implementation and tests.
+- Integration tests (real DB) come last, after all phases pass.
+- Phase content below is a **first draft** derived from the code map — refine once the `intent.md`
+  open questions (file types/caps, retention) are answered.
+
+### Phase Checklist
+
+#### Phase 1: Schema + storage scheme (`quote_attachments` spine)
+- [x] `db-conventions` skill: confirm column/migration conventions before writing.
+- [x] `quote_attachments` table — `bigIdentity`, `quoteId` FK (`onDelete: cascade`), self-contained snapshot columns (`filename`, `storageKey`, `contentType`, `byteSize`), `displayOrder`, `timestamps`, `actors`; index on `quoteId`. **No `document_id` column** — that's 0079's additive migration. (`src/lib/db/schema/quote-attachments.ts`, registered in `index.ts`.)
+- [x] GCS key scheme for uploads: `quotes/{quoteId}/attachments/{uuid}-{filename}` (uuid avoids collisions on same-name re-uploads). Documented in the schema header; helper lands in Phase 2.
+- [x] Generate migration (`0038_daily_azazel.sql`); verify journal `when` ordering (1781309007600 > 0037's 1781292323550 ✓); append standard RLS (service_role + staff, matching `quote_line_items`); apply to **sandbox** (✓ applied).
+
+#### Phase 2: Send-dialog upload UI + upload action
+- [ ] Server Action: accept an uploaded file (`FormData`) → validate type (PDF / PNG / JPG / WEBP / docx / xlsx) + size (≤ **10 MB/file**) → `putObject` to GCS → insert `quote_attachments` row (gated by the same capability as send-quote, `recordAudit`, `revalidate`). Define a shared MIME allowlist + caps constant reused by the client + the send-time total guard.
+- [ ] Server Action: remove an attachment (delete the row; optionally delete the GCS object) before send.
+- [ ] Loader: list a quote's `quote_attachments` for the dialog.
+- [ ] Extend the `confirmSendOpen` dialog in `quote-composer.tsx`: a "Documents" section with `<input type="file">` (multi), the current upload list, and a remove affordance; enforce type/size caps client-side too.
+- [ ] Test: upload inserts a row + GCS key; remove deletes the row; list reflects both.
+
+#### Phase 3: Wire uploaded attachments into `sendQuote`
+- [ ] In `sendQuote` (`actions.ts:820`), after the quote PDF is assembled, load this quote's `quote_attachments`.
+- [ ] For each, `getObject` the bytes from GCS and push `{ filename, content, contentType }` onto the `attachments` array (`actions.ts:1064`).
+- [ ] **Total-size guard:** sum quote PDF + all attachments; if over **20 MB total**, fail closed with a clear message **before** the status transition (don't half-send).
+- [ ] A missing/failed GCS fetch fails the send with a repairable error (mirror the existing "PDF upload failed" degraded-state handling), not a silent drop.
+- [ ] Extend the `quote.sent` audit payload to denorm the attachment filenames/count that went out.
+- [ ] Test: a quote with 2 uploads sends an email whose `attachments` array has 3 entries (PDF + 2); over-size set fails closed.
+
+#### Phase 4: Tests + smoke + wiki
+- [ ] Integration test: end-to-end send with uploads against a real DB (rolled back) — assert the `sendEmail` payload + audit denorm.
+- [ ] Integration test: re-send re-attaches the persisted set without re-uploading.
+- [ ] Smoke (web-test): `goto /quotes/<id>`; click "Send Quote"; dialog "Send Quote" shows a **Documents** section with a file-upload control. *(Read-only — do not click upload/send on the gated surface; those are real GCS/email writes.)*
+- [ ] If DB state is needed: `scripts/0078-quote-attachments-smoke.ts insert` → web-test → `cleanup` (idempotent by tag).
+- [ ] Wiki ingest: update `data-model.md` (new `quote_attachments` table) + note the attachment flow on the quote/commercial-spine page; add a `log.md` entry.
