@@ -88,7 +88,7 @@ There is **no customer self-serve accept** — acceptance is **staff-recorded**.
 - **On accept** — `acceptQuote` emits `quote.accepted` (`payload.source = 'staff'`) and promotes a `prospect` dealer → `active` (reusing the `dealerId` it already loaded for the gate). Decline emits `quote.declined`.
 - **Verifying the send path (0067)** — an admin-only **Send Test MSA** tool at `/admin/send-test-msa` (`sendTestMsa` in `src/features/msa/actions.ts`, gated `admin:access`) renders the MSA prose with placeholder data and posts a **real** MSA-only BoldSign envelope, surfacing the returned `documentId`. It creates **no** `master_service_agreements` row, so it stamps `metaData: { test: 'true' }`; the `Signed` webhook acks such an envelope `200` on that flag instead of 404ing. In prod it's a real, non-sandbox send — used to confirm prod BoldSign after a config change. See [`docs/chunks/closed/0067-send-test-msa/plan.md`](../chunks/closed/0067-send-test-msa/plan.md).
 
-Design history: the standalone split is [`docs/chunks/0082-quote-msa-decouple/`](../chunks/0082-quote-msa-decouple/decision.md); the superseded bundle was [`0055-quote-msa-one-document`](../chunks/closed/0055-quote-msa-one-document/plan.md) + [`0061-move-msa-action-to-quote`](../chunks/closed/0061-move-msa-action-to-quote/plan.md).
+Design history: the standalone split is [`docs/chunks/closed/0082-quote-msa-decouple/`](../chunks/closed/0082-quote-msa-decouple/decision.md); the superseded bundle was [`0055-quote-msa-one-document`](../chunks/closed/0055-quote-msa-one-document/plan.md) + [`0061-move-msa-action-to-quote`](../chunks/closed/0061-move-msa-action-to-quote/plan.md).
 
 ### Less-happy paths
 

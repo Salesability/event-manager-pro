@@ -7,10 +7,10 @@
 The first deal with a new dealer merges the **quote PDF and the MSA into a single
 BoldSign document** (`combineQuoteAndMsa`), and one signature flips *both* the MSA →
 active *and* the bundled quote → accepted. That bundling — built up across
-[`0037`](../closed/0037-commercial-spine-msa/plan.md) /
-[`0041`](../closed/0041-msa-send-bundled-envelope/plan.md) /
-[`0055`](../closed/0055-quote-msa-one-document/plan.md) /
-[`0061`](../closed/0061-move-msa-action-to-quote/plan.md) — makes the quote and the
+[`0037`](../0037-commercial-spine-msa/plan.md) /
+[`0041`](../0041-msa-send-bundled-envelope/plan.md) /
+[`0055`](../0055-quote-msa-one-document/plan.md) /
+[`0061`](../0061-move-msa-action-to-quote/plan.md) — makes the quote and the
 agreement structurally inseparable:
 
 - The quote's primary CTA on a no-MSA dealer is **"Send for signature"**, which is really an MSA action that happens to carry the quote.
@@ -66,7 +66,7 @@ flow.
 
 ## Open questions
 
-- **Where does "Send MSA for signature" live now?** [`0061`](../closed/0061-move-msa-action-to-quote/plan.md) moved it onto the quote composer *because* it carried the quote. Decoupled, it belongs on an MSA/dealer-centric surface (the dealer/client page is the likely home — where it lived pre-0061). → Phase 1 / `decision.md`.
+- **Where does "Send MSA for signature" live now?** [`0061`](../0061-move-msa-action-to-quote/plan.md) moved it onto the quote composer *because* it carried the quote. Decoupled, it belongs on an MSA/dealer-centric surface (the dealer/client page is the likely home — where it lived pre-0061). → Phase 1 / `decision.md`.
 - **Where does the first-quote-accept gate live, and what's its UX?** Server-side reject in the accept action, plus a disabled Accept + helper text in the UI ("Sign the master agreement first")? → Phase 1.
 - **Keep vs. drop `quotes.msaId`.** Expand→contract favours keep-the-column (no migration, preserves the historical link on already-bundled quotes); confirm nothing still reads it after decoupling. → Phase 1 / `decision.md`.
 - **Gate scope — first-quote-only vs. require-active-MSA-for-any-accept.** The business rule names the *first* quote, but "no accept without an active MSA" is the cleaner, stricter form (also covers an expired MSA). Resolved → see `decision.md`. → Phase 1.
