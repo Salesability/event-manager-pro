@@ -218,7 +218,7 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
         }
         actions={
           <Can capability="dealer:create">
-            <Button outline compact onClick={() => setAddOpen(true)}>
+            <Button color="brand" onClick={() => setAddOpen(true)}>
               + Add Dealer
             </Button>
           </Can>

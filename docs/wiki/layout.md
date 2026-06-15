@@ -120,7 +120,9 @@ Implications:
 
 **Size:** add `compact` (orthogonal to variant — `text-xs`, tighter padding) for dense admin tables / row actions. Default size for standalone form-action rows and main page CTAs.
 
-**Migration principle — preserve emphasis:** solid→`color="brand"` solid, outline/white→`outline`, red→`destructive`. Don't promote an outline button to solid (the pre-existing solid-vs-outline mix for "+ Add X" create actions is out of scope).
+**Top-of-list create action = primary.** The main "create" affordance on a list/section ("+ Add Person", "+ Add Dealer", "+ Book Event", "New Quote", lookup "Add") is the solid brand **primary** (`color="brand"`, default size) — uniformly across surfaces. Established 2026-06-15 (the 0081 follow-up that promoted the two stragglers that had still been `outline`).
+
+**Otherwise preserve emphasis when migrating:** secondary/white→`outline`, minimal→`plain`, red→`destructive`. Only the top-of-list create action is force-promoted to solid brand; don't promote arbitrary outline buttons.
 
 **Intentional non-buttons (left as raw markup on purpose):** segmented **filter toggles** (`pillClass`/the calendar coach `Pill`), inline **text-link actions** in `<Field action=…>` slots ("Manage" / "+ Add"), **icon-only** removes (quote-composer `✕`) and text-link removes, CSV **download `<a>` + paired Print** toolbars (next/link would break the download), bespoke **unauthenticated auth-page** buttons (`/login`, `/auth/auth-error`), and component primitives/generic renderers (`tabs.tsx`, `row-actions.tsx`, `row-identity-cell.tsx`, `data-table.tsx` pagination, `<Badge>`).
 

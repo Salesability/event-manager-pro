@@ -181,10 +181,7 @@ export function PeopleAdmin({
           <p className="text-xs text-zinc-500">{people.length} people</p>
         </div>
         <Can capability="person:create">
-          <Button
-            outline
-            onClick={() => setAddOpen(true)}
-          >
+          <Button color="brand" onClick={() => setAddOpen(true)}>
             + Add Person
           </Button>
         </Can>
