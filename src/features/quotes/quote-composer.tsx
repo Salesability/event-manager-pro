@@ -757,7 +757,10 @@ export function QuoteComposer({
             <Label htmlFor="qf-tax">Tax</Label>
             {!selectedDealer?.province ? (
               // No province → nothing to compute; point the coach at the fix.
-              <span className={labelClass}>
+              // `mt-1 block` so the hint drops below the "Tax" label with the
+              // Field's label→description gap (a bare inline <span> collides
+              // with the label — it has no data-slot for Field to auto-space).
+              <span className={`mt-1 block ${labelClass}`}>
                 Set the dealer’s province to calculate sales tax.
               </span>
             ) : watched.taxOverride != null ? (
