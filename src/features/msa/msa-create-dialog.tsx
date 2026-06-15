@@ -137,7 +137,7 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
           </Button>
           <Button
             type="button"
-            color="green"
+            color="brand"
             onClick={onSubmit}
             disabled={pending || !canSubmit}
           >

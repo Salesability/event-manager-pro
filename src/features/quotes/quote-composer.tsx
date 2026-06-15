@@ -1169,7 +1169,7 @@ function ConfirmSendDialog({
         </Button>
         <Button
           type="button"
-          color="green"
+          color="brand"
           onClick={onConfirm}
           disabled={pending || attachmentPending || !recipientEmail}
         >

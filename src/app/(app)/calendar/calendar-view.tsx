@@ -456,7 +456,7 @@ export function CalendarView({
                   </Button>
                 </Can>
                 <Can capability="campaign:create">
-                  <Button color="green" onClick={() => setDialog({ kind: 'create' })}>
+                  <Button color="brand" onClick={() => setDialog({ kind: 'create' })}>
                     + Book Event
                   </Button>
                 </Can>

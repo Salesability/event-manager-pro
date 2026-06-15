@@ -77,7 +77,7 @@ const ITEM_ACTION_BADGE: Record<
 function ConnectButton({ label }: { label: string }) {
   return (
     <form action={connectQuickbooks}>
-      <Button type="submit" color="green">
+      <Button type="submit" color="brand">
         {label}
       </Button>
     </form>
@@ -165,7 +165,7 @@ export function QuickbooksAdmin({
             <div className="flex items-center gap-2">
               {!fetchError && actionable > 0 && (
                 <form action={syncDealersFromQuickbooks}>
-                  <Button type="submit" color="green">
+                  <Button type="submit" color="brand">
                     Sync dealers
                   </Button>
                 </form>
@@ -237,7 +237,7 @@ export function QuickbooksAdmin({
               <h3 className="text-sm font-semibold text-zinc-900">Items</h3>
               {!itemsFetchError && itemsActionable > 0 && (
                 <form action={pullItemsFromQuickbooks}>
-                  <Button type="submit" color="green">
+                  <Button type="submit" color="brand">
                     Pull items
                   </Button>
                 </form>

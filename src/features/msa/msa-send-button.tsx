@@ -33,7 +33,7 @@ export function MsaSendForSignatureButton(props: MsaSendForSignatureButtonProps)
     <>
       <Button
         type="button"
-        color="green"
+        color="brand"
         onClick={() => setOpen(true)}
         disabled={props.disabled}
         title={props.title}
