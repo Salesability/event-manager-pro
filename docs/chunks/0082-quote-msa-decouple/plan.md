@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Decision gate (msaId fate · MSA send home · accept gate) | **Done** (`decision.md`) | - |
 | 2: MSA-only envelope (strip quote from `sendMsaEnvelope`) | Done | `a719f66` |
-| 3: Quote standalone accept + MSA-active gate | Pending | - |
+| 3: Quote standalone accept + MSA-active gate | Done | `ac1aec6` |
 | 4: Remove dead coupling + DROP `quotes.msaId` migration | Pending | - |
 | 5: Tests + smoke verification + wiki | Pending | - |
 
@@ -45,7 +45,7 @@ single accept route.
 - `CLAUDE.md` → Conventions — mutations go through Server Actions; any schema/migration touch invokes the `db-conventions` skill.
 - [[project_msa_structure]] — 12-month MSA per client; accepted quote IS the contract; MSA signed before first quote-accept (the rule the gate preserves).
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - This chunk is mostly *removal/relaxation* of coupling, not new feature code — keep test cases focused on the new boundaries (MSA-only envelope, no quote side-effect on sign, gated first accept).
@@ -70,10 +70,10 @@ single accept route.
 > **Access note:** the dealer page is `admin:access`-gated, so moving the MSA send action here makes it **admin-only** (0061 had put it on the coach-accessible quote page). MSA = the once-per-client master contract, so admin-only sending is acceptable — captured in `decision.md` D2 / to surface in the Phase 5 wiki update.
 
 #### Phase 3: Quote standalone accept + MSA-active gate
-- [ ] Make the first quote acceptable through the standard send → accept path (not just the webhook).
-- [ ] Add the MSA-active gate to the accept path (`markQuoteAccepted`/`acceptQuote`): reject accept of ANY quote when the dealer has no `active` MSA (D3); clear message ("Sign / renew the master agreement first").
-- [ ] Simplify `deriveQuoteMsaState` / the quote-page CTA so the quote shows its own Send/Accept controls regardless of MSA state.
-- [ ] Test: accept blocked with no active MSA → allowed once MSA active; later quotes unaffected.
+- [x] **Discovered no Accept/Decline UI existed** (the MSA webhook was the only accept path). Paused; owner chose **Accept + Decline** (D5). Built `QuoteStatusActions` (staff "Mark accepted" / "Decline", each behind a confirm dialog) wired to the existing `acceptQuote`/`declineQuote`; rendered in a "Customer decision" card on `/quotes/[id]` for `sent` quotes only.
+- [x] Added the MSA-active gate to `acceptQuote` (server reject): loads `{ dealerId, status }`; a `sent` quote with no `active` MSA returns "Sign the master agreement first…". Gates only the real transition (non-`sent` skips → idempotent re-accept preserved). Reuses the loaded `dealerId` for the prospect→active promotion (dropped the duplicate select). Accept button mirrors the gate (disabled + helper copy when no active MSA / expired).
+- [x] Simplified `deriveQuoteMsaState` — dropped `bundleEligible` (the bundle is gone); kept `active`/`expiresAt`/`envelopeInFlight`. Composer keeps only the informational "MSA active — expires" indicator + the (Phase-4-bound) re-send gate.
+- [x] Tests: rewrote the `acceptQuote` suite for the gate (new no-active-MSA + quote-not-found cases; happy paths carry an active-MSA row); updated `send-state.test.ts`. `tsc` clean; 99/99 touched-area unit + 295 gate-matrix pass.
 
 #### Phase 4: Remove dead coupling
 - [ ] Delete `acceptBundledQuote` + its call from `markMsaSigned`; MSA sign flips only the MSA (+ keep prospect→active promotion).
