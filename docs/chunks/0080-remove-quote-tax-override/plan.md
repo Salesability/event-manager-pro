@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate — prod data-impact check + column keep/drop | Pending | - |
+| 1: Decision gate — prod data-impact check + column keep/drop | Done | - |
 | 2: Composer UI — Tax field display-only | Pending | - |
 | 3: Server + pricing — drop the override write/compute path | Pending | - |
 | 4: Schema — per the Phase 1 decision (keep = no-op; drop = migration) | Pending | - |
@@ -42,7 +42,7 @@ deleted (the "what we're moving away from" reference). Match the surrounding sha
 - **`db-conventions` skill** — invoke before any schema/migration work (Phase 4). Expand→contract: prefer keeping the column and dropping later over a risky immediate drop.
 - `src/lib/quotes/pricing.ts` — the pure totals function both the composer (live preview) and the server (persist) call; keep them in lockstep.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Phase 1 is a **decision gate** (research/data + an owner call) — like 0074/0075's Phase 1. No code until the column decision is made.
@@ -52,10 +52,10 @@ deleted (the "what we're moving away from" reference). Match the surrounding sha
 ### Phase Checklist
 
 #### Phase 1: Decision gate — prod data-impact check + column keep/drop
-- [ ] **Needs `gcloud auth login`** (prod token expired 2026-06-15). Then: count prod quotes with `tax_override IS NOT NULL`, broken down by `status` (`./scripts/with-prod-db.sh bash -c 'psql "$DATABASE_URL" -At -c "select status::text, count(*) filter (where tax_override is not null) from quotes group by status"'`).
-- [ ] Confirm whether any **read/render** path recomputes `tax` from `tax_override` live (grep PDF render + queries + accept/send paths) or whether `tax`/`total` are immutable persisted snapshots on `quotes`.
-- [ ] **Owner decision:** Option A (keep column, expand→contract, no migration — safest, preserves history) vs Option B (drop column now via migration — only if prod count is 0/all-draft). Record in `decision.md`.
-- [ ] Sandbox baseline already captured: 5 overridden (3 sent + 2 accepted).
+- [x] ~~Needs `gcloud auth login` — count prod quotes with `tax_override IS NOT NULL` by status~~ — **deferred (informational only under Option A; prod token expired)**. Sandbox baseline captured: 5 overridden (3 sent + 2 accepted). See [`decision.md`](decision.md).
+- [x] Confirmed **no read/render path recomputes `tax` from `tax_override`**: `sendQuote` + `render-quote.ts` use the persisted `quotes.tax`/`total` snapshot; only the edit-time write path + the composer live preview use the override. So removal can't retroactively change a sent quote.
+- [x] **Owner decision: Option A — keep the column (expand→contract, no migration).** Recorded in [`decision.md`](decision.md).
+- [x] Sandbox baseline captured: 5 overridden (3 sent + 2 accepted).
 
 #### Phase 2: Composer UI — Tax field display-only
 - [ ] Remove the `taxOverride != null` override-mode branch (`quote-composer.tsx:766–796`) and the **Override** link in the auto branch (~811–823).
