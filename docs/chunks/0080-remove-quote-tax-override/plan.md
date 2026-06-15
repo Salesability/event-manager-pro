@@ -8,10 +8,10 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — prod data-impact check + column keep/drop | Done | - |
-| 2: Composer UI — Tax field display-only | Pending | - |
-| 3: Server + pricing — drop the override write/compute path | Pending | - |
-| 4: Schema — per the Phase 1 decision (keep = no-op; drop = migration) | Pending | - |
-| 5: Tests + smoke + wiki | Pending | - |
+| 2: Composer UI — Tax field display-only | Done | `9f8ff43` |
+| 3: Server + pricing — drop the override write/compute path | Done | `df92f16` |
+| 4: Schema — per the Phase 1 decision (keep = no-op; drop = migration) | Done | `60bed1d` |
+| 5: Tests + smoke + wiki | Done | `53a6978` |
 
 QuickBooks now owns province tax rates (0075/0076) and computes the tax on the Estimate push, which
 already **rejects** any quote carrying a manual `tax_override` (`quote-push.ts:97`). So the per-quote
@@ -42,7 +42,7 @@ deleted (the "what we're moving away from" reference). Match the surrounding sha
 - **`db-conventions` skill** — invoke before any schema/migration work (Phase 4). Expand→contract: prefer keeping the column and dropping later over a risky immediate drop.
 - `src/lib/quotes/pricing.ts` — the pure totals function both the composer (live preview) and the server (persist) call; keep them in lockstep.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Phase 1 is a **decision gate** (research/data + an owner call) — like 0074/0075's Phase 1. No code until the column decision is made.
@@ -58,25 +58,25 @@ deleted (the "what we're moving away from" reference). Match the surrounding sha
 - [x] Sandbox baseline captured: 5 overridden (3 sent + 2 accepted).
 
 #### Phase 2: Composer UI — Tax field display-only
-- [ ] Remove the `taxOverride != null` override-mode branch (`quote-composer.tsx:766–796`) and the **Override** link in the auto branch (~811–823).
-- [ ] Drop `taxOverride` from `quoteFormSchema` (:177), `defaultValues` (:288), and the `useWatch`/`computed`/`display` usages (:351).
-- [ ] Stop sending `fd.set('tax', …)` in `onSaveDraft` (:401).
-- [ ] Drop `taxOverride` from the `InitialQuote` type (:84) + the `/quotes/[id]/page.tsx` prop wiring.
-- [ ] The no-province hint state stays (incl. the 0080-adjacent spacing fix already shipped).
+- [x] Removed the override-mode branch + the **Override** link → Tax field is now 2 states: no-province hint + auto display (value + `auto · X%` pill).
+- [x] Dropped `taxOverride` from `quoteFormSchema`, `defaultValues`, and the live `computePickedTotals(picked, { ratePct })` call; removed the `errors.taxOverride` FieldError.
+- [x] Stopped sending `fd.set('tax', …)` in `onSaveDraft`.
+- [x] Dropped `taxOverride` from the `InitialQuote` type + the `/quotes/[id]/page.tsx` prop.
+- [x] No-province hint state kept (with the already-shipped spacing fix).
 
 #### Phase 3: Server + pricing — drop the override write/compute path
-- [ ] `computePickedTotals` opts: remove `override` (`pricing.ts:127`); recompute tax from `ratePct` only. Update `pricing` tests.
-- [ ] Delete `parseTaxOverride` (`actions.ts:108`); drop the `override` arg from `resolveTaxAmount` (:125).
-- [ ] `createQuote` (:264) + `setQuoteInputs` (:511): stop reading the manual `tax` field; tax always = province-rate auto.
-- [ ] Retire `setQuoteTax` (:529) after confirming no remaining caller (grep `setQuoteTax`).
-- [ ] `quote-push.ts:97` guard: keep as defensive (with a comment that it's now unreachable) or remove — decide in-diff.
-- [ ] Queries projection (`queries.ts`): stop projecting `taxOverride` (or remove if column dropped in Phase 4).
+- [x] `computePickedTotals`: removed `override` from `QuoteTaxBasis`; tax = `subtotal × ratePct`. Updated `pricing.test.ts` (rewrote the override case to auto-tax; removed override-only cases).
+- [x] Deleted `parseTaxOverride` + `TAX_RE`; `resolveTaxAmount(subtotal, ratePct)` (no override arg).
+- [x] `createQuote` + `setQuoteInputs`: stopped reading the `tax` field + stopped writing `taxOverride`; tax always auto. `setQuoteDealer` re-derives auto tax (no override read).
+- [x] Retired `setQuoteTax` (no UI caller — only tests + the gate matrix). Removed from `action-gate-matrix.ts` + `actions.test.ts`.
+- [x] `quote-push.ts` guard **kept as defensive** — overrides can't be set any more, so it only fires for a pre-0080 historical quote (fails closed rather than pushing a wrong tax); reworded the message.
+- [x] Queries projections **kept** (Option A: column retained; the QB-push guard reads `taxOverride` for historical quotes). The composer's `InitialQuote` no longer carries it (Phase 2).
 
 #### Phase 4: Schema — per the Phase 1 decision
-- [ ] **If Option A (keep):** no migration. Add a comment on `quotes.tax_override` (`schema/quotes.ts:85`) noting it's retained-but-unused (0080) pending a later contract migration.
-- [ ] **If Option B (drop):** invoke `db-conventions`; generate the drop migration; verify journal `when` ordering; apply to **sandbox**; (prod applied at deploy time, after the data-impact check confirms safety).
+- [x] **Option A (keep) chosen:** no migration. Added a retained-but-unused comment on `quotes.tax_override` (`schema/quotes.ts`) marking it 0080-unused, kept for historical overrides + the QB-push guard, droppable in a later contract chunk.
+- [x] ~~Option B (drop now via migration)~~ — not chosen; see [`decision.md`](decision.md).
 
 #### Phase 5: Tests + smoke + wiki
-- [ ] Update `actions.test.ts` (drop override-path cases; assert tax is always auto), `queries.test.ts`, `status-display.test.ts`, `pricing` tests, `quote-push.test.ts` (the override-rejection case).
-- [ ] Smoke (web-test): `goto /quotes/<id>`; the Tax field shows the `auto · <Province> X%` pill with **no "Override" link**; no override input present.
-- [ ] Wiki: `commercial-spine.md` (drop the override from the tax model), `data-model.md` (`tax_override` column note per Phase 4), `log.md` entry.
+- [x] Test updates landed in Phase 3 (forced by the per-phase gate): `actions.test.ts` (dropped `setQuoteTax` + override-persist), `pricing.test.ts` (auto-tax). `queries.test.ts` / `status-display.test.ts` fixtures keep `taxOverride: null` (the `Quote` type retains the column — Option A) and stay valid; `quote-push.test.ts`'s override-rejection case now exercises the **historical-quote defensive guard** — still valid, no change.
+- [~] Smoke (web-test): the Tax field shows the `auto · X%` pill with **no Override link** — **deferred to the chunk-end `/eval`** (the build two-tier gate runs browser smoke there, not per-phase).
+- [x] Wiki: `data-model.md` (tax model → `round(subtotal × tax_pct/100)`; `tax_override` retained-but-unused; ERD + summary + pre-flight note), `log.md` entry. (`commercial-spine.md` doesn't carry the tax-model formula — nothing to drop there.)
