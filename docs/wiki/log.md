@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-15 — Quote decoupled from the MSA/BoldSign envelope (chunk 0082)
+
+- Rewrote [`commercial-spine.md`](commercial-spine.md): the bundled first-deal envelope (one merged Quote+MSA PDF, 0055/0061) is **superseded**. The MSA now signs on its **own** BoldSign envelope (MSA pages only), sent from the per-dealer panel on `/dealerships/[id]`; signing flips **only** the MSA (no quote/dealer side effect). Replaced the "The bundled first-deal envelope" section with **"The MSA envelope (standalone)"** + a new **"Accepting a Quote"** section: every quote accepts via the staff `acceptQuote` action behind a new **accept gate** (D3 — a `sent` quote needs the dealer to have an `active` MSA), surfaced as a "Customer decision" Accept/Decline card. Updated the TL;DR, the lifecycle diagram, the entities table, the per-Client bullets, and the MSA-expiry less-happy path.
+- Updated [`data-model.md`](data-model.md): **`quotes.msa_id` column + index dropped** (migration `0040`, sandbox-applied) — removed the FK from the ERD + relationship list + the `quotes` column walkthrough; reframed the `(dealer_id, status)` MSA index around the accept gate; the signed-PDF artifact is now MSA-only.
+- Code: deleted `src/lib/pdf/merge.ts` (`combineQuoteAndMsa`) + `markQuoteAcceptedViaEnvelope` + `acceptBundledQuote` + the quote re-send MSA-in-flight guard; `sendMsaEnvelope` renders MSA-only. New `quote-status-actions.tsx`. **Sandbox-only — not yet on prod.** History: [`docs/chunks/0082-quote-msa-decouple/`](../chunks/0082-quote-msa-decouple/decision.md).
+
 ## 2026-06-15 — Button consolidation: one primitive, brand-blue primary, soft-red destructive (chunk 0081)
 
 - Added a **Buttons (the one primitive)** section to [layout.md](layout.md): the shared Catalyst `Button` is the single button primitive; **brand blue (`color="brand"`) is the one primary color** (green retired from primary → semantic `<Badge color="green">` only); new **soft-red `destructive`** variant + **`compact`** size; the emphasis-preservation migration principle; and the list of intentional non-buttons (filter toggles, field-label text links, icon/text-link removes, download-`<a>`+Print, bespoke auth-page buttons, component primitives).
