@@ -17,7 +17,7 @@ Entries are reverse-chronological (newest at the top). Format:
 
 - The composer Tax field is now **display-only** (auto, QB-sourced province rate + the `auto · X%` pill; no Override link/input). QuickBooks owns the tax rate (0075/0076) and the QBO Estimate push already rejected overridden quotes, so the per-quote override was redundant + a footgun.
 - [`data-model.md`](data-model.md): tax model updated to `tax = round(subtotal × tax_pct/100)` (override removed); `quotes.tax_override` marked **retained-but-unused** (expand→contract — kept for pre-0080 historical overrides + the QB-push defensive guard, droppable in a later chunk; no migration this chunk).
-- Code: removed the override write/compute path (`computePickedTotals` `override`, `parseTaxOverride`, `setQuoteTax`); `quote-push` override guard kept as a historical-quote safety net. Decision recorded in [`0080-remove-quote-tax-override/decision.md`](../chunks/0080-remove-quote-tax-override/decision.md) (Option A — keep the column).
+- Code: removed the override write/compute path (`computePickedTotals` `override`, `parseTaxOverride`, `setQuoteTax`); `quote-push` override guard kept as a historical-quote safety net. Decision recorded in [`0080-remove-quote-tax-override/decision.md`](../chunks/closed/0080-remove-quote-tax-override/decision.md) (Option A — keep the column).
 
 ## 2026-06-12 — Quote attachments: local-file upload on the send dialog (0078)
 
