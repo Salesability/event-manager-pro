@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-15 — Removed the per-quote manual tax override (0080)
+
+- The composer Tax field is now **display-only** (auto, QB-sourced province rate + the `auto · X%` pill; no Override link/input). QuickBooks owns the tax rate (0075/0076) and the QBO Estimate push already rejected overridden quotes, so the per-quote override was redundant + a footgun.
+- [`data-model.md`](data-model.md): tax model updated to `tax = round(subtotal × tax_pct/100)` (override removed); `quotes.tax_override` marked **retained-but-unused** (expand→contract — kept for pre-0080 historical overrides + the QB-push defensive guard, droppable in a later chunk; no migration this chunk).
+- Code: removed the override write/compute path (`computePickedTotals` `override`, `parseTaxOverride`, `setQuoteTax`); `quote-push` override guard kept as a historical-quote safety net. Decision recorded in [`0080-remove-quote-tax-override/decision.md`](../chunks/0080-remove-quote-tax-override/decision.md) (Option A — keep the column).
+
 ## 2026-06-12 — Quote attachments: local-file upload on the send dialog (0078)
 
 - New `quote_attachments` table (migration `0038`, sandbox): one row per file a coach uploads to ride alongside the quote PDF in the send email. `quote_id` FK **CASCADE**, snapshot columns (`filename`/`storage_key`/`content_type`/`byte_size`), `display_order`, `(quote_id, display_order)` index, standard RLS (service_role + staff). Added to [`data-model.md`](data-model.md) (ERD + entity block + summary row + relationships list).
