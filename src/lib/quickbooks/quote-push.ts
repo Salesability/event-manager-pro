@@ -92,13 +92,16 @@ export function checkQuotePushReadiness(
       reason: `These items aren't linked to QuickBooks yet — run Pull items first: ${unlinked.join(', ')}.`,
     };
   }
-  // Tax (0074): a manual override can't be represented as a QBO tax code yet;
-  // a taxed quote needs its province mapped (QBO computes from the code).
+  // Tax (0074): a manual override can't be represented as a QBO tax code (QBO
+  // computes from the province's mapped code). 0080 removed the ability to SET
+  // an override, so this only ever fires for a pre-0080 historical quote — kept
+  // as a defensive guard so such a quote still fails closed rather than pushing
+  // a wrong tax.
   if (quote.taxOverride != null) {
     return {
       ok: false,
       reason:
-        "This quote has a manual tax override, which can't be pushed to QuickBooks yet — remove the override or push without it.",
+        "This quote has a manual tax override (set before overrides were removed) and can't be pushed to QuickBooks — make a new quote to push it.",
     };
   }
   if (Number(quote.tax) > 0 && !quote.taxCodeId) {

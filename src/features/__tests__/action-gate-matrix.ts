@@ -359,12 +359,6 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'quote:edit — admin || coach (composer setter)',
   },
   {
-    label: 'setQuoteTax',
-    invoke: () => quotesActions.setQuoteTax(fd()),
-    expectedByRole: ADMIN_OR_COACH,
-    note: 'quote:edit — admin || coach (composer setter)',
-  },
-  {
     label: 'setQuoteDealer',
     invoke: () => quotesActions.setQuoteDealer(fd()),
     expectedByRole: ADMIN_OR_COACH,

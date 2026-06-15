@@ -168,7 +168,6 @@ import {
   sendQuote,
   setQuoteDealer,
   setQuoteInputs,
-  setQuoteTax,
   uploadQuoteAttachment,
 } from './actions';
 import { MAX_ADDRESS_LINES } from './constants';
@@ -1094,49 +1093,6 @@ const CATALOG_FIXTURE = [
     sortOrder: 1,
   },
 ];
-
-describe('setQuoteTax', () => {
-  it('overrides tax and recomputes total = subtotal + tax', async () => {
-    // status SELECT, then UPDATE.returning() returns one row.
-    mocks.dbResults.push([{ status: 'draft', subtotal: '7500.00' }], [{ id: 42 }]);
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '1125' })));
-    expect(result).toEqual({ ok: true });
-    const patch = mocks.updates[0].patch as Record<string, unknown>;
-    expect(patch.tax).toBe('1125.00');
-    expect(patch.total).toBe('8625.00');
-  });
-
-  it('rejects negative tax', async () => {
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '-5' })));
-    expect((result as { error: string }).error).toMatch(/non-negative/);
-  });
-
-  it('rejects tax with more than 2 decimal places (no IEEE-754 drift between paths)', async () => {
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '2.675' })));
-    expect((result as { error: string }).error).toContain('2 decimal places');
-  });
-
-  it('rejects tax above the dollar cap (matches pricing module)', async () => {
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '999999999999' })));
-    expect((result as { error: string }).error).toContain('Tax must be ≤');
-  });
-
-  it('rejects edit on non-draft quote', async () => {
-    mocks.dbResults.push([{ status: 'accepted', subtotal: '7500.00' }]);
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '100' })));
-    expect(result).toEqual({ error: "Quote cannot be edited in status 'accepted'." });
-  });
-
-  it('rejects when concurrent send races past the read-then-write window', async () => {
-    mocks.dbResults.push(
-      [{ status: 'draft', subtotal: '7500.00' }],
-      [],
-      [{ status: 'sent' }],
-    );
-    const result = await call(setQuoteTax(fd({ quoteId: '42', tax: '100' })));
-    expect(result).toEqual({ error: "Quote cannot be edited in status 'sent'." });
-  });
-});
 
 describe('setQuoteDealer', () => {
   it('flips dealer on a draft quote when the new dealer is active', async () => {

@@ -59,13 +59,13 @@ describe('computePickedTotals (0062 picker)', () => {
     expect(r.subtotal).toBe(6000);
   });
 
-  it('sums multiple lines and adds the manual tax override', () => {
+  it('sums multiple lines and computes auto province-rate tax', () => {
     const r = computePickedTotals(
       [pick({ code: 'a', qty: 1, unitPrice: 1000 }), pick({ code: 'b', qty: 2, unitPrice: 250 })],
-      { override: 150 },
+      { ratePct: 10 },
     );
     expect(r.subtotal).toBe(1500);
-    expect(r.tax).toBe(150);
+    expect(r.tax).toBe(150); // 1500 × 10%
     expect(r.total).toBe(1650);
   });
 
@@ -86,11 +86,7 @@ describe('computePickedTotals (0062 picker)', () => {
     expect(input[0].lineTotal).toBe(0); // untouched
   });
 
-  it('throws on a negative tax override', () => {
-    expect(() => computePickedTotals([pick()], { override: -1 })).toThrow(QuoteInputsError);
-  });
-
-  describe('province-rate tax (0065)', () => {
+  describe('province-rate tax', () => {
     it('computes tax as subtotal × ratePct/100', () => {
       const r = computePickedTotals([pick({ qty: 1, unitPrice: 1000 })], { ratePct: 13 });
       expect(r.subtotal).toBe(1000);
@@ -104,27 +100,10 @@ describe('computePickedTotals (0062 picker)', () => {
       expect(r.total).toBe(1149.75);
     });
 
-    it('a manual override wins over the province rate', () => {
-      const r = computePickedTotals([pick({ qty: 1, unitPrice: 1000 })], {
-        ratePct: 13,
-        override: 50,
-      });
-      expect(r.tax).toBe(50);
-      expect(r.total).toBe(1050);
-    });
-
     it('no province rate (0) yields zero tax', () => {
       const r = computePickedTotals([pick({ qty: 1, unitPrice: 1000 })], { ratePct: 0 });
       expect(r.tax).toBe(0);
       expect(r.total).toBe(1000);
-    });
-
-    it('an override of 0 is honored (not treated as auto)', () => {
-      const r = computePickedTotals([pick({ qty: 1, unitPrice: 1000 })], {
-        ratePct: 13,
-        override: 0,
-      });
-      expect(r.tax).toBe(0);
     });
   });
 });
