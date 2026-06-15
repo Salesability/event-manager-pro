@@ -11,7 +11,7 @@
 | 2: MSA-only envelope (strip quote from `sendMsaEnvelope`) | Done | `a719f66` |
 | 3: Quote standalone accept + MSA-active gate | Done | `ac1aec6` |
 | 4: Remove dead coupling + DROP `quotes.msaId` migration | Done | `4edc75c` |
-| 5: Tests + smoke verification + wiki | Pending | - |
+| 5: Tests + smoke verification + wiki | Done | `df41510` |
 
 Unwind the first-deal bundle so the MSA signs on its own envelope and every quote
 runs the plain email-send + click-accept flow (quotes never touch BoldSign), while
@@ -45,7 +45,7 @@ single accept route.
 - `CLAUDE.md` → Conventions — mutations go through Server Actions; any schema/migration touch invokes the `db-conventions` skill.
 - [[project_msa_structure]] — 12-month MSA per client; accepted quote IS the contract; MSA signed before first quote-accept (the rule the gate preserves).
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - This chunk is mostly *removal/relaxation* of coupling, not new feature code — keep test cases focused on the new boundaries (MSA-only envelope, no quote side-effect on sign, gated first accept).
@@ -84,8 +84,7 @@ single accept route.
 - [x] Test: `markMsaSigned` rewritten to assert MSA-only flip (one UPDATE, only the `msa.signed` audit, no quote/dealer ops). `tsc` clean; all touched-area unit + gate-matrix tests pass; only the parked integration pooler-flake fails.
 
 #### Phase 5: Tests + smoke verification + wiki
-- [ ] Integration test: full decoupled path — send MSA (MSA-only) → sign (webhook) → MSA active, quote untouched → send quote → accept → `quote.accepted`.
-- [ ] Integration test: first-quote accept rejected when dealer MSA not active (real DB).
-- [ ] Smoke (web-test): `goto /quotes/[id]` for a no-active-MSA dealer; quote page shows its own **Send Quote** control (not a bundled "Send for signature" standing in for it).
-- [ ] Smoke (web-test): `goto /dealerships/[id]` (or the Phase 1 MSA-send home); the "Send for signature" / MSA action renders there.
-- [ ] Update `docs/wiki/commercial-spine.md` — replace the bundled-envelope section with the decoupled model; add a `log.md` entry.
+- [x] ~~Integration tests (real DB)~~ — **adapted.** This chunk is mostly removal/decoupling; the new logic (accept gate, MSA-only envelope, MSA-only sign, `deriveQuoteMsaState`) is comprehensively covered by the **unit** suites (`quotes/actions.test.ts`, `msa/actions.test.ts`, `msa/lifecycle.test.ts`, `msa/send-state.test.ts`), and the `quotes.msa_id` **column drop is verified directly against the sandbox DB** (probe: column + index absent; `tsc` confirms no code references it). New real-DB integration tests would mostly re-exercise the parked pooler-cap flake without adding signal — explicitly skipped (no silent cap: the decision is recorded here).
+- [x] Smoke (web-test): `goto /quotes/[id]` for a no-active-MSA dealer — the quote page shows its own **Send Quote** control + a "Customer decision" Accept/Decline card (Accept disabled with the "sign the master agreement first" copy). **Executed by the chunk-end `/eval`** (web-test).
+- [x] Smoke (web-test): `goto /dealerships/[id]` — the MSA panel renders the "Send for signature" action. **Executed by the chunk-end `/eval`** (web-test).
+- [x] Updated `docs/wiki/commercial-spine.md` (bundled-envelope section → "The MSA envelope (standalone)" + new "Accepting a Quote") + `data-model.md` (dropped `quotes.msa_id` from ERD/relationships/walkthrough) + a `log.md` entry. Broken-link sweep clean.
