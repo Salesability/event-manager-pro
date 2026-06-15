@@ -111,11 +111,6 @@ type Props = {
   initial?: InitialQuote;
   /** Edit-mode only. Drives the Send confirm dialog. */
   recipient?: Recipient;
-  /** Re-send only. True when the dealer's MSA is `pending` with an envelope
-   *  posted to BoldSign — `sendQuote` will refuse re-send until the
-   *  envelope resolves. The UI gates the button to match the server.
-   *  Always false on first-send (the MSA gate only fires on re-send). */
-  msaEnvelopeInFlight?: boolean;
   /** Dealer's MSA standing (0082: informational only — the MSA is sent for
    *  signature from the dealer page, not here). `active` → an "MSA active —
    *  expires …" indicator; the dealer's quotes can be accepted. Omitted on
@@ -219,7 +214,6 @@ export function QuoteComposer({
   initialCampaignId,
   initial,
   recipient,
-  msaEnvelopeInFlight = false,
   msaState,
   pageTitle,
   pageDescription,
@@ -561,22 +555,14 @@ export function QuoteComposer({
           type="button"
           color="green"
           onClick={() => setConfirmSendOpen(true)}
-          disabled={
-            !recipientEmail ||
-            isDirty ||
-            pending ||
-            sendPending ||
-            (isResend && msaEnvelopeInFlight)
-          }
+          disabled={!recipientEmail || isDirty || pending || sendPending}
           title={
-            isResend && msaEnvelopeInFlight
-              ? 'MSA envelope is in flight — finish signing or terminate before re-sending this quote.'
-              : isDirty
-                ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
-                : recipientErrorMessage ??
-                  (recipientEmail
-                    ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
-                    : undefined)
+            isDirty
+              ? 'Save changes before sending — the email emits the saved quote, not the unsaved edits.'
+              : recipientErrorMessage ??
+                (recipientEmail
+                  ? `${isResend ? 'Re-send Quote' : 'Send Quote'} to ${recipientEmail}`
+                  : undefined)
           }
         >
           {isResend ? 'Re-send Quote' : 'Send Quote'}
@@ -613,11 +599,6 @@ export function QuoteComposer({
       {canSend && !isDirty && recipientErrorMessage && (
         <p className="text-right text-[11px] text-red-700">
           Send disabled: {recipientErrorMessage}
-        </p>
-      )}
-      {canSend && isResend && msaEnvelopeInFlight && (
-        <p className="text-right text-[11px] text-amber-700">
-          Re-send disabled: MSA envelope awaiting signature.
         </p>
       )}
       {canSend && hasActiveMsa && (

@@ -1,14 +1,12 @@
-// Throwaway helper for unblocking local testing when the MSA-pending in-flight
-// gate at src/features/quotes/actions.ts:824 prevents you from re-sending a
-// Quote. The gate fires only when a dealer's MSA has BOTH status='pending'
-// AND provider_document_id IS NOT NULL (i.e. the envelope has been posted to
-// the e-sig provider but the signed callback hasn't fired yet).
+// Throwaway helper for local MSA-lifecycle testing. As of 0082 the main use is
+// `activate <msa-id>` — flip a pending MSA to `active` so the dealer's quotes
+// can be accepted (the accept gate requires an active MSA), without running the
+// real BoldSign send + webhook round-trip. (The old MSA-pending in-flight
+// re-send gate this script also unblocked was removed in 0082.)
 //
 // Three subcommands, increasing in invasiveness:
 //   list                 — show all `pending` MSAs (read-only, safe)
-//   unpost <msa-id>      — set provider_document_id = NULL (gate passes; MSA
-//                          stays `pending`; least invasive — recommended for
-//                          local test unblock)
+//   unpost <msa-id>      — set provider_document_id = NULL (MSA stays `pending`)
 //   activate <msa-id>    — flip status to `active`, signed_at = now(),
 //                          expires_at = now() + 12 months (mimics a signed
 //                          MSA; mutates lifecycle state)
@@ -25,7 +23,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/lib/db/schema';
-import { auditLog, masterServiceAgreements, quotes } from '../src/lib/db/schema';
+import { auditLog, masterServiceAgreements } from '../src/lib/db/schema';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -121,22 +119,8 @@ async function activate(id: number) {
 }
 
 async function hardDelete(id: number) {
-  // Pre-flight: quotes.msa_id is FK with onDelete: 'restrict', so any quote
-  // referencing this MSA will block the DELETE. Surface this before mutating.
-  const referencingQuotes = await db
-    .select({ id: quotes.id, status: quotes.status })
-    .from(quotes)
-    .where(eq(quotes.msaId, id));
-  if (referencingQuotes.length > 0) {
-    console.error(
-      `Refusing to delete MSA #${id}: ${referencingQuotes.length} quote(s) reference it via msa_id (FK onDelete: 'restrict').`,
-    );
-    for (const q of referencingQuotes) {
-      console.error(`  quote #${q.id} (status=${q.status})`);
-    }
-    console.error('NULL out quotes.msa_id for these rows first, or delete the quotes, then re-run.');
-    process.exit(1);
-  }
+  // 0082: quotes no longer reference the MSA (the `quotes.msa_id` FK was
+  // dropped), so there's no quote-reference pre-flight to run anymore.
 
   // Count audit rows that will be purged alongside (matches scripts/0041-msa-smoke.ts:115-127).
   const auditCount = await db
@@ -166,7 +150,6 @@ async function hardDelete(id: number) {
 
   console.log(`Pre-flight for MSA #${id}:`);
   console.log(`  dealer #${existing.dealerId}  status=${existing.status}  provider_document_id=${existing.providerDocumentId ?? 'NULL'}`);
-  console.log(`  ${referencingQuotes.length} quote(s) reference this MSA  (none — proceeding)`);
   console.log(`  ${auditCount.length} audit_log row(s) will be purged`);
   console.log();
 

@@ -281,6 +281,13 @@
       "when": 1781309857738,
       "tag": "0039_quiet_blur",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1781565684779,
+      "tag": "0040_wealthy_ultragirl",
+      "breakpoints": true
     }
   ]
 }

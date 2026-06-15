@@ -17,7 +17,6 @@ import {
 import { actors, bigIdentity, timestamps } from './_columns';
 import { audienceSources } from './audience-sources';
 import { dealers } from './dealers';
-import { masterServiceAgreements } from './master-service-agreements';
 
 // Quote = the accepted contract per Salesability MSA §1.iii ("Each Quote …
 // shall constitute a separate distinct and independent agreement"). The
@@ -53,10 +52,8 @@ export const quotes = pgTable(
     dealerId: bigint('dealer_id', { mode: 'number' })
       .notNull()
       .references(() => dealers.id, { onDelete: 'restrict' }),
-    msaId: bigint('msa_id', { mode: 'number' }).references(
-      () => masterServiceAgreements.id,
-      { onDelete: 'restrict' }
-    ),
+    // 0082: the `msa_id` FK was dropped — a quote no longer links to an MSA (the
+    // MSA signs on its own envelope, the quote has its own send→accept flow).
     status: quoteStatus('status').notNull().default('draft'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
@@ -103,7 +100,6 @@ export const quotes = pgTable(
   (table) => [
     index('quotes_dealer_id_idx').on(table.dealerId),
     index('quotes_dealer_id_status_idx').on(table.dealerId, table.status),
-    index('quotes_msa_id_idx').on(table.msaId),
     index('quotes_audience_source_id_idx').on(table.audienceSourceId),
     index('quotes_previous_quote_id_idx').on(table.previousQuoteId),
     index('quotes_created_by_id_idx').on(table.createdById),

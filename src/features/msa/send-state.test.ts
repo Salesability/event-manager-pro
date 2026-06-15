@@ -21,12 +21,8 @@ function makeMsa(overrides: Partial<Msa> & { status: MsaStatus }): Msa {
 }
 
 describe('deriveQuoteMsaState (0082 — MSA-only)', () => {
-  it('no MSA → not active, not in-flight', () => {
-    expect(deriveQuoteMsaState(null)).toEqual({
-      active: false,
-      expiresAt: null,
-      envelopeInFlight: false,
-    });
+  it('no MSA → not active', () => {
+    expect(deriveQuoteMsaState(null)).toEqual({ active: false, expiresAt: null });
   });
 
   it('active MSA → active + expiresAt', () => {
@@ -34,36 +30,24 @@ describe('deriveQuoteMsaState (0082 — MSA-only)', () => {
     expect(deriveQuoteMsaState(makeMsa({ status: 'active', expiresAt }))).toEqual({
       active: true,
       expiresAt,
-      envelopeInFlight: false,
     });
   });
 
-  it('expired MSA → not active, not in-flight', () => {
+  it('expired MSA → not active', () => {
     const state = deriveQuoteMsaState(makeMsa({ status: 'expired' }));
     expect(state.active).toBe(false);
     expect(state.expiresAt).toBeNull();
-    expect(state.envelopeInFlight).toBe(false);
   });
 
   it('terminated MSA → not active', () => {
     expect(deriveQuoteMsaState(makeMsa({ status: 'terminated' })).active).toBe(false);
   });
 
-  it('pending MSA with a posted envelope → envelopeInFlight', () => {
-    const state = deriveQuoteMsaState(
-      makeMsa({ status: 'pending', providerDocumentId: 'doc_123' }),
-    );
-    expect(state).toEqual({
+  it('pending MSA → not active (no accept, no indicator)', () => {
+    expect(deriveQuoteMsaState(makeMsa({ status: 'pending' }))).toEqual({
       active: false,
       expiresAt: null,
-      envelopeInFlight: true,
     });
-  });
-
-  it('pending MSA without a posted envelope → no flags', () => {
-    const state = deriveQuoteMsaState(makeMsa({ status: 'pending' }));
-    expect(state.envelopeInFlight).toBe(false);
-    expect(state.active).toBe(false);
   });
 
   it('active MSA with null expiresAt → active but expiresAt stays null', () => {

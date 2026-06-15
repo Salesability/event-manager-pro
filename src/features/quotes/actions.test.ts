@@ -478,9 +478,9 @@ describe('sendQuote', () => {
   });
 
   it('re-sends an already-sent quote: re-renders, re-uploads, resets sentAt, and emits a fresh quote.sent audit row (0046)', async () => {
-    // Pre-load finds status='sent'; dealer; MSA-pending lookup empty
-    // (no in-flight envelope); UPDATE returns one row.
-    mocks.dbResults.push([SENT_ROW], [DEALER_ROW], [], [{ id: 42 }]);
+    // Pre-load finds status='sent'; dealer; UPDATE returns one row. (0082: no
+    // MSA-pending lookup — the re-send guard was removed.)
+    mocks.dbResults.push([SENT_ROW], [DEALER_ROW], [{ id: 42 }]);
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
     expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
@@ -503,7 +503,6 @@ describe('sendQuote', () => {
     mocks.dbResults.push(
       [{ ...SENT_ROW, sentAt: longAgoSent, updatedAt: longAgoSent }],
       [DEALER_ROW],
-      [], // MSA-pending lookup empty
       [{ id: 42 }],
     );
     const result = await call(sendQuote(fd({ quoteId: '42' })));
@@ -594,16 +593,15 @@ describe('sendQuote', () => {
   });
 
   it('rejects rather than claims success when a concurrent EDIT (not a send) bumped updatedAt under a re-send (eval Codex High #1)', async () => {
-    // Pre-load row=sent at T1; dealer; MSA empty; UPDATE misses; re-select
-    // finds the row still in `sent` with a DIFFERENT updatedAt but the SAME
-    // (unchanged) sentAt — a concurrent `setQuoteInputs` ran. The pre-fix
-    // path would have returned ok:true (claiming the re-send succeeded);
-    // the fixed path classifies as concurrent edit and returns the retry
-    // error so the coach re-pre-loads before re-sending stale data.
+    // Pre-load row=sent at T1; dealer; UPDATE misses; re-select finds the row
+    // still in `sent` with a DIFFERENT updatedAt but the SAME (unchanged)
+    // sentAt — a concurrent `setQuoteInputs` ran. The pre-fix path would have
+    // returned ok:true (claiming the re-send succeeded); the fixed path
+    // classifies as concurrent edit and returns the retry error so the coach
+    // re-pre-loads before re-sending stale data.
     mocks.dbResults.push(
       [SENT_ROW],
       [DEALER_ROW],
-      [],
       [],
       [{
         id: 42,
@@ -617,55 +615,6 @@ describe('sendQuote', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('refuses re-send when the dealer\'s MSA envelope is in flight (status=pending + providerDocumentId set)', async () => {
-    // Pre-load row=sent, dealer; MSA-pending in-flight lookup returns a row
-    // with a providerDocumentId. Action aborts before render/recipient/UPDATE.
-    mocks.dbResults.push(
-      [SENT_ROW],
-      [DEALER_ROW],
-      [{ status: 'pending', providerDocumentId: 'dbox-sign-123' }],
-    );
-    const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({
-      error:
-        'MSA envelope is in flight — finish signing or terminate before re-sending this quote.',
-    });
-    expect(mocks.renderQuotePdf).not.toHaveBeenCalled();
-    expect(mocks.updates).toHaveLength(0);
-    expect(mocks.putObject).not.toHaveBeenCalled();
-  });
-
-  it('re-sends successfully when an MSA is pending but the envelope has not been posted yet (providerDocumentId IS NULL)', async () => {
-    // Pre-load row=sent, dealer; MSA-pending lookup finds a row WITHOUT a
-    // providerDocumentId (sendMsaEnvelope hasn\'t fired yet). Re-send is
-    // allowed — there\'s no in-flight envelope for the dealer to be confused by.
-    mocks.dbResults.push(
-      [SENT_ROW],
-      [DEALER_ROW],
-      [{ status: 'pending', providerDocumentId: null }],
-      [{ id: 42 }],
-    );
-    const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ ok: true });
-    expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
-  });
-
-  it('first send (sentAt=null) does not run the MSA-pending in-flight check', async () => {
-    // The MSA gate is gated on `sentAt != null` — first send must not pay
-    // the cost. Pre-load=draft, dealer, then straight to recipient/render/UPDATE
-    // (no MSA SELECT between dealer + recipient resolve).
-    mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW], [{ id: 42 }]);
-    const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ ok: true });
-  });
-
-  it('re-sends when no MSA exists for the dealer (gate is a no-op)', async () => {
-    // Pre-load row=sent, dealer; MSA SELECT returns []. Re-send proceeds.
-    mocks.dbResults.push([SENT_ROW], [DEALER_ROW], [], [{ id: 42 }]);
-    const result = await call(sendQuote(fd({ quoteId: '42' })));
-    expect(result).toEqual({ ok: true });
-  });
-
   it('is idempotent on the send-then-immediate-retry-with-same-updatedAt path (optimistic-lock collapses two concurrent re-sends)', async () => {
     // Two clicks pre-load the same updatedAt; the first wins, the second's
     // UPDATE misses on the (now-bumped) updatedAt predicate and re-select
@@ -675,7 +624,6 @@ describe('sendQuote', () => {
     mocks.dbResults.push(
       [SENT_ROW],
       [DEALER_ROW],
-      [], // MSA-pending lookup empty
       [], // UPDATE misses
       [{
         id: 42,

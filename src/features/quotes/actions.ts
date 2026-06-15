@@ -804,34 +804,9 @@ export const sendQuote = capabilityClient('quote:edit')
       .limit(1);
     if (!dealer) return { error: 'Dealer not found or archived.' };
 
-    // MSA-pending in-flight gate (0046 Phase 5). On re-send only — first-send
-    // pre-dates the MSA bundle by definition, and the MSA-bundle envelope
-    // path lives in `sendMsaEnvelope` (it bundles the draft Quote alongside
-    // the MSA PDF). Re-sending a Quote *while the dealer's MSA envelope is
-    // sitting in BoldSign awaiting signature* would confuse the signer:
-    // they'd see two different Quote PDFs. Block re-send until the envelope
-    // resolves (signed → MSA goes `active`; declined → manual cleanup).
-    if (draft.sentAt != null) {
-      const [pendingMsa] = await db
-        .select({
-          status: masterServiceAgreements.status,
-          providerDocumentId: masterServiceAgreements.providerDocumentId,
-        })
-        .from(masterServiceAgreements)
-        .where(
-          and(
-            eq(masterServiceAgreements.dealerId, draft.dealerId),
-            eq(masterServiceAgreements.status, 'pending'),
-          ),
-        )
-        .limit(1);
-      if (pendingMsa && pendingMsa.providerDocumentId != null) {
-        return {
-          error:
-            'MSA envelope is in flight — finish signing or terminate before re-sending this quote.',
-        };
-      }
-    }
+    // 0082: the old "MSA envelope in flight" re-send block is gone. With the
+    // quote unbundled from the MSA envelope, a pending MSA signature has no
+    // bearing on re-sending this quote's own PDF.
 
     // Resolve recipient before any side effects. If the dealer doesn't have a
     // customer contact with a primary email, we fail closed — the row stays

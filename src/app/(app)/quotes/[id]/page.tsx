@@ -111,10 +111,10 @@ export default async function QuoteEditPage({
       loadQuoteAttachments(quote.id),
     ]);
   // 0082: the MSA send action moved to the dealer page; the composer keeps only
-  // an informational MSA-active indicator + the re-send-in-flight gate. Derived
-  // in one tested helper so the lifecycle rules aren't re-encoded in the page.
+  // an informational MSA-active indicator, and the accept gate (D3) reads the
+  // same active flag. Derived in one tested helper so the lifecycle rules aren't
+  // re-encoded in the page.
   const sendState = deriveQuoteMsaState(msa);
-  const msaEnvelopeInFlight = sendState.envelopeInFlight;
   const msaState = {
     active: sendState.active,
     expiresAt: sendState.expiresAt,
@@ -245,7 +245,6 @@ export default async function QuoteEditPage({
           quoteValidDays: quote.quoteValidDays,
         }}
         recipient={recipient}
-        msaEnvelopeInFlight={msaEnvelopeInFlight}
         msaState={msaState}
         pageTitle={quoteDisplayName(quote.createdAt)}
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
