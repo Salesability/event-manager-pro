@@ -754,12 +754,17 @@ export function QuoteComposer({
           <Field>
             <Label htmlFor="qf-tax">Tax</Label>
             {!selectedDealer?.province ? (
-              // No province → nothing to compute; point the coach at the fix.
+              // No province to compute against. Two distinct cases with
+              // different fixes: no dealer picked yet (create mode) vs a dealer
+              // whose record has no province — so the copy is context-aware
+              // rather than the misleading blanket "set the dealer's province".
               // `mt-1 block` so the hint drops below the "Tax" label with the
               // Field's label→description gap (a bare inline <span> collides
               // with the label — it has no data-slot for Field to auto-space).
               <span className={`mt-1 block ${labelClass}`}>
-                Set the dealer’s province to calculate sales tax.
+                {selectedDealer
+                  ? 'This dealer has no province set — add it on the dealer to calculate sales tax.'
+                  : 'Select a dealer to calculate sales tax.'}
               </span>
             ) : (
               // Auto, QuickBooks-sourced province rate — display-only. 0080
