@@ -9,8 +9,8 @@
 |-------|--------|--------|
 | 1: Green → brand primary swaps (pure) | Done | c69c11f |
 | 2: Component foundation + collapse class-constants onto `Button` | Done | 5d20fc8 |
-| 3: Migrate one-off inline raw buttons (calendar + forms) | Pending | - |
-| 4: Resolve destructive + compact-scale decisions, apply | Pending | - |
+| 3: Migrate one-off inline raw buttons (calendar + forms) | Done | dd88395 |
+| 4: Resolve destructive + compact-scale decisions, apply | Done | dd88395 |
 | 5: Smoke verification (web-test) | Pending | - |
 
 This chunk makes the shared Catalyst `Button`
@@ -45,7 +45,7 @@ plus an existing good consumer to match call-site shape.
 - [[project_design_chroma_north_star]] (memory) — brand is logo-derived; brand
   blue as primary aligns with the north-star.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - This is a visual/refactor chunk: "tests" = `tsc` + existing suite stay green +
@@ -90,34 +90,40 @@ Small-secondary / header constants → `<Button outline compact>` (emphasis pres
 
 #### Phase 3: Migrate one-off inline raw buttons (calendar + forms)
 `src/app/(app)/calendar/event-detail.tsx`:
-- [ ] 135 Email Client, 144 Email Coach → `<Button outline>`
-- [ ] 157 Create Quote (an `<a>`) → `<Button outline href=…>`
-- [ ] 167 Cancel Campaign → destructive (see Phase 4 decision)
-- [ ] 179 Re-sync → `<Button outline>`
-- [ ] 191 Edit → `<Button color="brand">`
+- [x] 135 Email Client, 144 Email Coach → `<Button outline compact>`
+- [x] 157 Create Quote (an `<a>`) → `<Button outline compact href=…>` (dropped now-unused `next/link` import)
+- [x] 167 Cancel Campaign → `<Button destructive compact>`
+- [x] 179 Re-sync → `<Button outline compact>`
+- [x] 191 Edit → `<Button color="brand" compact>`
 
 `src/app/(app)/calendar/booking-form.tsx`:
-- [ ] 254 "+ Add" dealership action → `<Button plain>` (or keep as a text link if plain reads wrong)
-- [ ] 459 Cancel → `<Button outline>`
-- [ ] 466 Book Event / Save (submit) → `<Button color="brand" type="submit">`
-- [ ] 325 / 352 / 420 — audit and migrate the remaining inline buttons
+- [x] 459 Cancel → `<Button outline>` · 466 Book Event/Save → `<Button color="brand" type="submit">`
+- [x] ~~254/325/352/420 "+ Add"/"Manage"~~ — **left as exceptions**: inline text-link affordances in `<Field action=…>` slots (borderless, brand-700 text), not standard buttons
 
-Other surfaces (audit each, migrate standard buttons):
-- [ ] `src/features/people/people-admin.tsx` (202/212/222/249)
-- [ ] `src/features/dealers/dealers-admin.tsx` (195/203/211/244)
-- [ ] `src/features/quotes/quotes-admin.tsx` (126/151), `quote-composer.tsx` (894/1134)
-- [ ] `src/app/(app)/quotes/[id]/page.tsx:276`, `dealerships/[id]/page.tsx:133`
-- [ ] `src/app/(app)/production/production-page-actions.tsx:23`, `reports/reports-tabs.tsx:148`
-- [ ] `src/app/login/page.tsx` (43/74), `src/app/auth/auth-error/page.tsx:59` — audit (some may be password-toggles / non-standard)
-- [ ] **Do NOT touch** the intentional exceptions (see intent Non-goals): `Pill` (calendar-view:667), `tabs.tsx`, `row-actions.tsx`, `row-identity-cell.tsx`, `data-table.tsx` pagination, `<Badge>`
-- [ ] `tsc` + tests green
+`src/app/(app)/calendar/calendar-view.tsx`:
+- [x] 465/475 month-nav `‹`/`›` → `<Button outline>`
+
+Other surfaces:
+- [x] `people-admin.tsx` Clear-filters → `<Button outline compact>`; **pills (202/212/222) left** (filter toggles)
+- [x] `quotes-admin.tsx` Clear-filters → `<Button outline compact>`; **pill (126) left** (filter toggle)
+- [x] `quotes/[id]/page.tsx`, `dealerships/[id]/page.tsx` "Push to QuickBooks" → `<Button outline compact type="submit">` (server-component-safe — `quotes/page.tsx` already uses `Button`)
+- [x] dealers-admin headerAdd/Clear-filters done in Phase 2; **pills (193/201/209) left**
+
+Intentional exceptions confirmed (raw `<button>`/`<a>` left on purpose — all verified, 0 stray standard buttons remain):
+- [x] Filter toggles (`pillClass`/`Pill`): calendar-view:659, dealers/people/quotes-admin pills
+- [x] Icon-only / text-link removes: quote-composer ✕ (894, icon-only — see intent non-goal) + Remove attachment (1134, text link)
+- [x] CSV **download `<a>` + paired Print** toolbars: production-page-actions, reports-tabs (next/link would break the file download)
+- [x] Bespoke unauthenticated auth surfaces: login/page.tsx (43/74 — Google OAuth + magic-link, custom lift/shadow), auth-error/page.tsx (59)
+- [x] Component primitives / generic renderers: `tabs.tsx`, `row-actions.tsx`, `row-identity-cell.tsx`, `data-table.tsx` pagination, `<Badge>`
+- [x] `tsc` clean + 1136/1136 tests green (serial)
 
 #### Phase 4: Resolve destructive + compact-scale decisions, apply
 - [x] **Decision 1 — destructive: LOCKED → soft/tonal red** (owner inspiration 2026-06-15, the Supabase "Delete project" button). NOT solid `color="red"`. Spec: pale red fill (`bg-red-50`), soft red border (`border-red-200`/`-300`), **dark near-black text** (`text-zinc-950`, not red text), `rounded-lg`, hover `bg-red-100`. Low-emphasis destructive. Implementation TBD in build (likely a new variant/preset on `button.tsx` since Catalyst's solid/outline/plain don't produce a tinted-fill-dark-text treatment) — record the exact mechanism in `decision.md`.
-- [ ] Apply the soft-red destructive treatment to: Cancel Campaign (event-detail:167), lookup archive "x" (lookup-admin:273/278), availability delete (availability-admin:196), dealer delete, any other red buttons surfaced in Phase 3
-- [ ] **Decision 2 — compact scale.** Pick: (a) accept Catalyst's `text-sm/6` size everywhere, or (b) add a `compact`/size affordance to `button.tsx` for dense admin tables. Record in `decision.md`.
-- [ ] Apply the scale decision consistently across the migrated admin-table buttons
-- [ ] `tsc` + tests green; lint shows 0 new vs base
+- [x] Applied soft-red destructive to: Cancel Campaign (`event-detail`), lookup archive "✕" (`lookup-admin`), availability delete "✕" (`availability-admin`) — done in-pass during Phases 2–3. (No standalone "dealer delete" button — dealer archive goes through `row-actions.tsx`, an exception. Verified 0 remaining `text-red-700` standard buttons.)
+- [x] **Decision 2 — compact scale: LOCKED → add `compact` size** (option b). Implemented in the Phase 2 foundation (`styles.sizes.{default,compact}` + `compact?` prop).
+- [x] Applied compact to dense admin/table/row buttons; default size kept for form-action rows + main CTAs (see `decision.md`).
+- [x] Both decisions recorded in [`decision.md`](decision.md).
+- [x] `tsc` clean + 1136/1136 tests green (Phases 2–3 carried the code; Phase 4 added only `decision.md`). Lint runs at the chunk-end `/eval`.
 
 #### Phase 5: Smoke verification (web-test)
 - [ ] `goto /calendar` — header renders "+ Book Event" as a **brand-blue** primary; "Block Date" outline; month nav `‹`/`›` present
