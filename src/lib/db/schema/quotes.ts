@@ -80,8 +80,11 @@ export const quotes = pgTable(
     ),
     subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),
     tax: numeric('tax', { precision: 12, scale: 2 }).notNull().default('0'),
-    // 0065: coach's manual tax override. NULL = auto (subtotal × tax_pct/100);
-    // when set, used verbatim as the tax. Lets a coach handle exemptions.
+    // Coach's manual tax override (0065). **Retained-but-unused as of 0080** —
+    // the override write path was removed (QuickBooks owns the rate; tax is
+    // always subtotal × tax_pct/100). Kept (expand→contract) so pre-0080
+    // historical overrides are preserved + still read by the QB-push guard; a
+    // later cleanup chunk can DROP the column once that's verified on prod.
     taxOverride: numeric('tax_override', { precision: 12, scale: 2 }),
     total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
     previousQuoteId: bigint('previous_quote_id', { mode: 'number' }).references(
