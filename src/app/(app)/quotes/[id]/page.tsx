@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { Button } from '@/components/catalyst/button';
 import { RelativeTime } from '@/components/app/relative-time';
 import { Section } from '@/components/app/section';
 import { QuoteStatusBadge } from '@/components/app/status-badge';
@@ -273,12 +274,9 @@ export default async function QuoteEditPage({
             </p>
             <form action={pushQuoteToQuickbooks}>
               <input type="hidden" name="quoteId" value={quote.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
-              >
+              <Button outline compact type="submit">
                 Push to QuickBooks
-              </button>
+              </Button>
             </form>
           </div>
         </Section>

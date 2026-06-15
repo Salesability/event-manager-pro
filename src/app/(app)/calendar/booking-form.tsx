@@ -11,6 +11,7 @@ import {
   FieldGroup,
   Label,
 } from '@/components/catalyst/fieldset';
+import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
 import { Textarea } from '@/components/catalyst/textarea';
 import { toast } from '@/components/ui/toaster';
@@ -456,20 +457,12 @@ export function BookingForm({
       </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onSuccess}
-          className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-500 transition hover:border-zinc-300 hover:text-brand-700"
-        >
+        <Button outline type="button" onClick={onSuccess}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        </Button>
+        <Button type="submit" color="brand" disabled={pending}>
           {pending ? 'Saving…' : mode === 'create' ? 'Book Event' : 'Save'}
-        </button>
+        </Button>
       </div>
     </form>
       <Dialog open={stylesOpen} onClose={setStylesOpen}>

@@ -246,13 +246,9 @@ export function PeopleAdmin({
             isFiltered ? (
               <span className="inline-flex items-center gap-2">
                 <span>No people match.</span>
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
-                >
+                <Button outline compact type="button" onClick={clearFilters}>
                   Clear filters
-                </button>
+                </Button>
               </span>
             ) : (
               'No people yet.'

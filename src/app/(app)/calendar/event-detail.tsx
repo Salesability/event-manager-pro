@@ -1,9 +1,9 @@
 'use client';
 
 import { useTransition } from 'react';
-import Link from 'next/link';
 import { Can } from '@/components/auth/can';
 import { Badge } from '@/components/catalyst/badge';
+import { Button } from '@/components/catalyst/button';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { cancelCampaign, resyncCampaign } from '@/features/schedule/actions';
@@ -132,69 +132,70 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4">
         <Can capability="email:send">
-          <button
+          <Button
+            outline
+            compact
             type="button"
             onClick={onEmailClient}
             disabled={pending || !campaign.email}
             title={campaign.email ? 'Send the dealer contact a booking confirmation' : 'No client email on file'}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 transition hover:border-brand-500 hover:bg-brand-700/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Email Client
-          </button>
-          <button
+          </Button>
+          <Button
+            outline
+            compact
             type="button"
             onClick={onEmailCoach}
             disabled={pending || !campaign.coachId}
             title={campaign.coachId ? 'Send the assigned coach a booking confirmation' : 'No coach assigned'}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 transition hover:border-brand-500 hover:bg-brand-700/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Email Coach
-          </button>
+          </Button>
         </Can>
         <span className="flex-1" />
         {campaign.status !== 'cancelled' && (
           <Can capability="quote:edit">
-            <Link
+            <Button
+              outline
+              compact
               href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
-              className="rounded-lg border border-brand-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
             >
               Create Quote
-            </Link>
+            </Button>
           </Can>
         )}
         {campaign.status !== 'cancelled' && (
           <Can capability="campaign:cancel">
-            <button
+            <Button
+              destructive
+              compact
               type="button"
               onClick={onCancel}
               disabled={pending}
-              className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel Campaign
-            </button>
+            </Button>
           </Can>
         )}
         {(campaign.status === 'booked' || campaign.status === 'completed') && (
           <Can capability="campaign:edit">
-            <button
+            <Button
+              outline
+              compact
               type="button"
               onClick={onResync}
               disabled={pending}
               title="Re-push this event to Google Calendar (coach + dealer invites)"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Re-sync
-            </button>
+            </Button>
           </Can>
         )}
         <Can capability="campaign:edit">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700"
-          >
+          <Button color="brand" compact type="button" onClick={onEdit}>
             Edit
-          </button>
+          </Button>
         </Can>
       </div>
     </div>

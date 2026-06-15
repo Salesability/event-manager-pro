@@ -462,23 +462,15 @@ export function CalendarView({
                 </Can>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => changeMonth(-1)}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-brand-700 transition hover:border-brand-500 hover:bg-zinc-100"
-            >
+            <Button outline type="button" onClick={() => changeMonth(-1)}>
               ‹
-            </button>
+            </Button>
             <span className="min-w-[180px] text-center font-sans font-bold tracking-tight text-xl text-brand-700">
               {MONTHS[month]} {year}
             </span>
-            <button
-              type="button"
-              onClick={() => changeMonth(1)}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-brand-700 transition hover:border-brand-500 hover:bg-zinc-100"
-            >
+            <Button outline type="button" onClick={() => changeMonth(1)}>
               ›
-            </button>
+            </Button>
           </div>
         }
       />

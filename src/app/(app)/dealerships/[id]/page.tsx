@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCan } from '@/lib/auth/assert-can';
+import { Button } from '@/components/catalyst/button';
 import { KeyValueStrip } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
 import { Section } from '@/components/app/section';
@@ -130,12 +131,9 @@ export default async function DealerDetailPage({
             {!dealer.archivedAt && (
               <form action={pushDealerToQuickbooks}>
                 <input type="hidden" name="dealerId" value={dealer.id} />
-                <button
-                  type="submit"
-                  className="rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50"
-                >
+                <Button outline compact type="submit">
                   Push to QuickBooks
-                </button>
+                </Button>
               </form>
             )}
           </div>

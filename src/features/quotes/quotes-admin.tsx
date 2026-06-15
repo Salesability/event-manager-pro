@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ColumnFiltersState } from '@tanstack/react-table';
 import { ListToolbar } from '@/components/app/list-toolbar';
+import { Button } from '@/components/catalyst/button';
 import { DataTable } from '@/components/ui/data-table';
 import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
 import { buildQuotesColumns } from '@/features/quotes/quotes-columns';
@@ -148,13 +149,9 @@ export function QuotesAdmin({ quotes }: { quotes: Quote[] }) {
             isFiltered ? (
               <span className="inline-flex items-center gap-2">
                 <span>No quotes match.</span>
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
-                >
+                <Button outline compact type="button" onClick={clearFilters}>
                   Clear filters
-                </button>
+                </Button>
               </span>
             ) : (
               'No quotes yet — click “New Quote” above (or use the Quote action on a dealer).'
