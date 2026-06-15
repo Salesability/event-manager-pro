@@ -19,15 +19,17 @@ import { testMsaFormSchema } from './test-msa-schema';
 // Phase 2's `master_service_agreements` schema; this file is the first
 // surface that writes rows. The actions:
 //
-//   1. `createMsaDraft(dealerId)` — capability-gated `msa:edit`. Stamps a
+//   1. `createMsaDraft(dealerId)` — capability-gated `admin:access` (0082: the
+//      send action lives only on the admin-only dealer page, so the Server
+//      Action matches — MSA = the once-per-Client master contract). Stamps a
 //      `pending` row with `templateVersion` from the env. Refuses if the
 //      dealer already has a pending or active MSA (one MSA per dealer v1 per
 //      plan body); expired/terminated rows allow a renewal-style fresh draft.
-//   2. `sendMsaEnvelope(msaId)` — renders the MSA PDF on its own (0082: the
-//      quote is no longer bundled in), posts a single-file MSA-only envelope to
-//      BoldSign, persists the returned `providerDocumentId`, and emits
-//      `msa.sent`. The quote follows its own send→accept lifecycle; signing the
-//      MSA flips only the MSA (+ dealer promotion via the webhook).
+//   2. `sendMsaEnvelope(msaId)` — `admin:access` too. Renders the MSA PDF on
+//      its own (0082: the quote is no longer bundled in), posts a single-file
+//      MSA-only envelope to BoldSign, persists the returned `providerDocumentId`,
+//      and emits `msa.sent`. The quote follows its own send→accept lifecycle;
+//      signing the MSA flips only the MSA.
 //
 // Atomic-transition shape mirrors `sendQuote`: pre-load the row, side-effect
 // the API call, atomically guard the UPDATE on `providerDocumentId IS
@@ -77,7 +79,7 @@ const BLOCKING_STATUSES = ['pending', 'active'] as const;
 
 // validation: skip — id-only action (dealerId); `parseId` covers it. Could be
 // moved onto a schema if more fields surface.
-export const createMsaDraft = capabilityClient('msa:edit')
+export const createMsaDraft = capabilityClient('admin:access')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<CreateMsaResult> => {
     const userId = ctx.user.id;
@@ -146,7 +148,7 @@ export const createMsaDraft = capabilityClient('msa:edit')
 
 // validation: skip — id-only action (msaId + free-text message); `parseId`
 // covers msaId.
-export const sendMsaEnvelope = capabilityClient('msa:edit')
+export const sendMsaEnvelope = capabilityClient('admin:access')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<SendMsaResult> => {
     const userId = ctx.user.id;

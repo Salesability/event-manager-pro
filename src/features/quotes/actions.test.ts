@@ -847,7 +847,7 @@ describe('acceptQuote (staff-side)', () => {
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({
       error:
-        'Sign the master agreement first — a quote can only be accepted once the dealer has an active MSA.',
+        'Sign or renew the master agreement first — a quote can only be accepted while the dealer has a current (unexpired) active MSA.',
     });
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.recordAudit).not.toHaveBeenCalled();

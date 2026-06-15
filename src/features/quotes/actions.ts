@@ -1256,6 +1256,11 @@ export const acceptQuote = capabilityClient('quote:edit')
       .limit(1);
     if (!row) return { error: 'Quote not found.' };
     if (row.status === 'sent') {
+      // Require a LIVE active MSA: `status='active'` AND not past its 12-month
+      // term. The daily expiry sweep that flips `active → expired` isn't built
+      // yet, so an expired MSA can still read `active` — the `expires_at >= now()`
+      // predicate (Postgres-time, like the quote expiry guard) closes that hole.
+      // A null `expires_at` (malformed active row) fails the comparison → blocked.
       const [activeMsa] = await db
         .select({ id: masterServiceAgreements.id })
         .from(masterServiceAgreements)
@@ -1263,13 +1268,14 @@ export const acceptQuote = capabilityClient('quote:edit')
           and(
             eq(masterServiceAgreements.dealerId, row.dealerId),
             eq(masterServiceAgreements.status, 'active'),
+            sql`${masterServiceAgreements.expiresAt} >= now()`,
           ),
         )
         .limit(1);
       if (!activeMsa) {
         return {
           error:
-            'Sign the master agreement first — a quote can only be accepted once the dealer has an active MSA.',
+            'Sign or renew the master agreement first — a quote can only be accepted while the dealer has a current (unexpired) active MSA.',
         };
       }
     }
