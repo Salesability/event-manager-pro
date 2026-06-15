@@ -9,6 +9,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/catalyst/dialog';
+import { Button } from '@/components/catalyst/button';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
@@ -51,9 +52,6 @@ const dealersGlobalFilterFn = makeNeedleFilter<Dealer>((d) => [
   d.primaryPhone,
   d.address,
 ]);
-
-const headerAddClass =
-  'rounded-lg border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 transition hover:border-brand-500 hover:bg-brand-50';
 
 // Compose the archive confirm message from the row's facets, mirroring the
 // people-admin pattern. Counts (linked contacts, referenced campaigns) aren't
@@ -220,9 +218,9 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
         }
         actions={
           <Can capability="dealer:create">
-            <button onClick={() => setAddOpen(true)} className={headerAddClass}>
+            <Button outline compact onClick={() => setAddOpen(true)}>
               + Add Dealer
-            </button>
+            </Button>
           </Can>
         }
       />
@@ -241,13 +239,9 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
             isFiltered ? (
               <span className="inline-flex items-center gap-2">
                 <span>No dealers match.</span>
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700"
-                >
+                <Button outline compact type="button" onClick={clearFilters}>
                   Clear filters
-                </button>
+                </Button>
               </span>
             ) : (
               'No dealers yet.'

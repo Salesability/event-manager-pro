@@ -6,9 +6,7 @@ import { Link } from './link'
 const styles = {
   base: [
     // Base
-    'relative isolate inline-flex items-baseline justify-center gap-x-2 rounded-lg border text-base/6 font-semibold',
-    // Sizing
-    'px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6',
+    'relative isolate inline-flex items-baseline justify-center gap-x-2 rounded-lg border font-semibold',
     // Focus
     'focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-blue-500',
     // Disabled
@@ -16,6 +14,14 @@ const styles = {
     // Icon
     '*:data-[slot=icon]:-mx-0.5 *:data-[slot=icon]:my-0.5 *:data-[slot=icon]:size-5 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:self-center *:data-[slot=icon]:text-(--btn-icon) sm:*:data-[slot=icon]:my-1 sm:*:data-[slot=icon]:size-4 forced-colors:[--btn-icon:ButtonText] forced-colors:data-hover:[--btn-icon:ButtonText]',
   ],
+  sizes: {
+    // Default — Catalyst's original sizing (text-base/6 → sm:text-sm/6)
+    default: [
+      'px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-base/6 sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] sm:text-sm/6',
+    ],
+    // Compact — dense admin tables/rows (≈ text-xs px-2.5 py-1)
+    compact: ['px-[calc(--spacing(2.5)-1px)] py-[calc(--spacing(1)-1px)] text-xs/5'],
+  },
   solid: [
     // Optical border, implemented as the button background to avoid corner artifacts
     'border-transparent bg-(--btn-border)',
@@ -55,6 +61,14 @@ const styles = {
     'dark:text-white dark:data-active:bg-white/10 dark:data-hover:bg-white/10',
     // Icon
     '[--btn-icon:var(--color-zinc-500)] data-active:[--btn-icon:var(--color-zinc-700)] data-hover:[--btn-icon:var(--color-zinc-700)] dark:[--btn-icon:var(--color-zinc-500)] dark:data-active:[--btn-icon:var(--color-zinc-400)] dark:data-hover:[--btn-icon:var(--color-zinc-400)]',
+  ],
+  destructive: [
+    // Soft/tonal red — pale fill, soft red border, dark text (low-emphasis destructive)
+    'border-red-300 bg-red-50 text-zinc-950 data-active:bg-red-100 data-hover:bg-red-100',
+    // Dark mode
+    'dark:border-red-400/25 dark:bg-red-500/10 dark:text-red-50 dark:data-active:bg-red-500/15 dark:data-hover:bg-red-500/15',
+    // Icon
+    '[--btn-icon:var(--color-red-500)] data-active:[--btn-icon:var(--color-red-600)] data-hover:[--btn-icon:var(--color-red-600)]',
   ],
   colors: {
     'dark/zinc': [
@@ -163,22 +177,30 @@ const styles = {
 }
 
 type ButtonProps = (
-  | { color?: keyof typeof styles.colors; outline?: never; plain?: never }
-  | { color?: never; outline: true; plain?: never }
-  | { color?: never; outline?: never; plain: true }
-) & { className?: string; children: React.ReactNode } & (
+  | { color?: keyof typeof styles.colors; outline?: never; plain?: never; destructive?: never }
+  | { color?: never; outline: true; plain?: never; destructive?: never }
+  | { color?: never; outline?: never; plain: true; destructive?: never }
+  | { color?: never; outline?: never; plain?: never; destructive: true }
+) & { compact?: boolean; className?: string; children: React.ReactNode } & (
     | ({ href?: never } & Omit<Headless.ButtonProps, 'as' | 'className'>)
     | ({ href: string } & Omit<React.ComponentPropsWithoutRef<typeof Link>, 'className'>)
   )
 
 export const Button = forwardRef(function Button(
-  { color, outline, plain, className, children, ...props }: ButtonProps,
+  { color, outline, plain, destructive, compact, className, children, ...props }: ButtonProps,
   ref: React.ForwardedRef<HTMLElement>
 ) {
   let classes = clsx(
     className,
     styles.base,
-    outline ? styles.outline : plain ? styles.plain : clsx(styles.solid, styles.colors[color ?? 'dark/zinc'])
+    styles.sizes[compact ? 'compact' : 'default'],
+    outline
+      ? styles.outline
+      : plain
+        ? styles.plain
+        : destructive
+          ? styles.destructive
+          : clsx(styles.solid, styles.colors[color ?? 'dark/zinc'])
   )
 
   return typeof props.href === 'string' ? (

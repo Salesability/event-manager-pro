@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
+import { Button } from '@/components/catalyst/button';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import type {
@@ -25,9 +26,6 @@ const cardClass =
   'rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]';
 const selectClass =
   'min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-50';
-const buttonClass =
-  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
-
 export function TaxRateMapping({ data }: { data: TaxMappingAdminData }) {
   return (
     <section className={cardClass}>
@@ -89,9 +87,9 @@ function RefreshButton() {
   }
 
   return (
-    <button type="button" onClick={onClick} disabled={pending} className={buttonClass}>
+    <Button outline compact type="button" onClick={onClick} disabled={pending}>
       {pending ? 'Refreshing…' : 'Refresh rates'}
-    </button>
+    </Button>
   );
 }
 

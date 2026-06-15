@@ -11,6 +11,7 @@ import {
   Description,
 } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
+import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -29,12 +30,6 @@ import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
 // `mode: 'onTouched'` covers the blur-then-empty inline-error path.
 
 type Mode = 'create' | 'edit';
-
-const submitClass =
-  'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
-
-const cancelClass =
-  'rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 
 function valuesToFormData(values: DealerFormValues, id?: number): FormData {
   const fd = new FormData();
@@ -234,11 +229,11 @@ export function DealerForm({
 
       <div className="mt-2 flex justify-end gap-2">
         {onCancel && (
-          <button type="button" onClick={onCancel} className={cancelClass}>
+          <Button outline compact type="button" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         )}
-        <button type="submit" disabled={pending} className={submitClass}>
+        <Button type="submit" color="brand" compact disabled={pending}>
           {pending
             ? mode === 'create'
               ? 'Creating…'
@@ -246,7 +241,7 @@ export function DealerForm({
             : mode === 'create'
               ? 'Add Dealer'
               : 'Save'}
-        </button>
+        </Button>
       </div>
     </form>
   );

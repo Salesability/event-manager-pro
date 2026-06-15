@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from '@/components/ui/toaster';
+import { Button } from '@/components/catalyst/button';
 import { Field, FieldGroup, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/catalyst/input';
@@ -30,12 +31,6 @@ const KIND_LABELS: Record<AvailabilityKind, string> = {
 
 const selectClass =
   'h-9 w-full min-w-0 rounded-lg border border-zinc-300 bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-zinc-400 focus-visible:ring-3 focus-visible:ring-zinc-400/50 md:text-sm disabled:bg-zinc-100 disabled:text-zinc-500/70';
-
-const buttonClass =
-  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
-
-const submitClass =
-  'h-10 rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export function AvailabilityAdmin({
   blocks,
@@ -185,18 +180,19 @@ function AvailabilityRow({
         </div>
       </div>
       <div className="flex shrink-0 gap-1">
-        <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+        <Button outline compact type="button" onClick={() => setEditing(true)}>
           Edit
-        </button>
-        <button
+        </Button>
+        <Button
+          destructive
+          compact
           type="button"
           onClick={archive}
           disabled={pending}
           aria-label={`Remove ${formatRange(block.startDate, block.endDate)}`}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           x
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -365,13 +361,13 @@ function AvailabilityForm(props: AvailabilityFormProps) {
           </Field>
           <div className="flex items-end gap-2">
             {isEdit && (
-              <button type="button" onClick={props.onCancel} className={buttonClass}>
+              <Button outline type="button" onClick={props.onCancel}>
                 Cancel
-              </button>
+              </Button>
             )}
-            <button type="submit" disabled={isSubmitting} className={submitClass}>
+            <Button type="submit" color="brand" disabled={isSubmitting}>
               {isEdit ? 'Save' : 'Add Block'}
-            </button>
+            </Button>
           </div>
         </div>
       </FieldGroup>

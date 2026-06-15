@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/catalyst/dialog';
+import { Button } from '@/components/catalyst/button';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { adoptOrphanAuthUser } from '@/features/people/actions';
@@ -15,12 +16,6 @@ import type { OrphanAuthUser } from '@/features/people/queries';
 
 const inputClass =
   'min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20';
-
-const rowEditClass =
-  'rounded border border-zinc-200 bg-white px-2 py-0.5 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
-
-const submitClass =
-  'rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 // Surfaced only when the page query found at least one orphan auth.users row.
 // Adopting one materializes a contacts row + email identifier and links via
@@ -57,9 +52,9 @@ function OrphanRow({ orphan }: { orphan: OrphanAuthUser }) {
         </div>
       </div>
       <Can capability="person:adopt-orphan">
-        <button onClick={() => setOpen(true)} className={rowEditClass}>
+        <Button outline compact onClick={() => setOpen(true)}>
           Adopt
-        </button>
+        </Button>
       </Can>
       <Dialog open={open} onClose={setOpen}>
         <DialogTitle>Adopt {orphan.email ?? orphan.userId}</DialogTitle>
@@ -138,12 +133,12 @@ function AdoptForm({
         </p>
       )}
       <div className="mt-2 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className={rowEditClass}>
+        <Button outline compact type="button" onClick={onCancel}>
           Cancel
-        </button>
-        <button type="submit" disabled={pending} className={submitClass}>
+        </Button>
+        <Button type="submit" color="brand" compact disabled={pending}>
           {pending ? 'Adopting…' : 'Adopt'}
-        </button>
+        </Button>
       </div>
     </form>
   );

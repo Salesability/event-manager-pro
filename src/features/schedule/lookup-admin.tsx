@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
+import { Button } from '@/components/catalyst/button';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -52,9 +53,6 @@ const configs: Record<
 
 const inputClass =
   'min-w-0 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20';
-
-const buttonClass =
-  'rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-900 transition hover:border-brand-500 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function LookupAdmin({
   kind,
@@ -133,13 +131,9 @@ export function LookupAdmin({
             placeholder={config.addLabel}
             maxLength={120}
           />
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
+          <Button type="submit" color="brand" compact disabled={pending}>
             Add
-          </button>
+          </Button>
         </form>
       </Can>
 
@@ -247,19 +241,20 @@ function LookupRow({
             maxLength={120}
             autoFocus
           />
-          <button type="button" onClick={save} disabled={pending} className={buttonClass}>
+          <Button outline compact type="button" onClick={save} disabled={pending}>
             Save
-          </button>
-          <button
+          </Button>
+          <Button
+            outline
+            compact
             type="button"
             onClick={() => {
               setLabel(item.label);
               setEditing(false);
             }}
-            className={buttonClass}
           >
             Cancel
-          </button>
+          </Button>
         </>
       ) : (
         <>
@@ -267,18 +262,19 @@ function LookupRow({
             {item.label}
           </span>
           <Can capability="lookup:edit">
-            <button type="button" onClick={() => setEditing(true)} className={buttonClass}>
+            <Button outline compact type="button" onClick={() => setEditing(true)}>
               Rename
-            </button>
-            <button
+            </Button>
+            <Button
+              destructive
+              compact
               type="button"
               onClick={archive}
               disabled={pending}
               aria-label={`Archive ${item.label}`}
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-red-700 transition hover:border-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               x
-            </button>
+            </Button>
           </Can>
         </>
       )}
