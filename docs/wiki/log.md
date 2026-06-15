@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-15 — Button consolidation: one primitive, brand-blue primary, soft-red destructive (chunk 0081)
+
+- Added a **Buttons (the one primitive)** section to [layout.md](layout.md): the shared Catalyst `Button` is the single button primitive; **brand blue (`color="brand"`) is the one primary color** (green retired from primary → semantic `<Badge color="green">` only); new **soft-red `destructive`** variant + **`compact`** size; the emphasis-preservation migration principle; and the list of intentional non-buttons (filter toggles, field-label text links, icon/text-link removes, download-`<a>`+Print, bespoke auth-page buttons, component primitives).
+- Reflects chunk 0081 (migrated ~50 raw `<button>` / duplicated class-constants across ~25 files onto `Button`). Deferred follow-up ≈0082: a shared danger Callout panel.
+
 ## 2026-06-15 — Removed the per-quote manual tax override (0080)
 
 - The composer Tax field is now **display-only** (auto, QB-sourced province rate + the `auto · X%` pill; no Override link/input). QuickBooks owns the tax rate (0075/0076) and the QBO Estimate push already rejected overridden quotes, so the per-quote override was redundant + a footgun.

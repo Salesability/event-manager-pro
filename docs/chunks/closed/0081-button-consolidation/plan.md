@@ -11,7 +11,7 @@
 | 2: Component foundation + collapse class-constants onto `Button` | Done | 5d20fc8 |
 | 3: Migrate one-off inline raw buttons (calendar + forms) | Done | dd88395 |
 | 4: Resolve destructive + compact-scale decisions, apply | Done | dd88395 |
-| 5: Smoke verification (web-test) | Pending | - |
+| 5: Smoke verification (web-test) | Done | (eval) |
 
 This chunk makes the shared Catalyst `Button`
 (`src/components/catalyst/button.tsx`) the one way standard buttons are rendered,
@@ -45,7 +45,7 @@ plus an existing good consumer to match call-site shape.
 - [[project_design_chroma_north_star]] (memory) — brand is logo-derived; brand
   blue as primary aligns with the north-star.
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete) — chunk-end `/eval` PASS-with-warnings (Codex Medium = verified false positive, 0 parked)
 
 **Note:**
 - This is a visual/refactor chunk: "tests" = `tsc` + existing suite stay green +
@@ -125,12 +125,11 @@ Intentional exceptions confirmed (raw `<button>`/`<a>` left on purpose — all v
 - [x] Both decisions recorded in [`decision.md`](decision.md).
 - [x] `tsc` clean + 1136/1136 tests green (Phases 2–3 carried the code; Phase 4 added only `decision.md`). Lint runs at the chunk-end `/eval`.
 
-#### Phase 5: Smoke verification (web-test)
-- [ ] `goto /calendar` — header renders "+ Book Event" as a **brand-blue** primary; "Block Date" outline; month nav `‹`/`›` present
-- [ ] `goto /admin/lookups` — lookup admin renders "Add" (brand) + secondary actions; no visual regression
-- [ ] `goto /admin/quickbooks` — Connect / submit buttons render brand blue (no green)
-- [ ] `goto /quotes/[id]` — quote actions render; primary is brand blue
-- [ ] `goto /dealerships` and a dealer detail — add/edit/cancel buttons render via the shared component
-- [ ] Read-only discipline: do NOT click Email Client/Coach, Cancel Campaign, deletes, or any send/submit (real-side-effects on the auth-injected user)
-- [ ] Capture a screenshot of `/calendar` header for the visual record
-- [ ] On close: ingest the "Button is the one primitive; brand blue = primary; green is status-only" rule into `docs/wiki/` and log it
+#### Phase 5: Smoke verification (web-test) — chunk-end `/eval` ([eval-2026-06-15-1643.md](eval-2026-06-15-1643.md))
+- [x] `/calendar` — "+ Book Event" brand-blue primary; "Block Date" outline; month nav `‹`/`›` present (screenshot `/tmp/web-test-0081-calendar.png`)
+- [x] `/admin/lookups` — "Add" (brand) + "Rename" (outline) + archive "✕" (soft-red destructive) + "Refresh rates"; visually confirmed (screenshot `/tmp/web-test-0081-lookups.png`)
+- [x] `/admin/quickbooks` — "Pull items" (brand, **no green**) + "Disconnect" (outline)
+- [x] `/quotes/[id]` + `/dealerships/[id]` (server components) — "Push to QuickBooks" submit + actions render at runtime, 0 console errors (resolves the Codex RSC false-positive)
+- [x] `/dealerships` — "+ Add Dealer" + filter pills + row menus render
+- [x] Read-only discipline honored (no send/submit/delete clicked)
+- [x] On close: ingested the rule into [`docs/wiki/layout.md`](../../../wiki/layout.md) "Buttons (the one primitive)" + logged in [`log.md`](../../../wiki/log.md)

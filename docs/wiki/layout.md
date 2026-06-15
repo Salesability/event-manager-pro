@@ -108,6 +108,24 @@ Implications:
 
 **Identity-cell exceptions on `/reports`.** Every report tab renders the group/dealer label as plain text (no `<RowIdentityCell>`). Three reasons compound: (a) no detail page exists for `/coaches/[id]` or `/reports/[month]`, (b) `/reports` admits coaches via `reports:view`, but `/dealerships/[id]` gates `admin:access` — a coach clicking a dealer drill-through would route to a 403, (c) `loadDealer()` filters archived rows, so historical report dealers would 404 even for admins. The exception holds until either a coach-safe dealer surface or an archived-loader exists. Documented intentionally.
 
+## Buttons (the one primitive)
+
+[`src/components/catalyst/button.tsx`](../../src/components/catalyst/button.tsx) is the single button primitive — Catalyst's Button (clsx + Tailwind + CSS-vars; no `cva`). Standard buttons go through it; don't hand-roll `<button className>` or duplicate local `submitClass`/`buttonClass`-style constants (the drift 0081 removed). Works in both client and server components (it delegates interactivity to Headless UI; server-action forms on `/quotes/[id]`, `/dealerships/[id]`, `/admin/quickbooks` render it directly).
+
+**Variants** (mutually exclusive — the `ButtonProps` discriminated union):
+- solid `color="…"` — **primary**. The one primary-action color is **brand blue** (`color="brand"`, the logo color). Green is **retired from primary** (use a status `<Badge color="green">` for semantic "live/active" only — see below).
+- `outline` — secondary / cancel / nav (white-ish, neutral border).
+- `plain` — borderless minimal.
+- `destructive` — **soft/tonal red**: pale fill + soft red border + dark near-black text (`bg-red-50 border-red-300 text-zinc-950`), **not** a loud solid red. Low-emphasis "you have to mean it" delete (e.g. Cancel Campaign, lookup/availability archive `✕`).
+
+**Size:** add `compact` (orthogonal to variant — `text-xs`, tighter padding) for dense admin tables / row actions. Default size for standalone form-action rows and main page CTAs.
+
+**Migration principle — preserve emphasis:** solid→`color="brand"` solid, outline/white→`outline`, red→`destructive`. Don't promote an outline button to solid (the pre-existing solid-vs-outline mix for "+ Add X" create actions is out of scope).
+
+**Intentional non-buttons (left as raw markup on purpose):** segmented **filter toggles** (`pillClass`/the calendar coach `Pill`), inline **text-link actions** in `<Field action=…>` slots ("Manage" / "+ Add"), **icon-only** removes (quote-composer `✕`) and text-link removes, CSV **download `<a>` + paired Print** toolbars (next/link would break the download), bespoke **unauthenticated auth-page** buttons (`/login`, `/auth/auth-error`), and component primitives/generic renderers (`tabs.tsx`, `row-actions.tsx`, `row-identity-cell.tsx`, `data-table.tsx` pagination, `<Badge>`).
+
+Established by chunk 0081. Deferred follow-up (≈0082): a shared danger/warning **Callout** panel (red icon badge + heading + soft-red action) that would also unify the ~8 ad-hoc red error panels.
+
 ## Status badges + relative time
 
 ### `<Badge>` and the status-badge wrappers
