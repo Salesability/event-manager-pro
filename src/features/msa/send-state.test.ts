@@ -20,54 +20,48 @@ function makeMsa(overrides: Partial<Msa> & { status: MsaStatus }): Msa {
   };
 }
 
-describe('deriveQuoteMsaState (0061)', () => {
-  it('no MSA → bundleEligible, not active, not in-flight', () => {
+describe('deriveQuoteMsaState (0082 — MSA-only)', () => {
+  it('no MSA → not active, not in-flight', () => {
     expect(deriveQuoteMsaState(null)).toEqual({
       active: false,
       expiresAt: null,
-      bundleEligible: true,
       envelopeInFlight: false,
     });
   });
 
-  it('active MSA → active + expiresAt, not bundleEligible', () => {
+  it('active MSA → active + expiresAt', () => {
     const expiresAt = new Date('2027-05-29T00:00:00Z');
     expect(deriveQuoteMsaState(makeMsa({ status: 'active', expiresAt }))).toEqual({
       active: true,
       expiresAt,
-      bundleEligible: false,
       envelopeInFlight: false,
     });
   });
 
-  it('expired MSA → bundleEligible (renewal path), not active', () => {
+  it('expired MSA → not active, not in-flight', () => {
     const state = deriveQuoteMsaState(makeMsa({ status: 'expired' }));
-    expect(state.bundleEligible).toBe(true);
     expect(state.active).toBe(false);
     expect(state.expiresAt).toBeNull();
+    expect(state.envelopeInFlight).toBe(false);
   });
 
-  it('terminated MSA → bundleEligible (renewal path)', () => {
-    expect(deriveQuoteMsaState(makeMsa({ status: 'terminated' })).bundleEligible).toBe(
-      true,
-    );
+  it('terminated MSA → not active', () => {
+    expect(deriveQuoteMsaState(makeMsa({ status: 'terminated' })).active).toBe(false);
   });
 
-  it('pending MSA with a posted envelope → envelopeInFlight, not bundleEligible', () => {
+  it('pending MSA with a posted envelope → envelopeInFlight', () => {
     const state = deriveQuoteMsaState(
       makeMsa({ status: 'pending', providerDocumentId: 'doc_123' }),
     );
     expect(state).toEqual({
       active: false,
       expiresAt: null,
-      bundleEligible: false,
       envelopeInFlight: true,
     });
   });
 
-  it('pending MSA without a posted envelope → no flags (plain-send fallback)', () => {
+  it('pending MSA without a posted envelope → no flags', () => {
     const state = deriveQuoteMsaState(makeMsa({ status: 'pending' }));
-    expect(state.bundleEligible).toBe(false);
     expect(state.envelopeInFlight).toBe(false);
     expect(state.active).toBe(false);
   });

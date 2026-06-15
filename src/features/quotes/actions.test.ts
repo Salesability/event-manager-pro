@@ -854,17 +854,20 @@ const FRESH_SENT_PRELOAD = {
   quoteValidDays: 30,
 };
 
+// 0082: acceptQuote first loads {dealerId, status}; a `sent` quote then needs
+// an ACTIVE MSA before the transition. Happy-path queue order is therefore:
+// [{dealerId,status:'sent'}], [activeMsa], [expiry pre-load], [accept UPDATE],
+// [promote UPDATE]. ACTIVE_MSA is a non-empty row; an empty result = no MSA.
+const ACTIVE_MSA = [{ id: 1 }];
+
 describe('acceptQuote (staff-side)', () => {
   it('flips sent → accepted, emits audit, and promotes a prospect dealer to active', async () => {
-    // 1. markQuoteAccepted expiry pre-load (status='sent', within window).
-    // 2. markQuoteAccepted UPDATE returns one row.
-    // 3. SELECT quotes.dealerId.
-    // 4. UPDATE dealers (prospect → active) returns one row.
     mocks.dbResults.push(
-      [FRESH_SENT_PRELOAD],
-      [{ id: 42 }],
-      [{ dealerId: 7 }],
-      [{ id: 7 }],
+      [{ dealerId: 7, status: 'sent' }], // 0082 gate: quote dealer + status
+      ACTIVE_MSA, // 0082 gate: dealer has an active MSA
+      [FRESH_SENT_PRELOAD], // markQuoteAccepted expiry pre-load
+      [{ id: 42 }], // accept UPDATE wins
+      [{ id: 7 }], // dealer promotion UPDATE wins
     );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({ ok: true });
@@ -889,14 +892,33 @@ describe('acceptQuote (staff-side)', () => {
     });
   });
 
+  it('refuses acceptance when the dealer has no active MSA (0082 gate)', async () => {
+    // Quote is sent; the active-MSA lookup returns empty → blocked before any
+    // transition. No quote UPDATE, no markQuoteAccepted call, no audit.
+    mocks.dbResults.push([{ dealerId: 7, status: 'sent' }], []);
+    const result = await call(acceptQuote(fd({ quoteId: '42' })));
+    expect(result).toEqual({
+      error:
+        'Sign the master agreement first — a quote can only be accepted once the dealer has an active MSA.',
+    });
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('errors when the quote does not exist (0082 gate pre-load empty)', async () => {
+    mocks.dbResults.push([]); // dealer/status lookup empty
+    const result = await call(acceptQuote(fd({ quoteId: '99' })));
+    expect(result).toEqual({ error: 'Quote not found.' });
+    expect(mocks.updates).toHaveLength(0);
+  });
+
   it('does not emit dealer.activated when the dealer is already active', async () => {
-    // markQuoteAccepted expiry pre-load; UPDATE wins; SELECT dealerId;
-    // UPDATE dealers misses (guard `status='prospect'` falsy on already-active).
     mocks.dbResults.push(
+      [{ dealerId: 7, status: 'sent' }],
+      ACTIVE_MSA,
       [FRESH_SENT_PRELOAD],
       [{ id: 42 }],
-      [{ dealerId: 7 }],
-      [],
+      [], // dealer promotion UPDATE misses (already active)
     );
     await call(acceptQuote(fd({ quoteId: '42' })));
     expect(mocks.recordAudit).toHaveBeenCalledWith(
@@ -907,10 +929,11 @@ describe('acceptQuote (staff-side)', () => {
     );
   });
 
-  it('is idempotent on already-accepted — no audit, no dealer promotion', async () => {
-    // Pre-load finds 'accepted' (expiry guard skipped); UPDATE misses;
-    // re-select finds 'accepted'.
+  it('is idempotent on already-accepted — gate skipped, no audit, no dealer promotion', async () => {
+    // status !== 'sent' → MSA gate skipped; markQuoteAccepted pre-load finds
+    // 'accepted'; UPDATE misses; re-select finds 'accepted'.
     mocks.dbResults.push(
+      [{ dealerId: 7, status: 'accepted' }], // 0082 gate pre-load
       [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
       [],
       [{ status: 'accepted', sentAt: null, quoteValidDays: 30 }],
@@ -920,10 +943,9 @@ describe('acceptQuote (staff-side)', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
-  it('rejects accept of a draft quote', async () => {
-    // Pre-load finds 'draft' (expiry guard skipped — only fires inside the
-    // 'sent' branch per OQ #2); UPDATE misses; re-select finds 'draft'.
+  it('rejects accept of a draft quote (gate skipped on non-sent status)', async () => {
     mocks.dbResults.push(
+      [{ dealerId: 7, status: 'draft' }], // 0082 gate pre-load (no MSA check)
       [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
       [],
       [{ status: 'draft', sentAt: null, quoteValidDays: 30 }],
@@ -940,9 +962,14 @@ describe('acceptQuote (staff-side)', () => {
   });
 
   it('refuses acceptance when a sent quote has expired (default 30-day window)', async () => {
-    // sent 31 days ago with the default quoteValidDays=30 → expired.
+    // sent 31 days ago with the default quoteValidDays=30 → expired. The MSA
+    // gate passes first (active MSA), then the expiry guard rejects.
     const sentAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-    mocks.dbResults.push([{ status: 'sent', sentAt, quoteValidDays: 30 }]);
+    mocks.dbResults.push(
+      [{ dealerId: 7, status: 'sent' }],
+      ACTIVE_MSA,
+      [{ status: 'sent', sentAt, quoteValidDays: 30 }],
+    );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({
       error: `This Quote has expired (valid for 30 days from send date — sent ${sentAt.toISOString().slice(0, 10)}). Re-issue a new Quote with current pricing.`,
@@ -956,9 +983,10 @@ describe('acceptQuote (staff-side)', () => {
     // sent 29 days ago with the default quoteValidDays=30 → still valid.
     const sentAt = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000);
     mocks.dbResults.push(
+      [{ dealerId: 7, status: 'sent' }],
+      ACTIVE_MSA,
       [{ status: 'sent', sentAt, quoteValidDays: 30 }],
       [{ id: 42 }],
-      [{ dealerId: 7 }],
       [{ id: 7 }],
     );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
@@ -973,7 +1001,11 @@ describe('acceptQuote (staff-side)', () => {
     // sent 8 days ago with a per-row quoteValidDays=7 → expired even though
     // the default 30-day window would still allow it.
     const sentAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
-    mocks.dbResults.push([{ status: 'sent', sentAt, quoteValidDays: 7 }]);
+    mocks.dbResults.push(
+      [{ dealerId: 7, status: 'sent' }],
+      ACTIVE_MSA,
+      [{ status: 'sent', sentAt, quoteValidDays: 7 }],
+    );
     const result = await call(acceptQuote(fd({ quoteId: '42' })));
     expect(result).toEqual({
       error: `This Quote has expired (valid for 7 days from send date — sent ${sentAt.toISOString().slice(0, 10)}). Re-issue a new Quote with current pricing.`,
@@ -991,6 +1023,8 @@ describe('acceptQuote (staff-side)', () => {
     const freshSentAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
     const expiredSentAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     mocks.dbResults.push(
+      [{ dealerId: 7, status: 'sent' }],
+      ACTIVE_MSA,
       [{ status: 'sent', sentAt: freshSentAt, quoteValidDays: 30 }], // JS pre-load: looks fresh
       [], // UPDATE miss — simulating the SQL guard rejecting
       [{ status: 'sent', sentAt: expiredSentAt, quoteValidDays: 30 }], // reselect: now-expired

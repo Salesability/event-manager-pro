@@ -1266,6 +1266,39 @@ export const acceptQuote = capabilityClient('quote:edit')
     const quoteId = parseId(formData, 'quoteId');
     if (quoteId == null) return { error: 'Invalid quote id.' };
 
+    // 0082: a quote can only be accepted once the dealer has an ACTIVE MSA (the
+    // accepted quote IS the contract; the master agreement must be signed
+    // first). This replaces the old implicit gate where signing the bundled
+    // MSA+Quote envelope was the only way to accept the first quote. Gate only
+    // the actual `sent → accepted` transition: a non-`sent` row (already
+    // accepted/declined/draft) skips the check so re-accept stays idempotent
+    // and `markQuoteAccepted` returns the precise status error. A future public
+    // accept route must apply the same check.
+    const [row] = await db
+      .select({ dealerId: quotes.dealerId, status: quotes.status })
+      .from(quotes)
+      .where(eq(quotes.id, quoteId))
+      .limit(1);
+    if (!row) return { error: 'Quote not found.' };
+    if (row.status === 'sent') {
+      const [activeMsa] = await db
+        .select({ id: masterServiceAgreements.id })
+        .from(masterServiceAgreements)
+        .where(
+          and(
+            eq(masterServiceAgreements.dealerId, row.dealerId),
+            eq(masterServiceAgreements.status, 'active'),
+          ),
+        )
+        .limit(1);
+      if (!activeMsa) {
+        return {
+          error:
+            'Sign the master agreement first — a quote can only be accepted once the dealer has an active MSA.',
+        };
+      }
+    }
+
     const result = await markQuoteAccepted(quoteId, userId);
     if ('error' in result) return result;
 
@@ -1283,31 +1316,25 @@ export const acceptQuote = capabilityClient('quote:edit')
       // Promote a prospect dealer to active. Same atomic-transition shape as
       // `convertProspectToActive`: only flip rows currently `prospect` AND
       // not archived. Archived or already-active rows fall through silently.
-      const [row] = await db
-        .select({ dealerId: quotes.dealerId })
-        .from(quotes)
-        .where(eq(quotes.id, quoteId))
-        .limit(1);
-      if (row) {
-        const promoted = await db
-          .update(dealers)
-          .set({ status: 'active', updatedById: userId })
-          .where(
-            and(
-              eq(dealers.id, row.dealerId),
-              eq(dealers.status, 'prospect'),
-              isNull(dealers.archivedAt),
-            ),
-          )
-          .returning({ id: dealers.id });
-        if (promoted.length) {
-          await recordAudit({
-            action: 'dealer.activated',
-            targetTable: 'dealers',
-            targetId: row.dealerId,
-            payload: { from: 'prospect', via: 'quote.accepted' },
-          });
-        }
+      // Reuses `row.dealerId` loaded for the MSA gate above.
+      const promoted = await db
+        .update(dealers)
+        .set({ status: 'active', updatedById: userId })
+        .where(
+          and(
+            eq(dealers.id, row.dealerId),
+            eq(dealers.status, 'prospect'),
+            isNull(dealers.archivedAt),
+          ),
+        )
+        .returning({ id: dealers.id });
+      if (promoted.length) {
+        await recordAudit({
+          action: 'dealer.activated',
+          targetTable: 'dealers',
+          targetId: row.dealerId,
+          payload: { from: 'prospect', via: 'quote.accepted' },
+        });
       }
     }
 

@@ -1,27 +1,19 @@
 import type { Msa } from './queries';
 
-// The quote composer's MSA-aware send state (0061). Derived from the dealer's
-// current MSA (loadActiveOrPendingMsa) so the toolbar picks exactly one
-// affordance per state without re-encoding the lifecycle rules client-side:
+// The quote page's MSA-aware send state. Derived from the dealer's current MSA
+// (loadActiveOrPendingMsa) without re-encoding the lifecycle rules client-side.
+// 0082 dropped `bundleEligible` (the MSA is now sent for signature from the
+// dealer page, not bundled with the quote), leaving:
 //
-//   bundleEligible   → "Send for signature" is the primary CTA (the signed
-//                      MSA+Quote bundle); plain "Send Quote" demotes to outline.
-//   active           → plain "Send Quote" + an "MSA active — expires …" note.
-//   envelopeInFlight → a bundled envelope is awaiting signature (disabled).
-//
-// The states are mutually exclusive given loadActiveOrPendingMsa's contract
-// (returns the active MSA if any, else the most-recent pending). A pending row
-// whose envelope hasn't been posted yet (no providerDocumentId) maps to none
-// of the flags → the toolbar falls back to plain send (rare; owned by the
-// 0041 resend-envelope follow-up).
+//   active           → an "MSA active — expires …" indicator; the dealer's
+//                      quotes can be accepted.
+//   envelopeInFlight → a pending MSA envelope is awaiting signature; the quote
+//                      re-send is gated to match the server (removed in Phase 4).
 export type QuoteMsaState = {
   active: boolean;
   /** Active MSA expiry, for the indicator. Null unless `active`. */
   expiresAt: Date | null;
-  /** No usable MSA — none, expired, or terminated. Exactly the states where
-   *  `createMsaDraft` won't collide with a pending/active row. */
-  bundleEligible: boolean;
-  /** A bundled envelope is posted to BoldSign awaiting signature. */
+  /** A pending MSA envelope is posted to BoldSign awaiting signature. */
   envelopeInFlight: boolean;
 };
 
@@ -30,8 +22,6 @@ export function deriveQuoteMsaState(msa: Msa | null): QuoteMsaState {
   return {
     active,
     expiresAt: active ? msa!.expiresAt : null,
-    bundleEligible:
-      msa == null || msa.status === 'expired' || msa.status === 'terminated',
     envelopeInFlight:
       msa != null &&
       msa.status === 'pending' &&

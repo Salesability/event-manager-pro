@@ -15,6 +15,7 @@ import { loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
+import { QuoteStatusActions } from '@/features/quotes/quote-status-actions';
 import { can } from '@/lib/auth/capabilities';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { getConnection } from '@/lib/quickbooks/connection';
@@ -210,6 +211,17 @@ export default async function QuoteEditPage({
         >
           {qbNotice.msg}
         </p>
+      )}
+
+      {quote.status === 'sent' && (
+        <Section title="Customer decision" variant="card">
+          <QuoteStatusActions
+            quoteId={quote.id}
+            status={quote.status}
+            hasActiveMsa={sendState.active}
+            isExpired={quote.isExpired}
+          />
+        </Section>
       )}
 
       <QuoteComposer
