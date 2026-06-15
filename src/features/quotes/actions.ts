@@ -42,9 +42,10 @@ import { quoteDownloadFilename } from './display-name';
 // 0026 Phase 2 — `quotes` data model + bare-bones Server Actions.
 //
 // Scope: `createQuote` stands up a draft row with zeroed inputs/totals; the
-// composer (0035 Phase 3) extends this file with `setQuoteInputs`,
-// `setQuoteTax`, `setQuoteDealer` setters that recompute lines + totals and
-// persist them. `sendQuote` is the lifecycle-transition action — Phase 3
+// composer (0035 Phase 3) extends this file with `setQuoteInputs` +
+// `setQuoteDealer` setters that recompute lines + totals and persist them
+// (0080 retired `setQuoteTax` — tax is always the auto province rate).
+// `sendQuote` is the lifecycle-transition action — Phase 3
 // wires `renderQuotePdf` + GCS storage; Phase 4 wires the email send + the
 // public accept/decline route handler. For now `sendQuote` is idempotent on
 // the `draft → sent` transition and emits the `quote.sent` audit row; PDF +
@@ -397,6 +398,10 @@ async function applyPickerSave(
         subtotal: moneyString(computed.subtotal),
         tax: moneyString(computed.tax),
         taxPct: pctString(ratePct),
+        // 0080: clear any pre-0080 historical override on re-save so the
+        // recomputed auto tax is the truth (and the quote becomes QB-pushable
+        // again). Also drains the retained column toward all-null over time.
+        taxOverride: null,
         total: moneyString(computed.total),
         updatedById: userId,
       })
@@ -535,6 +540,8 @@ export const setQuoteDealer = capabilityClient('quote:edit')
           dealerId,
           taxPct: pctString(ratePct),
           tax: moneyString(tax),
+          // 0080: clear any pre-0080 historical override on dealer-swap re-save.
+          taxOverride: null,
           total: moneyString(total),
           updatedById: userId,
         })
