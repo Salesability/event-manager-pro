@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Green → brand primary swaps (pure) | Done | c69c11f |
-| 2: Collapse duplicated class-constants onto `Button` | Pending | - |
+| 2: Component foundation + collapse class-constants onto `Button` | Done | 5d20fc8 |
 | 3: Migrate one-off inline raw buttons (calendar + forms) | Pending | - |
 | 4: Resolve destructive + compact-scale decisions, apply | Pending | - |
 | 5: Smoke verification (web-test) | Pending | - |
@@ -45,7 +45,7 @@ plus an existing good consumer to match call-site shape.
 - [[project_design_chroma_north_star]] (memory) — brand is logo-derived; brand
   blue as primary aligns with the north-star.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - This is a visual/refactor chunk: "tests" = `tsc` + existing suite stay green +
@@ -64,24 +64,29 @@ plus an existing good consumer to match call-site shape.
 - [x] Leave `src/components/app/status-badge.tsx:50` `<Badge color="green">Live</Badge>` — semantic status, not a button (verified: only remaining `color="green"`)
 - [x] `tsc` + tests green
 
-#### Phase 2: Collapse duplicated class-constants onto `Button`
-Primary constant `submitClass` (`bg-brand-600 … text-white`) → `<Button color="brand">`:
-- [ ] `src/features/schedule/availability-admin.tsx` (also defines `buttonClass`)
-- [ ] `src/features/msa/send-test-msa-form.tsx`
-- [ ] `src/features/people/orphan-auth-users.tsx` (also `rowEditClass`)
-- [ ] `src/features/email/send-test-email-form.tsx`
-- [ ] `src/features/dealers/dealer-form.tsx` (also `cancelClass`)
+#### Phase 2: Component foundation + collapse duplicated class-constants onto `Button`
+**Foundation (`src/components/catalyst/button.tsx`)** — both Phase-4 decisions are locked, so the affordances they need are built here first:
+- [x] Add `compact` size (split sizing into `styles.sizes.{default,compact}`; compact ≈ `text-xs px-2.5 py-1`) — Decision 2
+- [x] Add soft-red `destructive` variant (`bg-red-50 border-red-300 text-zinc-950 data-hover:bg-red-100`) + `destructive: true` in the prop union — Decision 1
 
-Secondary constant `buttonClass` (`border-zinc-200 bg-white … text-zinc-900`) → `<Button outline>`:
-- [ ] `src/features/schedule/lookup-admin.tsx`
-- [ ] `src/features/schedule/availability-admin.tsx`
-- [ ] `src/features/tax-rates/tax-rate-mapping.tsx`
+Primary constant `submitClass` (`bg-brand-600 … text-white`) → `<Button color="brand" compact>`:
+- [x] `src/features/schedule/availability-admin.tsx` (taller form submit → `color="brand"` default size)
+- [x] `src/features/msa/send-test-msa-form.tsx`
+- [x] `src/features/people/orphan-auth-users.tsx`
+- [x] `src/features/email/send-test-email-form.tsx`
+- [x] `src/features/dealers/dealer-form.tsx`
 
-Small-secondary / header constants → `<Button outline>` (mind compact scale — see Phase 4):
-- [ ] `cancelClass` / `rowEditClass` (dealer-form, orphan-auth-users)
-- [ ] `headerAddClass` (`src/features/dealers/dealers-admin.tsx:55`)
-- [ ] Delete the now-unused constant declarations
-- [ ] `tsc` + tests green; confirm no remaining references to the deleted constants
+Secondary constant `buttonClass` (`border-zinc-200 bg-white … text-zinc-900`) → `<Button outline compact>`:
+- [x] `src/features/schedule/lookup-admin.tsx` (Save / Cancel / Rename) + inline Add → `color="brand" compact`
+- [x] `src/features/schedule/availability-admin.tsx` (Edit / Cancel)
+- [x] `src/features/tax-rates/tax-rate-mapping.tsx` (Refresh rates)
+
+Small-secondary / header constants → `<Button outline compact>` (emphasis preserved — outline stays outline):
+- [x] `cancelClass` / `rowEditClass` (dealer-form, orphan-auth-users)
+- [x] `headerAddClass` (`dealers-admin.tsx`) + Clear-filters; **left the `pillClass` filter toggles (195/203/211) as intentional exceptions** (rounded-full segmented filter, like the coach `Pill`)
+- [x] **Destructive buttons in these files converted in-pass** (lookup archive "x" `lookup-admin`, availability delete `availability-admin`) → `<Button destructive compact>`
+- [x] Delete the now-unused constant declarations (verified: 0 leftover refs to `submitClass`/`buttonClass`/`cancelClass`/`rowEditClass`/`headerAddClass`)
+- [x] `tsc` clean + 1136/1136 tests green (serial)
 
 #### Phase 3: Migrate one-off inline raw buttons (calendar + forms)
 `src/app/(app)/calendar/event-detail.tsx`:
