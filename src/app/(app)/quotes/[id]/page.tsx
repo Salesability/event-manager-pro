@@ -226,7 +226,6 @@ export default async function QuoteEditPage({
           pickedLines: quote.pickedLines,
           subtotal: Number(quote.subtotal) || 0,
           tax: Number(quote.tax) || 0,
-          taxOverride: quote.taxOverride != null ? Number(quote.taxOverride) : null,
           total: Number(quote.total) || 0,
           status: quote.status,
           isExpired: quote.isExpired,

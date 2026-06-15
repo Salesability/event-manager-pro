@@ -77,11 +77,9 @@ export type InitialQuote = {
    *  these directly. */
   pickedLines: PickedLine[];
   subtotal: number;
-  /** Tax dollar amount (not %). Matches the `tax` FormData field consumed by
-   *  `setQuoteInputs`/`createQuote`. */
+  /** Tax dollar amount (not %). Always the auto, QB-sourced province-rate
+   *  computation — 0080 removed the manual override. */
   tax: number;
-  /** Coach's manual tax override, or null when tax is auto from the province (0065). */
-  taxOverride: number | null;
   total: number;
   status: QuoteStatus;
   /** Derived at read time — `status='sent' && sentAt + quoteValidDays < now()`.
@@ -161,9 +159,11 @@ const labelClass = 'text-xs font-medium text-zinc-500';
 const fieldClass = 'flex flex-col gap-1';
 
 // Form schema. `lines` is the picked-SKU array (RHF field array); `dealerId`
-// is create-mode chrome; `taxOverride` + `quoteNotes` ride alongside. The
-// server (`setQuoteInputs`/`createQuote`) receives `lines` as a JSON string +
-// `tax` / `quoteNotes` / `dealerId` as separate FormData entries.
+// is create-mode chrome; `quoteNotes` rides alongside. The server
+// (`setQuoteInputs`/`createQuote`) receives `lines` as a JSON string +
+// `quoteNotes` / `dealerId` as separate FormData entries. Tax is always the
+// auto, QB-sourced province rate (0080 removed the manual override) — it isn't
+// a form field; the server recomputes it from the dealer's province.
 const lineFieldSchema = z.object({
   serviceItemId: z.number().int().positive(),
   qty: z.number().int().min(1).max(1_000_000),
@@ -173,8 +173,6 @@ type LineFieldValue = z.infer<typeof lineFieldSchema>;
 
 const quoteFormSchema = z.object({
   dealerId: z.number().int().positive().nullable(),
-  // 0065: nullable — null means "auto" (derive tax from the dealer's province).
-  taxOverride: z.number().min(0).max(MAX_DOLLARS).nullable(),
   quoteNotes: z.string().max(1000),
   lines: z.array(lineFieldSchema),
 });
@@ -285,7 +283,6 @@ export function QuoteComposer({
     }));
     return {
       dealerId: initial?.dealerId ?? initialDealerId,
-      taxOverride: initial?.taxOverride ?? null,
       quoteNotes: initial?.quoteNotes ?? '',
       lines,
     };
@@ -345,10 +342,11 @@ export function QuoteComposer({
   const computed = useMemo(() => {
     try {
       const picked = toPickedLines((watched.lines ?? []) as LineFieldValue[], catalogById);
-      // 0065: tax = the manual override if typed, else subtotal × province rate.
+      // Tax = subtotal × the dealer's province rate (QB-sourced). 0080 removed
+      // the manual override, so there's no per-quote tax input any more.
       return {
         ok: true as const,
-        out: computePickedTotals(picked, { ratePct, override: watched.taxOverride ?? null }),
+        out: computePickedTotals(picked, { ratePct }),
       };
     } catch (err) {
       const msg = err instanceof QuoteInputsError ? err.message : 'Invalid lines.';
@@ -397,8 +395,8 @@ export function QuoteComposer({
             })),
           ),
         );
-        // 0065: blank → auto (server derives tax from the dealer's province).
-        fd.set('tax', values.taxOverride != null ? String(values.taxOverride) : '');
+        // 0080: tax is always auto — the server derives it from the dealer's
+        // province rate. No `tax` field is sent (the manual override is gone).
         fd.set('quoteNotes', values.quoteNotes ?? '');
         if (initial?.quoteId) {
           fd.set('quoteId', String(initial.quoteId));
@@ -763,41 +761,11 @@ export function QuoteComposer({
               <span className={`mt-1 block ${labelClass}`}>
                 Set the dealer’s province to calculate sales tax.
               </span>
-            ) : watched.taxOverride != null ? (
-              // Override mode: an editable amount, seeded from the auto value,
-              // with an explicit path back to the province rate.
-              <div className="flex flex-col gap-1">
-                <input
-                  id="qf-tax"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className="w-40 rounded border border-zinc-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                  {...register('taxOverride', {
-                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
-                  })}
-                />
-                <span className={labelClass}>
-                  Manual override.{' '}
-                  <button
-                    type="button"
-                    className="font-medium text-brand-600 underline hover:text-brand-700"
-                    onClick={() =>
-                      form.setValue('taxOverride', null, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      })
-                    }
-                  >
-                    Use {CA_PROVINCE_NAMES[selectedDealer.province]} {ratePct}% (
-                    {fmtMoney(computed.ok ? computed.out.tax : 0)})
-                  </button>
-                </span>
-              </div>
             ) : (
-              // Auto mode: show the computed tax as a real value (not a ghost
-              // placeholder) + an explicit Override affordance that seeds the
-              // input with the current amount.
+              // Auto, QuickBooks-sourced province rate — display-only. 0080
+              // removed the manual per-quote override: QB owns the tax rate
+              // (0075/0076) and an overridden quote can't be pushed to QB
+              // (quote-push pre-flight), so there's no editable path here.
               <div className="flex items-center gap-2">
                 <span
                   id="qf-tax"
@@ -808,24 +776,8 @@ export function QuoteComposer({
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
                   auto · {CA_PROVINCE_NAMES[selectedDealer.province]} {ratePct}%
                 </span>
-                <button
-                  type="button"
-                  className="text-xs font-medium text-brand-600 underline hover:text-brand-700"
-                  onClick={() =>
-                    form.setValue(
-                      'taxOverride',
-                      computed.ok ? computed.out.tax : 0,
-                      { shouldDirty: true, shouldValidate: true },
-                    )
-                  }
-                >
-                  Override
-                </button>
               </div>
             )}
-            {errors.taxOverride?.message ? (
-              <FieldError>{errors.taxOverride.message}</FieldError>
-            ) : null}
           </Field>
         </div>
       </section>
