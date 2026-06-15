@@ -14,6 +14,8 @@ import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
 import { DealerForm } from '@/features/dealers/dealer-form';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
+import { MsaSendForSignatureButton } from '@/features/msa/msa-send-button';
+import { resolveQuoteRecipient } from '@/features/quotes/recipient';
 import { pushDealerToQuickbooks } from '@/features/quickbooks/actions';
 import { getConnection } from '@/lib/quickbooks/connection';
 import { signedUrl } from '@/lib/storage/gcs';
@@ -40,11 +42,22 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const [quotes, msa, qbConnection] = await Promise.all([
+  const [quotes, msa, qbConnection, recipientResult] = await Promise.all([
     loadQuotesByDealer(id),
     loadActiveOrPendingMsa(id),
     getConnection(),
+    resolveQuoteRecipient(id),
   ]);
+
+  // 0082: the MSA is sent for signature from here (the dealer page), on its own
+  // BoldSign envelope — no longer bundled with the first quote. Eligible when
+  // there's no usable MSA (none / expired / terminated, the states where
+  // `createMsaDraft` succeeds) and the dealer isn't archived.
+  const canSendMsa =
+    !dealer.archivedAt &&
+    (msa == null || msa.status === 'expired' || msa.status === 'terminated');
+  const msaRecipient =
+    'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
 
   // The push action redirects back here with ?qbpush=created|updated.
   const sp = await searchParams;
@@ -145,7 +158,7 @@ export default async function DealerDetailPage({
         actions={msa ? <MsaStatusBadge status={msa.status} /> : null}
         variant="card"
       >
-        {msa ? (
+        {msa && (
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[max-content_1fr]">
             <dt className="font-medium text-zinc-500">Created</dt>
             <dd className="text-zinc-900">{fmtDate(msa.createdAt)}</dd>
@@ -185,12 +198,26 @@ export default async function DealerDetailPage({
               </dd>
             )}
           </dl>
+        )}
+        {canSendMsa ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-zinc-500">
+              {msa
+                ? 'The previous agreement is no longer active — send a renewal for signature.'
+                : 'No MSA on file yet. Send the Master Service Agreement to the Client for signature; once signed, this dealer’s quotes can be accepted.'}
+            </p>
+            <MsaSendForSignatureButton
+              dealerId={dealer.id}
+              dealerName={dealer.name}
+              recipient={msaRecipient}
+            />
+          </div>
         ) : (
-          <p className="text-sm text-zinc-500">
-            No MSA on file yet. The MSA bundles with the dealer&apos;s first
-            Quote and is sent for signature from that quote — open or create one
-            in <span className="font-medium text-zinc-700">Quotes</span> below.
-          </p>
+          !msa && (
+            <p className="text-sm text-zinc-500">
+              No MSA on file yet.
+            </p>
+          )
         )}
       </Section>
 

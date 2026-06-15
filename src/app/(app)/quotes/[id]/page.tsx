@@ -109,15 +109,14 @@ export default async function QuoteEditPage({
       // 0078: uploaded attachments seed the send dialog's Documents list.
       loadQuoteAttachments(quote.id),
     ]);
-  // 0061: drive the composer toolbar's MSA-aware send action. The four flags
-  // (active / expiresAt / bundleEligible / envelopeInFlight) are derived in one
-  // tested helper so the lifecycle rules aren't re-encoded in the page.
+  // 0082: the MSA send action moved to the dealer page; the composer keeps only
+  // an informational MSA-active indicator + the re-send-in-flight gate. Derived
+  // in one tested helper so the lifecycle rules aren't re-encoded in the page.
   const sendState = deriveQuoteMsaState(msa);
   const msaEnvelopeInFlight = sendState.envelopeInFlight;
   const msaState = {
     active: sendState.active,
     expiresAt: sendState.expiresAt,
-    bundleEligible: sendState.bundleEligible,
   };
   const recipient: Recipient =
     'ok' in recipientResult ? recipientResult.recipient : { error: recipientResult.error };
@@ -236,7 +235,6 @@ export default async function QuoteEditPage({
         recipient={recipient}
         msaEnvelopeInFlight={msaEnvelopeInFlight}
         msaState={msaState}
-        quoteCreatedAt={quote.createdAt}
         pageTitle={quoteDisplayName(quote.createdAt)}
         pageStatusBadge={<QuoteStatusBadge status={pillKey} />}
         keyValueItems={[

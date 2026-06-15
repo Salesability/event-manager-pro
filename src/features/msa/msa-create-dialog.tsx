@@ -10,7 +10,6 @@ import {
 } from '@/components/catalyst/dialog';
 import { Button } from '@/components/catalyst/button';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { quoteDisplayName } from '@/features/quotes/display-name';
 import { createMsaDraft, sendMsaEnvelope } from './actions';
 
 export type MsaCreateDialogProps = {
@@ -19,37 +18,29 @@ export type MsaCreateDialogProps = {
   dealerId: number;
   dealerName: string;
   /** Pre-resolved recipient. When `{ error }`, the dialog renders the error
-   *  instead of the action surface — the bundled-envelope flow has no
-   *  sensible fallback without a customer-contact primary email. */
+   *  instead of the action surface — the MSA envelope has no sensible fallback
+   *  without a customer-contact primary email. */
   recipient: { email: string; firstName: string } | { error: string };
-  /** The dealer's first draft Quote (id + createdAt) — drives the
-   *  `quote-<timestamp>` display name. `null` when no draft exists, in which
-   *  case the dialog renders the "create a draft Quote first" guidance. */
-  firstDraftQuote: { id: number; createdAt: Date } | null;
 };
 
-// Single-click "create MSA + send envelope" flow. Two-step action sequence:
+// Single-click "create MSA + send envelope" flow (0082: MSA-only — the quote is
+// no longer bundled in). Two-step action sequence:
 //   1. `createMsaDraft(dealerId)` inserts the `pending` row + emits
 //      `msa.created` audit.
-//   2. `sendMsaEnvelope(msaId, firstDraftQuoteId)` renders both PDFs, uploads
-//      the draft to GCS, posts the envelope to BoldSign, and persists
-//      the returned `providerDocumentId` + emits `msa.sent`.
+//   2. `sendMsaEnvelope(msaId)` renders the MSA PDF, uploads the draft to GCS,
+//      posts the MSA-only envelope to BoldSign, and persists the returned
+//      `providerDocumentId` + emits `msa.sent`.
 //
-// On step-2 failure the `pending` row stays put — a follow-up "Resend" surface
-// would re-invoke `sendMsaEnvelope` against the same id (idempotency lives in
-// the action). That follow-up is out of scope for 0041 v1; for now a failed
-// send surfaces a toast and the operator can either re-open the dialog (the
-// `providerDocumentId IS NULL` guard makes the action safely re-runnable)
-// or chase BoldSign creds out-of-band.
+// On step-2 failure the `pending` row stays put — re-opening the dialog
+// re-invokes `sendMsaEnvelope` against the same id (the `providerDocumentId IS
+// NULL` guard makes the action safely re-runnable).
 export function MsaCreateDialog(props: MsaCreateDialogProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [lastError, setLastError] = useState<string | null>(null);
 
   const noRecipient = 'error' in props.recipient;
-  const draftQuote = props.firstDraftQuote;
-  const noDraftQuote = draftQuote == null;
-  const canSubmit = !noRecipient && !noDraftQuote;
+  const canSubmit = !noRecipient;
 
   function onSubmit() {
     if (!canSubmit) return;
@@ -68,7 +59,6 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
 
       const sendFd = new FormData();
       sendFd.set('msaId', String(createResult.msaId));
-      sendFd.set('firstQuoteId', String(draftQuote!.id));
       const sendResult = toLegacyResult(await sendMsaEnvelope(sendFd));
       if (!('ok' in sendResult)) {
         setLastError(sendResult.error);
@@ -84,10 +74,10 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
 
   return (
     <Dialog open={props.open} onClose={() => props.onClose(false)}>
-      <DialogTitle>Send MSA + first Quote for signature</DialogTitle>
+      <DialogTitle>Send MSA for signature</DialogTitle>
         <DialogDescription>
-          A bundled envelope is sent to the Client via BoldSign. The Client
-          signs once and both documents take effect.
+          The Master Service Agreement is sent to the Client via BoldSign. Once
+          signed it takes effect, and the dealer&apos;s quotes can be accepted.
         </DialogDescription>
 
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
@@ -99,28 +89,6 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
               <span className="text-red-700">{props.recipient.error}</span>
             ) : (
               `${props.recipient.firstName} <${props.recipient.email}>`
-            )}
-          </dd>
-          <dt className="text-zinc-500">First Quote</dt>
-          <dd className="text-zinc-900">
-            {draftQuote == null ? (
-              <span className="text-red-700">
-                No draft Quote yet —{' '}
-                <a
-                  href={`/quotes/new?dealerId=${props.dealerId}`}
-                  className="font-medium underline hover:text-brand-700"
-                >
-                  create one first
-                </a>
-                .
-              </span>
-            ) : (
-              <a
-                href={`/quotes/${draftQuote.id}`}
-                className="font-medium text-brand-700 underline"
-              >
-                {quoteDisplayName(draftQuote.createdAt)}
-              </a>
             )}
           </dd>
         </dl>

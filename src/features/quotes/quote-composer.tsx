@@ -44,7 +44,6 @@ import {
   MAX_TOTAL_ATTACHMENT_BYTES,
   type QuoteAttachmentView,
 } from '@/features/quotes/attachments';
-import { MsaSendForSignatureButton } from '@/features/msa/msa-send-button';
 import type { Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
@@ -117,20 +116,14 @@ type Props = {
    *  envelope resolves. The UI gates the button to match the server.
    *  Always false on first-send (the MSA gate only fires on re-send). */
   msaEnvelopeInFlight?: boolean;
-  /** Dealer's MSA standing for the bundled-envelope action (0061). Drives the
-   *  toolbar: `bundleEligible` (no usable MSA — none/expired/terminated, the
-   *  states where `createMsaDraft` succeeds) → "Send for signature" is the
-   *  primary CTA and "Send Quote" demotes to secondary; `active` → plain
-   *  "Send Quote" + an "MSA active — expires …" indicator. Omitted on
+  /** Dealer's MSA standing (0082: informational only — the MSA is sent for
+   *  signature from the dealer page, not here). `active` → an "MSA active —
+   *  expires …" indicator; the dealer's quotes can be accepted. Omitted on
    *  create-mode (no dealer/quote yet). */
   msaState?: {
     active: boolean;
     expiresAt: Date | null;
-    bundleEligible: boolean;
   };
-  /** The quote's `createdAt` — drives the bundled-envelope dialog's
-   *  `quote-<timestamp>` display name. Edit-mode only. */
-  quoteCreatedAt?: Date;
   /** Page-level title rendered inside the sticky `<PageHeader>` the composer
    *  owns. Owned by the composer (not the page) so the composer's action
    *  buttons can ride in the same actions slot as the status badge — one
@@ -228,7 +221,6 @@ export function QuoteComposer({
   recipient,
   msaEnvelopeInFlight = false,
   msaState,
-  quoteCreatedAt,
   pageTitle,
   pageDescription,
   pageStatusBadge,
@@ -254,12 +246,9 @@ export function QuoteComposer({
   const canSend =
     isEdit && initial.status !== 'accepted' && initial.status !== 'declined';
   const isResend = isEdit && initial.sentAt != null;
-  // 0061: MSA-aware send. `bundleEligible` (no usable MSA — page-computed from
-  // none/expired/terminated) means this first/renewal deal must ship as the
-  // signed MSA+Quote bundle, so "Send for signature" becomes the primary CTA
-  // and plain "Send Quote" demotes to a secondary review-email button.
-  // `canSend` already gates to non-terminal (draft|sent) quotes.
-  const showBundle = canSend && (msaState?.bundleEligible ?? false);
+  // 0082: the MSA is sent for signature from the dealer page (no longer bundled
+  // with the quote here). `hasActiveMsa` only drives an informational indicator
+  // — acceptance of this quote requires an active MSA (enforced server-side).
   const hasActiveMsa = msaState?.active ?? false;
 
   const catalogById = useMemo(
@@ -570,10 +559,7 @@ export function QuoteComposer({
       {canSend && (
         <Button
           type="button"
-          // 0061: when the bundle is the primary CTA, the plain quote email
-          // demotes to a secondary (outline) review-send; otherwise it stays
-          // the green primary.
-          {...(showBundle ? ({ outline: true } as const) : ({ color: 'green' } as const))}
+          color="green"
           onClick={() => setConfirmSendOpen(true)}
           disabled={
             !recipientEmail ||
@@ -595,23 +581,6 @@ export function QuoteComposer({
         >
           {isResend ? 'Re-send Quote' : 'Send Quote'}
         </Button>
-      )}
-      {showBundle && initial && quoteCreatedAt && (
-        <MsaSendForSignatureButton
-          dealerId={initial.dealerId}
-          dealerName={initial.dealerName}
-          recipient={recipient ?? { error: 'No recipient resolved for this dealer.' }}
-          quote={{ id: initial.quoteId, createdAt: quoteCreatedAt }}
-          // Same guard as Send Quote: the envelope renders the SAVED snapshot,
-          // so block on unsaved edits (else the signed bundle carries stale
-          // pricing) or an in-flight action.
-          disabled={isDirty || pending || sendPending}
-          title={
-            isDirty
-              ? 'Save changes before sending for signature — the envelope renders the saved quote, not the unsaved edits.'
-              : undefined
-          }
-        />
       )}
     </>
   );
@@ -649,12 +618,6 @@ export function QuoteComposer({
       {canSend && isResend && msaEnvelopeInFlight && (
         <p className="text-right text-[11px] text-amber-700">
           Re-send disabled: MSA envelope awaiting signature.
-        </p>
-      )}
-      {showBundle && (
-        <p className="text-right text-[11px] text-amber-700">
-          No active MSA — acceptance requires the signed MSA&nbsp;+&nbsp;Quote
-          bundle (&ldquo;Send for signature&rdquo;).
         </p>
       )}
       {canSend && hasActiveMsa && (

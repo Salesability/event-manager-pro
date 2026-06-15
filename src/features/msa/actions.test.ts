@@ -6,8 +6,6 @@ const mocks = vi.hoisted(() => ({
   loadCurrentMembership: vi.fn(),
   recordAudit: vi.fn(),
   renderMsaPdf: vi.fn(),
-  renderQuotePdf: vi.fn(),
-  combineQuoteAndMsa: vi.fn(),
   putObject: vi.fn(),
   resolveQuoteRecipient: vi.fn(),
   sendSignatureRequest: vi.fn(),
@@ -41,8 +39,6 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
 });
 vi.mock('@/features/audit/actions', () => ({ recordAudit: mocks.recordAudit }));
 vi.mock('@/lib/pdf/render-msa', () => ({ renderMsaPdf: mocks.renderMsaPdf }));
-vi.mock('@/lib/pdf/render-quote', () => ({ renderQuotePdf: mocks.renderQuotePdf }));
-vi.mock('@/lib/pdf/merge', () => ({ combineQuoteAndMsa: mocks.combineQuoteAndMsa }));
 vi.mock('@/lib/storage/gcs', () => ({ putObject: mocks.putObject }));
 vi.mock('@/features/quotes/recipient', () => ({
   resolveQuoteRecipient: mocks.resolveQuoteRecipient,
@@ -150,27 +146,9 @@ const DEALER_ROW = {
   address: '456 Dealership Boulevard\nMississauga, ON  L5B 3C2',
 };
 
-const DRAFT_QUOTE_ROW = {
-  id: 42,
-  dealerId: 7,
-  status: 'draft' as const,
-  createdAt: new Date('2026-05-12T11:00:00.000Z'),
-  quoteValidDays: 30,
-  // 0062: render lines come inline from the quote_line_items subquery.
-  renderLines: [
-    {
-      label: 'Base Event (includes 500 records)',
-      description: null,
-      qty: 1,
-      unitPrice: 6900,
-      overrideUnitPrice: null,
-      lineTotal: 6900,
-    },
-  ],
-  subtotal: '6900.00',
-  tax: '0.00',
-  total: '6900.00',
-};
+// 0082: the MSA renders on its own; its signature anchor is forwarded straight
+// to BoldSign (no merge step shifting page coordinates).
+const MSA_SIG_ANCHOR = { pageNumber: 1, x: 321, y: 600, width: 241, height: 22 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -188,17 +166,7 @@ beforeEach(() => {
   mocks.renderMsaPdf.mockResolvedValue({
     ok: true,
     body: Buffer.from('%PDF-msa-stub'),
-  });
-  mocks.renderQuotePdf.mockResolvedValue({
-    ok: true,
-    body: Buffer.from('%PDF-quote-stub'),
-    initialsAnchor: { pageNumber: 1, x: 492, y: 710, width: 70, height: 22 },
-  });
-  mocks.combineQuoteAndMsa.mockResolvedValue({
-    ok: true,
-    body: Buffer.from('%PDF-combined-stub'),
-    signatureAnchor: { pageNumber: 2, x: 321, y: 600, width: 241, height: 22 },
-    initialsAnchors: [{ pageNumber: 1, x: 492, y: 710, width: 70, height: 22 }],
+    signatureAnchor: MSA_SIG_ANCHOR,
   });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'msa/1/draft.pdf' });
   mocks.resolveQuoteRecipient.mockResolvedValue({
@@ -271,19 +239,12 @@ describe('createMsaDraft', () => {
   });
 });
 
-describe('sendMsaEnvelope', () => {
-  it('happy path: renders + combines Quote & MSA, uploads one draft, posts a single-file envelope, persists doc id, links the quote, emits audit', async () => {
-    // MSA pre-load → dealer → quote → guarded MSA UPDATE → quote-link UPDATE.
-    mocks.dbResults.push(
-      [MSA_PENDING],
-      [DEALER_ROW],
-      [DRAFT_QUOTE_ROW],
-      [{ id: 1 }],
-    );
+describe('sendMsaEnvelope (0082 — MSA-only)', () => {
+  it('happy path: renders the MSA alone, uploads one draft, posts a single-file MSA-only envelope, persists doc id, emits audit — no quote touched', async () => {
+    // MSA pre-load → dealer → guarded MSA UPDATE. No quote read or write.
+    mocks.dbResults.push([MSA_PENDING], [DEALER_ROW], [{ id: 1 }]);
 
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
+    const result = await call(sendMsaEnvelope(fd({ msaId: '1' })));
 
     expect(result).toEqual({ ok: true });
     expect(mocks.renderMsaPdf).toHaveBeenCalledTimes(1);
@@ -293,11 +254,6 @@ describe('sendMsaEnvelope', () => {
     expect(msaData.signerEmail).toBe('buyer@dealer.test');
     expect(msaData.terminationNoticeDays).toBe(30);
     expect(msaData.templateVersion).toBe('2026-05-12');
-
-    // Quote is rendered WITH the Client-initials field, then combined.
-    expect(mocks.renderQuotePdf).toHaveBeenCalledTimes(1);
-    expect(mocks.renderQuotePdf.mock.calls[0][1]).toEqual({ withInitials: true });
-    expect(mocks.combineQuoteAndMsa).toHaveBeenCalledTimes(1);
 
     expect(mocks.putObject).toHaveBeenCalledTimes(1);
     const uploadArg = mocks.putObject.mock.calls[0][0] as Record<string, unknown>;
@@ -312,19 +268,21 @@ describe('sendMsaEnvelope', () => {
     const files = envelopeArg.files as Array<{ filename: string }>;
     expect(files).toHaveLength(1);
     expect(files[0].filename).toBe('agreement-1.pdf');
-    expect(envelopeArg.initialsAnchors).toHaveLength(1);
-    expect((envelopeArg.signatureAnchor as { pageNumber: number }).pageNumber).toBe(2);
+    // MSA-only: no initials anchor, and the MSA's own signature anchor is
+    // forwarded as-is (no merge step shifting the page number).
+    expect(envelopeArg.initialsAnchors).toBeUndefined();
+    expect(envelopeArg.signatureAnchor).toEqual(MSA_SIG_ANCHOR);
+    expect(envelopeArg.metadata).toEqual({ msaId: '1' });
     expect((envelopeArg.signer as { emailAddress: string }).emailAddress).toBe(
       'buyer@dealer.test',
     );
 
-    // Two updates: MSA providerDocumentId, then the quote→MSA link.
-    expect(mocks.updates).toHaveLength(2);
-    const msaPatch = mocks.updates[0].patch as Record<string, unknown>;
+    // Exactly ONE update: the MSA providerDocumentId. No quote→MSA link.
+    expect(mocks.updates).toHaveLength(1);
     expect(mocks.updates[0].table).toBe('master_service_agreements');
-    expect(msaPatch.providerDocumentId).toBe('doc-abc');
-    expect(mocks.updates[1].table).toBe('quotes');
-    expect((mocks.updates[1].patch as Record<string, unknown>).msaId).toBe(1);
+    expect((mocks.updates[0].patch as Record<string, unknown>).providerDocumentId).toBe(
+      'doc-abc',
+    );
 
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'msa.sent',
@@ -332,66 +290,35 @@ describe('sendMsaEnvelope', () => {
       targetId: 1,
       payload: {
         dealerId: 7,
-        quoteId: 42,
         providerDocumentId: 'doc-abc',
         draftPdfStorageKey: 'msa/1/draft.pdf',
       },
     });
   });
 
-  it('accepts a SENT quote (0061) — sends the envelope and still links it to the MSA', async () => {
-    // MSA pre-load → dealer → quote(SENT) → guarded MSA UPDATE → quote-link UPDATE.
-    mocks.dbResults.push(
-      [MSA_PENDING],
-      [DEALER_ROW],
-      [{ ...DRAFT_QUOTE_ROW, status: 'sent' }],
-      [{ id: 1 }],
-    );
-
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
-
-    expect(result).toEqual({ ok: true });
-    expect(mocks.sendSignatureRequest).toHaveBeenCalledTimes(1);
-    // The quote→MSA link UPDATE must still fire for a SENT quote — otherwise the
-    // signed-webhook auto-accept can't correlate the row (Phase 1 actions.ts:387
-    // widened the link guard from draft-only to draft|sent).
-    expect(mocks.updates).toHaveLength(2);
-    expect(mocks.updates[1].table).toBe('quotes');
-    expect((mocks.updates[1].patch as Record<string, unknown>).msaId).toBe(1);
-  });
-
-  it('rejects when the Quote does not exist', async () => {
-    mocks.dbResults.push([MSA_PENDING], [DEALER_ROW], []); // quote lookup empty
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '99' })),
-    );
-    expect((result as { error: string }).error).toContain('Quote not found');
-    expect(mocks.renderMsaPdf).not.toHaveBeenCalled();
-    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
-    expect(mocks.updates).toHaveLength(0);
-  });
-
   it('rejects when the dealer is archived (no envelope post)', async () => {
     mocks.dbResults.push([MSA_PENDING], []); // dealer archived → empty
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
+    const result = await call(sendMsaEnvelope(fd({ msaId: '1' })));
     expect((result as { error: string }).error).toContain('Dealer not found');
     expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.putObject).not.toHaveBeenCalled();
   });
 
+  it('rejects when the MSA is not pending', async () => {
+    mocks.dbResults.push([{ ...MSA_PENDING, status: 'active' }]);
+    const result = await call(sendMsaEnvelope(fd({ msaId: '1' })));
+    expect((result as { error: string }).error).toContain('cannot be sent');
+    expect(mocks.renderMsaPdf).not.toHaveBeenCalled();
+    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
+  });
+
   it('does not mutate row state when the BoldSign API call fails', async () => {
-    mocks.dbResults.push([MSA_PENDING], [DEALER_ROW], [DRAFT_QUOTE_ROW]);
+    mocks.dbResults.push([MSA_PENDING], [DEALER_ROW]);
     mocks.sendSignatureRequest.mockResolvedValueOnce({
       error: 'rate limit',
     });
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
+    const result = await call(sendMsaEnvelope(fd({ msaId: '1' })));
     expect((result as { error: string }).error).toContain(
       'BoldSign send failed',
     );
@@ -403,44 +330,12 @@ describe('sendMsaEnvelope', () => {
     mocks.dbResults.push([
       { ...MSA_PENDING, providerDocumentId: 'sig-req-existing' },
     ]);
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
+    const result = await call(sendMsaEnvelope(fd({ msaId: '1' })));
     expect(result).toEqual({ ok: true });
     expect(mocks.renderMsaPdf).not.toHaveBeenCalled();
     expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
     expect(mocks.updates).toHaveLength(0);
     expect(mocks.recordAudit).not.toHaveBeenCalled();
-  });
-
-  it('rejects when the Quote belongs to a different dealer', async () => {
-    mocks.dbResults.push(
-      [MSA_PENDING],
-      [DEALER_ROW],
-      [{ ...DRAFT_QUOTE_ROW, dealerId: 99 }],
-    );
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
-    expect((result as { error: string }).error).toContain(
-      'Quote does not belong',
-    );
-    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
-  });
-
-  it('rejects when the Quote is in a terminal status (0061 — draft|sent only)', async () => {
-    mocks.dbResults.push(
-      [MSA_PENDING],
-      [DEALER_ROW],
-      [{ ...DRAFT_QUOTE_ROW, status: 'accepted' }],
-    );
-    const result = await call(
-      sendMsaEnvelope(fd({ msaId: '1', firstQuoteId: '42' })),
-    );
-    expect((result as { error: string }).error).toContain(
-      'must be in draft or sent',
-    );
-    expect(mocks.sendSignatureRequest).not.toHaveBeenCalled();
   });
 });
 
