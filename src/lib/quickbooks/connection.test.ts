@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { accessTokenFresh, computeExpiry, getValidAccessToken } from './connection';
+import {
+  accessTokenFresh,
+  computeExpiry,
+  getConnection,
+  getValidAccessToken,
+} from './connection';
 import type { QboTokens } from './client';
 
 vi.mock('server-only', () => ({}));
@@ -117,5 +122,50 @@ describe('getValidAccessToken', () => {
   it('throws when nothing is connected', async () => {
     h.row = null;
     await expect(getValidAccessToken(now)).rejects.toThrow(/not connected/i);
+  });
+});
+
+describe('getConnection', () => {
+  afterEach(() => {
+    delete process.env.QBO_TOKEN_ENC_KEY;
+    h.row = null;
+  });
+
+  it('returns null when there is no connection row', async () => {
+    h.row = null;
+    expect(await getConnection()).toBeNull();
+  });
+
+  it('decrypts and returns the connection when the row + enc key are present', async () => {
+    process.env.QBO_TOKEN_ENC_KEY = Buffer.alloc(32, 9).toString('base64');
+    const { encrypt } = await import('@/lib/crypto/sealed-box');
+    const now = new Date('2026-06-08T12:00:00.000Z');
+    h.row = {
+      realmId: 'realm-7',
+      accessTokenEnc: encrypt('at'),
+      refreshTokenEnc: encrypt('rt'),
+      accessTokenExpiresAt: now,
+      refreshTokenExpiresAt: now,
+      connectedById: 'u-admin',
+      updatedAt: now,
+    };
+    const conn = await getConnection();
+    expect(conn?.realmId).toBe('realm-7');
+    expect(conn?.accessToken).toBe('at');
+    expect(conn?.refreshToken).toBe('rt');
+  });
+
+  it('returns null (does NOT throw) when a row exists but QBO_TOKEN_ENC_KEY is unset — QBO-dormant env with a leftover sandbox row', async () => {
+    delete process.env.QBO_TOKEN_ENC_KEY;
+    h.row = {
+      realmId: 'realm-stray',
+      accessTokenEnc: 'v1.ciphertext-we-never-decrypt',
+      refreshTokenEnc: 'v1.ciphertext-we-never-decrypt',
+      accessTokenExpiresAt: new Date('2026-06-08T12:00:00.000Z'),
+      refreshTokenExpiresAt: new Date('2026-06-08T12:00:00.000Z'),
+      connectedById: 'u-admin',
+      updatedAt: new Date('2026-06-08T12:00:00.000Z'),
+    };
+    await expect(getConnection()).resolves.toBeNull();
   });
 });

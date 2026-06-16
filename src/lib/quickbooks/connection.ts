@@ -46,6 +46,14 @@ export async function getConnection(): Promise<QboConnection | null> {
   const rows = await db.select().from(quickbooksConnection).limit(1);
   const row = rows[0];
   if (!row) return null;
+  // An environment that ships QuickBooks dormant has no QBO_TOKEN_ENC_KEY (e.g.
+  // a stage service that shares the sandbox DB, which may still hold a leftover
+  // connection row from QBO testing). Without the key, `decrypt` below throws
+  // "QBO_TOKEN_ENC_KEY is not set" — which would crash *every* page that reads
+  // the connection (the quote + dealer pages call getConnection on render).
+  // Treat an undecryptable connection as not-connected so QBO simply stays
+  // dormant rather than 500ing unrelated pages. Mirrors sealed-box's own check.
+  if (!process.env.QBO_TOKEN_ENC_KEY?.trim()) return null;
   return {
     realmId: row.realmId,
     accessToken: decrypt(row.accessTokenEnc),
