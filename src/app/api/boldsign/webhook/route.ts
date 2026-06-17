@@ -141,6 +141,17 @@ async function handleDeclined(documentId: string): Promise<NextResponse> {
 // the gate is HMAC-SHA256 signature verification on the raw body,
 // performed before any DB read or mutation.
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // BoldSign's dashboard "Verify" button (and the URL-registration step) sends
+  // an UNSIGNED verification POST carrying header `X-BoldSign-Event:
+  // Verification`; it only needs a 200 to confirm the endpoint is reachable, and
+  // BoldSign won't let the webhook be saved until it gets one. Ack it BEFORE the
+  // HMAC gate — it's a no-op (no body read, no mutation), so acking an unsigned
+  // ping is safe. Real events carry a signature and go through the full check
+  // below. https://developers.boldsign.com/webhooks/verify-webhook-events/
+  if (request.headers.get('x-boldsign-event') === 'Verification') {
+    return new NextResponse('OK', { status: 200 });
+  }
+
   const secret = process.env.BOLDSIGN_WEBHOOK_SECRET;
   if (!secret) {
     return new NextResponse('Server misconfigured.', { status: 500 });

@@ -104,6 +104,21 @@ beforeEach(() => {
 });
 
 describe('POST /api/boldsign/webhook', () => {
+  it('acks BoldSign\'s unsigned verification ping (X-BoldSign-Event: Verification) with 200', async () => {
+    // The dashboard "Verify" button sends an UNSIGNED POST carrying this header
+    // and needs a 200 to enable Save — must short-circuit before the HMAC gate.
+    const req = new NextRequest('https://example.test/api/boldsign/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-boldsign-event': 'Verification' },
+      body: '',
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mocks.markMsaSigned).not.toHaveBeenCalled();
+    expect(mocks.markMsaDeclined).not.toHaveBeenCalled();
+    expect(mocks.getSignedFileBytes).not.toHaveBeenCalled();
+  });
+
   it('returns 401 when the HMAC signature does not match', async () => {
     const body = payload({ eventType: 'Signed' });
     const req = makeRequest(body, {
