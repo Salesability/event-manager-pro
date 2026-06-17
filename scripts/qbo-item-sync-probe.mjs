@@ -114,15 +114,31 @@ for (let page = 0; page < 10; page++) {
   start += 100;
 }
 
+const byId = new Map(qboItems.map((i) => [i.Id, i]));
 const mapped = qboItems.map(mapItem);
 const syncable = mapped.filter((m) => m.isSyncable);
+const skipped = mapped.filter((m) => !m.isSyncable);
 
 console.log(`\n=== PROD QBO company Items (realm ${realm}, env ${QBO_ENV}) ===`);
-console.log(`fetched=${qboItems.length}  syncable(Service/NonInventory, top-level, named)=${syncable.length}`);
+console.log(`fetched=${qboItems.length}  syncable(Service/NonInventory, top-level, named)=${syncable.length}  skipped=${skipped.length}`);
 const byType = {};
 for (const m of mapped) byType[m.type || '(none)'] = (byType[m.type || '(none)'] ?? 0) + 1;
 console.log(`types: ${Object.entries(byType).map(([t, n]) => `${t}=${n}`).join(', ')}`);
 console.log(`syncable sample: ${syncable.slice(0, 12).map((m) => `${m.code}${m.unitPrice ? '($' + m.unitPrice + ')' : ''}`).join(', ')}${syncable.length > 12 ? ' …' : ''}`);
+
+// Per-item SKIP reasons — exactly why each non-syncable QBO item is left out.
+if (skipped.length) {
+  console.log(`\n=== SKIPPED QBO items (left out of the catalog) — why ===`);
+  for (const m of skipped) {
+    const o = byId.get(m.qbId);
+    const why = [];
+    if (o.Type !== 'Service' && o.Type !== 'NonInventory') why.push(`Type=${o.Type || '(none)'}`);
+    if (o.SubItem === true) why.push('is a sub-item');
+    if (o.ParentRef) why.push(`nested under #${o.ParentRef?.value ?? o.ParentRef}`);
+    if (!m.label) why.push('no name');
+    console.log(`  "${m.label || '(no name)'}" [${m.code}] → ${why.join(' · ') || '(unexpected — would be syncable)'}`);
+  }
+}
 
 // (3) DRY-RUN plan (mirror classifyItemSyncPlan + the empty-pull guard)
 console.log(`\n=== DRY-RUN: what a "Sync" would do to the catalog (NO writes) ===`);
