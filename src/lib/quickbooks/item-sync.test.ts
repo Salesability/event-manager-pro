@@ -151,5 +151,6 @@ describe('item sync summary round-trip', () => {
     expect(decodeItemSyncSummary('1.2.3.4.5')).toBeNull(); // too many
     expect(decodeItemSyncSummary('1x.2.3.4')).toBeNull(); // non-digit
     expect(decodeItemSyncSummary('1e9.0.0.0')).toBeNull();
+    expect(decodeItemSyncSummary(`${'9'.repeat(309)}.0.0.0`)).toBeNull(); // overflows to Infinity
   });
 });

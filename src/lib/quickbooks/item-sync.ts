@@ -260,6 +260,9 @@ export function decodeItemSyncSummary(param: string): ItemSyncSummary | null {
   if (parts.length !== 4) return null;
   if (!parts.every((p) => /^\d+$/.test(p))) return null;
   const [created, updated, archived, purged] = parts.map((p) => Number.parseInt(p, 10));
+  // A 309+ digit (all-digit) segment overflows the double to Infinity, which the
+  // regex still admits — reject anything that isn't a safe integer.
+  if (![created, updated, archived, purged].every(Number.isSafeInteger)) return null;
   return { created, updated, archived, purged };
 }
 

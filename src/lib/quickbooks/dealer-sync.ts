@@ -226,6 +226,9 @@ export function decodeSyncSummary(param: string): SyncSummary | null {
   // or '1e9' (-> 1) and render a bogus tampered-URL summary.
   if (!parts.every((p) => /^\d+$/.test(p))) return null;
   const [created, linked, skipped] = parts.map((p) => Number.parseInt(p, 10));
+  // A 309+ digit (all-digit) segment overflows the double to Infinity, which the
+  // regex still admits — reject anything that isn't a safe integer.
+  if (![created, linked, skipped].every(Number.isSafeInteger)) return null;
   return { created, linked, skipped };
 }
 

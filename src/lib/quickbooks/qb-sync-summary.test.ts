@@ -29,6 +29,7 @@ describe('combined QB sync summary param encode/decode', () => {
     expect(decodeQbSyncSummary('a.b.c.d.e.f.g')).toBeNull(); // non-numeric
     expect(decodeQbSyncSummary('-1.0.0.0.0.0.0')).toBeNull(); // negative
     expect(decodeQbSyncSummary('1e9.0.0.0.0.0.0')).toBeNull(); // exponent notation
+    expect(decodeQbSyncSummary(`${'9'.repeat(309)}.0.0.0.0.0.0`)).toBeNull(); // overflows to Infinity
     expect(decodeQbSyncSummary('')).toBeNull();
   });
 });

@@ -123,6 +123,7 @@ describe('sync summary param encode/decode', () => {
     expect(decodeSyncSummary('-1.0.0')).toBeNull(); // negative
     expect(decodeSyncSummary('1x.2.3')).toBeNull(); // numeric prefix junk
     expect(decodeSyncSummary('1e9.0.0')).toBeNull(); // exponent notation
+    expect(decodeSyncSummary(`${'9'.repeat(309)}.0.0`)).toBeNull(); // overflows to Infinity
     expect(decodeSyncSummary('')).toBeNull();
   });
 });
