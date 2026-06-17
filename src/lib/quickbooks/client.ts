@@ -244,6 +244,40 @@ export async function fetchCustomers(
   return all;
 }
 
+export type QboCompanyInfo = {
+  CompanyName?: string;
+  LegalName?: string;
+};
+
+// Read the connected company's display name (chunk 0083 follow-up — the
+// connection bar leads with the company name instead of the opaque realm id).
+// Uses the query API like the other reads. Returns null when QBO omits a name;
+// callers treat this as best-effort and fall back to the realm id.
+export async function fetchCompanyInfo(
+  realmId: string,
+  accessToken: string,
+): Promise<QboCompanyInfo | null> {
+  const cfg = qboConfig();
+  const query = 'SELECT * FROM CompanyInfo';
+  const url = `${cfg.apiBase}/v3/company/${realmId}/query?query=${encodeURIComponent(
+    query,
+  )}&minorversion=${MINOR_VERSION}`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+
+  if (res.status === 401) {
+    throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+  }
+  if (!res.ok) {
+    throw new Error(`QBO query ${res.status}: ${await res.text()}`);
+  }
+
+  const json = (await res.json()) as { QueryResponse?: { CompanyInfo?: QboCompanyInfo[] } };
+  return json.QueryResponse?.CompanyInfo?.[0] ?? null;
+}
+
 // ---------- Accounting API: read/write a single Customer (chunk 0070) ----------
 
 // Thrown when a Customer create collides with an existing QBO `DisplayName`

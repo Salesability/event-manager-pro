@@ -1,6 +1,12 @@
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
-import { fetchCustomers, fetchItems, qboConfig, qboConfigured } from '@/lib/quickbooks/client';
+import {
+  fetchCompanyInfo,
+  fetchCustomers,
+  fetchItems,
+  qboConfig,
+  qboConfigured,
+} from '@/lib/quickbooks/client';
 import { getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
 import { computeDealerSyncPlan, type SyncPlanRow } from '@/lib/quickbooks/dealer-sync';
 import { computeItemSyncPlan, type ItemSyncPlanRow } from '@/lib/quickbooks/item-sync';
@@ -86,7 +92,12 @@ export default async function QuickbooksAdminPage({
     } catch {
       // Credentials not configured in this environment — surface it below.
     }
-    connection = { realmId: conn.realmId, connectedAt: conn.updatedAt.toISOString(), env };
+    connection = {
+      realmId: conn.realmId,
+      connectedAt: conn.updatedAt.toISOString(),
+      env,
+      companyName: null,
+    };
 
     let token: { realmId: string; accessToken: string } | null = null;
     try {
@@ -97,6 +108,13 @@ export default async function QuickbooksAdminPage({
       itemsFetchError = msg;
     }
     if (token) {
+      try {
+        // Best-effort — the bar falls back to the realm id if this fails.
+        const info = await fetchCompanyInfo(token.realmId, token.accessToken);
+        connection.companyName = info?.CompanyName?.trim() || info?.LegalName?.trim() || null;
+      } catch {
+        // leave companyName null
+      }
       try {
         const customers = await fetchCustomers(token.realmId, token.accessToken);
         plan = await computeDealerSyncPlan(customers);

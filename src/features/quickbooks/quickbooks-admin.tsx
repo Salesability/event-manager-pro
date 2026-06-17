@@ -27,6 +27,7 @@ export type ConnectionView = {
   realmId: string;
   connectedAt: string; // ISO; the row's updated_at (= last token refresh)
   env: 'sandbox' | 'production' | null;
+  companyName: string | null; // QBO CompanyInfo name (best-effort; null → show realm only)
 };
 
 export type Notice = { kind: 'error' | 'success'; message: string } | null;
@@ -296,12 +297,16 @@ export function QuickbooksAdmin({
               dealers + mirrors items; Disconnect stays as the secondary control. */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-6">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge color="lime">Connected</Badge>
+                {connection.companyName && (
+                  <span className="text-sm font-semibold text-zinc-900">{connection.companyName}</span>
+                )}
                 {connection.env && <Badge color="zinc">{connection.env}</Badge>}
               </div>
               <p className="text-sm text-zinc-500">
-                Company realm <code className="font-mono">{connection.realmId}</code> · token last refreshed{' '}
+                {connection.companyName ? 'QuickBooks company' : 'Company realm'}{' '}
+                <code className="font-mono text-xs">{connection.realmId}</code> · token last refreshed{' '}
                 {new Date(connection.connectedAt).toLocaleString()}
               </p>
             </div>
