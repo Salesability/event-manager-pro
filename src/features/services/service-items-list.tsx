@@ -23,7 +23,7 @@ export function ServiceItemsList({ items }: { items: ServiceItemAdminRow[] }) {
         <h2 className="text-sm font-semibold text-zinc-900">Service items</h2>
         <p className="text-sm text-zinc-500">
           {items.length} items · {linked} linked to QuickBooks · {archived} archived. Items are
-          mastered in QuickBooks — use the Pull items action below to sync the catalog.
+          mastered in QuickBooks — use the Sync button above to refresh the catalog from QuickBooks.
         </p>
       </div>
 

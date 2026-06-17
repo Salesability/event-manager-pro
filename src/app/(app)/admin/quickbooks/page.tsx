@@ -2,33 +2,43 @@ import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
 import { fetchCustomers, fetchItems, qboConfig, qboConfigured } from '@/lib/quickbooks/client';
 import { getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
-import {
-  computeDealerSyncPlan,
-  decodeSyncSummary,
-  type SyncPlanRow,
-} from '@/lib/quickbooks/dealer-sync';
-import {
-  computeItemSyncPlan,
-  decodeItemSyncSummary,
-  type ItemSyncPlanRow,
-} from '@/lib/quickbooks/item-sync';
+import { computeDealerSyncPlan, type SyncPlanRow } from '@/lib/quickbooks/dealer-sync';
+import { computeItemSyncPlan, type ItemSyncPlanRow } from '@/lib/quickbooks/item-sync';
+import { decodeQbSyncSummary, type QbSyncSummary } from '@/lib/quickbooks/qb-sync-summary';
 import {
   QuickbooksAdmin,
   type ConnectionView,
   type Notice,
 } from '@/features/quickbooks/quickbooks-admin';
 import { loadServiceItemsForAdmin } from '@/features/services/queries';
-import { ServiceItemsList } from '@/features/services/service-items-list';
 
-// 0068/0069 — admin in-app QuickBooks OAuth viewer turned dealer-sync surface.
-// Gated on the pure-admin `admin:access` (mirrors `/admin/send-test-msa`),
-// double-covered by the `/admin/*` middleware gate. Connect via OAuth, then
-// live-read the connected company's customers and render the computed change set
-// against our `dealers` (Create / Link / Already linked / Skip). The change set
-// is computed READ-ONLY on load (`computeDealerSyncPlan`); the deliberate "Sync
-// dealers" button applies it via the `syncDealersFromQuickbooks` Server Action.
+// 0068/0069/0083 — admin in-app QuickBooks surface. Gated on the pure-admin
+// `admin:access` (mirrors `/admin/send-test-msa`), double-covered by the
+// `/admin/*` middleware gate. Connect via OAuth, then live-read the connected
+// company's customers + items and render the computed change sets (dealers:
+// Create / Link / Already linked / Skip; items: Create / Update / Archive /
+// Purge) READ-ONLY on load. The single "Sync" button (0083) applies both via
+// the `syncQuickbooks` Server Action and flashes one combined summary.
 
 type SearchParams = Record<string, string | string[] | undefined>;
+
+// Compose the one-sentence flash notice from the combined `?qbsync=` counts plus
+// any per-part error (partial-report — a failed pass never discards the other's
+// committed writes, so we report both outcomes).
+function composeSyncNotice(
+  s: QbSyncSummary,
+  dealerError: string | null,
+  itemError: string | null,
+): string {
+  const dealerPart = dealerError
+    ? `dealers sync failed (${dealerError})`
+    : `dealers: created ${s.dealers.created}, linked ${s.dealers.linked}, skipped ${s.dealers.skipped}`;
+  const itemPart = itemError
+    ? `items sync failed (${itemError})`
+    : `items: created ${s.items.created}, updated ${s.items.updated}, archived ${s.items.archived}, purged ${s.items.purged}`;
+  const lead = dealerError || itemError ? 'Synced with QuickBooks (with errors)' : 'Synced with QuickBooks';
+  return `${lead} — ${dealerPart} · ${itemPart}.`;
+}
 
 export default async function QuickbooksAdminPage({
   searchParams,
@@ -38,31 +48,28 @@ export default async function QuickbooksAdminPage({
   await assertCan('admin:access');
   const sp = await searchParams;
 
-  // The local service catalog, read-only — shown regardless of QBO connection
-  // (0072). Items are mastered in QuickBooks (0071); this is just visibility.
+  // The local service catalog, read-only (0072). Items are mastered in
+  // QuickBooks (0071); this is rendered inside the Items tab.
   const catalog = await loadServiceItemsForAdmin();
 
-  // The callback route lands here with ?connected=1; the dealer sync with
-  // ?synced=<c>.<l>.<s>; the item pull with ?itemsynced=<c>.<u>.<a>.<p>; any
-  // with ?error=<message>.
-  const synced = typeof sp.synced === 'string' ? decodeSyncSummary(sp.synced) : null;
-  const itemSynced = typeof sp.itemsynced === 'string' ? decodeItemSyncSummary(sp.itemsynced) : null;
+  // The callback route lands here with ?connected=1; the unified Sync (0083)
+  // with ?qbsync=<c.l.s.c.u.a.p> + an optional ?qbderror=/?qbierror= per-part
+  // message when a pass failed; any with ?error=<message>.
+  const qbSync = typeof sp.qbsync === 'string' ? decodeQbSyncSummary(sp.qbsync) : null;
+  const qbDealerError = typeof sp.qbderror === 'string' ? sp.qbderror : null;
+  const qbItemError = typeof sp.qbierror === 'string' ? sp.qbierror : null;
+
   const notice: Notice =
     typeof sp.error === 'string'
       ? { kind: 'error', message: sp.error }
-      : synced
+      : qbSync
         ? {
-            kind: 'success',
-            message: `Synced dealers from QuickBooks — created ${synced.created} · linked ${synced.linked} · skipped ${synced.skipped}.`,
+            kind: qbDealerError || qbItemError ? 'error' : 'success',
+            message: composeSyncNotice(qbSync, qbDealerError, qbItemError),
           }
-        : itemSynced
-          ? {
-              kind: 'success',
-              message: `Synced items from QuickBooks — created ${itemSynced.created} · updated ${itemSynced.updated} · archived ${itemSynced.archived} · purged ${itemSynced.purged}.`,
-            }
-          : sp.connected === '1'
-            ? { kind: 'success', message: 'Connected to QuickBooks.' }
-            : null;
+        : sp.connected === '1'
+          ? { kind: 'success', message: 'Connected to QuickBooks.' }
+          : null;
 
   const conn = await getConnection();
 
@@ -111,9 +118,8 @@ export default async function QuickbooksAdminPage({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="QuickBooks"
-        description="Connect the business's QuickBooks Online company, reconcile its customers with your dealers, and pull its items into the quote-composer catalog."
+        description="Connect the business's QuickBooks Online company, then press Sync to reconcile its customers with your dealers and mirror its items into the quote-composer catalog."
       />
-      <ServiceItemsList items={catalog} />
       <QuickbooksAdmin
         connection={connection}
         configured={qboConfigured()}
@@ -121,6 +127,7 @@ export default async function QuickbooksAdminPage({
         fetchError={fetchError}
         itemPlan={itemPlan}
         itemsFetchError={itemsFetchError}
+        catalog={catalog}
         notice={notice}
       />
     </div>

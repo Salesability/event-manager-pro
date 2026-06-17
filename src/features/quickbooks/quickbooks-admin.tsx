@@ -10,19 +10,16 @@ import {
 } from '@/components/catalyst/table';
 import type { SyncAction, SyncPlanRow } from '@/lib/quickbooks/dealer-sync';
 import type { ItemSyncAction, ItemSyncPlanRow } from '@/lib/quickbooks/item-sync';
-import {
-  connectQuickbooks,
-  disconnectQuickbooks,
-  pullItemsFromQuickbooks,
-  syncDealersFromQuickbooks,
-} from './actions';
+import { ServiceItemsList } from '@/features/services/service-items-list';
+import type { ServiceItemAdminRow } from '@/features/services/queries';
+import { connectQuickbooks, disconnectQuickbooks, syncQuickbooks } from './actions';
 
-// QuickBooks dealer-sync UI (chunks 0068 + 0069). Server component — the
-// connect/disconnect/sync controls are `<form action={serverAction}>` so no
-// client JS is needed. The connected view renders the computed change set (one
-// row per QB customer, with the action that *would* land in our DB); the "Sync
-// dealers" button applies it via `syncDealersFromQuickbooks`. The plan is
-// computed READ-ONLY on the page; nothing here writes.
+// QuickBooks admin surface (chunks 0068/0069/0071/0072, reorganized by 0083).
+// Server component — connect/disconnect/sync controls are `<form action=…>` so
+// no client JS is needed here. The connection bar sits FIRST; one "Sync" button
+// reconciles dealers AND mirrors items in a single click (`syncQuickbooks`). The
+// per-section detail (dealer change set + item catalog/diff) renders below the
+// bar. Plans are computed READ-ONLY on the page; nothing here writes.
 
 export type ConnectionView = {
   realmId: string;
@@ -39,6 +36,7 @@ type Props = {
   fetchError: string | null;
   itemPlan: ItemSyncPlanRow[] | null;
   itemsFetchError: string | null;
+  catalog: ServiceItemAdminRow[];
   notice: Notice;
 };
 
@@ -84,6 +82,131 @@ function ConnectButton({ label }: { label: string }) {
   );
 }
 
+// The dealer reconcile change set (one row per QB customer). Server-rendered;
+// moved out of the page body so it can become a tab panel (0083 Phase 3).
+function DealersPanel({
+  plan,
+  counts,
+  actionable,
+}: {
+  plan: SyncPlanRow[] | null;
+  counts: Record<SyncAction, number>;
+  actionable: number;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-zinc-500">
+        {plan?.length ?? 0} customers · {counts.create} create · {counts.link} link ·{' '}
+        {counts['already-linked']} already linked · {counts['skip-collision']} skip
+        {actionable === 0 && plan && plan.length > 0 ? ' — dealers are up to date.' : ''}
+      </p>
+      <Table dense className="[--gutter:--spacing(6)]">
+        <TableHead>
+          <TableRow>
+            <TableHeader>Company</TableHeader>
+            <TableHeader>Email</TableHeader>
+            <TableHeader>Phone</TableHeader>
+            <TableHeader>Action</TableHeader>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {(plan ?? []).map((row) => (
+            <TableRow key={row.qbId}>
+              <TableCell className="font-medium text-zinc-900">{row.company}</TableCell>
+              <TableCell className="text-zinc-500">{row.email ?? '—'}</TableCell>
+              <TableCell className="text-zinc-500">{row.phone ?? '—'}</TableCell>
+              <TableCell>
+                <ActionBadge row={row} />
+              </TableCell>
+            </TableRow>
+          ))}
+          {(plan?.length ?? 0) === 0 && (
+            <TableRow>
+              <TableCell colSpan={4} className="text-zinc-500">
+                No customers found in the connected QuickBooks company.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// The local catalog (read-only mirror) + the pending QBO mirror diff. Items are
+// mastered in QuickBooks (0071); the unified Sync button above applies the diff.
+function ItemsPanel({
+  itemPlan,
+  itemsFetchError,
+  itemCounts,
+  itemsActionable,
+  catalog,
+}: {
+  itemPlan: ItemSyncPlanRow[] | null;
+  itemsFetchError: string | null;
+  itemCounts: Record<ItemSyncAction, number>;
+  itemsActionable: number;
+  catalog: ServiceItemAdminRow[];
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <ServiceItemsList items={catalog} />
+
+      {itemsFetchError ? (
+        <div className="flex flex-col items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-6">
+          <p className="text-sm font-medium text-amber-900">Couldn&apos;t load items</p>
+          <p className="text-sm text-amber-800">{itemsFetchError}</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-zinc-500">
+            {itemPlan?.length ?? 0} items · {itemCounts.create} create · {itemCounts.update} update ·{' '}
+            {itemCounts.archive} archive · {itemCounts.purge} purge
+            {itemsActionable === 0 && itemPlan && itemPlan.length > 0
+              ? ' — catalog matches QuickBooks.'
+              : ''}
+          </p>
+          <Table dense className="[--gutter:--spacing(6)]">
+            <TableHead>
+              <TableRow>
+                <TableHeader>Code</TableHeader>
+                <TableHeader>Label</TableHeader>
+                <TableHeader>Price</TableHeader>
+                <TableHeader>Action</TableHeader>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(itemPlan ?? [])
+                .filter((row) => row.action !== 'current')
+                .map((row, i) => (
+                  <TableRow key={`${row.qbId ?? row.serviceItemId ?? row.code}-${i}`}>
+                    <TableCell className="font-mono text-xs text-zinc-700">{row.code}</TableCell>
+                    <TableCell className="font-medium text-zinc-900">{row.label}</TableCell>
+                    <TableCell className="text-zinc-500">
+                      {row.unitPrice != null ? `$${row.unitPrice}` : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge color={ITEM_ACTION_BADGE[row.action].color}>
+                        {ITEM_ACTION_BADGE[row.action].label}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              {(itemPlan?.length ?? 0) === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-zinc-500">
+                    No items found in the connected QuickBooks company.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function QuickbooksAdmin({
   connection,
   configured,
@@ -91,6 +214,7 @@ export function QuickbooksAdmin({
   fetchError,
   itemPlan,
   itemsFetchError,
+  catalog,
   notice,
 }: Props) {
   const counts = (plan ?? []).reduce(
@@ -135,7 +259,8 @@ export function QuickbooksAdmin({
             <p className="text-sm font-medium text-zinc-900">Not connected</p>
             <p className="text-sm text-zinc-500">
               Connect the business&apos;s QuickBooks Online company to reconcile its customers with your
-              dealers. Reading is non-destructive — dealers only change when you press Sync.
+              dealers and mirror its items. Reading is non-destructive — nothing changes until you press
+              Sync.
             </p>
           </div>
           {configured ? (
@@ -151,6 +276,8 @@ export function QuickbooksAdmin({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* Connection bar — first on the page (0083). One "Sync" reconciles
+              dealers + mirrors items; Disconnect stays as the secondary control. */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white p-6">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -163,10 +290,10 @@ export function QuickbooksAdmin({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {!fetchError && actionable > 0 && (
-                <form action={syncDealersFromQuickbooks}>
+              {!fetchError && (
+                <form action={syncQuickbooks}>
                   <Button type="submit" color="brand">
-                    Sync dealers
+                    Sync
                   </Button>
                 </form>
               )}
@@ -190,116 +317,23 @@ export function QuickbooksAdmin({
               <ConnectButton label="Reconnect" />
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-zinc-500">
-                {(plan?.length ?? 0)} customers · {counts.create} create · {counts.link} link ·{' '}
-                {counts['already-linked']} already linked · {counts['skip-collision']} skip
-                {actionable === 0 && plan && plan.length > 0 ? ' — dealers are up to date.' : ''}
-              </p>
-              <Table dense className="[--gutter:--spacing(6)]">
-                <TableHead>
-                  <TableRow>
-                    <TableHeader>Company</TableHeader>
-                    <TableHeader>Email</TableHeader>
-                    <TableHeader>Phone</TableHeader>
-                    <TableHeader>Action</TableHeader>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {(plan ?? []).map((row) => (
-                    <TableRow key={row.qbId}>
-                      <TableCell className="font-medium text-zinc-900">{row.company}</TableCell>
-                      <TableCell className="text-zinc-500">{row.email ?? '—'}</TableCell>
-                      <TableCell className="text-zinc-500">{row.phone ?? '—'}</TableCell>
-                      <TableCell>
-                        <ActionBadge row={row} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {(plan?.length ?? 0) === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={4} className="text-zinc-500">
-                        No customers found in the connected QuickBooks company.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <DealersPanel plan={plan} counts={counts} actionable={actionable} />
+              <div className="border-t border-zinc-100 pt-4">
+                <ItemsPanel
+                  itemPlan={itemPlan}
+                  itemsFetchError={itemsFetchError}
+                  itemCounts={itemCounts}
+                  itemsActionable={itemsActionable}
+                  catalog={catalog}
+                />
+              </div>
+            </>
           )}
 
-          {/* Items — QuickBooks is the item master (0071). "Pull items" mirrors
-              the QBO Item list into the quote-composer catalog: create / update
-              (overwrite from QBO) / archive (QBO-removed) / purge (legacy
-              unlinked). Read-only here; the catalog is no longer edited in-app. */}
-          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold text-zinc-900">Items</h3>
-              {!itemsFetchError && itemsActionable > 0 && (
-                <form action={pullItemsFromQuickbooks}>
-                  <Button type="submit" color="brand">
-                    Pull items
-                  </Button>
-                </form>
-              )}
-            </div>
-
-            {itemsFetchError ? (
-              <div className="flex flex-col items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-6">
-                <p className="text-sm font-medium text-amber-900">Couldn&apos;t load items</p>
-                <p className="text-sm text-amber-800">{itemsFetchError}</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-sm text-zinc-500">
-                  {itemPlan?.length ?? 0} items · {itemCounts.create} create · {itemCounts.update} update ·{' '}
-                  {itemCounts.archive} archive · {itemCounts.purge} purge
-                  {itemsActionable === 0 && itemPlan && itemPlan.length > 0
-                    ? ' — catalog matches QuickBooks.'
-                    : ''}
-                </p>
-                <Table dense className="[--gutter:--spacing(6)]">
-                  <TableHead>
-                    <TableRow>
-                      <TableHeader>Code</TableHeader>
-                      <TableHeader>Label</TableHeader>
-                      <TableHeader>Price</TableHeader>
-                      <TableHeader>Action</TableHeader>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {(itemPlan ?? [])
-                      .filter((row) => row.action !== 'current')
-                      .map((row, i) => (
-                        <TableRow key={`${row.qbId ?? row.serviceItemId ?? row.code}-${i}`}>
-                          <TableCell className="font-mono text-xs text-zinc-700">{row.code}</TableCell>
-                          <TableCell className="font-medium text-zinc-900">{row.label}</TableCell>
-                          <TableCell className="text-zinc-500">
-                            {row.unitPrice != null ? `$${row.unitPrice}` : '—'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge color={ITEM_ACTION_BADGE[row.action].color}>
-                              {ITEM_ACTION_BADGE[row.action].label}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    {(itemPlan?.length ?? 0) === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-zinc-500">
-                          No items found in the connected QuickBooks company.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </>
-            )}
-          </div>
-
-          {/* Tax rates — province → QB-tax-code mapping moved to /admin/lookups
-              (0076). The auto-apply "Pull tax codes" heuristic was retired (it
-              could mis-map provinces); map codes explicitly + refresh rates there. */}
+          {/* Tax rates — province → QB-tax-code mapping lives at /admin/lookups
+              (0076). The auto-apply "Pull tax codes" heuristic was retired; the
+              Lookups link is added beside the tabs in Phase 3. */}
         </div>
       )}
     </div>
