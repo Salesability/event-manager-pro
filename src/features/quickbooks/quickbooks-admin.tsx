@@ -150,6 +150,12 @@ function ItemsPanel({
   itemsActionable: number;
   catalog: ServiceItemAdminRow[];
 }) {
+  // The preview lists only PENDING changes. `current` (no-op) and `skip` rows
+  // (permanent — Groups/bundles/sub-items QBO will never sync into the catalog)
+  // are filtered out so the table isn't perpetual noise.
+  const pendingRows = (itemPlan ?? []).filter(
+    (row) => row.action !== 'current' && row.action !== 'skip',
+  );
   return (
     <div className="flex flex-col gap-4">
       <ServiceItemsList items={catalog} />
@@ -178,26 +184,26 @@ function ItemsPanel({
               </TableRow>
             </TableHead>
             <TableBody>
-              {(itemPlan ?? [])
-                .filter((row) => row.action !== 'current')
-                .map((row, i) => (
-                  <TableRow key={`${row.qbId ?? row.serviceItemId ?? row.code}-${i}`}>
-                    <TableCell className="font-mono text-xs text-zinc-700">{row.code}</TableCell>
-                    <TableCell className="font-medium text-zinc-900">{row.label}</TableCell>
-                    <TableCell className="text-zinc-500">
-                      {row.unitPrice != null ? `$${row.unitPrice}` : '—'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge color={ITEM_ACTION_BADGE[row.action].color}>
-                        {ITEM_ACTION_BADGE[row.action].label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              {(itemPlan?.length ?? 0) === 0 && (
+              {pendingRows.map((row, i) => (
+                <TableRow key={`${row.qbId ?? row.serviceItemId ?? row.code}-${i}`}>
+                  <TableCell className="font-mono text-xs text-zinc-700">{row.code}</TableCell>
+                  <TableCell className="font-medium text-zinc-900">{row.label}</TableCell>
+                  <TableCell className="text-zinc-500">
+                    {row.unitPrice != null ? `$${row.unitPrice}` : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge color={ITEM_ACTION_BADGE[row.action].color}>
+                      {ITEM_ACTION_BADGE[row.action].label}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {pendingRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-zinc-500">
-                    No items found in the connected QuickBooks company.
+                    {(itemPlan?.length ?? 0) === 0
+                      ? 'No items found in the connected QuickBooks company.'
+                      : 'No pending changes — the catalog matches QuickBooks.'}
                   </TableCell>
                 </TableRow>
               )}
