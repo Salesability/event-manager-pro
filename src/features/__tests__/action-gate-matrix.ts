@@ -208,7 +208,8 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
 
   // ---- Service catalog — REMOVED (0071): QuickBooks is the item master; the
   // in-app create/update/archive item actions were deleted. Items are synced
-  // read-only via `pullItemsFromQuickbooks` (below).
+  // read-only via the unified `syncQuickbooks` (below; 0083 folded the old
+  // per-section `pullItemsFromQuickbooks`/`syncDealersFromQuickbooks` into it).
 
   // ---- Sales tax rates (1) — admin-only (lookup:edit) -------------------
   // 0075 removed the free-rate editor (QB is the tax-rate master); 0076 re-adds an
@@ -274,28 +275,16 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'admin:access — admin-only (0068 QBO OAuth disconnect; revoke + drop the connection row)',
   },
   {
-    label: 'syncDealersFromQuickbooks',
-    invoke: () => quickbooksActions.syncDealersFromQuickbooks(),
-    expectedByRole: ADMIN_ONLY,
-    note: 'admin:access — admin-only (0069 QBO dealer sync; reconciles QB customers into dealers)',
-  },
-  {
     label: 'pushDealerToQuickbooks',
     invoke: () => quickbooksActions.pushDealerToQuickbooks(fd()),
     expectedByRole: ADMIN_ONLY,
     note: 'admin:access — admin-only (0070 QBO dealer push; create/update a QB customer from a dealer)',
   },
   {
-    label: 'pullItemsFromQuickbooks',
-    invoke: () => quickbooksActions.pullItemsFromQuickbooks(),
-    expectedByRole: ADMIN_ONLY,
-    note: 'admin:access — admin-only (0071 QBO item pull; mirrors QBO Items into service_items)',
-  },
-  {
     label: 'syncQuickbooks',
     invoke: () => quickbooksActions.syncQuickbooks(),
     expectedByRole: ADMIN_ONLY,
-    note: 'admin:access — admin-only (0083 unified sync; dealer reconcile + item mirror in one click)',
+    note: 'admin:access — admin-only (0083 unified sync; dealer reconcile + item mirror in one click — replaces the per-section syncDealersFromQuickbooks + pullItemsFromQuickbooks)',
   },
   {
     label: 'pushQuoteToQuickbooks',

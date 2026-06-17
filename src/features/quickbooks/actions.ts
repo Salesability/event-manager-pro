@@ -17,8 +17,8 @@ import {
 } from '@/lib/quickbooks/client';
 import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
-import { applyDealerSync, encodeSyncSummary, type SyncSummary } from '@/lib/quickbooks/dealer-sync';
-import { applyItemSync, encodeItemSyncSummary, type ItemSyncSummary } from '@/lib/quickbooks/item-sync';
+import { applyDealerSync, type SyncSummary } from '@/lib/quickbooks/dealer-sync';
+import { applyItemSync, type ItemSyncSummary } from '@/lib/quickbooks/item-sync';
 import { encodeQbSyncSummary } from '@/lib/quickbooks/qb-sync-summary';
 import {
   QuotePushNotReadyError,
@@ -89,51 +89,6 @@ export async function disconnectQuickbooks() {
   // The Disconnect button lives ON /admin/quickbooks — revalidate in place so
   // the page re-renders into the disconnected state (no redirect needed).
   revalidatePath('/admin/quickbooks');
-}
-
-// authz: admin:access
-// validation: skip — no FormData input; reads the live QB customer list and
-// applies the computed dealer change set.
-//
-// Reconciles the connected company's QuickBooks customers into `dealers`
-// (chunk 0069): match-by-QB-ID → match-by-name+address & backfill → insert.
-// On success, redirects with `?synced=<created>.<linked>.<skipped>` so the page
-// flashes a summary and re-renders the recomputed (now mostly already-linked)
-// plan. Errors (not connected / token refresh / fetch) propagate to Next's
-// error boundary rather than being caught-and-redirected — the Sync button only
-// renders once the page has already loaded the customer list (so the token is
-// fresh), making a sync-time failure rare, and a post-gate redirect would read
-// as a wrong gate-admit to the action-gate-matrix suite.
-export async function syncDealersFromQuickbooks() {
-  const user = await assertCan('admin:access');
-
-  const { realmId, accessToken } = await getValidAccessToken();
-  const customers = await fetchCustomers(realmId, accessToken);
-  const result = await applyDealerSync(customers, user.id);
-
-  revalidatePath('/admin/quickbooks');
-  redirect(`/admin/quickbooks?synced=${encodeSyncSummary(result)}`);
-}
-
-// authz: admin:access
-// validation: skip — no FormData input; reads the live QB item list and applies
-// the computed catalog change set (chunk 0071 — QuickBooks is the item master).
-//
-// Mirrors the connected company's Items into `service_items`: create / overwrite
-// linked / archive QBO-removed / purge legacy unlinked. Wrapped in a transaction
-// so external readers never observe the brief mid-apply (purge-then-create)
-// state, and a failure rolls back rather than leaving a half-wiped catalog. The
-// empty-pull guard inside `applyItemSync` refuses to wipe on a zero-item read.
-// Errors propagate (no catch) — same rationale as `syncDealersFromQuickbooks`.
-export async function pullItemsFromQuickbooks() {
-  await assertCan('admin:access');
-
-  const { realmId, accessToken } = await getValidAccessToken();
-  const items = await fetchItems(realmId, accessToken);
-  const result = await db.transaction((tx) => applyItemSync(items, tx));
-
-  revalidatePath('/admin/quickbooks');
-  redirect(`/admin/quickbooks?itemsynced=${encodeItemSyncSummary(result)}`);
 }
 
 // authz: admin:access

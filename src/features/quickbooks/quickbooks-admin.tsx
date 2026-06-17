@@ -1,5 +1,6 @@
 import { Badge } from '@/components/catalyst/badge';
 import { Button } from '@/components/catalyst/button';
+import { Link } from '@/components/catalyst/link';
 import {
   Table,
   TableBody,
@@ -13,6 +14,7 @@ import type { ItemSyncAction, ItemSyncPlanRow } from '@/lib/quickbooks/item-sync
 import { ServiceItemsList } from '@/features/services/service-items-list';
 import type { ServiceItemAdminRow } from '@/features/services/queries';
 import { connectQuickbooks, disconnectQuickbooks, syncQuickbooks } from './actions';
+import { QuickbooksTabs } from './quickbooks-tabs';
 
 // QuickBooks admin surface (chunks 0068/0069/0071/0072, reorganized by 0083).
 // Server component — connect/disconnect/sync controls are `<form action=…>` so
@@ -318,22 +320,34 @@ export function QuickbooksAdmin({
             </div>
           ) : (
             <>
-              <DealersPanel plan={plan} counts={counts} actionable={actionable} />
-              <div className="border-t border-zinc-100 pt-4">
-                <ItemsPanel
-                  itemPlan={itemPlan}
-                  itemsFetchError={itemsFetchError}
-                  itemCounts={itemCounts}
-                  itemsActionable={itemsActionable}
-                  catalog={catalog}
-                />
-              </div>
+              {/* Dealers / Items detail in tabs — only the switcher is client;
+                  both panels are server-rendered and passed in as props. */}
+              <QuickbooksTabs
+                dealers={<DealersPanel plan={plan} counts={counts} actionable={actionable} />}
+                items={
+                  <ItemsPanel
+                    itemPlan={itemPlan}
+                    itemsFetchError={itemsFetchError}
+                    itemCounts={itemCounts}
+                    itemsActionable={itemsActionable}
+                    catalog={catalog}
+                  />
+                }
+              />
+
+              {/* Tax-code mapping deliberately lives at /admin/lookups (0076) —
+                  no Tax tab here, just a pointer. */}
+              <p className="text-sm text-zinc-500">
+                Tax codes are managed in{' '}
+                <Link
+                  href="/admin/lookups"
+                  className="font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Lookups →
+                </Link>
+              </p>
             </>
           )}
-
-          {/* Tax rates — province → QB-tax-code mapping lives at /admin/lookups
-              (0076). The auto-apply "Pull tax codes" heuristic was retired; the
-              Lookups link is added beside the tabs in Phase 3. */}
         </div>
       )}
     </div>

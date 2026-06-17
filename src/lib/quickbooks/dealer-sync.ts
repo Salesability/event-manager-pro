@@ -212,9 +212,9 @@ export type SyncResult = {
 
 export type SyncSummary = { created: number; linked: number; skipped: number };
 
-// The sync action redirects with `?synced=<created>.<linked>.<skipped>` (no
-// client JS) and the page decodes it back into a flash notice. Kept pure so the
-// round-trip is unit-tested.
+// Encodes a dealer sync result as `<created>.<linked>.<skipped>`. Feeds the
+// combined `?qbsync=` flash param (chunk 0083 — was the standalone `?synced=`
+// before the dealer/item sync buttons merged into one). Pure → unit-tested.
 export function encodeSyncSummary(r: SyncSummary): string {
   return `${r.created}.${r.linked}.${r.skipped}`;
 }

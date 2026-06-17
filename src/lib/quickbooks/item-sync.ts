@@ -249,7 +249,8 @@ export type ItemSyncSummary = {
   purged: number;
 };
 
-// `?itemsynced=<created>.<updated>.<archived>.<purged>` round-trip (no client JS).
+// Encodes an item sync result as `<created>.<updated>.<archived>.<purged>`. Feeds
+// the combined `?qbsync=` flash param (chunk 0083 — was the standalone `?itemsynced=`).
 export function encodeItemSyncSummary(r: ItemSyncSummary): string {
   return `${r.created}.${r.updated}.${r.archived}.${r.purged}`;
 }
