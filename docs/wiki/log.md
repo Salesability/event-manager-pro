@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-17 — `/admin/quickbooks` information-architecture refinement (chunk 0083)
+
+- Updated [`data-model.md`](data-model.md) `service_items`: the item mirror's write path is now the unified **`syncQuickbooks`** action behind the single **Sync** button on `/admin/quickbooks` — 0083 folded the former standalone "Pull items" button (and the dealer-only "Sync dealers" button) into one Sync that reconciles dealers *and* mirrors items in a single click. The read-only `ServiceItemsList` catalog now renders inside the **Items** tab (was a flat section above the change-set), shown when QBO is connected; the connection bar now leads the page. Reconcile logic (`applyDealerSync`/`applyItemSync`) unchanged.
+- Code: new `src/features/quickbooks/quickbooks-tabs.tsx` (the only `'use client'` piece — server-rendered Dealers/Items panels passed as props), new `src/lib/quickbooks/qb-sync-summary.ts` (combined `?qbsync=` flash param), removed the dead `syncDealersFromQuickbooks`/`pullItemsFromQuickbooks` exports + their gate-matrix rows. A "Tax codes are managed in Lookups →" link replaces a Tax tab (mapping stays at `/admin/lookups`, 0076). **Code-only, no migration; NOT yet on prod (deploy paused — the one Sync button now also fires the destructive item pull).** History: [`docs/chunks/closed/0083-quickbooks-admin-refine/`](../chunks/closed/0083-quickbooks-admin-refine/plan.md).
+
 ## 2026-06-15 — Quote decoupled from the MSA/BoldSign envelope (chunk 0082)
 
 - Rewrote [`commercial-spine.md`](commercial-spine.md): the bundled first-deal envelope (one merged Quote+MSA PDF, 0055/0061) is **superseded**. The MSA now signs on its **own** BoldSign envelope (MSA pages only), sent from the per-dealer panel on `/dealerships/[id]`; signing flips **only** the MSA (no quote/dealer side effect). Replaced the "The bundled first-deal envelope" section with **"The MSA envelope (standalone)"** + a new **"Accepting a Quote"** section: every quote accepts via the staff `acceptQuote` action behind a new **accept gate** (D3 — a `sent` quote needs the dealer to have an `active` MSA), surfaced as a "Customer decision" Accept/Decline card. Updated the TL;DR, the lifecycle diagram, the entities table, the per-Client bullets, and the MSA-expiry less-happy path.
