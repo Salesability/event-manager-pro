@@ -292,6 +292,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     note: 'admin:access — admin-only (0071 QBO item pull; mirrors QBO Items into service_items)',
   },
   {
+    label: 'syncQuickbooks',
+    invoke: () => quickbooksActions.syncQuickbooks(),
+    expectedByRole: ADMIN_ONLY,
+    note: 'admin:access — admin-only (0083 unified sync; dealer reconcile + item mirror in one click)',
+  },
+  {
     label: 'pushQuoteToQuickbooks',
     invoke: () => quickbooksActions.pushQuoteToQuickbooks(fd()),
     expectedByRole: ADMIN_ONLY,

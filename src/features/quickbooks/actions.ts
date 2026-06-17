@@ -17,8 +17,9 @@ import {
 } from '@/lib/quickbooks/client';
 import { deleteConnection, getConnection, getValidAccessToken } from '@/lib/quickbooks/connection';
 import { pushDealerToQuickbooks as pushDealerToQbo } from '@/lib/quickbooks/dealer-push';
-import { applyDealerSync, encodeSyncSummary } from '@/lib/quickbooks/dealer-sync';
-import { applyItemSync, encodeItemSyncSummary } from '@/lib/quickbooks/item-sync';
+import { applyDealerSync, encodeSyncSummary, type SyncSummary } from '@/lib/quickbooks/dealer-sync';
+import { applyItemSync, encodeItemSyncSummary, type ItemSyncSummary } from '@/lib/quickbooks/item-sync';
+import { encodeQbSyncSummary } from '@/lib/quickbooks/qb-sync-summary';
 import {
   QuotePushNotReadyError,
   pushQuoteToQuickbooks as pushQuoteToEstimate,
@@ -133,6 +134,50 @@ export async function pullItemsFromQuickbooks() {
 
   revalidatePath('/admin/quickbooks');
   redirect(`/admin/quickbooks?itemsynced=${encodeItemSyncSummary(result)}`);
+}
+
+// authz: admin:access
+// validation: skip — no FormData input; reads the live QB customer + item lists
+// and applies both computed change sets in one click (chunk 0083).
+//
+// Unified "Sync" for /admin/quickbooks: one click reconciles dealers (QBO→app
+// create/link, never clobbering app-authored data — chunk 0069) AND mirrors the
+// item catalog from QuickBooks (create / update / archive / purge — chunk 0071),
+// then flashes ONE combined summary. The two passes run INDEPENDENTLY (each in
+// its own try/catch): a throw in one must never discard the other's already-
+// committed result — that's the honest report, since the successful pass's
+// writes are real. The shared token fetch stays OUTSIDE the per-pass guards so a
+// not-connected / token-refresh failure PROPAGATES to Next's error boundary
+// (same gate-matrix rationale as `syncDealersFromQuickbooks`); only the per-pass
+// fetch+apply is caught and surfaced as `?qbderror=`/`?qbierror=`.
+export async function syncQuickbooks() {
+  const user = await assertCan('admin:access');
+
+  const { realmId, accessToken } = await getValidAccessToken();
+
+  let dealers: SyncSummary = { created: 0, linked: 0, skipped: 0 };
+  let dealerError: string | null = null;
+  try {
+    const customers = await fetchCustomers(realmId, accessToken);
+    dealers = await applyDealerSync(customers, user.id);
+  } catch (err) {
+    dealerError = err instanceof Error ? err.message : 'Could not sync dealers from QuickBooks.';
+  }
+
+  let items: ItemSyncSummary = { created: 0, updated: 0, archived: 0, purged: 0 };
+  let itemError: string | null = null;
+  try {
+    const qbItems = await fetchItems(realmId, accessToken);
+    items = await db.transaction((tx) => applyItemSync(qbItems, tx));
+  } catch (err) {
+    itemError = err instanceof Error ? err.message : 'Could not sync items from QuickBooks.';
+  }
+
+  revalidatePath('/admin/quickbooks');
+  const params = new URLSearchParams({ qbsync: encodeQbSyncSummary(dealers, items) });
+  if (dealerError) params.set('qbderror', dealerError);
+  if (itemError) params.set('qbierror', itemError);
+  redirect(`/admin/quickbooks?${params.toString()}`);
 }
 
 // Tax-code sync RETIRED (0076): the auto-apply "Pull tax codes" heuristic could
