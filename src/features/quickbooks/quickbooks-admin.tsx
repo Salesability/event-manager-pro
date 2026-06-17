@@ -166,7 +166,15 @@ function ItemsPanel({
           <p className="text-sm text-amber-800">{itemsFetchError}</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-6">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-zinc-900">Sync preview</h2>
+            <p className="text-sm text-zinc-500">
+              What pressing <span className="font-medium text-zinc-700">Sync</span> would change in the
+              catalog above to match QuickBooks — items to add, update, or archive. This is a preview only;
+              nothing changes until you press Sync.
+            </p>
+          </div>
           <p className="text-sm text-zinc-500">
             {itemPlan?.length ?? 0} items · {itemCounts.create} create · {itemCounts.update} update ·{' '}
             {itemCounts.archive} archive · {itemCounts.purge} purge
