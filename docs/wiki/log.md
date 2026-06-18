@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-18 — auto-push active dealers to QuickBooks + contact-name mapping (chunk 0084)
+
+- Updated [`data-model.md`](data-model.md) `dealers.quickbooks_id`: the app→QBO push is now **automatic + best-effort** (the app is the dealer master). Creating an **active** dealer, flipping a prospect active, or **editing** an active-or-linked dealer auto-runs the 0070 push from inside `createDealer`/`convertProspectToActive`/`updateDealer` — never blocking the dealer save (a dormant/erroring QuickBooks or an Intuit 6240 duplicate-name leaves the dealer unlinked; prospects don't push). The pushed `Customer` now also carries the primary contact's `GivenName`/`FamilyName`, not just company + email/phone. The QB→app Sync stays **non-clobbering**, unchanged.
+- Code: new private helper `autoPushActiveDealerToQuickbooks` in `src/features/schedule/actions.ts` (wraps `getValidAccessToken` + `pushDealerToQuickbooks` in a swallow-all try/catch, mirroring the 0077 calendar best-effort pattern); `GivenName?`/`FamilyName?` added to `QboCustomerInput` (`client.ts`) + `contactFirstName?`/`contactLastName?` to `DealerToPush` and the `mapDealerToCustomer` mapping (`dealer-push.ts`). **No new exported action → no gate-matrix row. Code-only, no migration** (reuses `dealers.quickbooks_id` from 0069). Chunk-end `/eval` PASS-with-warnings (Codex 0 High / 1 Medium / 1 Low — both parked as 0084-a/0084-b). **Not yet on prod.** History: [`docs/chunks/closed/0084-dealer-create-qbo-customer/`](../chunks/closed/0084-dealer-create-qbo-customer/plan.md).
+
 ## 2026-06-17 — `/admin/quickbooks` information-architecture refinement (chunk 0083)
 
 - Updated [`data-model.md`](data-model.md) `service_items`: the item mirror's write path is now the unified **`syncQuickbooks`** action behind the single **Sync** button on `/admin/quickbooks` — 0083 folded the former standalone "Pull items" button (and the dealer-only "Sync dealers" button) into one Sync that reconciles dealers *and* mirrors items in a single click. The read-only `ServiceItemsList` catalog now renders inside the **Items** tab (was a flat section above the change-set), shown when QBO is connected; the connection bar now leads the page. Reconcile logic (`applyDealerSync`/`applyItemSync`) unchanged.
