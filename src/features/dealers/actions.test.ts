@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
   loadCurrentMembership: vi.fn(),
   recordAudit: vi.fn(),
+  // 0084 — the best-effort app→QBO auto-push deps wired into the dealer actions.
+  getValidAccessToken: vi.fn(),
+  pushDealerToQuickbooks: vi.fn(),
+  loadDealer: vi.fn(),
   dbResults: [] as unknown[][],
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ table: string; patch: unknown }>,
@@ -31,6 +35,15 @@ vi.mock('@/lib/auth/load-team-membership', async (importOriginal) => {
   return { ...real, loadCurrentMembership: mocks.loadCurrentMembership };
 });
 vi.mock('@/features/audit/actions', () => ({ recordAudit: mocks.recordAudit }));
+// 0084 — stub the QBO auto-push surface so the dealer actions can be exercised
+// without a live connection. `@/features/schedule/queries` and the relative
+// `./queries` import inside `schedule/actions.ts` resolve to the same module, so
+// this mock intercepts the action's `loadDealer` call.
+vi.mock('@/lib/quickbooks/connection', () => ({ getValidAccessToken: mocks.getValidAccessToken }));
+vi.mock('@/lib/quickbooks/dealer-push', () => ({
+  pushDealerToQuickbooks: mocks.pushDealerToQuickbooks,
+}));
+vi.mock('@/features/schedule/queries', () => ({ loadDealer: mocks.loadDealer }));
 
 vi.mock('@/lib/db', () => {
   function tableName(t: unknown): string {
@@ -115,10 +128,38 @@ beforeEach(() => {
     app_metadata: { role: 'admin' },
   });
   mocks.loadCurrentMembership.mockResolvedValue(null);
+  // 0084 defaults: QBO "connected" + push resolves; loadDealer returns nothing so
+  // the edit/activate paths don't push unless a test sets up a dealer. (The
+  // existing create tests with status='active' will invoke the push — harmless,
+  // unasserted.)
+  mocks.getValidAccessToken.mockResolvedValue({ realmId: 'realm-1', accessToken: 'access-1' });
+  mocks.pushDealerToQuickbooks.mockResolvedValue({ action: 'created', qbId: 'qb-1' });
+  mocks.loadDealer.mockResolvedValue(null);
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
 });
+
+// 0084 — a `loadDealer`-shaped row for the edit/activate push-gating tests.
+function dealerRow(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 42,
+    publicId: 'pub-42',
+    name: 'Acme Motors',
+    address: null,
+    province: null,
+    status: 'active',
+    acquiredVia: null,
+    archivedAt: null,
+    quickbooksId: null,
+    contactId: null,
+    contactFirstName: null,
+    contactLastName: null,
+    primaryEmail: null,
+    primaryPhone: null,
+    ...over,
+  };
+}
 
 describe('createDealer', () => {
   it("defaults status='active' when no status submitted (back-office add)", async () => {
@@ -270,5 +311,116 @@ describe('convertProspectToActive', () => {
     const result = await call(convertProspectToActive(fd({})));
     expect(result).toEqual({ error: 'Invalid dealer id.' });
     expect(mocks.updates).toHaveLength(0);
+  });
+});
+
+// 0084 — best-effort app→QBO auto-push on create / activate / edit. The push
+// CORE (Customer create+backfill, update-branch SyncToken read-before-write) is
+// covered in tests/integration/dealer-push.test.ts; these assert the ACTION-level
+// wiring: which paths invoke the push, the inline-built payload, the D2 edit
+// gating, and that a missing/erroring QuickBooks never blocks the dealer save.
+describe('auto-push to QuickBooks (0084)', () => {
+  it('createDealer pushes an ACTIVE dealer, carrying the inline contact name/email/phone', async () => {
+    const result = await call(
+      createDealer(
+        fd({
+          name: 'Acme Motors', // default status = active
+          contactFirst: 'Dana',
+          contactLast: 'Reyes',
+          contactEmail: 'Dana@Acme.Test',
+          contactPhone: '555-1000',
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalledTimes(1);
+    const [dealerArg, realmId, accessToken] = mocks.pushDealerToQuickbooks.mock.calls[0];
+    expect(dealerArg).toMatchObject({
+      id: 999,
+      name: 'Acme Motors',
+      quickbooksId: null,
+      contactFirstName: 'Dana',
+      contactLastName: 'Reyes',
+      primaryEmail: 'dana@acme.test', // lowercased by the action
+      primaryPhone: '555-1000',
+    });
+    expect(realmId).toBe('realm-1');
+    expect(accessToken).toBe('access-1');
+  });
+
+  it('createDealer does NOT push a PROSPECT dealer', async () => {
+    await call(createDealer(fd({ name: 'Lead Co', status: 'prospect' })));
+    expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
+  });
+
+  it('createDealer still resolves ok when QuickBooks is not connected (best-effort swallow)', async () => {
+    mocks.getValidAccessToken.mockRejectedValue(new Error('QuickBooks is not connected.'));
+    const result = await call(createDealer(fd({ name: 'Acme Motors' })));
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
+  });
+
+  it('createDealer still resolves ok when the QBO push throws (D1 6240 → leave unlinked)', async () => {
+    mocks.pushDealerToQuickbooks.mockRejectedValue(new Error('Intuit 6240: duplicate name'));
+    const result = await call(createDealer(fd({ name: 'Acme Motors' })));
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalledTimes(1);
+  });
+
+  it('convertProspectToActive pushes the freshly-activated dealer', async () => {
+    mocks.dbResults.push([{ id: 7 }]); // guarded UPDATE returns one row
+    const activated = dealerRow({ id: 7, status: 'active', quickbooksId: null });
+    mocks.loadDealer.mockResolvedValue(activated);
+    const result = await call(convertProspectToActive(fd({ id: '7' })));
+    expect(result).toEqual({ ok: true });
+    expect(mocks.loadDealer).toHaveBeenCalledWith(7);
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalledTimes(1);
+    expect(mocks.pushDealerToQuickbooks.mock.calls[0][0]).toBe(activated);
+  });
+
+  it('convertProspectToActive does NOT push when the flip is a no-op (already active/archived)', async () => {
+    mocks.dbResults.push([]); // guarded UPDATE matches nothing
+    await call(convertProspectToActive(fd({ id: '7' })));
+    expect(mocks.loadDealer).not.toHaveBeenCalled();
+    expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
+  });
+
+  it('convertProspectToActive still resolves ok when the QBO push throws (best-effort)', async () => {
+    mocks.dbResults.push([{ id: 7 }]);
+    mocks.loadDealer.mockResolvedValue(dealerRow({ id: 7, status: 'active' }));
+    mocks.pushDealerToQuickbooks.mockRejectedValue(new Error('QBO 500'));
+    const result = await call(convertProspectToActive(fd({ id: '7' })));
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('updateDealer pushes a LINKED dealer even when it is a prospect (D2 = active OR linked)', async () => {
+    mocks.dbResults.push([{ id: 42 }]); // guarded UPDATE matches
+    const linkedProspect = dealerRow({ status: 'prospect', quickbooksId: 'QB-42' });
+    mocks.loadDealer.mockResolvedValue(linkedProspect);
+    await call(updateDealer(fd({ id: '42', name: 'Acme Motors' })));
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalledTimes(1);
+    expect(mocks.pushDealerToQuickbooks.mock.calls[0][0]).toBe(linkedProspect);
+  });
+
+  it('updateDealer pushes an ACTIVE but unlinked dealer (create branch → auto-link)', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    mocks.loadDealer.mockResolvedValue(dealerRow({ status: 'active', quickbooksId: null }));
+    await call(updateDealer(fd({ id: '42', name: 'Acme Motors' })));
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalledTimes(1);
+  });
+
+  it('updateDealer does NOT push a prospect + unlinked dealer (D2)', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    mocks.loadDealer.mockResolvedValue(dealerRow({ status: 'prospect', quickbooksId: null }));
+    await call(updateDealer(fd({ id: '42', name: 'Lead Co' })));
+    expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
+  });
+
+  it('updateDealer does NOT reach the push when the dealer is not found', async () => {
+    mocks.dbResults.push([]); // guarded UPDATE matches no row
+    const result = await call(updateDealer(fd({ id: '99', name: 'Acme' })));
+    expect(result).toEqual({ error: 'Dealer not found.' });
+    expect(mocks.loadDealer).not.toHaveBeenCalled();
+    expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
   });
 });

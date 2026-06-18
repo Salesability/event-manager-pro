@@ -114,6 +114,7 @@ describe.skipIf(!dbUrl)('pushDealerToQuickbooks DB writes (0070 Phase 2)', () =>
 
       const dealer: DealerToPush = {
         id: seed.id, name, address: '2 Bay St', province: 'BC', quickbooksId: linkedQbId,
+        contactFirstName: 'Dana', contactLastName: 'Reyes', // 0084 — contact churn propagates
       };
       const result = await pushDealerToQuickbooks(dealer, 'realm-1', 'access-1', actorId, tx);
 
@@ -123,6 +124,9 @@ describe.skipIf(!dbUrl)('pushDealerToQuickbooks DB writes (0070 Phase 2)', () =>
       const [, , payload] = vi.mocked(updateCustomer).mock.calls[0];
       expect(payload.Id).toBe(linkedQbId);
       expect(payload.SyncToken).toBe('5'); // the freshly-read token, not a stored one
+      // 0084 — the changed contact name reaches the mapped Customer payload.
+      expect(payload.GivenName).toBe('Dana');
+      expect(payload.FamilyName).toBe('Reyes');
 
       // No duplicate dealer created; updated_by_id touched.
       const rows = await tx.select().from(dealers).where(eq(dealers.quickbooksId, linkedQbId));
