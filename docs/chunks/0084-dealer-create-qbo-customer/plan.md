@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Done | (`decision.md`) |
 | 2: Map the contact person's name onto the QB Customer | Done | `4a7c5d0` |
-| 3: Best-effort auto-push on active create, activate, and edit | Pending | - |
+| 3: Best-effort auto-push on active create, activate, and edit | Done | `9586dc3` |
 | 4: Tests + verification | Pending | - |
 
 This chunk automates the **app→QBO** direction for active dealers — establishing
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - Best-effort pattern: `src/features/schedule/calendar-sync.ts` (0077) — never
   throw, never block the primary write.
 
-**Overall Progress:** 50% (2/4 phases complete — name mapping done)
+**Overall Progress:** 75% (3/4 phases complete — auto-push wired)
 
 **Note:**
 - Phases are sequenced: decide the open questions → fix the mapping (improves the
@@ -80,12 +80,12 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Unit test (`src/lib/quickbooks/dealer-push.test.ts`): mapped payload includes `GivenName`/`FamilyName` when a contact name is present; omits them when absent; existing company/address/email/phone mapping unchanged.
 
 #### Phase 3: Best-effort auto-push on active create, activate, and edit
-- [ ] Add `autoPushActiveDealerToQuickbooks(dealer: DealerToPush, actorId: string | null): Promise<void>` to `src/features/schedule/actions.ts` — `getValidAccessToken()` + `pushDealerToQuickbooks(...)` wrapped in a `try/catch` that **swallows** all errors (best-effort; never throws). Imports: `getValidAccessToken` (`@/lib/quickbooks/connection`), `pushDealerToQuickbooks` + `type DealerToPush` (`@/lib/quickbooks/dealer-push`), `loadDealer` (`./queries`).
-- [ ] Hook `createDealer`: after the insert transaction succeeds, **if `status === 'active'`**, call the helper with the new dealer (`id: newDealerId`, `name`, `address`, `province`, `quickbooksId: null`, `contactFirstName`/`contactLastName`/`primaryEmail`/`primaryPhone` from the just-created contact).
-- [ ] Hook `convertProspectToActive`: after the guarded flip succeeds (`result.length`) + the audit, `loadDealer(id)` → call the helper (only if the dealer loads).
-- [ ] Hook `updateDealer`: after the guarded update succeeds (not `notFound`), `loadDealer(id)` → call the helper **per the D2 gating** (active and/or already-linked). `pushDealerToQuickbooks` takes the **update** branch (fresh `SyncToken` read-before-write) when `quickbooks_id` is set, so a changed contact/email/phone/address propagates. (A now-active-but-unlinked dealer takes the create branch — auto-link.)
-- [ ] Apply the **D1** decision for the 6240 create path.
-- [ ] (No new exported action → confirm `action-gate-matrix` drift test still passes with **no** new row.)
+- [x] Add `autoPushActiveDealerToQuickbooks(dealer: DealerToPush, actorId: string | null): Promise<void>` to `src/features/schedule/actions.ts` — `getValidAccessToken()` + `pushDealerToQuickbooks(...)` wrapped in a `try/catch` that **swallows** all errors (best-effort; never throws). Imports: `getValidAccessToken` (`@/lib/quickbooks/connection`), `pushDealerToQuickbooks` + `type DealerToPush` (`@/lib/quickbooks/dealer-push`), `loadDealer` (`./queries`).
+- [x] Hook `createDealer`: after the insert transaction succeeds, **if `status === 'active'`**, call the helper with the new dealer (`id: newDealerId`, `name`, `address`, `province`, `quickbooksId: null`, `contactFirstName`/`contactLastName`/`primaryEmail`/`primaryPhone` from the just-created contact).
+- [x] Hook `convertProspectToActive`: after the guarded flip succeeds (`result.length`) + the audit, `loadDealer(id)` → call the helper (only if the dealer loads).
+- [x] Hook `updateDealer`: after the guarded update succeeds (not `notFound`), `loadDealer(id)` → call the helper **per the D2 gating** (active and/or already-linked). `pushDealerToQuickbooks` takes the **update** branch (fresh `SyncToken` read-before-write) when `quickbooks_id` is set, so a changed contact/email/phone/address propagates. (A now-active-but-unlinked dealer takes the create branch — auto-link.)
+- [x] Apply the **D1** decision for the 6240 create path. (Handled by the helper's blanket `catch` — a 6240 from `createCustomer` is swallowed, leaving the dealer saved-but-unlinked. No bare-name auto-link.)
+- [x] (No new exported action → confirm `action-gate-matrix` drift test still passes with **no** new row. The helper is a private `async function`, not a `capabilityClient` export.)
 
 #### Phase 4: Tests + verification
 - [ ] Integration test (`tests/integration/dealer-push.test.ts` or a sibling): an **active** create pushes (Customer created + `quickbooks_id` backfilled) against the test/stub QBO client; a **prospect** create does **not** push.
