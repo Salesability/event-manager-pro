@@ -7,19 +7,23 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate (duplicate-name handling + UI feedback) | Pending | - |
+| 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Pending | - |
 | 2: Map the contact person's name onto the QB Customer | Pending | - |
-| 3: Best-effort auto-push on active create + activate | Pending | - |
+| 3: Best-effort auto-push on active create, activate, and edit | Pending | - |
 | 4: Tests + verification | Pending | - |
 
-This chunk automates the **app→QBO** direction for active dealers: creating an
-`active` dealer (or converting a prospect to active) auto-creates a QuickBooks
-Customer and links the dealer, reusing the chunk-0070 push — **best-effort**, so
-a missing/erroring QuickBooks never blocks the dealer save. It also closes a
-mapping gap: the QB Customer now carries the **contact person's name**
-(`GivenName`/`FamilyName`), not just the company name + email/phone. "Done" =
-active create/activate pushes to QB when connected; prospects don't; a QBO
-failure never blocks the dealer; and the mapped Customer carries the contact name.
+This chunk automates the **app→QBO** direction for active dealers — establishing
+**the app as the source of truth** for dealer data (owner decision 2026-06-18):
+creating an `active` dealer (or converting a prospect to active) auto-creates a
+QuickBooks Customer and links the dealer, and **editing** an active/linked dealer
+pushes the change so contact churn keeps QuickBooks current — all reusing the
+chunk-0070 push, **best-effort**, so a missing/erroring QuickBooks never blocks
+the dealer save. It also closes a mapping gap: the QB Customer now carries the
+**contact person's name** (`GivenName`/`FamilyName`), not just company name +
+email/phone. The Sync (QB→app) stays **non-clobbering** and is *unchanged* — it
+never overwrites app dealer data (the app is the master). "Done" =
+active create/activate/edit push to QB when connected; prospects don't; a QBO
+failure never blocks the dealer; the mapped Customer carries the contact name.
 
 ## Code Anchors
 
@@ -32,6 +36,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 | `autoPushActiveDealerToQuickbooks` best-effort helper in `src/features/schedule/actions.ts` | `src/features/quickbooks/actions.ts:159` (`pushDealerToQuickbooks` manual action) + the best-effort `reconcileCampaignCalendar` call inside `createCampaign`/`updateCampaign` (same `actions.ts`) | reuse the 0070 push core; mirror the never-throw best-effort wrapper shape of the calendar reconcile (0077) |
 | Hook in `createDealer` (after the insert tx, when `status==='active'`) | `src/features/schedule/actions.ts:96` (`createDealer`) | the function being modified — best-effort call goes after the transaction, before `revalidatePath` |
 | Hook in `convertProspectToActive` (after the flip succeeds + audit) | `src/features/schedule/actions.ts:397` (`convertProspectToActive`) | nearest sibling; `loadDealer(id)` → helper after `result.length` success |
+| Hook in `updateDealer` (after the guarded update succeeds) | `src/features/schedule/actions.ts:193` (`updateDealer`) | the edit path; `loadDealer(id)` → helper when the dealer is active/linked — `pushDealerToQuickbooks` takes the **update** branch since `quickbooks_id` is set |
 | `GivenName?` / `FamilyName?` added to `QboCustomerInput` | `src/lib/quickbooks/client.ts:195` (`QboCustomerInput`) | extend the existing input type in place |
 | `contactFirstName?` / `contactLastName?` on `DealerToPush` + `mapDealerToCustomer` sets the name | `src/lib/quickbooks/dealer-push.ts:33` (`DealerToPush`) + `:44` (`mapDealerToCustomer`) | extend the mapping + its input type in place |
 | Integration coverage | `tests/integration/dealer-push.test.ts` | the existing push integration suite |
@@ -39,8 +44,9 @@ existing file, the anchor is the nearest sibling method in that same file.
 **Conventions referenced:**
 - `CLAUDE.md` → Conventions: mutations go through **Server Actions**. The
   auto-push rides **inside** the existing `createDealer` / `convertProspectToActive`
-  actions — **no new exported Server Action**, so **no `action-gate-matrix` row**
-  is needed (the gate is the host action's existing `dealer:create` / `dealer:edit`).
+  / `updateDealer` actions — **no new exported Server Action**, so **no
+  `action-gate-matrix` row** is needed (the gate is the host action's existing
+  `dealer:create` / `dealer:edit`).
 - `docs/wiki/data-model.md` — `dealers.quickbooks_id` is the durable link to the
   QBO `Customer.Id` (written both directions: backfilled by Sync, set by the
   push). `contacts` / `dealer_contacts` hold the primary-contact name/email/phone
@@ -61,9 +67,10 @@ existing file, the anchor is the nearest sibling method in that same file.
 ### Phase Checklist
 
 #### Phase 1: Decision gate (resolve the open questions)
-- [ ] **D1 — duplicate-name (Intuit 6240) on auto-create:** choose (a) best-effort *leave unlinked* (the dealer saves; owner reconciles via Sync / manual Push) vs (b) *link to the existing* QB customer by name (the `applyDealerSync` match-by-name backfill). Record the choice + rationale in `decision.md`.
-- [ ] **D2 — UI feedback:** choose *silent* (rely on the dealer page's QB-link status) vs *surfaced* (a notice on the create/convert result). Record in `decision.md`.
-- [ ] Confirm the owner-locked decisions (2026-06-18) in `decision.md`: **active-only** (push on active create + prospect→active convert; prospects never pushed), **best-effort / connected-only** (skip silently when `getValidAccessToken` throws).
+- [ ] **D1 — duplicate-name (Intuit 6240) on auto-create:** choose (a) best-effort *leave unlinked* (the dealer saves; owner reconciles via Sync / manual Push) vs (b) *link to the existing* QB customer by name (the `applyDealerSync` match-by-name backfill). Record the choice + rationale in `decision.md`. (Only the **create** path can hit 6240; the edit path uses the update branch.)
+- [ ] **D2 — edit-push gating:** which `updateDealer` edits push to QB — *active dealers only*, *any already-linked dealer* (keep QB current even if the dealer is now a prospect), or *active **or** linked* (recommended: covers both). Record in `decision.md`.
+- [ ] **D3 — UI feedback:** choose *silent* (rely on the dealer page's QB-link status) vs *surfaced* (a notice on the create/convert/edit result). Record in `decision.md`.
+- [ ] Confirm the owner-locked decisions (2026-06-18) in `decision.md`: **source of truth = the app** (push app→QB on create/activate/edit; **Sync never overwrites** app dealer data); **active-only** create-push (prospects never pushed on create); **best-effort / connected-only** (skip silently when `getValidAccessToken` throws).
 
 #### Phase 2: Map the contact person's name onto the QB Customer
 - [ ] Add `GivenName?: string` / `FamilyName?: string` to `QboCustomerInput` (`src/lib/quickbooks/client.ts`).
@@ -72,15 +79,17 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [ ] Confirm the manual push action (`src/features/quickbooks/actions.ts` `pushDealerToQuickbooks`) flows the name through — `loadDealer`'s `Dealer` already carries `contactFirstName`/`contactLastName`, so it benefits for free.
 - [ ] Unit test (`src/lib/quickbooks/dealer-push.test.ts`): mapped payload includes `GivenName`/`FamilyName` when a contact name is present; omits them when absent; existing company/address/email/phone mapping unchanged.
 
-#### Phase 3: Best-effort auto-push on active create + activate
+#### Phase 3: Best-effort auto-push on active create, activate, and edit
 - [ ] Add `autoPushActiveDealerToQuickbooks(dealer: DealerToPush, actorId: string | null): Promise<void>` to `src/features/schedule/actions.ts` — `getValidAccessToken()` + `pushDealerToQuickbooks(...)` wrapped in a `try/catch` that **swallows** all errors (best-effort; never throws). Imports: `getValidAccessToken` (`@/lib/quickbooks/connection`), `pushDealerToQuickbooks` + `type DealerToPush` (`@/lib/quickbooks/dealer-push`), `loadDealer` (`./queries`).
 - [ ] Hook `createDealer`: after the insert transaction succeeds, **if `status === 'active'`**, call the helper with the new dealer (`id: newDealerId`, `name`, `address`, `province`, `quickbooksId: null`, `contactFirstName`/`contactLastName`/`primaryEmail`/`primaryPhone` from the just-created contact).
 - [ ] Hook `convertProspectToActive`: after the guarded flip succeeds (`result.length`) + the audit, `loadDealer(id)` → call the helper (only if the dealer loads).
-- [ ] Apply the **D1** decision for the 6240 path.
+- [ ] Hook `updateDealer`: after the guarded update succeeds (not `notFound`), `loadDealer(id)` → call the helper **per the D2 gating** (active and/or already-linked). `pushDealerToQuickbooks` takes the **update** branch (fresh `SyncToken` read-before-write) when `quickbooks_id` is set, so a changed contact/email/phone/address propagates. (A now-active-but-unlinked dealer takes the create branch — auto-link.)
+- [ ] Apply the **D1** decision for the 6240 create path.
 - [ ] (No new exported action → confirm `action-gate-matrix` drift test still passes with **no** new row.)
 
 #### Phase 4: Tests + verification
 - [ ] Integration test (`tests/integration/dealer-push.test.ts` or a sibling): an **active** create pushes (Customer created + `quickbooks_id` backfilled) against the test/stub QBO client; a **prospect** create does **not** push.
+- [ ] Integration/unit test: **editing** a linked dealer pushes the **update** branch (fresh SyncToken read-before-write; the changed contact/email/phone/address reaches the mapped Customer payload), per the D2 gating.
 - [ ] Action/unit test: **best-effort swallow** — with QBO not connected (`getValidAccessToken` throws), `createDealer`/`convertProspectToActive` still resolve `{ ok: true }` and the dealer row exists (no error propagated).
 - [ ] Unit test: the Phase-2 name-mapping cases.
 - [ ] `tsc` + lint clean; BASE vs HEAD **0 new lint** (stale-worktree noise per memory).

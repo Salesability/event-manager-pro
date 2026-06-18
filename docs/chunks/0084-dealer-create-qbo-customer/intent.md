@@ -20,13 +20,28 @@ Two specific gaps:
    **email** + **phone** (`PrimaryEmailAddr`/`PrimaryPhone`). The contact
    person's first/last name never reaches QuickBooks — `QboCustomerInput`
    (`client.ts`) doesn't even carry `GivenName`/`FamilyName`.
+3. **Edits don't propagate — churn leaves QuickBooks stale.** Once a dealer is
+   linked, *nothing* keeps it current: editing a dealer's contact in the app
+   (`updateDealer`) doesn't reach QuickBooks, and the Sync (`applyDealerSync`)
+   deliberately **never overwrites** an already-linked dealer. Dealer/contact
+   churn (people leave, emails/phones change) drifts the two apart.
 
 ## Desired outcome
+
+**Source of truth = the app** (owner decision, 2026-06-18). Dealer/contact info
+is edited in the app; the app is authoritative and **pushes** changes to
+QuickBooks. The Sync (QB→app) stays **non-clobbering** — it only *creates*
+dealers that exist in QuickBooks but not the app; it never overwrites app dealer
+data. So churn is handled by **propagating app edits outward**, not by pulling
+QuickBooks back over the app.
 
 - When an **active** dealer is created in the app — or when a **prospect is
   converted to active** — a QuickBooks **Customer** is created automatically and
   the dealer is linked (`quickbooks_id` backfilled), reusing the existing 0070
   push.
+- When an **active / already-linked** dealer is **edited** in the app, the change
+  is pushed to its QuickBooks Customer (update path of the 0070 push), so contact
+  churn keeps QuickBooks current.
 - The push is **best-effort**: it must **never block or roll back** the dealer
   write. If QuickBooks isn't connected, or the push errors, the dealer is saved
   normally and simply left unlinked (the owner can still Push manually / the Sync
@@ -39,13 +54,18 @@ Two specific gaps:
 
 ## Non-goals
 
-- **No auto-push on dealer *edit*.** Renaming/re-addressing a dealer doesn't
-  re-push; the manual "Push to QuickBooks" button + the Sync button cover edits.
+- **Sync stays non-clobbering — QuickBooks never overwrites app dealer data.**
+  The app is the master (decision above), so `applyDealerSync` is *unchanged*: it
+  only creates QB-only dealers + links, never updating an already-linked dealer
+  from QuickBooks. (This is the explicit *opposite* of the item catalog, where QB
+  is the master.)
 - **No separate QBO `Contact` entities.** We map the primary contact's
   name/email/phone onto the Customer's own fields, not a child Contact record.
 - **No change to the manual per-dealer Push (0070) or the unified Sync (0083).**
-  Those stay as-is; this only *automates* the push for the create/activate path.
-- **No prospect→QB push**, by the active-only decision above.
+  Those stay as-is; this *automates* the push for the create / activate / edit
+  paths and adds the contact-name mapping.
+- **No prospect→QB push**, by the active-only decision above (a prospect edit
+  also doesn't push, unless the dealer is already linked).
 
 ## Success criteria
 
@@ -54,6 +74,8 @@ Two specific gaps:
 - Creating a **prospect** → **no** QuickBooks write.
 - Converting a prospect → active (`convertProspectToActive`) → the dealer is
   pushed to QuickBooks.
+- **Editing** an active / already-linked dealer → the linked QuickBooks Customer
+  is updated to match (so a changed contact/email/phone/address propagates).
 - QuickBooks **not connected** (or the push throws) → the dealer still saves; no
   error surfaces to block the create; the dealer is left unlinked.
 - The mapped QB Customer payload includes the contact person's
