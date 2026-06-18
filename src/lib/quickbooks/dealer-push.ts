@@ -36,6 +36,8 @@ export type DealerToPush = {
   address: string | null;
   province: CaProvinceCode | null;
   quickbooksId: string | null;
+  contactFirstName?: string | null;
+  contactLastName?: string | null;
   primaryEmail?: string | null;
   primaryPhone?: string | null;
 };
@@ -46,6 +48,8 @@ export function mapDealerToCustomer(dealer: DealerToPush): QboCustomerInput {
     DisplayName: dealer.name,
     CompanyName: dealer.name,
   };
+  if (dealer.contactFirstName) input.GivenName = dealer.contactFirstName;
+  if (dealer.contactLastName) input.FamilyName = dealer.contactLastName;
   if (dealer.address || dealer.province) {
     input.BillAddr = {
       ...(dealer.address ? { Line1: dealer.address } : {}),

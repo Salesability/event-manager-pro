@@ -195,6 +195,8 @@ export type QboCustomer = {
 export type QboCustomerInput = {
   DisplayName?: string;
   CompanyName?: string;
+  GivenName?: string;
+  FamilyName?: string;
   BillAddr?: QboAddr;
   PrimaryEmailAddr?: { Address?: string };
   PrimaryPhone?: { FreeFormNumber?: string };

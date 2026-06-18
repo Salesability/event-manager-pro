@@ -44,6 +44,20 @@ describe('mapDealerToCustomer', () => {
     });
   });
 
+  it('maps the contact person name to GivenName/FamilyName when present, omits both when absent', () => {
+    const withName = mapDealerToCustomer({
+      ...base,
+      contactFirstName: 'Dana',
+      contactLastName: 'Reyes',
+    });
+    expect(withName.GivenName).toBe('Dana');
+    expect(withName.FamilyName).toBe('Reyes');
+
+    const without = mapDealerToCustomer(base);
+    expect(without.GivenName).toBeUndefined();
+    expect(without.FamilyName).toBeUndefined();
+  });
+
   it('maps primary contact email + phone when present, omits both when absent', () => {
     const withContact = mapDealerToCustomer({
       ...base,
