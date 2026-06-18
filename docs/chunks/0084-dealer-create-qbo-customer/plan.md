@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Done | (`decision.md`) |
-| 2: Map the contact person's name onto the QB Customer | Pending | - |
+| 2: Map the contact person's name onto the QB Customer | Done | `4a7c5d0` |
 | 3: Best-effort auto-push on active create, activate, and edit | Pending | - |
 | 4: Tests + verification | Pending | - |
 
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - Best-effort pattern: `src/features/schedule/calendar-sync.ts` (0077) — never
   throw, never block the primary write.
 
-**Overall Progress:** 25% (1/4 phases complete — decision gate settled)
+**Overall Progress:** 50% (2/4 phases complete — name mapping done)
 
 **Note:**
 - Phases are sequenced: decide the open questions → fix the mapping (improves the
@@ -73,11 +73,11 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Owner-locked decisions (2026-06-18) recorded in [`decision.md`](decision.md): **source of truth = the app** (push app→QB on create/activate/edit; **Sync never overwrites** app dealer data); **active-only** create-push; **best-effort / connected-only**; **app-side dedup out of scope**.
 
 #### Phase 2: Map the contact person's name onto the QB Customer
-- [ ] Add `GivenName?: string` / `FamilyName?: string` to `QboCustomerInput` (`src/lib/quickbooks/client.ts`).
-- [ ] Add `contactFirstName?: string | null` / `contactLastName?: string | null` to `DealerToPush` (`src/lib/quickbooks/dealer-push.ts`).
-- [ ] In `mapDealerToCustomer`, set `GivenName`/`FamilyName` from the contact name when present (omit when the dealer has no contact).
-- [ ] Confirm the manual push action (`src/features/quickbooks/actions.ts` `pushDealerToQuickbooks`) flows the name through — `loadDealer`'s `Dealer` already carries `contactFirstName`/`contactLastName`, so it benefits for free.
-- [ ] Unit test (`src/lib/quickbooks/dealer-push.test.ts`): mapped payload includes `GivenName`/`FamilyName` when a contact name is present; omits them when absent; existing company/address/email/phone mapping unchanged.
+- [x] Add `GivenName?: string` / `FamilyName?: string` to `QboCustomerInput` (`src/lib/quickbooks/client.ts`).
+- [x] Add `contactFirstName?: string | null` / `contactLastName?: string | null` to `DealerToPush` (`src/lib/quickbooks/dealer-push.ts`).
+- [x] In `mapDealerToCustomer`, set `GivenName`/`FamilyName` from the contact name when present (omit when the dealer has no contact).
+- [x] Confirm the manual push action (`src/features/quickbooks/actions.ts` `pushDealerToQuickbooks`) flows the name through — `loadDealer`'s `Dealer` already carries `contactFirstName`/`contactLastName`, so it benefits for free. (No code change: `Dealer & {quickbooksId}` is structurally assignable to the extended `DealerToPush`.)
+- [x] Unit test (`src/lib/quickbooks/dealer-push.test.ts`): mapped payload includes `GivenName`/`FamilyName` when a contact name is present; omits them when absent; existing company/address/email/phone mapping unchanged.
 
 #### Phase 3: Best-effort auto-push on active create, activate, and edit
 - [ ] Add `autoPushActiveDealerToQuickbooks(dealer: DealerToPush, actorId: string | null): Promise<void>` to `src/features/schedule/actions.ts` — `getValidAccessToken()` + `pushDealerToQuickbooks(...)` wrapped in a `try/catch` that **swallows** all errors (best-effort; never throws). Imports: `getValidAccessToken` (`@/lib/quickbooks/connection`), `pushDealerToQuickbooks` + `type DealerToPush` (`@/lib/quickbooks/dealer-push`), `loadDealer` (`./queries`).
