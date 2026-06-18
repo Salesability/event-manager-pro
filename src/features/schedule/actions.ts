@@ -19,8 +19,11 @@ import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
+import { getValidAccessToken } from '@/lib/quickbooks/connection';
+import { type DealerToPush, pushDealerToQuickbooks } from '@/lib/quickbooks/dealer-push';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import { reconcileCampaignCalendar } from './calendar-sync';
+import { loadDealer } from './queries';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
 import { availabilityFormSchema } from './availability-schema';
 import { lookupFormSchema } from './lookup-schema';
@@ -91,6 +94,28 @@ function validateContactCross(input: {
 function normalizeDealerWire(raw: Record<string, FormDataEntryValue>) {
   if (raw.status === '') delete raw.status;
   return raw;
+}
+
+// Best-effort app→QBO dealer push (chunk 0084). Mirrors the calendar
+// best-effort pattern (0077): NEVER throws and NEVER blocks/rolls back the
+// dealer write. When QuickBooks is connected, the dealer is pushed to its QBO
+// Customer — `pushDealerToQuickbooks` takes the update branch (fresh SyncToken)
+// for a linked dealer, or the create branch (+ link backfill) for an unlinked
+// one. A dormant connection (`getValidAccessToken` throws) or any QBO write
+// error (incl. a duplicate-name 6240 — D1: leave the dealer unlinked) is
+// swallowed; the dealer saves regardless and can be reconciled later via the
+// manual Push / Sync. Callers gate WHICH dealers reach here (active on create,
+// active-or-linked on edit) — this helper just runs the push when called.
+async function autoPushActiveDealerToQuickbooks(
+  dealer: DealerToPush,
+  actorId: string | null,
+): Promise<void> {
+  try {
+    const { realmId, accessToken } = await getValidAccessToken();
+    await pushDealerToQuickbooks(dealer, realmId, accessToken, actorId);
+  } catch {
+    // best-effort: a missing/erroring QuickBooks never blocks the dealer save.
+  }
 }
 
 export const createDealer = capabilityClient('dealer:create')
@@ -183,6 +208,26 @@ export const createDealer = capabilityClient('dealer:create')
       });
     } catch (err) {
       return toActionResult(err);
+    }
+
+    // Best-effort: an active dealer auto-creates a QBO Customer + links (0084).
+    // Prospects are not pushed (avoids cluttering QuickBooks with leads). Built
+    // inline from the just-saved data — no extra read; never blocks the save.
+    if (status === 'active') {
+      await autoPushActiveDealerToQuickbooks(
+        {
+          id: newDealerId,
+          name,
+          address: address || null,
+          province: v.province || null,
+          quickbooksId: null,
+          contactFirstName: contactFirst || null,
+          contactLastName: contactLast || null,
+          primaryEmail: contactEmail || null,
+          primaryPhone: contactPhone || null,
+        },
+        userId,
+      );
     }
 
     revalidatePath('/dealerships');
@@ -348,6 +393,16 @@ export const updateDealer = capabilityClient('dealer:edit')
     }
     if (notFound) return { error: 'Dealer not found.' };
 
+    // Best-effort: propagate the edit to QuickBooks so contact churn keeps the
+    // linked Customer current (0084, D2 = active OR already-linked). A linked
+    // dealer takes the push's update branch (fresh SyncToken); an active-but-
+    // unlinked one takes the create branch (auto-link). Reload to get the
+    // post-update status + denormalized contact name/email/phone.
+    const edited = await loadDealer(id);
+    if (edited && (edited.status === 'active' || edited.quickbooksId)) {
+      await autoPushActiveDealerToQuickbooks(edited, userId);
+    }
+
     revalidatePath('/dealerships');
     revalidatePath('/production');
     return { ok: true };
@@ -421,6 +476,11 @@ export const convertProspectToActive = capabilityClient('dealer:edit')
         targetId: id,
         payload: { from: 'prospect' },
       });
+
+      // Best-effort: the prospect just became a real customer → push to QBO
+      // (0084). Only when the flip actually happened (idempotent no-op skips it).
+      const activated = await loadDealer(id);
+      if (activated) await autoPushActiveDealerToQuickbooks(activated, userId);
     }
 
     revalidatePath('/dealerships');
