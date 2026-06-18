@@ -1,13 +1,13 @@
 # Auto-create a QuickBooks customer for active dealers — Plan
 
-**Intent:** [`intent.md`](intent.md)
+**Intent:** [`intent.md`](intent.md) · **Decisions:** [`decision.md`](decision.md)
 **Started:** 2026-06-18
 
 ## Progress Tracker
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Pending | - |
+| 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Done | (`decision.md`) |
 | 2: Map the contact person's name onto the QB Customer | Pending | - |
 | 3: Best-effort auto-push on active create, activate, and edit | Pending | - |
 | 4: Tests + verification | Pending | - |
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - Best-effort pattern: `src/features/schedule/calendar-sync.ts` (0077) — never
   throw, never block the primary write.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete — decision gate settled)
 
 **Note:**
 - Phases are sequenced: decide the open questions → fix the mapping (improves the
@@ -68,9 +68,9 @@ existing file, the anchor is the nearest sibling method in that same file.
 
 #### Phase 1: Decision gate (resolve the open questions)
 - [x] **D1 — duplicate-name (Intuit 6240) on auto-create — DECIDED 2026-06-18: leave unlinked.** Best-effort: on a 6240 the dealer saves but stays unlinked; **no auto-link by bare name** (the app treats dealer name as non-unique on purpose — identity is name+address — so bare-name linking could merge two different businesses). Owner reconciles via Sync (name+address) / manual Push. (Only the **create** path can hit 6240; the edit path uses the update branch.) **App-side dealer dedup is OUT of scope** (separate concern — owner decided keep-separate 2026-06-18).
-- [ ] **D2 — edit-push gating:** which `updateDealer` edits push to QB — *active dealers only*, *any already-linked dealer* (keep QB current even if the dealer is now a prospect), or *active **or** linked* (recommended: covers both). Record in `decision.md`.
-- [ ] **D3 — UI feedback:** choose *silent* (rely on the dealer page's QB-link status) vs *surfaced* (a notice on the create/convert/edit result). Record in `decision.md`.
-- [ ] Confirm the owner-locked decisions (2026-06-18) in `decision.md`: **source of truth = the app** (push app→QB on create/activate/edit; **Sync never overwrites** app dealer data); **active-only** create-push (prospects never pushed on create); **best-effort / connected-only** (skip silently when `getValidAccessToken` throws).
+- [x] **D2 — edit-push gating — DECIDED: active OR already-linked.** `updateDealer` pushes when the dealer is `active` **or** has a `quickbooks_id` (update branch for linked, create branch for active-but-unlinked). See [`decision.md`](decision.md).
+- [x] **D3 — UI feedback — DECIDED: silent.** No new notice; the dealer page already shows QB link status. Easily upgraded later. See [`decision.md`](decision.md).
+- [x] Owner-locked decisions (2026-06-18) recorded in [`decision.md`](decision.md): **source of truth = the app** (push app→QB on create/activate/edit; **Sync never overwrites** app dealer data); **active-only** create-push; **best-effort / connected-only**; **app-side dedup out of scope**.
 
 #### Phase 2: Map the contact person's name onto the QB Customer
 - [ ] Add `GivenName?: string` / `FamilyName?: string` to `QboCustomerInput` (`src/lib/quickbooks/client.ts`).
