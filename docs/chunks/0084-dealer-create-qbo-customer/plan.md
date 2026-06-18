@@ -10,7 +10,7 @@
 | 1: Decision gate (duplicate-name handling + edit-gating + UI feedback) | Done | (`decision.md`) |
 | 2: Map the contact person's name onto the QB Customer | Done | `4a7c5d0` |
 | 3: Best-effort auto-push on active create, activate, and edit | Done | `9586dc3` |
-| 4: Tests + verification | Pending | - |
+| 4: Tests + verification | Done | `9d134a2` |
 
 This chunk automates the **app→QBO** direction for active dealers — establishing
 **the app as the source of truth** for dealer data (owner decision 2026-06-18):
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - Best-effort pattern: `src/features/schedule/calendar-sync.ts` (0077) — never
   throw, never block the primary write.
 
-**Overall Progress:** 75% (3/4 phases complete — auto-push wired)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Phases are sequenced: decide the open questions → fix the mapping (improves the
@@ -88,9 +88,9 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] (No new exported action → confirm `action-gate-matrix` drift test still passes with **no** new row. The helper is a private `async function`, not a `capabilityClient` export.)
 
 #### Phase 4: Tests + verification
-- [ ] Integration test (`tests/integration/dealer-push.test.ts` or a sibling): an **active** create pushes (Customer created + `quickbooks_id` backfilled) against the test/stub QBO client; a **prospect** create does **not** push.
-- [ ] Integration/unit test: **editing** a linked dealer pushes the **update** branch (fresh SyncToken read-before-write; the changed contact/email/phone/address reaches the mapped Customer payload), per the D2 gating.
-- [ ] Action/unit test: **best-effort swallow** — with QBO not connected (`getValidAccessToken` throws), `createDealer`/`convertProspectToActive` still resolve `{ ok: true }` and the dealer row exists (no error propagated).
-- [ ] Unit test: the Phase-2 name-mapping cases.
-- [ ] `tsc` + lint clean; BASE vs HEAD **0 new lint** (stale-worktree noise per memory).
-- [ ] **Verification note (not web-test):** creating/activating a dealer is a *write* that pushes to the connected QBO company — the read-only `web-test` discipline can't exercise it on the gated surface. Verify via the integration/action tests above + a **manual sandbox** check (create an active dealer on the sandbox-connected dev app → confirm a QB Customer appears with the contact name, and the dealer shows linked). Record the sandbox result in the chunk-end eval.
+- [x] Integration test (`tests/integration/dealer-push.test.ts` or a sibling): an **active** create pushes (Customer created + `quickbooks_id` backfilled) against the test/stub QBO client; a **prospect** create does **not** push. (Push CORE create+backfill is the existing integration create-path test; the action-level active-pushes / prospect-doesn't-push is in `src/features/dealers/actions.test.ts` → "auto-push to QuickBooks (0084)".)
+- [x] Integration/unit test: **editing** a linked dealer pushes the **update** branch (fresh SyncToken read-before-write; the changed contact/email/phone/address reaches the mapped Customer payload), per the D2 gating. (Update-branch SyncToken + `GivenName`/`FamilyName` payload asserted in the integration update-path test; D2 action gating — linked-prospect pushes, active-unlinked pushes, prospect+unlinked doesn't — in the action suite.)
+- [x] Action/unit test: **best-effort swallow** — with QBO not connected (`getValidAccessToken` throws), `createDealer`/`convertProspectToActive` still resolve `{ ok: true }` and the dealer row exists (no error propagated). (Plus a 6240/push-throws swallow case for D1.)
+- [x] Unit test: the Phase-2 name-mapping cases. (`src/lib/quickbooks/dealer-push.test.ts`.)
+- [x] `tsc` + lint clean; BASE vs HEAD **0 new lint** (stale-worktree noise per memory). (eslint on the 6 touched files → 0.)
+- [x] **Verification note (not web-test):** creating/activating a dealer is a *write* that pushes to the connected QBO company — the read-only `web-test` discipline can't exercise it on the gated surface. Covered by the integration/action tests above (the 2 DB-gated integration cases run in the chunk-end `/eval` with `DATABASE_URL`). The **live sandbox round-trip** (create an active dealer on the sandbox-connected dev app → a QB Customer appears with the contact name + the dealer shows linked) is an owner manual-verify step — recorded as a coverage caveat in the chunk-end eval.
