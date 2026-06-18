@@ -66,6 +66,12 @@ QuickBooks back over the app.
   paths and adds the contact-name mapping.
 - **No prospect→QB push**, by the active-only decision above (a prospect edit
   also doesn't push, unless the dealer is already linked).
+- **No app-side dealer dedup.** Guarding against duplicate dealers *within the
+  app* (e.g. warn/block on a duplicate name+address at create) is a **separate
+  concern** (owner decision 2026-06-18) — the app has no name uniqueness today
+  (only `public_id` + `quickbooks_id` are unique; contacts dedup email/phone but
+  dealer names are free). If wanted, it's its own future chunk; 0084 only handles
+  the QuickBooks-side collision (the 6240, resolved above).
 
 ## Success criteria
 
@@ -84,14 +90,20 @@ QuickBooks back over the app.
 
 ## Open questions
 
-- **Duplicate-name (Intuit 6240) on auto-create.** If QuickBooks already has a
-  customer with the same name, the create path throws `QboDuplicateNameError`.
-  Best-effort default = leave the dealer **unlinked** (owner reconciles via Sync
-  / manual Push). Alternative = **link to the existing** QB customer by name (the
-  `applyDealerSync` match-by-name path). *Resolve in the Phase-1 decision gate.*
-- **UI feedback.** Should the create/convert flow surface "also created in
-  QuickBooks" / "couldn't reach QuickBooks", or stay fully silent (the dealer
-  page already shows the QB link status)? *Resolve in the Phase-1 decision gate.*
+- ~~**Duplicate-name (Intuit 6240) on auto-create.**~~ **Resolved 2026-06-18:**
+  on a 6240, leave the dealer **unlinked** (best-effort) — do **not** auto-link by
+  name. Rationale: the app deliberately treats dealer *name* as non-unique (two
+  same-named businesses are allowed; identity is name **+ address**), so linking a
+  new dealer to a same-named QB customer by bare name could link two genuinely
+  different businesses. The owner reconciles via the Sync (name+address match) or
+  the manual Push. (A careful name+address auto-link is a *possible* future
+  refinement, not in scope.)
+- **Edit-push gating (D2).** Which `updateDealer` edits push to QB — active-only,
+  any already-linked, or active-or-linked (lean: active-or-linked)? *Resolve in
+  the Phase-1 decision gate.*
+- **UI feedback (D3).** Surface "synced to QuickBooks / couldn't reach
+  QuickBooks" on the create/convert/edit result, or stay silent (the dealer page
+  already shows the QB link status)? *Resolve in the Phase-1 decision gate.*
 
 ## Why now
 
