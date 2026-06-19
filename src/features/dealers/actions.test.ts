@@ -266,6 +266,15 @@ describe('createDealer', () => {
   });
 
   it('reuseContactId links the existing contact instead of inserting a new one', async () => {
+    // The reuse target must be the contact that actually holds the submitted
+    // email (validated server-side — see the forge-rejection test below).
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
     const result = await call(
       createDealer(
         fd({
@@ -282,8 +291,34 @@ describe('createDealer', () => {
     expect(mocks.inserts.find((i) => i.table === 'contacts')).toBeUndefined();
     const link = mocks.inserts.find((i) => i.table === 'dealer_contacts');
     expect((link!.values as Record<string, unknown>).contactId).toBe(7);
-    // Dedup check is skipped once a reuse decision is present.
-    expect(mocks.findExistingContactByIdentifier).not.toHaveBeenCalled();
+  });
+
+  it('ignores a forged reuseContactId that does not hold the submitted email', async () => {
+    // The submitted email belongs to contact 7, but the re-submit claims 999 —
+    // the server drops the bogus flag and re-surfaces the real duplicate instead
+    // of linking an arbitrary contact.
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
+    const result = await call(
+      createDealer(
+        fd({
+          name: 'Acme',
+          contactFirst: 'Jane',
+          contactLast: 'Doe',
+          contactEmail: 'jane@x.io',
+          reuseContactId: '999',
+        }),
+      ),
+    );
+    expect(result).toEqual({
+      duplicate: { kind: 'contact', via: 'email', contactId: 7, name: 'Jane Smith', matchedValue: 'jane@x.io' },
+    });
+    expect(mocks.inserts).toHaveLength(0);
   });
 
   it('createAnyway skips the dedup check and inserts a fresh contact', async () => {

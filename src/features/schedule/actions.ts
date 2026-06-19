@@ -243,6 +243,23 @@ export const createDealer = capabilityClient('dealer:create')
     const decision = parseDealerDecision(formData);
     const wantsContact = !!(contactFirst || contactLast);
 
+    // 0085 (eval hardening): only honor `reuseContactId` if it really is the
+    // contact that holds the submitted email/phone — a re-submit must correspond
+    // to a match the action actually surfaced, not a forged id linking an
+    // arbitrary contact. On mismatch, drop the flag so the normal dedup flow
+    // re-runs (and re-surfaces the real duplicate). The `linkQuickbooksId` twin
+    // is parked (0085-a) — validating it needs a QB read that conflicts with the
+    // best-effort principle.
+    if (decision.reuseContactId != null) {
+      const verify =
+        contactEmail || contactPhone
+          ? await findExistingContactByIdentifier({ email: contactEmail, phone: contactPhone })
+          : null;
+      if (verify?.contactId !== decision.reuseContactId) {
+        decision.reuseContactId = null;
+      }
+    }
+
     // 0085 Phase 3: warn before creating a second dealer with the same
     // name+address (app-local — name+address is too fuzzy to enforce at the DB
     // level). Runs first (cheap local read). Skipped on `createAnyway` (a
