@@ -47,6 +47,8 @@ existing file, the anchor is the nearest sibling method in that same file.
 
 **Overall Progress:** 83% (5/6 phases complete — Phase 6 is the owner-gated prod step)
 
+**Chunk-end `/eval` (code, Phases 1–5):** **PASS with warnings** — [eval-2026-06-19-1359](eval-2026-06-19-1359.md). Static clean (tsc, **1182 pass/2 skip** serial, **0 new lint**), browser smoke PASS (`/dealerships` Prospect (274) + imported detail render, 0 console errors), Codex 0 High/0 Med/2 Low (both by-design/out-of-scope → parked **0086-a** no-DB-unique-on-name+address, **0086-b** archived-contact reuse). Run before the prod step so the owner has a clean gate; the chunk does **not** auto-close (Phase 6 prod is owner-gated).
+
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
 - **Migration expected** (Phase 2: `0041` adds 3 nullable columns). Sandbox-apply before Phase 4; prod-apply in Phase 6 before the prod import.
