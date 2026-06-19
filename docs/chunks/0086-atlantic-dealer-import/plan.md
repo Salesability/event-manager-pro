@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate + source prep + prod-overlap probe | Pending | - |
+| 1: Decision gate + source prep + prod-overlap probe | Done | - |
 | 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Pending | - |
 | 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Pending | - |
 | 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Pending | - |
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 17% (1/6 phases complete)
 
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
@@ -55,13 +55,13 @@ existing file, the anchor is the nearest sibling method in that same file.
 ### Phase Checklist
 
 #### Phase 1: Decision gate + source prep + prod-overlap probe
-- [ ] **Record the settled mapping** in a `decision.md` (dealer columns, contact GM/SM + dedup-by-email, phone→`dealers.phone`, manufacturer→column, Group/Verification/Co-op/Notes→`notes`, dropped BD-workflow columns, status=prospect, `acquiredVia` batch tag).
-- [ ] **Decide source format:** convert the `.xlsx` → a committed normalized data file (`scripts/data/atlantic-dealers.json`, reviewable in the diff, no runtime xlsx dep) vs runtime xlsx parse. Record + produce the artifact.
-- [ ] **Build the in-sheet drop-list** (the ~6 flagged rows) as explicit data, not heuristic: Smith & Watt Limited (dup), Motor Hub Antigonish Mitsubishi (2nd occurrence), Hooked on Detailing (not a dealership), Grand Falls Hyundai (closed), Central Garage / Cole Ford / Nadeau Hyundai (unconfirmed).
-- [ ] **Decide idempotency keys** — dealer `lower(name)+lower(address)`, contact `email` (confirm sufficient; phone is no longer a contact identifier).
-- [ ] **Run the read-only prod-overlap probe** (`scripts/atlantic-overlap-probe.mjs`): for the 281 rows, count how many already exist in prod **app** dealers (name+address) and prod **QBO** Customers (DisplayName). **Writes nothing.** Record the counts.
-- [ ] **Decide prod-overlap handling** from the probe: app match → skip-with-report; QBO-only match → leave unlinked (prospect doesn't push) — confirm with the owner.
-- [ ] **Decide city→address** (city-only vs `"City, PROV"`).
+- [x] **Record the settled mapping** in a `decision.md` (dealer columns, contact GM/SM + dedup-by-email, phone→`dealers.phone`, manufacturer→column, Group/Verification/Co-op/Notes→`notes`, dropped BD-workflow columns, status=prospect, `acquiredVia` batch tag). → [`decision.md`](decision.md) D2/D3.
+- [x] **Decide source format:** committed normalized JSON (D1) — `scripts/data/atlantic-dealers.json` produced (all 281 raw rows + explicit `dropList`; reconciles to 274 dealers / 445 emails). No runtime xlsx dep.
+- [x] **Build the in-sheet drop-list** (D5): 6 rows as explicit data in the JSON `dropList` (Smith & Watt Limited, Hooked on Detailing, Grand Falls Hyundai, Central Garage, Cole Ford, Nadeau Hyundai). The 2nd Motor Hub Antigonish row is **not** listed — it auto-dedups via name+city find-or-create.
+- [x] **Decide idempotency keys** (D4) — dealer `lower(trim(name))+lower(trim(address))`; contact email (lower+trim); name-only contact per `(dealer, role, title)`; link via `dealer_contacts` unique + `onConflictDoNothing`.
+- [x] ~~**Run the read-only prod-overlap probe** against prod~~ → probe **written + sandbox-validated** (`scripts/atlantic-overlap-probe.mjs`: 274 import dealers; sandbox = 0 name+addr / **10 name-only** matches / QBO token expired→skipped). The **prod**-count run is grouped with the Phase-6 owner gate (it's a prod read; per D7 it runs immediately before the prod dry-run so counts reflect write-time prod state).
+- [x] **Decide prod-overlap handling** (D7): app name+address → skip-with-report; QBO-only DisplayName → leave unlinked (prospect doesn't push). Default recorded; **owner confirms at the Phase-6 gate** (also surfaces the city-only-address name-only-match caveat, D6).
+- [x] **Decide city→address** (D6) — **city only** (province is its own column).
 
 #### Phase 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer`
 - [ ] Invoke the **`db-conventions`** skill first.
