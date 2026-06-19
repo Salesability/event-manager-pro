@@ -1,275 +1,275 @@
-"bd_name","bd_city","bd_prov","bd_phone","bd_manufacturer","match_type","suggested_action","prod_match_name","prod_match_prov","prod_match_status","prod_match_address","evidence","flags"
-"Acura of Moncton","Moncton","NB","5068531116","Acura","name+phone","skip-existing","Acura of Moncton","NB","active","1170 Aviation Ave, Dieppe New Brunswick E1A9A3","name exact + phone match",""
-"Tucker Acura","Mount Pearl","NL","7093642423","Acura","none","import-new","","","","","no name/phone/fuzzy match",""
-"Atlantic Acura","Halifax","NS","9024571555","Acura","none","import-new","","","","","no name/phone/fuzzy match",""
-"Audi Moncton","Moncton","NB","5068612834","Audi","phone-only","review","Audi of Moncton","NB","active","800 Aviation Ave, Dieppe NB E1A9A3","phone match, name differs → ""Audi of Moncton"" (variant?)",""
-"Audi St. John's","St John's","NL","7096062188","Audi","none","import-new","","","","","no name/phone/fuzzy match",""
-"Audi Halifax","Halifax","NS","9024532834","Audi","none","import-new","","","","","no name/phone/fuzzy match",""
-"BMW Moncton","Moncton","NB","5068725400","BMW","name+phone","skip-existing","BMW Moncton","NB","active","733 Ferdinand Blvd, Moncton NB","name exact + phone match","phone shared across BD rooftops"
-"BMW St. John's","St John's","NL","7097543269","BMW","name+phone","skip-existing","BMW St. John's","NL","active","St John's NL","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"O'Regan's BMW","Halifax","NS","9024545000","BMW","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"Bayside Chrysler Dodge Ltd","Bathurst","NB","5065466606","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bayside Chrysler Dodge Ltd - Tracadie","Tracadie-Sheila","NB","5063951233","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bouctouche Chrysler Dodge Ltd.","Bouctouche","NB","5067432497","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Connell Chrysler Ltd","Woodstock","NB","5063289243","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Dobson Chrysler Dodge","Saint John","NB","5066346060","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fairview Chrysler Ltd","Fredericton","NB","9056324335","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Moffitt Dodge Chrysler Ltd","Oak Bay","NB","5064663061","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Moncton Chrysler Jeep Dodge","Moncton","NB","5068573939","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Norrad Chrysler Dodge Jeep","Sussex","NB","5064331890","FCA","fuzzy-name","review","Norrad Chrysler","NB","active","40 Leonard Drive, Sussex NB E4E2R4","fuzzy name ~ ""Norrad Chrysler"" (score 0.50)",""
-"Rallye Chrysler Dodge Jeep Ram","Moncton","NB","5068528210","FCA","fuzzy-name","review","Rallye Motors Chrysler","NB","active","1810 Main St., Moncton NB E1E4S7, Canada","fuzzy name ~ ""Rallye Motors Chrysler"" (score 0.40)",""
-"Rendez-Vous Chrysler Ltd","Grand Falls","NB","5064735000","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Summit Dodge Chrysler Jeep","Fredericton","NB","8445259853","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Towne Chrysler","Miramichi","NB","5066223900","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"City Chrysler Dodge Jeep Ram","Corner Brook","NL","7096371000","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hickman Chrysler Dodge Jeep","St John's","NL","7097574364","FCA","phone-only","review","Hickmans Chrysler","NL","active","20 Peet St, St. john's NL A1B3N7","phone match, name differs → ""Hickmans Chrysler"" (variant?)",""
-"Lakeview Chrysler","Gander","NL","8445878785","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Marsh Motors Chrysler Ltd.","Grand Falls-Windsor","NL","7094892151","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Whitecap Chrysler","Clarenville","NL","7094662616","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Steele Chrysler","St John's","NL","8559260951","FCA","fuzzy-name","review","Steele Chrysler St. John's","NL","active","709 Topsail Rd., St. John's NL A1C5N2","fuzzy name ~ ""Steele Chrysler St. John's"" (score 0.40)","toll-free"
-"Amherst Chrysler","Amherst","NS","8889042182","FCA","name-only","skip-existing","Amherst Chrysler","NS","active","118 Robert Angus, Amherst NS B4H4R7","name exact, same province (phone differs/absent)","toll-free"
-"Atlantic Dodge Chrysler Jeep","New Glasgow","NS","8778353872","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Blaikies Dodge Chrysler Limited","Truro","NS","8882731563","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Clare Chrysler Dodge Jeep Ram","Saint Bernard","NS","8667218419","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Connell Chrysler Dodge","Middleton","NS","8888934920","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Dartmouth Dodge","Dartmouth","NS","9027013680","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Halifax Chrysler","Halifax","NS","9024550566","FCA","phone-shared","review","Steele Mazda","NS","active","15 Lansing Ct, Dartmouth NS B2W0K3, Canada","phone match but SHARED/toll-free → ""Steele Mazda"" (likely a group, not same rooftop)","phone shared across BD rooftops; phone on 2 prod dealers (group switchboard?)"
-"Kentville Chrysler","Kentville","NS","8775269276","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"MacDonald Chrysler","Antigonish","NS","8882291029","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Midway Motors Limited","Middle River","NS","8669213778","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Bruce Chrysler Dodge Jeep Ram","Yarmouth","NS","9028813310","FCA","fuzzy-name","review","Bruce Chrysler","NS","active","166 Starrs Road, Yarmouth Nova Scotia B5A5J7","fuzzy name ~ ""Bruce Chrysler"" (score 0.40)",""
-"Pothier Motors Limited","Falmouth","NS","8772860154","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Smith & Watt Chrysler","Shelburne","NS","9026372330","FCA","phone-only","review","Smith and Watt Chrysler","NS","active","Hwy 3, Barrington Passage Nova Scotia B0W 1G0","phone match, name differs → ""Smith and Watt Chrysler"" (variant?)",""
-"Saunders Motors Company Limited","Hebbville","NS","9025434335","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Colbourne Chrysler","Sydney","NS","8885410751","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Steele Chrysler Limited","Halifax","NS","9024550566","FCA","phone-shared","review","Steele Mazda","NS","active","15 Lansing Ct, Dartmouth NS B2W0K3, Canada","phone match but SHARED/toll-free → ""Steele Mazda"" (likely a group, not same rooftop)","phone shared across BD rooftops; phone on 2 prod dealers (group switchboard?)"
-"Centennial Chrysler Dodge Jeep Ram","Brudenell","PE","9028383435","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Reliable Motors Ltd","Charlottetown","PE","8774678389","FCA","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Summerside Chrysler","Summerside","PE","9024369141","FCA","none","import-new","","","","","no name/phone/fuzzy match",""
-"Downey Ford Sales","Saint John","NB","5066326000","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hatheway (Tracadie) Ford","Tracadie-Sheila","NB","5063952208","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hatheway Limited","Bathurst","NB","5065464464","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Kent Ford","Bouctouche","NB","5067432416","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Richibucto Ford","Richibucto","NB","5065239111","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Riverview Ford Lincoln","Fredericton","NB","5064530400","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Carol Automobile","Labrador City","NL","7099445200","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Humber Motors","Corner Brook","NL","7096344371","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Kelly Ford Grand Falls-Windsor","Grand Falls-Windsor","NL","7094893673","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Kelly Ford Gander","Gander","NL","7092564821","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Belliveau Motors","Church Point","NS","9027690706","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bruce Ford","Middleton","NS","9028255555","Ford/Lincoln","name-only","skip-existing","Bruce Ford","NS","active","451 Main Street, Middleton NS B0S 1P0","name exact, same province (phone differs/absent)",""
-"Canso Ford","Port Hawkesbury","NS","9026251338","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fairley & Stevens Ford","Dartmouth","NS","9024631220","Ford/Lincoln","fuzzy-name","review","Fairley and Stevens Ford","NS","active","580 Windmill Road, Dartmouth NS B3B 1B5","fuzzy name ~ ""Fairley and Stevens Ford"" (score 1.00)",""
-"Mosher Motors Ford","Hebbville","NS","9025432459","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Highland Ford Sales","Westville","NS","9023962020","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hollis Ford","Truro","NS","9028955000","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"MacPhee Ford","Dartmouth","NS","9024347700","Ford/Lincoln","name+phone","skip-existing","Macphee Ford","NS","active","580 Portland St., Dartmouth NS B2W2M3","name exact + phone match",""
-"Steele Ford Lincoln","Halifax","NS","9027068342","Ford/Lincoln","name-only","skip-existing","Steele Ford Lincoln","NS","active","Windsor St, Halifax Nova Scotia B3K5M2","name exact, same province (phone differs/absent)",""
-"Taylor Ford Amherst","Amherst","NS","9026776000","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Tri County Ford Sales","Tatamagouche","NS","9026572980","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Tusket Ford","Tusket","NS","9026482600","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"Valley Ford","Kentville","NS","9026781330","Ford/Lincoln","none","import-new","","","","","no name/phone/fuzzy match",""
-"D. Alex MacDonald Ford Lincoln","Summerside","PE","9024362138","Ford/Lincoln","fuzzy-name","review","D.Alex Macdonald Ford","PE","active","25 Water St., Summerside PEI C1N1A3","fuzzy name ~ ""D.Alex Macdonald Ford"" (score 0.80)",""
-"Fair Isle Ford","Charlottetown","PE","9023683673","Ford/Lincoln","name-only","skip-existing","Fair Isle Ford","PE","active","116 St. Peters Rd., Charlottetown PEI C1A 5P4","name exact, same province (phone differs/absent)",""
-"Steele Chevrolet Cadillac Buick GMC","Saint John","NB","5066345555","General Motors","group-other-rooftop","import-new","Steele Chevrolet Buick GMC Cadillac","NS","active","636 Portland St., Dartmouth NS B2Y3Z5","same group as ""Steele Chevrolet Buick GMC Cadillac"" but distinct phone + different town → new rooftop",""
-"Charlotte County Chevrolet Buick GMC Ltd","St. Stephen","NB","5064660640","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Cyv Chevrolet Buick GMC Ltd","Woodstock","NB","5063251840","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"G & M Chevrolet  Buick GMC Cadillac Ltd","Edmundston","NB","8449565080","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Fox Chevrolet Ltd","Fredericton","NB","5064521010","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Sussex Chevrolet Buick GMC","Sussex","NB","5064331160","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Lounsbury Automotive Bathurst","Bathurst","NB","5065470707","General Motors","group-other-rooftop","import-new","Lounsbury Automotive Limited","NB","active","855 King George HWY, Miramichi NB E1V3M5","same group as ""Lounsbury Automotive Limited"" but distinct phone + different town → new rooftop",""
-"Lounsbury Automotive Limited Dalhousie","Dalhousie","NB","5066843341","General Motors","fuzzy-name","review","Lounsbury's Dalhousie","NB","active","456 William St, Dalhousie NB E8C2X7","fuzzy name ~ ""Lounsbury's Dalhousie"" (score 0.67)",""
-"Lounsbury Miramichi","Miramichi","NB","5066222311","General Motors","phone-only","review","Lounsbury Automotive Limited","NB","active","855 King George HWY, Miramichi NB E1V3M5","phone match, name differs → ""Lounsbury Automotive Limited"" (variant?)",""
-"Lounsbury Moncton","Moncton","NB","8777638205","General Motors","group-other-rooftop","import-new","Lounsbury Automotive Limited","NB","active","855 King George HWY, Miramichi NB E1V3M5","same group as ""Lounsbury Automotive Limited"" but distinct phone + different town → new rooftop","toll-free"
-"Macdonald Buick GMC Cadillac Ltd","Moncton","NB","8006658899","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Plaza Clevrolet Buick GMC","Campbellton","NB","5067598855","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Rallye Motors Chevrolet Buick GMC","Rexton","NB","8005725593","General Motors","phone-shared","review","Rallye Motors Hyundai","NB","active","199 Carson Rd, Moncton NB E1C 0K4, Canada","phone match but SHARED/toll-free → ""Rallye Motors Hyundai"" (likely a group, not same rooftop)","phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)"
-"Seaside Chevrolet Limited","Shediac","NB","8772030590","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Steele GMC Buick","Fredericton","NB","5064537000","General Motors","name-only","skip-existing","Steele GMC Buick","NB","active","1135 Hanwell Rd, Fredericton, New Brunswick E3C1A5","name exact, same province (phone differs/absent)",""
-"Toner Chevrolet Buick GMC Ltd","Grand Falls","NB","8449565075","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Dennis Chevrolet Buick GMC Ltd","Corner Brook","NL","7096348248","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hickman Chevrolet Buick GMC Burin","Burin Bay Arm","NL","7098911300","General Motors","group-other-rooftop","import-new","Hickman Chevrolet","NL","active","85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",""
-"Hickman Chevrolet Buick GMC Carbonear","Carbonear","NL","7095965005","General Motors","group-other-rooftop","import-new","Hickman Chevrolet","NL","active","85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",""
-"Hickman Chevrolet Buick GMC Clarenville","Clarenville","NL","7094662661","General Motors","group-other-rooftop","import-new","Hickman Chevrolet","NL","active","85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",""
-"Hickman Chevrolet Buick GMC Gander","Gander","NL","7092563906","General Motors","group-other-rooftop","import-new","Hickman Chevrolet","NL","active","85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",""
-"Hickman Chevrolet","St John's","NL","7097266990","General Motors","name-only","skip-existing","Hickman Chevrolet","NL","active","85 Kenmount Rd, St.john's NL A1B 3N7","name exact, same province (phone differs/absent)",""
-"Labrador Motors Limited","Goose Bay","NL","7098962452","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Terra Nova Chevrolet Buick GMC","Grand Falls-Windsor","NL","7094892138","General Motors","group-other-rooftop","import-new","Terra Nova Motors","NL","active","595 Kenmount Rd., St. Johns NL","same group as ""Terra Nova Motors"" but distinct phone + different town → new rooftop",""
-"Terra Nova GMC Buick","St John's","NL","7093644130","General Motors","phone-only","review","Terra Nova Motors GFW","NL","active","75 Lincoln Rd, Windsor NL A2A2J9","phone match, name differs → ""Terra Nova Motors GFW"" (variant?)",""
-"Woodward Motors Bay Roberts","Bay Roberts","NL","8339421518","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Woodward Motors Port Aux Basques","Port Aux Basques","NL","8339421219","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Woodward Motors St. Anthony","St. Anthony","NL","8337373698","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Bruce Chevrolet Buick GMC Limited","Middleton","NS","9028253494","General Motors","name+phone","skip-existing","Bruce Chevrolet Buick GMC Limited","NS","active","394 Main St, Middleton NS B0S1P0","name exact + phone match",""
-"Steele Valley Chevrolet","New Minas","NS","9026818300","General Motors","name-only","skip-existing","Steele Valley Chevrolet","NS","active","9184 Commerical St, New Minas Nova Scotia B4N3V9, Canada","name exact, same province (phone differs/absent)",""
-"Herron Chevrolet Buick GMC Limited","New Glasgow","NS","9027521534","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Macintyre Chevrolet Buick GMC Cadillac Limited","Sydney","NS","9025644491","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Little Chevrolet Buick GMC","Yarmouth","NS","8335463723","General Motors","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"O'Regan Chevrolet Buick GMC Cadillac Limited","Halifax","NS","9024228551","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Pye Chevrolet Buick GMC Limited","Truro","NS","9028934333","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Ron MacGillivray Chev Buick GMC","Antigonish","NS","8333893050","General Motors","fuzzy-name","review","Ron MacGillivary Chev Buick GMC","NS","active","75 St. Andrews St., Antigonish NS B2G2G9","fuzzy name ~ ""Ron MacGillivary Chev Buick GMC"" (score 0.67)","toll-free"
-"South Shore Chevrolet Buick GMC","Bridgewater","NS","8886725779","General Motors","name-only","skip-existing","South Shore Chevrolet Buick GMC","NS","active","Bridgewater NS","name exact, same province (phone differs/absent)","toll-free"
-"Steele Chevrolet Buick GMC Cadillac","Dartmouth","NS","9024344100","General Motors","name+phone","skip-existing","Steele Chevrolet Buick GMC Cadillac","NS","active","636 Portland St., Dartmouth NS B2Y3Z5","name exact + phone match",""
-"Tantramar Chevrolet Buick GMC Limited","Amherst","NS","8669071609","General Motors","group-other-rooftop","import-new","Tantramar Chevrolet","","active","","same group as ""Tantramar Chevrolet"" but distinct phone + different town → new rooftop","toll-free"
-"Hillside Chevrolet Buick GMC","Charlottetown","PE","9028923587","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Township Chevrolet Buick GMC Ltd","Summerside","PE","9024364877","General Motors","none","import-new","","","","","no name/phone/fuzzy match",""
-"Olivier Honda Bathurst","Bathurst","NB","5065484569","Honda","name-only","skip-existing","Olivier Honda Bathurst","NB","active","2300 St Peter Avenue, Bathurst NB E2A7K2","name exact, same province (phone differs/absent)",""
-"Edmundston Honda","Edmundston","NB","5067397719","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fundy Honda","Saint John","NB","5066331333","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Miramichi Honda","Miramichi","NB","5067783685","Honda","name+phone","skip-existing","Miramichi Honda","NB","active","Miramichi NB","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"Moncton Honda","Moncton","NB","5068572950","Honda","name+phone","skip-existing","Moncton Honda","NB","active","1820 Main Street, Moncton NB E1E4S7","name exact + phone match",""
-"Clarenville Honda","Clarenville","NL","8883559292","Honda","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Fairway Honda","Corner Brook","NL","7096348881","Honda","name+phone","skip-existing","Fairway Honda","NL","active","43 Confederation Dr., Corner Brook NL A2H6T2","name exact + phone match",""
-"Hickman Honda","Grand Falls-Windsor","NL","7094890955","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Simmons Honda","Gander","NL","7092563415","Honda","name+phone","skip-existing","Simmons Honda","NL","active","Gander NL","name exact + phone match",""
-"Steele Honda","St John's","NL","7097009911","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bridgewater Honda","Bridgewater","NS","9025437796","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bruce Honda","Yarmouth","NS","9027422575","Honda","name-only","skip-existing","Bruce Honda","NS","active","166 Starrs Rd, Yarmouth NS B5A 5J7, Canada","name exact, same province (phone differs/absent)",""
-"Ceilidh Honda","New Glasgow","NS","9027521330","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Century Honda","Truro","NS","9028971700","Honda","name-only","skip-existing","Century Honda","NS","active","126 Main St, Truro NS B2N4G9","name exact, same province (phone differs/absent)",""
-"Colonial Honda","Halifax","NS","8887862621","Honda","name-only","skip-existing","Colonial Honda","NS","active","Halifax NS","name exact, same province (phone differs/absent)","toll-free"
-"Cumberland Honda","Amherst","NS","9026673844","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"King's County Honda","Kentville","NS","8889175464","Honda","phone-shared","review","Kings County Honda","NS","active","7336 Nova Scotia Trunk 1, Coldbrook NS B4R1B9","phone match but SHARED/toll-free → ""Kings County Honda"" (likely a group, not same rooftop)","toll-free"
-"Port Honda","Port Hawkesbury","NS","9026252700","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Portland Street Honda","Dartmouth","NS","9024353330","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Ramsay's Honda","Sydney","NS","9025390112","Honda","name-only","skip-existing","Ramsay's Honda","NS","active","229 Kings Rd., SYDNEY Nova Scotia B1S 1A5, Canada","name exact, same province (phone differs/absent)",""
-"Capital Honda","Charlottetown","PE","9025661101","Honda","group-other-rooftop","import-new","Capital Auto Center","NL","active","409, Kenmount rd., St. John's NL A1B3P9, Canada","same group as ""Capital Auto Center"" but distinct phone + different town → new rooftop",""
-"Centennial Honda","Summerside","PE","9024369158","Honda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bayside Hyundai","Bathurst","NB","5065451300","Hyundai","name+phone","skip-existing","Bayside Hyundai","NB","active","1905 St. Pierre, Bathurst NB E2A7J5","name exact + phone match",""
-"Fredericton Hyundai","Fredericton","NB","5064500800","Hyundai","name+phone","skip-existing","Fredericton Hyundai","NB","active","1165 Hanwell Road, Fredericton NB E3C1A5","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"Generation Hyundai","Atholville","NB","8778937566","Hyundai","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Rallye Motors Hyundai","Moncton","NB","8005725593","Hyundai","name+phone","skip-existing","Rallye Motors Hyundai","NB","active","199 Carson Rd, Moncton NB E1C 0K4, Canada","name exact + phone match","phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)"
-"Century Hyundai Saint John","Saint John","NB","5066522277","Hyundai","name+phone","skip-existing","Century Hyundai Saint John","NB","active","403 Westmorland Rd., Saint John New Brunswick E2J3S9, Canada","name exact + phone match",""
-"Trevors Hyundai","Miramichi","NB","5066224460","Hyundai","none","import-new","","","","","no name/phone/fuzzy match",""
-"Capital Hyundai","St John's","NL","7097260288","Hyundai","name-only","skip-existing","Capital Hyundai","NL","active","479 KENMOUNT RD, St John's NL A1B4G1","name exact, same province (phone differs/absent)",""
-"Gander Hyundai","Gander","NL","7092567257","Hyundai","name-only","skip-existing","Gander Hyundai","NL","active","360 James Blvd, Gander NL A1V 1W8, Canada","name exact, same province (phone differs/absent)",""
-"Parkway Hyundai","Corner Brook","NL","7096393093","Hyundai","name-only","skip-existing","Parkway Hyundai","NL","active","1 Hemlock Ave, Corner Brook NL","name exact, same province (phone differs/absent)",""
-"Steele Hyundai GFW","Grand Falls-Windsor","NL","7094898949","Hyundai","name+phone","skip-existing","Steele Hyundai GFW","NL","active","7 Cromer Ave, Grand Falls-Windsor NL A2A 1X3","name exact + phone match",""
-"Bruce Hyundai","New Minas","NS","9026813311","Hyundai","name+phone","skip-existing","Bruce Hyundai","NS","active","5482 Prospect Rd,, New Minas Nova Scotia B4N 3K8, Canada","name exact + phone match",""
-"Central Nova Hyundai","New Glasgow","NS","9027556202","Hyundai","phone-only","review","Central Nova","NS","active","2810 Westville Road, New Glasgow NS B2H5C6","phone match, name differs → ""Central Nova"" (variant?)","phone shared across BD rooftops"
-"Century Hyundai","Truro","NS","9028951900","Hyundai","name+phone","skip-existing","Century Hyundai","NS","active","138 Main St, Truro NS B2N 4G9, Canada","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"Gateway Hyundai","Port Hawkesbury","NS","9026257100","Hyundai","name+phone","skip-existing","Gateway Hyundai","NS","active","42 Paint St., Port Hawkesbury NS B9A3J8","name exact + phone match",""
-"O'Regan's Hyundai Dartmouth","Dartmouth","NS","9024657500","Hyundai","phone-only","review","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","phone match, name differs → ""O'Regan's Dartmouth Hyundai"" (variant?)",""
-"O'Regan's South Shore Hyundai","Bridgewater","NS","9025436888","Hyundai","name+phone","skip-existing","O'Regan's South Shore Hyundai","NS","active","Bridgewater NS","name exact + phone match",""
-"Scotia Hyundai","Amherst","NS","9026615000","Hyundai","name+phone","skip-existing","Scotia Hyundai","NS","active","108 Robert Angus Dr, Amherst NS B4H 4R7, Canada","name exact + phone match",""
-"Steele Hyundai","Halifax","NS","9027005898","Hyundai","fuzzy-name","review","Steele Hyundai Halifax","NS","active","3625 Kempt Rd, Halifax Nova Scotia B3K 4X6, Canada","fuzzy name ~ ""Steele Hyundai Halifax"" (score 0.67)",""
-"Experience Hyundai","Charlottetown","PE","9025692277","Hyundai","name+phone","skip-existing","Experience Hyundai","PE","active","15 Mt Edward Road, Charlottetown PE C1A5R7","name exact + phone match",""
-"Summerside Hyundai","Summerside","PE","9028883332","Hyundai","name+phone","skip-existing","Summerside Hyundai","PE","active","335 Pope Rd., Summerside PEI C1N5T4","name exact + phone match",""
-"Bayside Kia","Bathurst","NB","8559573147","Kia","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Edmundston Kia","Edmundston","NB","5063532886","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Kia","Fredericton","NB","5063003351","Kia","name-only","skip-existing","Fredericton Kia","NB","active","433 Bishops Drive, Fredericton New Brunswick E3C 2M6, Canada","name exact, same province (phone differs/absent)",""
-"Miramichi Kia","Miramichi","NB","5063082288","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Moncton Kia","Moncton","NB","8883017483","Kia","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Port City Kia","Saint John","NB","5066351600","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Central Kia","Grand Falls-Windsor","NL","8553480693","Kia","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Fewer Kia","Clarenville","NL","7094665959","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Gander Kia","Gander","NL","8337402225","Kia","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"East Coast Kia","St John's","NL","7097264542","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Western Kia","Corner Brook","NL","8667998792","Kia","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Cumberland Kia","Amherst","NS","9026672822","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Forbes Kia","New Minas","NS","8778173697","Kia","name+phone","skip-existing","Forbes Kia","NS","active","5488 Prospect Rd, New Minas NS B4N3K8","name exact + phone match","toll-free"
-"Bridgewater Kia","Bridgewater","NS","9025439542","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"MacDonald Kia","Sydney","NS","9025632926","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"O'Regan's Kia Dartmouth","Dartmouth","NS","9024669550","Kia","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"O'Regan's Kia Halifax","Halifax","NS","9024533477","Kia","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"Motor Hub Antigonish Mitsubishi","Antigonish","NS","9028639229","Mitsubishi","none","import-new","","","","","no name/phone/fuzzy match",""
-"Stuart Kia","Truro","NS","9028951671","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bruce Kia","Yarmouth","NS","9027492300","Kia","group-other-rooftop","import-new","Bruce Auto Group","NS","active","90 Commercial Street,, Middleton NS B0S 1P0","same group as ""Bruce Auto Group"" but distinct phone + different town → new rooftop",""
-"Centennial Kia","Summerside","PE","9027244542","Kia","none","import-new","","","","","no name/phone/fuzzy match",""
-"Discover Kia","Charlottetown","PE","9028944069","Kia","name+phone","skip-existing","Discover Kia","PE","active","78 Allen St., Charlottetown PEI C1E 1K1, Canada","name exact + phone match",""
-"Lexus of Saint John","Saint John","NB","5066425398","Lexus","none","import-new","","","","","no name/phone/fuzzy match",""
-"Atlantic Mazda","Dieppe","NB","5068528225","Mazda","name-only","skip-existing","Atlantic Mazda","NB","active","665 Ferdinand Blvd, Dieppe New Brunswick E1A7G1","name exact, same province (phone differs/absent)",""
-"Bayside Mazda","Beresford","NB","5065484515","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Mazda","Fredericton","NB","5064520680","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"King Mazda","Saint John","NB","5066342211","Mazda","name-only","skip-existing","King Mazda","NB","active","440 Rothesay Ave, Saint John NB E2L4G7","name exact, same province (phone differs/absent)",""
-"Martin Mazda","Edmundston","NB","8667397713","Mazda","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Towne Mazda","Miramichi","NB","5066222900","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Steele Mazda St John's","St John's","NL","7097268555","Mazda","phone-only","review","Steele Mazda St. John's","NL","active","220 Kenmount Ave, St. John's NL A1B3R2, Canada","phone match, name differs → ""Steele Mazda St. John's"" (variant?)",""
-"Western Mazda","Corner Brook","NL","8884967440","Mazda","name-only","skip-existing","Western Mazda","NL","active","32 Confederation, Corner Brook NL A2H6T2","name exact, same province (phone differs/absent)","toll-free"
-"Bridgewater Mazda","Hebbville","NS","9025309666","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Century Mazda","Halifax","NS","9024534115","Mazda","name+phone","skip-existing","Century Mazda","NS","active","2672 Robie St, Halifax NS B3K4N8","name exact + phone match",""
-"Bruce Mazda","Kentville","NS","9026783323","Mazda","name+phone","skip-existing","Bruce Mazda","NS","active","971 Park St, Kentville NS B4N 3X1, Canada","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"Steele Mazda","Dartmouth","NS","9029823988","Mazda","name-only","skip-existing","Steele Mazda","NS","active","15 Lansing Ct, Dartmouth NS B2W0K3, Canada","name exact, same province (phone differs/absent)",""
-"Sydney Mazda","Sydney","NS","9025643100","Mazda","name+phone","skip-existing","Sydney Mazda","NS","active","303 Welton St, Grand Lake Road Nova Scotia B1P5S3","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"County Mazda","New Glasgow","NS","9027520442","Mazda","name-only","skip-existing","County Mazda","NS","active","391 Westville Rd., New Glasgow NS B2H2J6","name exact, same province (phone differs/absent)",""
-"Truro Mazda","Truro","NS","8335591608","Mazda","name-only","skip-existing","Truro Mazda","NS","active","Truro NS","name exact, same province (phone differs/absent)","toll-free"
-"Yarmouth Mazda","Yarmouth","NS","9028819666","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Centennial Mazda of Charlottetown","Charlottetown","PE","9028948593","Mazda","none","import-new","","","","","no name/phone/fuzzy match",""
-"Mercedes-Benz Moncton","Dieppe","NB","5068591940","Mercedes-Benz","phone-only","review","Mercedes Benz","NB","active","1200 Aviation Ave, Dieppe NB E1A 7P5","phone match, name differs → ""Mercedes Benz"" (variant?)",""
-"Mercedes-Benz St John's","St John's","NL","7097382369","Mercedes-Benz","none","import-new","","","","","no name/phone/fuzzy match",""
-"O'Regan's Mercedes-Benz","Halifax","NS","9024532300","Mercedes-Benz","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"MINI Moncton","Moncton","NB","5068725400","MINI","phone-only","review","BMW Moncton","NB","active","733 Ferdinand Blvd, Moncton NB","phone match, name differs → ""BMW Moncton"" (variant?)","phone shared across BD rooftops"
-"MINI St John's","St John's","NL","7095796464","MINI","name+phone","skip-existing","MINI St John's","NL","active","120 Kenmount Rd, St John's NL A1B3R2","name exact + phone match",""
-"Mini Halifax","Halifax","NS","9024548000","MINI","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Mitsubishi","Fredericton","NB","5063001157","Mitsubishi","name-only","skip-existing","Fredericton Mitsubishi","NB","active","327 St. Marys, Fredricton NB E3A2S5","name exact, same province (phone differs/absent)",""
-"Loch Lomond Mitsubishi","Saint John","NB","5066341765","Mitsubishi","name+phone","skip-existing","Loch Lomond Mitsubishi","NB","active","1265 Loch Lomond Rd, Saint John New Brunswick E3J3V4","name exact + phone match",""
-"Rallye Motors Mitsubishi","Moncton","NB","8005725593","Mitsubishi","name+phone","skip-existing","Rallye Motors Mitsubishi","NB","active","1837 Main St., Moncton NB E1E1H6","name exact + phone match","phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)"
-"Capital Mitsubishi","St John's","NL","7095796487","Mitsubishi","name+phone","skip-existing","Capital Mitsubishi","NL","active","475 Kenmount Rd, St John's NL A1B4G1","name exact + phone match",""
-"Steele Mitsubishi","Halifax","NS","9024051177","Mitsubishi","name-only","skip-existing","Steele Mitsubishi","NS","active","3681 Kempt Rd, Halifax NS B3K4X6, CANADA","name exact, same province (phone differs/absent)",""
-"Sydney Mitsubishi","Sydney","NS","9025638000","Mitsubishi","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Nissan","Fredericton","NB","5064589423","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bayside Nissan","Bathurst","NB","5065473130","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Rallye Motors Nissan","Moncton","NB","5068571800","Nissan","name+phone","skip-existing","Rallye Motors Nissan","","active","191 Carson Rd, Moncton NB  E1C 0K4, C/O Devon MacAusland","name exact + phone match","phone on 2 prod dealers (group switchboard?)"
-"Saint John Nissan","Saint John","NB","8884937816","Nissan","name-only","skip-existing","Saint John Nissan","NB","active","633 Rothesay Ave, Saint John NB E2L 3Z8","name exact, same province (phone differs/absent)","toll-free"
-"Olivier Nissan Grand-Sault","Grand Falls","NB","5064734081","Nissan","phone-only","review","Olivier Nissan Grand Sault","NB","active","245 Chem Madawaska, Grand Falls New Brunswick E3Y 1A4","phone match, name differs → ""Olivier Nissan Grand Sault"" (variant?)",""
-"Trevors Nissan","Miramichi","NB","5066224455","Nissan","name+phone","skip-existing","Trevors Nissan","NB","active","1605, King George Hwy, Miramichi NB E1V6W3, Canada","name exact + phone match",""
-"Corner Brook Nissan","Corner Brook","NL","7096396011","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hickman Nissan Clarenville","Clarenville","NL","7094662331","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Hickman Nissan Gander","Gander","NL","7096513007","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"O'Neill Nissan","Mount Pearl","NL","7093686011","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Highland Nissan","Westville","NS","9023964200","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bruce Nissan","Kentville","NS","9026794000","Nissan","name-only","skip-existing","Bruce Nissan","NS","active","975 Park St, Kentville NS B4N 4H8","name exact, same province (phone differs/absent)",""
-"MacDonald Nissan","Sydney","NS","8447628474","Nissan","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"O'Regan's Nissan Dartmouth","Dartmouth","NS","9024698484","Nissan","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"O'Regan's Nissan Halifax","Halifax","NS","9024532020","Nissan","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"Truro Nissan","Truro","NS","8559433259","Nissan","name-only","skip-existing","Truro Nissan","NS","active","130 Onslow Road, Upper Onslow Nova Scotia b6L5K6","name exact, same province (phone differs/absent)","toll-free"
-"Centennial Nissan of Charlottetown","Charlottetown","PE","9028926577","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Centennial Nissan of Summerside","Summerside","PE","9024369159","Nissan","none","import-new","","","","","no name/phone/fuzzy match",""
-"Century Subaru","Saint John","NB","5066330833","Subaru","name+phone","skip-existing","Century Subaru","NB","active","299, Rothesay Ave, Saint John NB E2J2C1","name exact + phone match",""
-"Fox Subaru","Fredericton","NB","5064589588","Subaru","none","import-new","","","","","no name/phone/fuzzy match",""
-"Subaru of Moncton","Dieppe","NB","5068044364","Subaru","name-only","skip-existing","Subaru of Moncton","NB","active","1050 Aviation Ave, Dieppe NB E1A9A3","name exact, same province (phone differs/absent)",""
-"Capital Subaru","St John's","NL","7097269900","Subaru","fuzzy-name","review","Capital Auto Center","NL","active","409, Kenmount rd., St. John's NL A1B3P9, Canada","fuzzy name ~ ""Capital Auto Center"" (score 0.50)",""
-"Central Nova Subaru","New Glasgow","NS","9027556202","Subaru","phone-only","review","Central Nova","NS","active","2810 Westville Road, New Glasgow NS B2H5C6","phone match, name differs → ""Central Nova"" (variant?)","phone shared across BD rooftops"
-"O'Regan's South Shore Subaru","Bridgewater","NS","9025437129","Subaru","group-other-rooftop","import-new","O'Regan's South Shore Hyundai","NS","active","Bridgewater NS","same group as ""O'Regan's South Shore Hyundai"" but distinct phone + different brand → new rooftop",""
-"Steele Subaru","Halifax","NS","8883103549","Subaru","name-only","skip-existing","Steele Subaru","NS","active","3737 KEMPT ROAD, Halifax NS B0K4X6","name exact, same province (phone differs/absent)","toll-free"
-"Subaru of Charlottetown","Charlottetown","PE","9023677800","Subaru","none","import-new","","","","","no name/phone/fuzzy match",""
-"Acadia Toyota","Moncton","NB","5068578611","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bathurst Toyota","Bathurst","NB","8007868427","Toyota","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Edmundston Toyota","Edmundston","NB","5067354741","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"F. McClure & Sons Toyota","Grand Falls","NB","5064732024","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Toyota","Fredericton","NB","5064522200","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Woodstock NB Toyota","Hartford","NB","5063286695","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Restigouche Toyota","Campbellton","NB","5067535019","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Roussel Toyota","Miramichi","NB","5066221867","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Saint John Toyota","Saint John","NB","5066337070","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Gander Toyota","Gander","NL","7092567177","Toyota","name+phone","skip-existing","Gander Toyota","NL","active","340 James Blvd, Gander NL A1V1W8","name exact + phone match",""
-"Grand Toyota","Grand Falls-Windsor","NL","8773682208","Toyota","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Toyota Central","Clarenville","NL","7094666011","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Toyota Plaza","St John's","NL","7097534051","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Western Toyota","Corner Brook","NL","8778476632","Toyota","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Amherst Toyota","Amherst","NS","8337066363","Toyota","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Anchor Toyota","Stellarton","NS","8885680667","Toyota","name-only","skip-existing","Anchor Toyota","NS","active","70 Lawerence Blvd, Stellerton NS B0K0A2","name exact, same province (phone differs/absent)","toll-free"
-"Kentville Toyota","Kentville","NS","9026786000","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Breton Toyota","Sydney","NS","9025398930","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"O'Regan's South Shore Toyota","Bridgewater","NS","9025437168","Toyota","group-other-rooftop","import-new","O'Regan's South Shore Hyundai","NS","active","Bridgewater NS","same group as ""O'Regan's South Shore Hyundai"" but distinct phone + different brand → new rooftop",""
-"O'Regan's Toyota Dartmouth","Dartmouth","NS","9024649550","Toyota","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"O'Regan's Toyota Halifax","Halifax","NS","9024532331","Toyota","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"Tri-Mac Toyota","Port Hawkesbury","NS","9026253040","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Truro Toyota","Truro","NS","9028959000","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Tusket Toyota","Yarmouth","NS","9027491700","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Charlottetown Toyota","Charlottetown","PE","9023683330","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Summerside Toyota","Summerside","PE","9024365800","Toyota","none","import-new","","","","","no name/phone/fuzzy match",""
-"Fredericton Volkswagen","Fredericton","NB","5064542886","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Roussel Volkswagen","Miramichi","NB","8552567100","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match","toll-free"
-"Saint John Volkswagen","Saint John","NB","5066581313","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Volkswagen Moncton","Dieppe","NB","5068570444","Volkswagen","group-other-rooftop","import-new","Moncton Volkswagen","NB","active","850 Aviation Blvd, Moncton NB E1A9A3","same group as ""Moncton Volkswagen"" but distinct phone + different town → new rooftop",""
-"Volkswagen St. John's","St John's","NL","7097264424","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Bridgewater Volkswagen","Hebbville","NS","9025433344","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"O'Regan's Volkswagen Halifax","Halifax","NS","9024532790","Volkswagen","group-other-rooftop","import-new","O'Regan's Dartmouth Hyundai","NS","active","Dartmouth NS","same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",""
-"Jim Sampson Motors","Sydney","NS","9025391610","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Steele Volkswagen","Dartmouth","NS","9024686411","Volkswagen","name+phone","skip-existing","Steele Volkswagen","NS","active","696 Windmill Rd, Dartmouth NS B3B2A5","name exact + phone match",""
-"Valley Volkswagen","Coldbrook","NS","9026782155","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Truro Volkswagen","Truro","NS","9028955383","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Brown's Volkswagen","Charlottetown","PE","9028925381","Volkswagen","none","import-new","","","","","no name/phone/fuzzy match",""
-"Volvo Cars New Brunswick","Fredericton","NB","5064574500","Volvo","none","import-new","","","","","no name/phone/fuzzy match",""
-"Volvo of Newfoundland","Mount Pearl","NL","7093687683","Volvo","none","import-new","","","","","no name/phone/fuzzy match",""
-"Volvo of Halifax","Halifax","NS","9027005332","Volvo","none","import-new","","","","","no name/phone/fuzzy match",""
+bd_name,bd_city,bd_prov,bd_phone,bd_manufacturer,match_type,suggested_action,prod_match_name,prod_match_prov,prod_match_status,prod_match_address,evidence,flags
+Acura of Moncton,Moncton,NB,5068531116,Acura,name+phone,skip-existing,Acura of Moncton,NB,active,"1170 Aviation Ave, Dieppe New Brunswick E1A9A3",name exact + phone match,
+Tucker Acura,Mount Pearl,NL,7093642423,Acura,none,import-new,,,,,no name/phone/fuzzy match,
+Atlantic Acura,Halifax,NS,9024571555,Acura,none,import-new,,,,,no name/phone/fuzzy match,
+Audi Moncton,Moncton,NB,5068612834,Audi,phone-only,skip-existing,Audi of Moncton,NB,active,"800 Aviation Ave, Dieppe NB E1A9A3","phone match, name differs → ""Audi of Moncton"" (variant?)",
+Audi St. John's,St John's,NL,7096062188,Audi,none,import-new,,,,,no name/phone/fuzzy match,
+Audi Halifax,Halifax,NS,9024532834,Audi,none,import-new,,,,,no name/phone/fuzzy match,
+BMW Moncton,Moncton,NB,5068725400,BMW,name+phone,skip-existing,BMW Moncton,NB,active,"733 Ferdinand Blvd, Moncton NB",name exact + phone match,phone shared across BD rooftops
+BMW St. John's,St John's,NL,7097543269,BMW,name+phone,skip-existing,BMW St. John's,NL,active,St John's NL,name exact + phone match,phone on 2 prod dealers (group switchboard?)
+O'Regan's BMW,Halifax,NS,9024545000,BMW,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+Bayside Chrysler Dodge Ltd,Bathurst,NB,5065466606,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Bayside Chrysler Dodge Ltd - Tracadie,Tracadie-Sheila,NB,5063951233,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Bouctouche Chrysler Dodge Ltd.,Bouctouche,NB,5067432497,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Connell Chrysler Ltd,Woodstock,NB,5063289243,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Dobson Chrysler Dodge,Saint John,NB,5066346060,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Fairview Chrysler Ltd,Fredericton,NB,9056324335,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Moffitt Dodge Chrysler Ltd,Oak Bay,NB,5064663061,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Moncton Chrysler Jeep Dodge,Moncton,NB,5068573939,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Norrad Chrysler Dodge Jeep,Sussex,NB,5064331890,FCA,fuzzy-name,skip-existing,Norrad Chrysler,NB,active,"40 Leonard Drive, Sussex NB E4E2R4","fuzzy name ~ ""Norrad Chrysler"" (score 0.50)",
+Rallye Chrysler Dodge Jeep Ram,Moncton,NB,5068528210,FCA,fuzzy-name,skip-existing,Rallye Motors Chrysler,NB,active,"1810 Main St., Moncton NB E1E4S7, Canada","fuzzy name ~ ""Rallye Motors Chrysler"" (score 0.40)",
+Rendez-Vous Chrysler Ltd,Grand Falls,NB,5064735000,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Summit Dodge Chrysler Jeep,Fredericton,NB,8445259853,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Towne Chrysler,Miramichi,NB,5066223900,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+City Chrysler Dodge Jeep Ram,Corner Brook,NL,7096371000,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Hickman Chrysler Dodge Jeep,St John's,NL,7097574364,FCA,phone-only,skip-existing,Hickmans Chrysler,NL,active,"20 Peet St, St. john's NL A1B3N7","phone match, name differs → ""Hickmans Chrysler"" (variant?)",
+Lakeview Chrysler,Gander,NL,8445878785,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Marsh Motors Chrysler Ltd.,Grand Falls-Windsor,NL,7094892151,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Whitecap Chrysler,Clarenville,NL,7094662616,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Steele Chrysler,St John's,NL,8559260951,FCA,fuzzy-name,skip-existing,Steele Chrysler St. John's,NL,active,"709 Topsail Rd., St. John's NL A1C5N2","fuzzy name ~ ""Steele Chrysler St. John's"" (score 0.40)",toll-free
+Amherst Chrysler,Amherst,NS,8889042182,FCA,name-only,skip-existing,Amherst Chrysler,NS,active,"118 Robert Angus, Amherst NS B4H4R7","name exact, same province (phone differs/absent)",toll-free
+Atlantic Dodge Chrysler Jeep,New Glasgow,NS,8778353872,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Blaikies Dodge Chrysler Limited,Truro,NS,8882731563,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Clare Chrysler Dodge Jeep Ram,Saint Bernard,NS,8667218419,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Connell Chrysler Dodge,Middleton,NS,8888934920,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Dartmouth Dodge,Dartmouth,NS,9027013680,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Halifax Chrysler,Halifax,NS,9024550566,FCA,phone-shared,import-new,Steele Mazda,NS,active,"15 Lansing Ct, Dartmouth NS B2W0K3, Canada","phone match but SHARED/toll-free → ""Steele Mazda"" (likely a group, not same rooftop)",phone shared across BD rooftops; phone on 2 prod dealers (group switchboard?)
+Kentville Chrysler,Kentville,NS,8775269276,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+MacDonald Chrysler,Antigonish,NS,8882291029,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Midway Motors Limited,Middle River,NS,8669213778,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Bruce Chrysler Dodge Jeep Ram,Yarmouth,NS,9028813310,FCA,fuzzy-name,skip-existing,Bruce Chrysler,NS,active,"166 Starrs Road, Yarmouth Nova Scotia B5A5J7","fuzzy name ~ ""Bruce Chrysler"" (score 0.40)",
+Pothier Motors Limited,Falmouth,NS,8772860154,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Smith & Watt Chrysler,Shelburne,NS,9026372330,FCA,phone-only,skip-existing,Smith and Watt Chrysler,NS,active,"Hwy 3, Barrington Passage Nova Scotia B0W 1G0","phone match, name differs → ""Smith and Watt Chrysler"" (variant?)",
+Saunders Motors Company Limited,Hebbville,NS,9025434335,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Colbourne Chrysler,Sydney,NS,8885410751,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Steele Chrysler Limited,Halifax,NS,9024550566,FCA,phone-shared,import-new,Steele Mazda,NS,active,"15 Lansing Ct, Dartmouth NS B2W0K3, Canada","phone match but SHARED/toll-free → ""Steele Mazda"" (likely a group, not same rooftop)",phone shared across BD rooftops; phone on 2 prod dealers (group switchboard?)
+Centennial Chrysler Dodge Jeep Ram,Brudenell,PE,9028383435,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Reliable Motors Ltd,Charlottetown,PE,8774678389,FCA,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Summerside Chrysler,Summerside,PE,9024369141,FCA,none,import-new,,,,,no name/phone/fuzzy match,
+Downey Ford Sales,Saint John,NB,5066326000,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Hatheway (Tracadie) Ford,Tracadie-Sheila,NB,5063952208,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Hatheway Limited,Bathurst,NB,5065464464,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Kent Ford,Bouctouche,NB,5067432416,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Richibucto Ford,Richibucto,NB,5065239111,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Riverview Ford Lincoln,Fredericton,NB,5064530400,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Carol Automobile,Labrador City,NL,7099445200,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Humber Motors,Corner Brook,NL,7096344371,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Kelly Ford Grand Falls-Windsor,Grand Falls-Windsor,NL,7094893673,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Kelly Ford Gander,Gander,NL,7092564821,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Belliveau Motors,Church Point,NS,9027690706,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Bruce Ford,Middleton,NS,9028255555,Ford/Lincoln,name-only,skip-existing,Bruce Ford,NS,active,"451 Main Street, Middleton NS B0S 1P0","name exact, same province (phone differs/absent)",
+Canso Ford,Port Hawkesbury,NS,9026251338,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Fairley & Stevens Ford,Dartmouth,NS,9024631220,Ford/Lincoln,fuzzy-name,skip-existing,Fairley and Stevens Ford,NS,active,"580 Windmill Road, Dartmouth NS B3B 1B5","fuzzy name ~ ""Fairley and Stevens Ford"" (score 1.00)",
+Mosher Motors Ford,Hebbville,NS,9025432459,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Highland Ford Sales,Westville,NS,9023962020,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Hollis Ford,Truro,NS,9028955000,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+MacPhee Ford,Dartmouth,NS,9024347700,Ford/Lincoln,name+phone,skip-existing,Macphee Ford,NS,active,"580 Portland St., Dartmouth NS B2W2M3",name exact + phone match,
+Steele Ford Lincoln,Halifax,NS,9027068342,Ford/Lincoln,name-only,skip-existing,Steele Ford Lincoln,NS,active,"Windsor St, Halifax Nova Scotia B3K5M2","name exact, same province (phone differs/absent)",
+Taylor Ford Amherst,Amherst,NS,9026776000,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Tri County Ford Sales,Tatamagouche,NS,9026572980,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Tusket Ford,Tusket,NS,9026482600,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+Valley Ford,Kentville,NS,9026781330,Ford/Lincoln,none,import-new,,,,,no name/phone/fuzzy match,
+D. Alex MacDonald Ford Lincoln,Summerside,PE,9024362138,Ford/Lincoln,fuzzy-name,skip-existing,D.Alex Macdonald Ford,PE,active,"25 Water St., Summerside PEI C1N1A3","fuzzy name ~ ""D.Alex Macdonald Ford"" (score 0.80)",
+Fair Isle Ford,Charlottetown,PE,9023683673,Ford/Lincoln,name-only,skip-existing,Fair Isle Ford,PE,active,"116 St. Peters Rd., Charlottetown PEI C1A 5P4","name exact, same province (phone differs/absent)",
+Steele Chevrolet Cadillac Buick GMC,Saint John,NB,5066345555,General Motors,group-other-rooftop,import-new,Steele Chevrolet Buick GMC Cadillac,NS,active,"636 Portland St., Dartmouth NS B2Y3Z5","same group as ""Steele Chevrolet Buick GMC Cadillac"" but distinct phone + different town → new rooftop",
+Charlotte County Chevrolet Buick GMC Ltd,St. Stephen,NB,5064660640,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Cyv Chevrolet Buick GMC Ltd,Woodstock,NB,5063251840,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+G & M Chevrolet  Buick GMC Cadillac Ltd,Edmundston,NB,8449565080,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Fox Chevrolet Ltd,Fredericton,NB,5064521010,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Sussex Chevrolet Buick GMC,Sussex,NB,5064331160,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Lounsbury Automotive Bathurst,Bathurst,NB,5065470707,General Motors,group-other-rooftop,import-new,Lounsbury Automotive Limited,NB,active,"855 King George HWY, Miramichi NB E1V3M5","same group as ""Lounsbury Automotive Limited"" but distinct phone + different town → new rooftop",
+Lounsbury Automotive Limited Dalhousie,Dalhousie,NB,5066843341,General Motors,fuzzy-name,skip-existing,Lounsbury's Dalhousie,NB,active,"456 William St, Dalhousie NB E8C2X7","fuzzy name ~ ""Lounsbury's Dalhousie"" (score 0.67)",
+Lounsbury Miramichi,Miramichi,NB,5066222311,General Motors,phone-only,skip-existing,Lounsbury Automotive Limited,NB,active,"855 King George HWY, Miramichi NB E1V3M5","phone match, name differs → ""Lounsbury Automotive Limited"" (variant?)",
+Lounsbury Moncton,Moncton,NB,8777638205,General Motors,group-other-rooftop,import-new,Lounsbury Automotive Limited,NB,active,"855 King George HWY, Miramichi NB E1V3M5","same group as ""Lounsbury Automotive Limited"" but distinct phone + different town → new rooftop",toll-free
+Macdonald Buick GMC Cadillac Ltd,Moncton,NB,8006658899,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Plaza Clevrolet Buick GMC,Campbellton,NB,5067598855,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Rallye Motors Chevrolet Buick GMC,Rexton,NB,8005725593,General Motors,phone-shared,import-new,Rallye Motors Hyundai,NB,active,"199 Carson Rd, Moncton NB E1C 0K4, Canada","phone match but SHARED/toll-free → ""Rallye Motors Hyundai"" (likely a group, not same rooftop)",phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)
+Seaside Chevrolet Limited,Shediac,NB,8772030590,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Steele GMC Buick,Fredericton,NB,5064537000,General Motors,name-only,skip-existing,Steele GMC Buick,NB,active,"1135 Hanwell Rd, Fredericton, New Brunswick E3C1A5","name exact, same province (phone differs/absent)",
+Toner Chevrolet Buick GMC Ltd,Grand Falls,NB,8449565075,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Dennis Chevrolet Buick GMC Ltd,Corner Brook,NL,7096348248,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Hickman Chevrolet Buick GMC Burin,Burin Bay Arm,NL,7098911300,General Motors,group-other-rooftop,import-new,Hickman Chevrolet,NL,active,"85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",
+Hickman Chevrolet Buick GMC Carbonear,Carbonear,NL,7095965005,General Motors,group-other-rooftop,import-new,Hickman Chevrolet,NL,active,"85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",
+Hickman Chevrolet Buick GMC Clarenville,Clarenville,NL,7094662661,General Motors,group-other-rooftop,import-new,Hickman Chevrolet,NL,active,"85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",
+Hickman Chevrolet Buick GMC Gander,Gander,NL,7092563906,General Motors,group-other-rooftop,import-new,Hickman Chevrolet,NL,active,"85 Kenmount Rd, St.john's NL A1B 3N7","same group as ""Hickman Chevrolet"" but distinct phone + different town → new rooftop",
+Hickman Chevrolet,St John's,NL,7097266990,General Motors,name-only,skip-existing,Hickman Chevrolet,NL,active,"85 Kenmount Rd, St.john's NL A1B 3N7","name exact, same province (phone differs/absent)",
+Labrador Motors Limited,Goose Bay,NL,7098962452,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Terra Nova Chevrolet Buick GMC,Grand Falls-Windsor,NL,7094892138,General Motors,group-other-rooftop,import-new,Terra Nova Motors,NL,active,"595 Kenmount Rd., St. Johns NL","same group as ""Terra Nova Motors"" but distinct phone + different town → new rooftop",
+Terra Nova GMC Buick,St John's,NL,7093644130,General Motors,phone-only,skip-existing,Terra Nova Motors GFW,NL,active,"75 Lincoln Rd, Windsor NL A2A2J9","phone match, name differs → ""Terra Nova Motors GFW"" (variant?)",
+Woodward Motors Bay Roberts,Bay Roberts,NL,8339421518,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Woodward Motors Port Aux Basques,Port Aux Basques,NL,8339421219,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Woodward Motors St. Anthony,St. Anthony,NL,8337373698,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Bruce Chevrolet Buick GMC Limited,Middleton,NS,9028253494,General Motors,name+phone,skip-existing,Bruce Chevrolet Buick GMC Limited,NS,active,"394 Main St, Middleton NS B0S1P0",name exact + phone match,
+Steele Valley Chevrolet,New Minas,NS,9026818300,General Motors,name-only,skip-existing,Steele Valley Chevrolet,NS,active,"9184 Commerical St, New Minas Nova Scotia B4N3V9, Canada","name exact, same province (phone differs/absent)",
+Herron Chevrolet Buick GMC Limited,New Glasgow,NS,9027521534,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Macintyre Chevrolet Buick GMC Cadillac Limited,Sydney,NS,9025644491,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Little Chevrolet Buick GMC,Yarmouth,NS,8335463723,General Motors,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+O'Regan Chevrolet Buick GMC Cadillac Limited,Halifax,NS,9024228551,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Pye Chevrolet Buick GMC Limited,Truro,NS,9028934333,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Ron MacGillivray Chev Buick GMC,Antigonish,NS,8333893050,General Motors,fuzzy-name,skip-existing,Ron MacGillivary Chev Buick GMC,NS,active,"75 St. Andrews St., Antigonish NS B2G2G9","fuzzy name ~ ""Ron MacGillivary Chev Buick GMC"" (score 0.67)",toll-free
+South Shore Chevrolet Buick GMC,Bridgewater,NS,8886725779,General Motors,name-only,skip-existing,South Shore Chevrolet Buick GMC,NS,active,Bridgewater NS,"name exact, same province (phone differs/absent)",toll-free
+Steele Chevrolet Buick GMC Cadillac,Dartmouth,NS,9024344100,General Motors,name+phone,skip-existing,Steele Chevrolet Buick GMC Cadillac,NS,active,"636 Portland St., Dartmouth NS B2Y3Z5",name exact + phone match,
+Tantramar Chevrolet Buick GMC Limited,Amherst,NS,8669071609,General Motors,group-other-rooftop,import-new,Tantramar Chevrolet,,active,,"same group as ""Tantramar Chevrolet"" but distinct phone + different town → new rooftop",toll-free
+Hillside Chevrolet Buick GMC,Charlottetown,PE,9028923587,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Township Chevrolet Buick GMC Ltd,Summerside,PE,9024364877,General Motors,none,import-new,,,,,no name/phone/fuzzy match,
+Olivier Honda Bathurst,Bathurst,NB,5065484569,Honda,name-only,skip-existing,Olivier Honda Bathurst,NB,active,"2300 St Peter Avenue, Bathurst NB E2A7K2","name exact, same province (phone differs/absent)",
+Edmundston Honda,Edmundston,NB,5067397719,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Fundy Honda,Saint John,NB,5066331333,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Miramichi Honda,Miramichi,NB,5067783685,Honda,name+phone,skip-existing,Miramichi Honda,NB,active,Miramichi NB,name exact + phone match,phone on 2 prod dealers (group switchboard?)
+Moncton Honda,Moncton,NB,5068572950,Honda,name+phone,skip-existing,Moncton Honda,NB,active,"1820 Main Street, Moncton NB E1E4S7",name exact + phone match,
+Clarenville Honda,Clarenville,NL,8883559292,Honda,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Fairway Honda,Corner Brook,NL,7096348881,Honda,name+phone,skip-existing,Fairway Honda,NL,active,"43 Confederation Dr., Corner Brook NL A2H6T2",name exact + phone match,
+Hickman Honda,Grand Falls-Windsor,NL,7094890955,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Simmons Honda,Gander,NL,7092563415,Honda,name+phone,skip-existing,Simmons Honda,NL,active,Gander NL,name exact + phone match,
+Steele Honda,St John's,NL,7097009911,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Bridgewater Honda,Bridgewater,NS,9025437796,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Bruce Honda,Yarmouth,NS,9027422575,Honda,name-only,skip-existing,Bruce Honda,NS,active,"166 Starrs Rd, Yarmouth NS B5A 5J7, Canada","name exact, same province (phone differs/absent)",
+Ceilidh Honda,New Glasgow,NS,9027521330,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Century Honda,Truro,NS,9028971700,Honda,name-only,skip-existing,Century Honda,NS,active,"126 Main St, Truro NS B2N4G9","name exact, same province (phone differs/absent)",
+Colonial Honda,Halifax,NS,8887862621,Honda,name-only,skip-existing,Colonial Honda,NS,active,Halifax NS,"name exact, same province (phone differs/absent)",toll-free
+Cumberland Honda,Amherst,NS,9026673844,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+King's County Honda,Kentville,NS,8889175464,Honda,phone-shared,skip-existing,Kings County Honda,NS,active,"7336 Nova Scotia Trunk 1, Coldbrook NS B4R1B9","phone match but SHARED/toll-free → ""Kings County Honda"" (likely a group, not same rooftop)",toll-free
+Port Honda,Port Hawkesbury,NS,9026252700,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Portland Street Honda,Dartmouth,NS,9024353330,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Ramsay's Honda,Sydney,NS,9025390112,Honda,name-only,skip-existing,Ramsay's Honda,NS,active,"229 Kings Rd., SYDNEY Nova Scotia B1S 1A5, Canada","name exact, same province (phone differs/absent)",
+Capital Honda,Charlottetown,PE,9025661101,Honda,group-other-rooftop,import-new,Capital Auto Center,NL,active,"409, Kenmount rd., St. John's NL A1B3P9, Canada","same group as ""Capital Auto Center"" but distinct phone + different town → new rooftop",
+Centennial Honda,Summerside,PE,9024369158,Honda,none,import-new,,,,,no name/phone/fuzzy match,
+Bayside Hyundai,Bathurst,NB,5065451300,Hyundai,name+phone,skip-existing,Bayside Hyundai,NB,active,"1905 St. Pierre, Bathurst NB E2A7J5",name exact + phone match,
+Fredericton Hyundai,Fredericton,NB,5064500800,Hyundai,name+phone,skip-existing,Fredericton Hyundai,NB,active,"1165 Hanwell Road, Fredericton NB E3C1A5",name exact + phone match,phone on 2 prod dealers (group switchboard?)
+Generation Hyundai,Atholville,NB,8778937566,Hyundai,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Rallye Motors Hyundai,Moncton,NB,8005725593,Hyundai,name+phone,skip-existing,Rallye Motors Hyundai,NB,active,"199 Carson Rd, Moncton NB E1C 0K4, Canada",name exact + phone match,phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)
+Century Hyundai Saint John,Saint John,NB,5066522277,Hyundai,name+phone,skip-existing,Century Hyundai Saint John,NB,active,"403 Westmorland Rd., Saint John New Brunswick E2J3S9, Canada",name exact + phone match,
+Trevors Hyundai,Miramichi,NB,5066224460,Hyundai,none,import-new,,,,,no name/phone/fuzzy match,
+Capital Hyundai,St John's,NL,7097260288,Hyundai,name-only,skip-existing,Capital Hyundai,NL,active,"479 KENMOUNT RD, St John's NL A1B4G1","name exact, same province (phone differs/absent)",
+Gander Hyundai,Gander,NL,7092567257,Hyundai,name-only,skip-existing,Gander Hyundai,NL,active,"360 James Blvd, Gander NL A1V 1W8, Canada","name exact, same province (phone differs/absent)",
+Parkway Hyundai,Corner Brook,NL,7096393093,Hyundai,name-only,skip-existing,Parkway Hyundai,NL,active,"1 Hemlock Ave, Corner Brook NL","name exact, same province (phone differs/absent)",
+Steele Hyundai GFW,Grand Falls-Windsor,NL,7094898949,Hyundai,name+phone,skip-existing,Steele Hyundai GFW,NL,active,"7 Cromer Ave, Grand Falls-Windsor NL A2A 1X3",name exact + phone match,
+Bruce Hyundai,New Minas,NS,9026813311,Hyundai,name+phone,skip-existing,Bruce Hyundai,NS,active,"5482 Prospect Rd,, New Minas Nova Scotia B4N 3K8, Canada",name exact + phone match,
+Central Nova Hyundai,New Glasgow,NS,9027556202,Hyundai,phone-only,import-new,Central Nova,NS,active,"2810 Westville Road, New Glasgow NS B2H5C6","phone match, name differs → ""Central Nova"" (variant?)",phone shared across BD rooftops
+Century Hyundai,Truro,NS,9028951900,Hyundai,name+phone,skip-existing,Century Hyundai,NS,active,"138 Main St, Truro NS B2N 4G9, Canada",name exact + phone match,phone on 2 prod dealers (group switchboard?)
+Gateway Hyundai,Port Hawkesbury,NS,9026257100,Hyundai,name+phone,skip-existing,Gateway Hyundai,NS,active,"42 Paint St., Port Hawkesbury NS B9A3J8",name exact + phone match,
+O'Regan's Hyundai Dartmouth,Dartmouth,NS,9024657500,Hyundai,phone-only,skip-existing,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"phone match, name differs → ""O'Regan's Dartmouth Hyundai"" (variant?)",
+O'Regan's South Shore Hyundai,Bridgewater,NS,9025436888,Hyundai,name+phone,skip-existing,O'Regan's South Shore Hyundai,NS,active,Bridgewater NS,name exact + phone match,
+Scotia Hyundai,Amherst,NS,9026615000,Hyundai,name+phone,skip-existing,Scotia Hyundai,NS,active,"108 Robert Angus Dr, Amherst NS B4H 4R7, Canada",name exact + phone match,
+Steele Hyundai,Halifax,NS,9027005898,Hyundai,fuzzy-name,skip-existing,Steele Hyundai Halifax,NS,active,"3625 Kempt Rd, Halifax Nova Scotia B3K 4X6, Canada","fuzzy name ~ ""Steele Hyundai Halifax"" (score 0.67)",
+Experience Hyundai,Charlottetown,PE,9025692277,Hyundai,name+phone,skip-existing,Experience Hyundai,PE,active,"15 Mt Edward Road, Charlottetown PE C1A5R7",name exact + phone match,
+Summerside Hyundai,Summerside,PE,9028883332,Hyundai,name+phone,skip-existing,Summerside Hyundai,PE,active,"335 Pope Rd., Summerside PEI C1N5T4",name exact + phone match,
+Bayside Kia,Bathurst,NB,8559573147,Kia,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Edmundston Kia,Edmundston,NB,5063532886,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Kia,Fredericton,NB,5063003351,Kia,name-only,skip-existing,Fredericton Kia,NB,active,"433 Bishops Drive, Fredericton New Brunswick E3C 2M6, Canada","name exact, same province (phone differs/absent)",
+Miramichi Kia,Miramichi,NB,5063082288,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Moncton Kia,Moncton,NB,8883017483,Kia,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Port City Kia,Saint John,NB,5066351600,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Central Kia,Grand Falls-Windsor,NL,8553480693,Kia,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Fewer Kia,Clarenville,NL,7094665959,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Gander Kia,Gander,NL,8337402225,Kia,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+East Coast Kia,St John's,NL,7097264542,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Western Kia,Corner Brook,NL,8667998792,Kia,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Cumberland Kia,Amherst,NS,9026672822,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Forbes Kia,New Minas,NS,8778173697,Kia,name+phone,skip-existing,Forbes Kia,NS,active,"5488 Prospect Rd, New Minas NS B4N3K8",name exact + phone match,toll-free
+Bridgewater Kia,Bridgewater,NS,9025439542,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+MacDonald Kia,Sydney,NS,9025632926,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+O'Regan's Kia Dartmouth,Dartmouth,NS,9024669550,Kia,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+O'Regan's Kia Halifax,Halifax,NS,9024533477,Kia,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+Motor Hub Antigonish Mitsubishi,Antigonish,NS,9028639229,Mitsubishi,none,import-new,,,,,no name/phone/fuzzy match,
+Stuart Kia,Truro,NS,9028951671,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Bruce Kia,Yarmouth,NS,9027492300,Kia,group-other-rooftop,import-new,Bruce Auto Group,NS,active,"90 Commercial Street,, Middleton NS B0S 1P0","same group as ""Bruce Auto Group"" but distinct phone + different town → new rooftop",
+Centennial Kia,Summerside,PE,9027244542,Kia,none,import-new,,,,,no name/phone/fuzzy match,
+Discover Kia,Charlottetown,PE,9028944069,Kia,name+phone,skip-existing,Discover Kia,PE,active,"78 Allen St., Charlottetown PEI C1E 1K1, Canada",name exact + phone match,
+Lexus of Saint John,Saint John,NB,5066425398,Lexus,none,import-new,,,,,no name/phone/fuzzy match,
+Atlantic Mazda,Dieppe,NB,5068528225,Mazda,name-only,skip-existing,Atlantic Mazda,NB,active,"665 Ferdinand Blvd, Dieppe New Brunswick E1A7G1","name exact, same province (phone differs/absent)",
+Bayside Mazda,Beresford,NB,5065484515,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Mazda,Fredericton,NB,5064520680,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+King Mazda,Saint John,NB,5066342211,Mazda,name-only,skip-existing,King Mazda,NB,active,"440 Rothesay Ave, Saint John NB E2L4G7","name exact, same province (phone differs/absent)",
+Martin Mazda,Edmundston,NB,8667397713,Mazda,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Towne Mazda,Miramichi,NB,5066222900,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+Steele Mazda St John's,St John's,NL,7097268555,Mazda,phone-only,skip-existing,Steele Mazda St. John's,NL,active,"220 Kenmount Ave, St. John's NL A1B3R2, Canada","phone match, name differs → ""Steele Mazda St. John's"" (variant?)",
+Western Mazda,Corner Brook,NL,8884967440,Mazda,name-only,skip-existing,Western Mazda,NL,active,"32 Confederation, Corner Brook NL A2H6T2","name exact, same province (phone differs/absent)",toll-free
+Bridgewater Mazda,Hebbville,NS,9025309666,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+Century Mazda,Halifax,NS,9024534115,Mazda,name+phone,skip-existing,Century Mazda,NS,active,"2672 Robie St, Halifax NS B3K4N8",name exact + phone match,
+Bruce Mazda,Kentville,NS,9026783323,Mazda,name+phone,skip-existing,Bruce Mazda,NS,active,"971 Park St, Kentville NS B4N 3X1, Canada",name exact + phone match,phone on 2 prod dealers (group switchboard?)
+Steele Mazda,Dartmouth,NS,9029823988,Mazda,name-only,skip-existing,Steele Mazda,NS,active,"15 Lansing Ct, Dartmouth NS B2W0K3, Canada","name exact, same province (phone differs/absent)",
+Sydney Mazda,Sydney,NS,9025643100,Mazda,name+phone,skip-existing,Sydney Mazda,NS,active,"303 Welton St, Grand Lake Road Nova Scotia B1P5S3",name exact + phone match,phone on 2 prod dealers (group switchboard?)
+County Mazda,New Glasgow,NS,9027520442,Mazda,name-only,skip-existing,County Mazda,NS,active,"391 Westville Rd., New Glasgow NS B2H2J6","name exact, same province (phone differs/absent)",
+Truro Mazda,Truro,NS,8335591608,Mazda,name-only,skip-existing,Truro Mazda,NS,active,Truro NS,"name exact, same province (phone differs/absent)",toll-free
+Yarmouth Mazda,Yarmouth,NS,9028819666,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+Centennial Mazda of Charlottetown,Charlottetown,PE,9028948593,Mazda,none,import-new,,,,,no name/phone/fuzzy match,
+Mercedes-Benz Moncton,Dieppe,NB,5068591940,Mercedes-Benz,phone-only,skip-existing,Mercedes Benz,NB,active,"1200 Aviation Ave, Dieppe NB E1A 7P5","phone match, name differs → ""Mercedes Benz"" (variant?)",
+Mercedes-Benz St John's,St John's,NL,7097382369,Mercedes-Benz,none,import-new,,,,,no name/phone/fuzzy match,
+O'Regan's Mercedes-Benz,Halifax,NS,9024532300,Mercedes-Benz,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+MINI Moncton,Moncton,NB,5068725400,MINI,phone-only,import-new,BMW Moncton,NB,active,"733 Ferdinand Blvd, Moncton NB","phone match, name differs → ""BMW Moncton"" (variant?)",phone shared across BD rooftops
+MINI St John's,St John's,NL,7095796464,MINI,name+phone,skip-existing,MINI St John's,NL,active,"120 Kenmount Rd, St John's NL A1B3R2",name exact + phone match,
+Mini Halifax,Halifax,NS,9024548000,MINI,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Mitsubishi,Fredericton,NB,5063001157,Mitsubishi,name-only,skip-existing,Fredericton Mitsubishi,NB,active,"327 St. Marys, Fredricton NB E3A2S5","name exact, same province (phone differs/absent)",
+Loch Lomond Mitsubishi,Saint John,NB,5066341765,Mitsubishi,name+phone,skip-existing,Loch Lomond Mitsubishi,NB,active,"1265 Loch Lomond Rd, Saint John New Brunswick E3J3V4",name exact + phone match,
+Rallye Motors Mitsubishi,Moncton,NB,8005725593,Mitsubishi,name+phone,skip-existing,Rallye Motors Mitsubishi,NB,active,"1837 Main St., Moncton NB E1E1H6",name exact + phone match,phone shared across BD rooftops; toll-free; phone on 2 prod dealers (group switchboard?)
+Capital Mitsubishi,St John's,NL,7095796487,Mitsubishi,name+phone,skip-existing,Capital Mitsubishi,NL,active,"475 Kenmount Rd, St John's NL A1B4G1",name exact + phone match,
+Steele Mitsubishi,Halifax,NS,9024051177,Mitsubishi,name-only,skip-existing,Steele Mitsubishi,NS,active,"3681 Kempt Rd, Halifax NS B3K4X6, CANADA","name exact, same province (phone differs/absent)",
+Sydney Mitsubishi,Sydney,NS,9025638000,Mitsubishi,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Nissan,Fredericton,NB,5064589423,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Bayside Nissan,Bathurst,NB,5065473130,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Rallye Motors Nissan,Moncton,NB,5068571800,Nissan,name+phone,skip-existing,Rallye Motors Nissan,,active,"191 Carson Rd, Moncton NB  E1C 0K4, C/O Devon MacAusland",name exact + phone match,phone on 2 prod dealers (group switchboard?)
+Saint John Nissan,Saint John,NB,8884937816,Nissan,name-only,skip-existing,Saint John Nissan,NB,active,"633 Rothesay Ave, Saint John NB E2L 3Z8","name exact, same province (phone differs/absent)",toll-free
+Olivier Nissan Grand-Sault,Grand Falls,NB,5064734081,Nissan,phone-only,skip-existing,Olivier Nissan Grand Sault,NB,active,"245 Chem Madawaska, Grand Falls New Brunswick E3Y 1A4","phone match, name differs → ""Olivier Nissan Grand Sault"" (variant?)",
+Trevors Nissan,Miramichi,NB,5066224455,Nissan,name+phone,skip-existing,Trevors Nissan,NB,active,"1605, King George Hwy, Miramichi NB E1V6W3, Canada",name exact + phone match,
+Corner Brook Nissan,Corner Brook,NL,7096396011,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Hickman Nissan Clarenville,Clarenville,NL,7094662331,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Hickman Nissan Gander,Gander,NL,7096513007,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+O'Neill Nissan,Mount Pearl,NL,7093686011,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Highland Nissan,Westville,NS,9023964200,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Bruce Nissan,Kentville,NS,9026794000,Nissan,name-only,skip-existing,Bruce Nissan,NS,active,"975 Park St, Kentville NS B4N 4H8","name exact, same province (phone differs/absent)",
+MacDonald Nissan,Sydney,NS,8447628474,Nissan,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+O'Regan's Nissan Dartmouth,Dartmouth,NS,9024698484,Nissan,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+O'Regan's Nissan Halifax,Halifax,NS,9024532020,Nissan,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+Truro Nissan,Truro,NS,8559433259,Nissan,name-only,skip-existing,Truro Nissan,NS,active,"130 Onslow Road, Upper Onslow Nova Scotia b6L5K6","name exact, same province (phone differs/absent)",toll-free
+Centennial Nissan of Charlottetown,Charlottetown,PE,9028926577,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Centennial Nissan of Summerside,Summerside,PE,9024369159,Nissan,none,import-new,,,,,no name/phone/fuzzy match,
+Century Subaru,Saint John,NB,5066330833,Subaru,name+phone,skip-existing,Century Subaru,NB,active,"299, Rothesay Ave, Saint John NB E2J2C1",name exact + phone match,
+Fox Subaru,Fredericton,NB,5064589588,Subaru,none,import-new,,,,,no name/phone/fuzzy match,
+Subaru of Moncton,Dieppe,NB,5068044364,Subaru,name-only,skip-existing,Subaru of Moncton,NB,active,"1050 Aviation Ave, Dieppe NB E1A9A3","name exact, same province (phone differs/absent)",
+Capital Subaru,St John's,NL,7097269900,Subaru,fuzzy-name,import-new,Capital Auto Center,NL,active,"409, Kenmount rd., St. John's NL A1B3P9, Canada","fuzzy name ~ ""Capital Auto Center"" (score 0.50)",
+Central Nova Subaru,New Glasgow,NS,9027556202,Subaru,phone-only,import-new,Central Nova,NS,active,"2810 Westville Road, New Glasgow NS B2H5C6","phone match, name differs → ""Central Nova"" (variant?)",phone shared across BD rooftops
+O'Regan's South Shore Subaru,Bridgewater,NS,9025437129,Subaru,group-other-rooftop,import-new,O'Regan's South Shore Hyundai,NS,active,Bridgewater NS,"same group as ""O'Regan's South Shore Hyundai"" but distinct phone + different brand → new rooftop",
+Steele Subaru,Halifax,NS,8883103549,Subaru,name-only,skip-existing,Steele Subaru,NS,active,"3737 KEMPT ROAD, Halifax NS B0K4X6","name exact, same province (phone differs/absent)",toll-free
+Subaru of Charlottetown,Charlottetown,PE,9023677800,Subaru,none,import-new,,,,,no name/phone/fuzzy match,
+Acadia Toyota,Moncton,NB,5068578611,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Bathurst Toyota,Bathurst,NB,8007868427,Toyota,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Edmundston Toyota,Edmundston,NB,5067354741,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+F. McClure & Sons Toyota,Grand Falls,NB,5064732024,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Toyota,Fredericton,NB,5064522200,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Woodstock NB Toyota,Hartford,NB,5063286695,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Restigouche Toyota,Campbellton,NB,5067535019,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Roussel Toyota,Miramichi,NB,5066221867,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Saint John Toyota,Saint John,NB,5066337070,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Gander Toyota,Gander,NL,7092567177,Toyota,name+phone,skip-existing,Gander Toyota,NL,active,"340 James Blvd, Gander NL A1V1W8",name exact + phone match,
+Grand Toyota,Grand Falls-Windsor,NL,8773682208,Toyota,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Toyota Central,Clarenville,NL,7094666011,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Toyota Plaza,St John's,NL,7097534051,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Western Toyota,Corner Brook,NL,8778476632,Toyota,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Amherst Toyota,Amherst,NS,8337066363,Toyota,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Anchor Toyota,Stellarton,NS,8885680667,Toyota,name-only,skip-existing,Anchor Toyota,NS,active,"70 Lawerence Blvd, Stellerton NS B0K0A2","name exact, same province (phone differs/absent)",toll-free
+Kentville Toyota,Kentville,NS,9026786000,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Breton Toyota,Sydney,NS,9025398930,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+O'Regan's South Shore Toyota,Bridgewater,NS,9025437168,Toyota,group-other-rooftop,import-new,O'Regan's South Shore Hyundai,NS,active,Bridgewater NS,"same group as ""O'Regan's South Shore Hyundai"" but distinct phone + different brand → new rooftop",
+O'Regan's Toyota Dartmouth,Dartmouth,NS,9024649550,Toyota,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+O'Regan's Toyota Halifax,Halifax,NS,9024532331,Toyota,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+Tri-Mac Toyota,Port Hawkesbury,NS,9026253040,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Truro Toyota,Truro,NS,9028959000,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Tusket Toyota,Yarmouth,NS,9027491700,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Charlottetown Toyota,Charlottetown,PE,9023683330,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Summerside Toyota,Summerside,PE,9024365800,Toyota,none,import-new,,,,,no name/phone/fuzzy match,
+Fredericton Volkswagen,Fredericton,NB,5064542886,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Roussel Volkswagen,Miramichi,NB,8552567100,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,toll-free
+Saint John Volkswagen,Saint John,NB,5066581313,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Volkswagen Moncton,Dieppe,NB,5068570444,Volkswagen,group-other-rooftop,import-new,Moncton Volkswagen,NB,active,"850 Aviation Blvd, Moncton NB E1A9A3","same group as ""Moncton Volkswagen"" but distinct phone + different town → new rooftop",
+Volkswagen St. John's,St John's,NL,7097264424,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Bridgewater Volkswagen,Hebbville,NS,9025433344,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+O'Regan's Volkswagen Halifax,Halifax,NS,9024532790,Volkswagen,group-other-rooftop,import-new,O'Regan's Dartmouth Hyundai,NS,active,Dartmouth NS,"same group as ""O'Regan's Dartmouth Hyundai"" but distinct phone + different brand → new rooftop",
+Jim Sampson Motors,Sydney,NS,9025391610,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Steele Volkswagen,Dartmouth,NS,9024686411,Volkswagen,name+phone,skip-existing,Steele Volkswagen,NS,active,"696 Windmill Rd, Dartmouth NS B3B2A5",name exact + phone match,
+Valley Volkswagen,Coldbrook,NS,9026782155,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Truro Volkswagen,Truro,NS,9028955383,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Brown's Volkswagen,Charlottetown,PE,9028925381,Volkswagen,none,import-new,,,,,no name/phone/fuzzy match,
+Volvo Cars New Brunswick,Fredericton,NB,5064574500,Volvo,none,import-new,,,,,no name/phone/fuzzy match,
+Volvo of Newfoundland,Mount Pearl,NL,7093687683,Volvo,none,import-new,,,,,no name/phone/fuzzy match,
+Volvo of Halifax,Halifax,NS,9027005332,Volvo,none,import-new,,,,,no name/phone/fuzzy match,
