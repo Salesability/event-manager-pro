@@ -9,9 +9,9 @@
 |-------|--------|--------|
 | 1: Decision gate + source prep + prod-overlap probe | Done | `4e5781e` |
 | 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Done | `9788c7e` |
-| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Done | - |
-| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | In Progress | - |
-| 5: Sandbox dry-run + verify | Pending | - |
+| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Done | `458e865` |
+| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Done | - |
+| 5: Sandbox dry-run + verify | In Progress | - |
 | 6: Prod migration + run + verify | Pending | - |
 
 A one-time, idempotent import of the cleaned 281-rooftop Atlantic Canada BD list
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
@@ -77,10 +77,10 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Confirmed **no push fires for a prospect** — gate `if (status === 'active')` unchanged; already covered by `dealers/actions.test.ts:419` ("does not run the QB check for a prospect"). The Phase-4 import inserts directly (bypasses the action) so it never pushes regardless.
 
 #### Phase 4: Import script — parse → 3-layer dedup → upsert dealers + contacts
-- [ ] `scripts/import-atlantic-dealers.ts`: read the Phase-1 data file → for each non-dropped row: find-or-create dealer (dedup name+address; insert `status='prospect'`, `province`, `phone`, `manufacturer`, `notes` block, `acquiredVia`); find-or-create each contact **by email** (reuse across rooftops); link `dealer_contacts` (`role='staff'`, `title` GM/SM). Idempotent guarded inserts.
-- [ ] `--dry-run` mode: print per-row disposition (insert / link-existing-contact / skip-existing-dealer / skip-flagged) + summary counts; **no writes**.
-- [ ] Reuse the 0085 dedup helpers + `findCustomerByDisplayName`; respect the Phase-1 prod-overlap decision.
-- [ ] Unit tests on the pure mapper (row → dealer fields + notes block + contact list) + the in-sheet drop-list; no live DB/QBO in CI.
+- [x] `scripts/import-atlantic-dealers.ts`: reads the JSON → per non-dropped row: find-or-create dealer (name+city dedup → insert `status='prospect'`, `province`, `phone`, `manufacturer`, composed `notes`, `acquiredVia`), find-or-create each contact **by email** (reuse across rooftops; name-only contacts deduped per `(dealer, role, title)`), link `dealer_contacts` (`role='staff'`, `title` GM/SM, `onConflictDoNothing`). Contact+email-identifier insert is in a tx (0085 orphan guarantee).
+- [x] `--dry-run` mode: per-row disposition (`insert` / `skip-existing` / `skip-dup-in-run` / `skip-flagged`; contacts `insert`/`reuse(db)`/`reuse(in-run)`) + summary counts; **no writes**. Validated on sandbox: 281 → 6 flagged / 274 dealers / 1 in-run dup; 452 contacts (442 email + 10 name-only), 3 reuse-db, 17 reuse-in-run — reconciles exactly.
+- [x] Dedup mirrors the 0085 helpers (`dedup.ts`) inlined on the runner's own connection (the helpers import `@/lib/db`'s un-closable pool + the QBO client pulls `server-only`). **`findCustomerByDisplayName` deliberately NOT called** — prospects don't link to QBO (D7); the prod-QBO overlap is reported by `scripts/atlantic-overlap-probe.mjs` instead.
+- [x] Unit tests on the pure mapper (`src/features/dealers/atlantic-import.ts` → `atlantic-import.test.ts`, 13 tests: dealer fields, city→address, province parse, notes block, GM/SM contacts, name-only, drop-list) — no live DB/QBO in CI.
 
 #### Phase 5: Sandbox dry-run + verify
 - [ ] `--dry-run` against sandbox → confirm ≈275 dealers / ≈447 contacts and the disposition breakdown matches the probe.
