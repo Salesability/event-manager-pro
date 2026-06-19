@@ -301,6 +301,37 @@ describe('createDealer', () => {
     expect(mocks.findExistingContactByIdentifier).not.toHaveBeenCalled();
     expect(mocks.inserts.find((i) => i.table === 'contacts')).toBeDefined();
   });
+
+  // 0085 Phase 3 — dealer name+address dedup guard (app-local). (Case/whitespace
+  // insensitivity is the helper's SQL; verified in the Phase 6 integration test.)
+  it('returns a dealer-local duplicate (no insert) when name+address matches an existing dealer', async () => {
+    mocks.findExistingDealerByNameAddress.mockResolvedValue({
+      dealerId: 12,
+      name: 'ABC Motors',
+      address: '123 King St',
+    });
+    const result = await call(createDealer(fd({ name: 'ABC Motors', address: '123 King St' })));
+    expect(result).toEqual({
+      duplicate: { kind: 'dealer-local', dealerId: 12, name: 'ABC Motors', address: '123 King St' },
+    });
+    // Returned before the transaction, and before the contact check.
+    expect(mocks.inserts).toHaveLength(0);
+    expect(mocks.findExistingContactByIdentifier).not.toHaveBeenCalled();
+  });
+
+  it('createAnyway skips the dealer-local check and inserts the dealer', async () => {
+    mocks.findExistingDealerByNameAddress.mockResolvedValue({
+      dealerId: 12,
+      name: 'ABC Motors',
+      address: '123 King St',
+    });
+    const result = await call(
+      createDealer(fd({ name: 'ABC Motors', address: '123 King St', createAnyway: '1' })),
+    );
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.findExistingDealerByNameAddress).not.toHaveBeenCalled();
+    expect(mocks.inserts.find((i) => i.table === 'dealers')).toBeDefined();
+  });
 });
 
 describe('updateDealer', () => {

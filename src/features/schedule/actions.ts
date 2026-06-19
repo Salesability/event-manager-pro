@@ -25,7 +25,11 @@ import { ensureAvailabilityOwnership } from './availability-authz';
 import { reconcileCampaignCalendar } from './calendar-sync';
 import { loadDealer } from './queries';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
-import { type DuplicateResult, findExistingContactByIdentifier } from '@/features/dealers/dedup';
+import {
+  type DuplicateResult,
+  findExistingContactByIdentifier,
+  findExistingDealerByNameAddress,
+} from '@/features/dealers/dedup';
 import { availabilityFormSchema } from './availability-schema';
 import { lookupFormSchema } from './lookup-schema';
 import { parseCampaignInput, parseId } from './validators';
@@ -202,6 +206,25 @@ export const createDealer = capabilityClient('dealer:create')
 
     const decision = parseDealerDecision(formData);
     const wantsContact = !!(contactFirst || contactLast);
+
+    // 0085 Phase 3: warn before creating a second dealer with the same
+    // name+address (app-local — name+address is too fuzzy to enforce at the DB
+    // level). Runs first (cheap local read). Skipped on `createAnyway` (a
+    // deliberate same-name dealer at a different lot) and on `linkQuickbooksId`
+    // (the QB-link prompt is only reached once this check already passed).
+    if (!decision.createAnyway && decision.linkQuickbooksId == null) {
+      const dealerMatch = await findExistingDealerByNameAddress(name, address || null);
+      if (dealerMatch) {
+        return {
+          duplicate: {
+            kind: 'dealer-local',
+            dealerId: dealerMatch.dealerId,
+            name: dealerMatch.name,
+            address: dealerMatch.address,
+          },
+        };
+      }
+    }
 
     // 0085 Phase 2: warn before blind-inserting a contact whose email/phone
     // already belongs to another contact. Skipped once the coach has chosen to
