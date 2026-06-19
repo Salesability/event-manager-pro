@@ -16,7 +16,7 @@ Entries are reverse-chronological (newest at the top). Format:
 ## 2026-06-19 — `dealers` gains `phone` / `manufacturer` / `notes` (chunk 0086, migration 0041)
 
 - Updated [`data-model.md`](data-model.md): `dealers` adds three **nullable text** columns for the Atlantic Canada BD-list import — `phone` (rooftop switchboard line; a dealer-level attribute, **not** a contact identifier, since rooftops share numbers the `contact_identifiers` active-unique index forbids), `manufacturer` (vehicle brand, free-form), `notes` (free-form; the import folds Group/Contact-Verification/Co-op/sheet-notes into a readable block). Also noted `address` is city-only for BD-list prospects and `acquired_via='Atlantic Canada BD list'` is the batch tag.
-- Migration `0041_strong_slyde.sql` (additive, no backfill) **applied to sandbox**; prod-apply is gated to the chunk's Phase 6. History: [`docs/chunks/0086-atlantic-dealer-import/`](../chunks/0086-atlantic-dealer-import/plan.md).
+- Migration `0041_strong_slyde.sql` (additive, no backfill) applied to sandbox **and prod** (2026-06-19). History: [`docs/chunks/closed/0086-atlantic-dealer-import/`](../chunks/closed/0086-atlantic-dealer-import/plan.md).
 
 ## 2026-06-18 — auto-push active dealers to QuickBooks + contact-name mapping (chunk 0084)
 
