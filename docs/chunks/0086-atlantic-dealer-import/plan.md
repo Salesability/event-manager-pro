@@ -8,9 +8,9 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate + source prep + prod-overlap probe | Done | `4e5781e` |
-| 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Done | - |
-| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | In Progress | - |
-| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Pending | - |
+| 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Done | `9788c7e` |
+| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Done | - |
+| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | In Progress | - |
 | 5: Sandbox dry-run + verify | Pending | - |
 | 6: Prod migration + run + verify | Pending | - |
 
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
@@ -71,10 +71,10 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Updated `docs/wiki/data-model.md` (ER block + entity-catalog row) + `docs/wiki/log.md` entry.
 
 #### Phase 3: Wire `loadDealer` + QBO push to read `dealers.phone`
-- [ ] Extend `loadDealer` (`queries.ts`) projection to return `phone` / `manufacturer` / `notes`.
-- [ ] `mapDealerToCustomer` (`dealer-push.ts`): `PrimaryPhone` prefers `dealer.phone` (fallback to the primary contact's phone) so an **activated** prospect's QBO Customer carries the rooftop line; add `phone` to `DealerToPush`.
-- [ ] Unit tests: `mapDealerToCustomer` emits `PrimaryPhone` from `dealers.phone`; no behavior change when `phone` is null.
-- [ ] Confirm **no push fires for a prospect** (status-gated, unchanged from 0084).
+- [x] Extended `loadDealer` (`queries.ts`) projection + return type to carry `phone` / `manufacturer` / `notes` (kept off the base list `Dealer`, mirroring `quickbooksId`). The activation/edit push paths build their `DealerToPush` via `loadDealer`, so they now carry the rooftop phone automatically.
+- [x] `mapDealerToCustomer` (`dealer-push.ts`): `PrimaryPhone = dealer.phone ?? dealer.primaryPhone` (prefer the rooftop line, fall back to contact); added optional `phone?` to `DealerToPush`; refreshed the stale "phone comes from the contact" comment. `createDealer`'s inline no-reuse `toPush` sets `phone: null` (UI create has no rooftop-phone field).
+- [x] Unit tests (`dealer-push.test.ts`, +4): prefers `dealer.phone` over contact phone; falls back when null/absent (no behavior change); emits from `dealer.phone` alone; omits when both absent.
+- [x] Confirmed **no push fires for a prospect** — gate `if (status === 'active')` unchanged; already covered by `dealers/actions.test.ts:419` ("does not run the QB check for a prospect"). The Phase-4 import inserts directly (bypasses the action) so it never pushes regardless.
 
 #### Phase 4: Import script — parse → 3-layer dedup → upsert dealers + contacts
 - [ ] `scripts/import-atlantic-dealers.ts`: read the Phase-1 data file → for each non-dropped row: find-or-create dealer (dedup name+address; insert `status='prospect'`, `province`, `phone`, `manufacturer`, `notes` block, `acquiredVia`); find-or-create each contact **by email** (reuse across rooftops); link `dealer_contacts` (`role='staff'`, `title` GM/SM). Idempotent guarded inserts.

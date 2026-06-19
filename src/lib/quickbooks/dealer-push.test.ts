@@ -71,6 +71,35 @@ describe('mapDealerToCustomer', () => {
     expect(without.PrimaryEmailAddr).toBeUndefined();
     expect(without.PrimaryPhone).toBeUndefined();
   });
+
+  it('prefers the rooftop dealer.phone over the contact phone for PrimaryPhone (0086)', () => {
+    const out = mapDealerToCustomer({
+      ...base,
+      phone: '902-555-0100',
+      primaryPhone: '555-1234',
+    });
+    expect(out.PrimaryPhone).toEqual({ FreeFormNumber: '902-555-0100' });
+  });
+
+  it('falls back to the contact phone when dealer.phone is null/absent (no behavior change)', () => {
+    expect(
+      mapDealerToCustomer({ ...base, phone: null, primaryPhone: '555-1234' }).PrimaryPhone,
+    ).toEqual({ FreeFormNumber: '555-1234' });
+    // absent `phone` key behaves identically to null
+    expect(
+      mapDealerToCustomer({ ...base, primaryPhone: '555-1234' }).PrimaryPhone,
+    ).toEqual({ FreeFormNumber: '555-1234' });
+  });
+
+  it('emits PrimaryPhone from dealer.phone even with no contact phone', () => {
+    expect(mapDealerToCustomer({ ...base, phone: '902-555-0100' }).PrimaryPhone).toEqual({
+      FreeFormNumber: '902-555-0100',
+    });
+  });
+
+  it('omits PrimaryPhone when both dealer.phone and contact phone are absent', () => {
+    expect(mapDealerToCustomer(base).PrimaryPhone).toBeUndefined();
+  });
 });
 
 describe('planDealerPush', () => {

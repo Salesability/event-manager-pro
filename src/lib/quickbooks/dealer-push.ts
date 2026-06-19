@@ -19,8 +19,9 @@ import {
 // Address fidelity is intentionally lossy: our `dealers.address` is a single
 // flat string (0069's `formatAddress` joined the QBO parts), so we send the
 // whole blob as `BillAddr.Line1` rather than re-parsing it into structured
-// QBO address fields. Email/phone come from the dealer's primary contact
-// (`dealers` itself has no contact columns).
+// QBO address fields. The Customer phone prefers the rooftop line
+// (`dealers.phone`, 0086) and falls back to the primary contact's phone; email
+// comes from the primary contact.
 
 // `db` and a transaction handle both satisfy the update surface — accepting
 // either lets the integration test pass a rolled-back tx (mirrors dealer-sync).
@@ -36,6 +37,10 @@ export type DealerToPush = {
   address: string | null;
   province: CaProvinceCode | null;
   quickbooksId: string | null;
+  // Rooftop switchboard line (0086). Optional — UI-created dealers leave it null
+  // and fall back to the contact phone; BD-import prospects carry it so an
+  // activation pushes the dealership number to the Customer.
+  phone?: string | null;
   contactFirstName?: string | null;
   contactLastName?: string | null;
   primaryEmail?: string | null;
@@ -57,7 +62,9 @@ export function mapDealerToCustomer(dealer: DealerToPush): QboCustomerInput {
     };
   }
   if (dealer.primaryEmail) input.PrimaryEmailAddr = { Address: dealer.primaryEmail };
-  if (dealer.primaryPhone) input.PrimaryPhone = { FreeFormNumber: dealer.primaryPhone };
+  // Prefer the rooftop line over the contact's phone (0086).
+  const phone = dealer.phone ?? dealer.primaryPhone;
+  if (phone) input.PrimaryPhone = { FreeFormNumber: phone };
   return input;
 }
 

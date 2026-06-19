@@ -424,6 +424,10 @@ export const createDealer = capabilityClient('dealer:create')
               province: v.province || null,
               // 0085 Phase 4: a born-linked dealer pushes via the update branch.
               quickbooksId: decision.linkQuickbooksId ?? null,
+              // 0086: the UI create form has no rooftop-phone field; the Customer
+              // phone falls back to the contact's. Imported prospects that carry
+              // `dealers.phone` push it via `loadDealer` on activation/edit.
+              phone: null,
               contactFirstName: contactFirst || null,
               contactLastName: contactLast || null,
               primaryEmail: contactEmail || null,

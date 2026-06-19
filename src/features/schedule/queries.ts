@@ -262,7 +262,15 @@ export async function loadDealersIncludingArchived(): Promise<Dealer[]> {
 // list loaders don't need it, so it stays off the base `Dealer` type.
 export async function loadDealer(
   id: number,
-): Promise<(Dealer & { quickbooksId: string | null }) | null> {
+): Promise<
+  | (Dealer & {
+      quickbooksId: string | null;
+      phone: string | null;
+      manufacturer: string | null;
+      notes: string | null;
+    })
+  | null
+> {
   const [row] = await db
     .select({
       id: dealers.id,
@@ -274,6 +282,11 @@ export async function loadDealer(
       acquiredVia: dealers.acquiredVia,
       archivedAt: dealers.archivedAt,
       quickbooksId: dealers.quickbooksId,
+      // 0086: rooftop phone (the QBO push prefers it) + manufacturer/notes
+      // (carried for the dealer detail surface; off the base list `Dealer`).
+      phone: dealers.phone,
+      manufacturer: dealers.manufacturer,
+      notes: dealers.notes,
     })
     .from(dealers)
     .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
@@ -295,6 +308,9 @@ export async function loadDealer(
     acquiredVia: row.acquiredVia,
     archivedAt: row.archivedAt,
     quickbooksId: row.quickbooksId,
+    phone: row.phone,
+    manufacturer: row.manufacturer,
+    notes: row.notes,
     contactId: link?.contactId ?? null,
     contactFirstName: link?.firstName ?? null,
     contactLastName: link?.lastName ?? null,
