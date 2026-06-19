@@ -1,12 +1,17 @@
 // One-time, idempotent import of the cleaned Atlantic Canada dealer BD list
 // (chunk 0086) into `dealers` + `contacts` + `dealer_contacts` as **prospect**
-// dealers. Reads the committed `scripts/data/atlantic-dealers.json`, applies the
-// in-sheet drop-list + name+city dedup (skip-existing-dealer) + email contact
-// dedup (a person on many rooftops = one contact, many links), and is safe to
-// re-run (a full re-run inserts 0 rows). NO QB writes — prospects don't push
-// (0084); the prod-QBO overlap is reported separately by
-// `scripts/atlantic-overlap-probe.mjs` (decision.md D7). Mirrors the shape of
-// `scripts/import-from-sheets.ts`.
+// dealers. Reads the committed `scripts/data/atlantic-dealers.json` for the rows
+// and `scripts/data/atlantic-reconciliation.csv` for the per-rooftop disposition.
+//
+// Dedup is OWNER-VETTED, not auto: the prod overlap was large + messy (dealer
+// groups share phones/postal codes across distinct brand rooftops, and the BD
+// list has city-only addresses), so a single auto-key is untrustworthy (see
+// decision.md D8). The reconciliation worksheet carries a `suggested_action` per
+// rooftop — `import-new` (insert as prospect) or `skip-existing` (already in prod,
+// leave untouched). This runner HONORS that column (keyed by name+city); it does
+// not re-derive the overlap. Email contact dedup still applies (a person on many
+// rooftops = one contact, many links). Safe to re-run (0 inserts). NO QB writes —
+// prospects don't push (0084). Mirrors the shape of `scripts/import-from-sheets.ts`.
 //
 // Run (sandbox, dry-run):
 //   set -a && source .env.local && set +a && pnpm dlx tsx scripts/import-atlantic-dealers.ts --dry-run
@@ -17,7 +22,8 @@
 // The dedup queries below are inlined copies of `src/features/dealers/dedup.ts`
 // (0085) — those helpers import `@/lib/db` (an un-closable eager pool) and pull
 // in the `server-only` QBO client, neither of which suits a standalone tsx
-// runner; the semantics here are identical.
+// runner; the semantics here are identical. (They now serve only as a re-run
+// safety net for `import-new` rows; the skip decision comes from the worksheet.)
 
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -96,9 +102,53 @@ async function findStaffContactIdByTitle(dealerId: number, title: string): Promi
   return row?.contactId ?? null;
 }
 
+// Minimal RFC-4180-ish CSV parser (quoted fields, "" escapes). The worksheet is
+// machine-written + may be re-saved from Excel, so handle quotes + CRLF.
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+    else if (c !== '\r') field += c;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+// name+city → owner-vetted suggested_action ('import-new' | 'skip-existing').
+function loadReconciliation(): Map<string, string> {
+  const csv = parseCsv(
+    readFileSync(new URL('./data/atlantic-reconciliation.csv', import.meta.url), 'utf8'),
+  );
+  const header = csv[0];
+  const iName = header.indexOf('bd_name');
+  const iCity = header.indexOf('bd_city');
+  const iAction = header.indexOf('suggested_action');
+  if (iName < 0 || iCity < 0 || iAction < 0) {
+    throw new Error('reconciliation CSV missing bd_name/bd_city/suggested_action columns');
+  }
+  const map = new Map<string, string>();
+  for (const r of csv.slice(1)) {
+    if (!r[iName]) continue;
+    map.set(dropKey(r[iName], r[iCity]), (r[iAction] || '').trim());
+  }
+  return map;
+}
+
 const stats = {
   rows: 0,
   skipFlagged: 0,
+  skipVetted: 0,
+  unvetted: 0,
   dealersInserted: 0,
   dealersExisting: 0,
   dealersDupInRun: 0,
@@ -115,11 +165,12 @@ async function main(): Promise<void> {
     readFileSync(new URL('./data/atlantic-dealers.json', import.meta.url), 'utf8'),
   ) as AtlanticFile;
   const dropSet = buildDropSet(file);
+  const recon = loadReconciliation();
   const seenDealer = new Map<string, number>(); // name+city → dealerId (in-run)
   const seenEmail = new Set<string>(); // dry-run cross-row reuse simulation
 
   console.log(`\n=== Atlantic BD import ${DRY_RUN ? '(DRY RUN — no writes)' : '(WRITING)'} ===`);
-  console.log(`source: ${file.source}  rows: ${file.rows.length}  dropList: ${file.dropList.length}`);
+  console.log(`source: ${file.source}  rows: ${file.rows.length}  dropList: ${file.dropList.length}  reconciliation: ${recon.size}`);
   console.log(`target: ${printf(DATABASE_URL)}\n`);
 
   for (const row of file.rows) {
@@ -130,6 +181,22 @@ async function main(): Promise<void> {
     if (dropSet.has(key)) {
       stats.skipFlagged++;
       console.log(`[skip-flagged]   ${mapped.name} (${row.city}, ${row.province})`);
+      continue;
+    }
+
+    // Owner-vetted disposition (decision.md D8). `skip-existing` ⇒ already in prod,
+    // leave untouched (no dealer, no contacts). Anything not `import-new` (a
+    // leftover `review`, or a row missing from the worksheet) is NOT guessed —
+    // it's skipped with a warning so the operator notices before a prod run.
+    const action = recon.get(key);
+    if (action === 'skip-existing') {
+      stats.skipVetted++;
+      console.log(`[skip-existing*] ${mapped.name} (${row.city}, ${row.province})  · vetted: already in prod`);
+      continue;
+    }
+    if (action !== 'import-new') {
+      stats.unvetted++;
+      console.log(`[UNVETTED!]      ${mapped.name} (${row.city}, ${row.province})  · action=${action ?? 'MISSING'} — SKIPPED (resolve in the worksheet)`);
       continue;
     }
 
@@ -276,9 +343,11 @@ async function insertContactWithEmail(
 function printSummary(): void {
   console.log(`\n=== SUMMARY ${DRY_RUN ? '(DRY RUN)' : '(WRITTEN)'} ===`);
   console.log(`rows processed           : ${stats.rows}`);
-  console.log(`  skip-flagged           : ${stats.skipFlagged}`);
+  console.log(`  skip-flagged (drop)    : ${stats.skipFlagged}`);
+  console.log(`  skip-existing (vetted) : ${stats.skipVetted}`);
+  if (stats.unvetted) console.log(`  ⚠ UNVETTED (skipped)   : ${stats.unvetted}  ← resolve in the worksheet!`);
   console.log(`dealers inserted         : ${stats.dealersInserted}`);
-  console.log(`  skip-existing (DB)     : ${stats.dealersExisting}`);
+  console.log(`  skip-existing (DB/rerun): ${stats.dealersExisting}`);
   console.log(`  skip-dup-in-run        : ${stats.dealersDupInRun}`);
   console.log(`contacts inserted        : ${stats.contactsInserted}`);
   console.log(`  reuse existing (DB)    : ${stats.contactsReusedExisting}`);
@@ -288,7 +357,7 @@ function printSummary(): void {
     console.log(`dealer_contacts links    : ${stats.linksInserted} inserted, ${stats.linksExisting} already-linked`);
   }
   const distinctDealers = stats.dealersInserted + stats.dealersExisting;
-  console.log(`→ distinct dealers handled: ${distinctDealers} (expected 274 on a clean DB)`);
+  console.log(`→ import-new dealers handled: ${distinctDealers} (expected 188 on a clean DB) · skipped-as-existing: ${stats.skipVetted}`);
 }
 
 // host:port only — never leak the password.
