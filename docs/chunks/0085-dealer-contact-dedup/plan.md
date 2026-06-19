@@ -11,7 +11,7 @@
 | 2: Contact email/phone guard in Server Actions (+ orphan-row fix) | Done | `7219e0e` |
 | 3: Dealer name+address guard in `createDealer` (app-local) | Done | `af24bd8` |
 | 4: Create-time QuickBooks `Customer`-by-name check + link-on-match | Done | `2dd1095` |
-| 5: Client reuse / link affordance on the forms | Pending | - |
+| 5: Client reuse / link affordance on the forms | Done | `8de1821` |
 | 6: Tests + smoke verification | Pending | - |
 
 This chunk closes the create-time duplicate gap: the UI create/edit paths
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/auth.md` — keep the existing `requireRole` gating on the touched actions unchanged.
 - **QB best-effort principle (0077/0084)** — a dormant/erroring QuickBooks must never block the dealer save; the Phase-4 QB check degrades to "skip + proceed" on any connection/query failure, raising the link prompt *only* on a successful match.
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -96,10 +96,11 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Tests (mock QB client): match → `dealer-quickbooks` result; link → born-linked insert + push gets a linked dealer, no QB query; dormant → skipped + create; createAnyway → no query; prospect → no query. Plus `client.test.ts`: query/escaping/null/401.
 
 #### Phase 5: Client reuse / link affordance on the forms
-- [ ] `dealer-form.tsx`: on a local-duplicate result, show a Callout ("Looks like *{name}* already exists") with **Use existing** + **Create anyway**; on an "exists in QuickBooks" result, show **Link to the QuickBooks customer** + **Create anyway** (shared Catalyst `Button`); re-submit with the decision (`reuseExistingId` / `linkQuickbooksId` / `createAnyway`).
-- [ ] `coach-add-form.tsx` / `people-admin.tsx`: reuse affordance for the contact email/phone case.
-- [ ] `booking-form.tsx` inline-add-dealer-coach: surface the dealer (local + QB) + contact dup results (per the Phase 1 decision — full prompt vs "open existing" hint).
-- [ ] Match `forms.md` RHF + zod + `<Field>` patterns; no new validator lib (Zod only).
+- [x] Foundation: `toLegacyResult` passes `{ duplicate }` through (constraint relaxed to `extends object`; `booking-form` made its no-arg call explicit `<{ ok: true }>`); shared `DuplicateResult` moved to a types-only `duplicate-types.ts`; shared presentational `DuplicateNotice` + `duplicateMessage` (amber warning panel). Plus a `legacy-result.test.ts`.
+- [x] `dealer-form.tsx`: dealer-local → **Open existing dealer** (`/dealerships/{id}`) + **Create anyway**; dealer-quickbooks → **Link to the QuickBooks customer** + **Create anyway**; contact → **Use {name}** (`reuseContactId`, create-mode) + dismiss. Re-submits via a `submit(values, decision)` refactor (`reuseContactId`/`linkQuickbooksId`/`createAnyway`).
+- [x] `coach-add-form.tsx` + `people-admin.tsx` (PersonForm): informational `DuplicateNotice` for the contact case (D4 — a coach/person IS a contact; dismiss + fix the email, no re-link).
+- [x] `booking-form.tsx` inline **Add dealer** reuses `DealerForm` → inherits the full affordance for free (better than the planned "simpler hint", no nested-dialog cost); inline **Add coach** uses `CoachAddForm`'s informational notice. _(Prospect inline-adds skip the QB check per D6.)_
+- [x] Match RHF + zod + `<Field>` patterns; shared Catalyst `Button`; no new validator lib. (No shared danger-Callout built — the local amber `DuplicateNotice` matches existing warning panels; the shared component stays the parked ≈0082 follow-up.)
 
 #### Phase 6: Tests + smoke verification
 - [ ] Service-level integration test (real DB): contact email collision → reuse links existing contact, no orphan row; dealer name+address collision → duplicate-detected.
