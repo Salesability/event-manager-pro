@@ -10,9 +10,9 @@
 | 1: Decision gate + source prep + prod-overlap probe | Done | `4e5781e` |
 | 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Done | `9788c7e` |
 | 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Done | `458e865` |
-| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Done | - |
-| 5: Sandbox dry-run + verify | In Progress | - |
-| 6: Prod migration + run + verify | Pending | - |
+| 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Done | `a482d68` |
+| 5: Sandbox dry-run + verify | Done | (sandbox-only, no code commit) |
+| 6: Prod migration + run + verify | Pending (owner-gated) | - |
 
 A one-time, idempotent import of the cleaned 281-rooftop Atlantic Canada BD list
 into the app as **prospect** dealers (no QB push — prospects don't push, 0084),
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete — Phase 6 is the owner-gated prod step)
 
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
@@ -83,10 +83,10 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Unit tests on the pure mapper (`src/features/dealers/atlantic-import.ts` → `atlantic-import.test.ts`, 13 tests: dealer fields, city→address, province parse, notes block, GM/SM contacts, name-only, drop-list) — no live DB/QBO in CI.
 
 #### Phase 5: Sandbox dry-run + verify
-- [ ] `--dry-run` against sandbox → confirm ≈275 dealers / ≈447 contacts and the disposition breakdown matches the probe.
-- [ ] Real run against **sandbox**; verify: counts, a few spot-checked dealers (province/phone/manufacturer/notes populated, `status='prospect'`), a shared-email person (e.g. Cole Darrach) is **one** contact with multiple `dealer_contacts` links, the ~6 flagged rows are absent.
-- [ ] **Re-run** against sandbox → asserts **0** new rows (idempotent).
-- [ ] Smoke (web-test): `goto /dealerships` → an imported prospect renders (status prospect, province, phone shown).
+- [x] `--dry-run` against sandbox → 281 → 6 flagged / 274 dealers / 1 in-run dup; 452 est. contacts (442 email + 10 name-only), 3 reuse-db, 17 reuse-in-run. Reconciles with the probe (0 name+addr, 274 distinct).
+- [x] Real run against **sandbox**: 274 dealers inserted (all `status='prospect'`, province split NB:90/NL:56/NS:108/PE:20), 451 contacts. Spot-checks: Acura of Moncton (`address='Moncton'` city-only, NB, phone `506-853-1116`, manufacturer Acura, notes block), Atlantic Acura (multi-line notes). **Cole Darrach = ONE contact (id 612) with 4 `dealer_contacts` links** across 4 Rallye rooftops (cross-rooftop email dedup ✓). All 6 flagged rows absent; kept sibling Smith & Watt Chrysler present; Motor Hub Antigonish = exactly 1.
+- [x] **Re-run** against sandbox → **0 dealers / 0 contacts / 0 links inserted** (274 skip-existing, 462 reuse-db, 10 reuse-by-title, 472 already-linked); batch counts unchanged (274/442/471). Idempotent ✓.
+- [x] Smoke (web-test): `/dealerships` renders 200, no console errors; **"Prospect (274)"** filter present; imported rows render (Acura of Moncton/Atlantic Acura/Acadia Toyota — name + GM contact + email + city + `prospect`). _Caveat: `dealers.phone`/manufacturer/notes are stored + consumed by the QBO push but not surfaced in the dealer UI (no roster UI in scope); the list shows the contact phone (null for imports)._
 
 #### Phase 6: Prod migration + run + verify
 - [ ] Apply `0041` to **prod** first (`pnpm db:migrate:prod`, session pooler 5432); verify columns. _(Owner-gated; gcloud reauth may be needed — [[project-prod-gcp]].)_
