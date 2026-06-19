@@ -1,97 +1,90 @@
-# Dealer pipeline (prospecting CRM-lite) — Intent
+# Dealer commitment tracker ("don't drop the ball") — Intent
 
-**Created:** 2026-06-19
+**Created:** 2026-06-19 · **Reframed:** 2026-06-19 (after 0086 shipped + an owner reframe — this is a *promised-follow-up* tracker, not a stage funnel). Folder slug kept as `0087-dealer-pipeline` (serial = identity); the scope is the commitment tracker described here.
 
 ## Problem
 
-The app tracks a **deal/contract** funnel (Quote → MSA → accepted → active dealer
-→ campaign → invoice — see [`commercial-spine.md`](../../wiki/commercial-spine.md))
-but has **no prospecting funnel**. Dealer status is a binary `prospect | active`
-(`dealers.status`); there's no stage, owner, priority, next-action, or activity
-trail for working a cold prospect through outreach. With the Atlantic Canada BD
-list (0086) bringing **281 prospects** into the app, the team needs somewhere to
-track *where each prospect is* and *who's working it* — otherwise that lives in a
-spreadsheet, disconnected from the dealer record, quotes, and QuickBooks.
+The app tracks the **deal/contract** funnel (Quote → MSA → accepted → active → campaign →
+invoice — see [`commercial-spine.md`](../../wiki/commercial-spine.md)) but has nothing to
+help a salesperson **keep the small promises that win trust** — *"I'll call you back
+Tuesday"*, *"I'll send pricing by Friday."* With 0086 putting **188 cold Atlantic
+prospects** into the app, those commitments otherwise live in someone's head or a
+spreadsheet, and a single dropped callback quietly erodes the relationship. Dealer status
+is a binary `prospect | active` with no notion of *what did I commit to do next, and when.*
 
-The BD tracker's `Pipeline Stage / Priority / Owner / Last Contact / Next Action`
-columns (dropped from the 0086 import because the schema has no home for them) are
-exactly the gap this chunk fills.
+**This is NOT a CRM stage funnel.** An earlier sketch modeled a 9-stage pipeline
+(`researching → contacted → negotiation …`). The owner's reframe: **the value is
+reliability, not stage-reporting.** What matters is the *next promised action + its due
+date*, surfaced so it never slips. How a rep manages **permission to contact** is their
+own judgment and style — explicitly **out of scope to model** (a free-text note at most).
 
 ## Desired outcome
 
-A **CRM-lite pipeline on the dealer** — enough to run a real outreach effort from
-inside the app, without building a full CRM:
+A **commitment tracker on the dealer** — the lightest thing that keeps promises from
+slipping:
 
-- A **pipeline stage** on each dealer (top-of-funnel outreach stages that dovetail
-  with the existing `prospect → active` status; "won" = the dealer converting to
-  active via quote-accept, not a duplicate state).
-- An **owner** (the coach/staff member working the prospect), a **priority**, a
-  **next action + date**, and a **last-contacted** timestamp at the dealer level.
-- A **per-dealer pipeline panel** on `/dealerships/[id]` to set stage/owner/priority/
-  next-action and **log a touch** (one click → stamps last-contacted).
-- **Stage / owner / priority columns + filters** on the `/dealerships` list so the
-  team can work the board ("show me my Negotiation prospects").
-- **Won wiring:** moving a prospect to "won" reuses `convertProspectToActive` (which
-  already flips status + triggers the QBO push, 0084) — so the pipeline and the
-  commercial spine stay one system, not two.
+- A single **current next action** per dealer (**free text**, the rep's own words —
+  "call back re: spring event", "send pricing"), with a **due date** and an **owner**.
+- A **commitments queue**: **overdue** (loud — about to break a promise), **due
+  today/soon**, and prospects with **no next action set** (idle — need a first step) —
+  filtered to "mine."
+- **Log a touch:** one click stamps **last-contacted** (and optionally appends a dated
+  note), then the rep sets the next promised action.
+- **Won** reuses `convertProspectToActive` (status → active + QBO push, 0084) — the
+  prospecting effort and the commercial spine stay one system.
 
-Observable end state: a coach opens `/dealerships`, filters to their prospects by
-stage, opens one, advances its stage / logs a call / sets the next action — and
-when it converts, marks it won (→ active → QBO), all without leaving the app.
+**States without an enum** (the reframe's elegance):
+- **On hold** = just a **future-dated** next action ("revisit in Sept") → drops off
+  today's queue, reappears when due.
+- **Lost / dead** = **archive** the dealer (existing `archivedAt`) → off the queue.
+- **Won** = `status='active'` via `convertProspectToActive`.
+
+Observable end state: a coach opens their follow-ups, sees who they owe a callback today
+(and what they're overdue on), opens a dealer, logs the call, sets the next promise — and
+nothing they committed to quietly disappears.
 
 ## Non-goals (v1 scope guard)
 
-- **No full activity-timeline table.** v1 uses dealer-level `last_contacted_at` +
-  the `dealers.notes` field (0086). A dedicated `dealer_activities` table
-  (timestamped call/email/meeting rows with actor + body) is a **v2** extension.
-- **No Kanban/drag-drop board.** v1 is a **filterable list** + a detail panel; a
-  visual board view is v2.
-- **No automated stage transitions.** Stages are set manually; auto-syncing stage
-  from quote/MSA events (e.g. `quote.sent` → "proposal sent") is v2.
-- **No outbound send (email/SMS/calls) from the pipeline.** Logging a touch records
-  that it happened; it doesn't send anything.
-- **No lead inbox / round-robin / multi-tenant assignment.** Single-tenant,
-  coach-owned (consistent with the app's model). Owner is a manual assignment.
-- **No reporting/analytics beyond simple stage counts** (and even those are a
-  decision-gate option, not committed).
+- **No stage funnel / Kanban.** The next-action + date *is* the state.
+- **No permission/consent modeling.** The rep's style — a free-text note at most.
+- **No activity-history table** (`dealer_activities`). A single *current* action in v1;
+  a timestamped call/email/meeting timeline is **v2**.
+- **No outbound send** (email/SMS/calls). Logging a touch records that it happened; it
+  doesn't send anything.
+- **No priority field in v1.** The **due date is the priority**.
+- **No automated next-action** from quote/MSA events (e.g. `quote.sent` → "follow up") —
+  manual in v1; auto is v2.
+- **No lead inbox / round-robin / multi-tenant.** Single-tenant; owner is a manual
+  assignment (consistent with [[project_coach_owned_business]]).
 
 ## Success criteria
 
-- A dealer carries a settable `pipeline_stage`, `owner`, `priority`,
-  `next_action` (+ date), and `last_contacted_at`; all nullable, all editable from
-  the dealer detail panel via capability-gated Server Actions.
-- The `/dealerships` list shows stage/owner/priority and filters on them.
-- "Mark won" on a prospect reuses `convertProspectToActive` (status → active, QBO
-  push fires per 0084) — no parallel state.
-- Static gate green (tsc + tests + 0 new lint); the new actions have unit tests +
-  a web-test smoke driving the panel + list filter.
-- Plays with 0086: imported prospects land at the initial stage (see Open
-  questions — seed-vs-backfill depending on sequencing).
+- A dealer carries settable `next_action` (text) + `next_action_at` (date) + `owner_id`
+  + `last_contacted_at`; all nullable, editable from the dealer panel via
+  capability-gated (`dealer:edit`) Server Actions.
+- `/dealerships` surfaces the **commitment queue**: sort/filter by due (overdue / today /
+  soon) + owner + "no next action" (idle); overdue is visually loud.
+- **Log a touch** stamps `last_contacted_at` (+ optional note) and lets the rep set the
+  next action.
+- **Mark won** reuses `convertProspectToActive` — no parallel status path.
+- Static gate green (tsc + tests + 0 new lint); new actions have unit tests + a web-test
+  smoke driving the panel + the queue.
+- Imported 0086 prospects appear as **"idle / no next action"** (the correct initial
+  state — they need a first commitment); **no backfill required** (null = idle).
 
-## Open questions (the Phase-1 decision gate resolves these)
+## Open questions (light — most settled in the reframe conversation)
 
-- **Stage set + status relationship.** Draft from the BD tracker:
-  `new → researching → contacted → follow_up → meeting_booked → proposal_sent →
-  negotiation → on_hold → lost`. "Won" is *not* a stage — it's `status='active'`
-  (via convert). Confirm the list, whether `lost`/`on_hold` are stages vs flags,
-  and whether `lost` also archives the dealer or just parks it.
-- **Owner FK target.** `auth.users` uuid (reuse the actor/`createdById` pattern;
-  coaches have auth users) vs a `contacts` FK. Lean: `auth.users` uuid.
-- **Fields-on-dealer vs an activity table.** v1 = columns on `dealers` (cheapest,
-  gets the board working). Confirm we defer `dealer_activities` to v2.
-- **Stage-count dashboard?** A small "N by stage" strip on `/dealerships` (the BD
-  tracker had a dashboard) — in v1 or deferred?
-- **Default stage + 0086 sequencing.** If this ships **before** 0086's prod load,
-  the importer seeds `pipeline_stage` (+ owner/priority from the sheet — we'd
-  *un-drop* those columns). If **after**, backfill imported prospects to the
-  initial stage (`new`). Decide the order with the owner.
-- **Does the stage apply to active dealers too?** Lean: stage is a prospect concern;
-  once `active`, the pipeline is "won" and the panel hides/locks the stage. Confirm.
+- **Owner picklist source.** Coaches only (`loadCoaches`) vs **all staff** (coaches +
+  admins) who can own a prospect. Lean: all staff.
+- **Queue surface.** Integrated into `/dealerships` (commitment columns + due/owner/idle
+  filters + sort + a small "overdue / due-today" strip) vs a dedicated "My follow-ups"
+  page. Lean: **list-integrated for v1**; a dedicated page is a fast-follow if wanted.
+- **Log-a-touch note.** Append to `dealers.notes` (0086) vs nothing in v1. Lean: optional
+  append (a light trail without an activity table).
 
 ## Why now
 
-0086 is about to put 281 cold prospects into the app. Without a pipeline they're an
-undifferentiated pool and the real outreach tracking stays in a spreadsheet —
-defeating the point of importing them. Building the pipeline now (and deciding
-whether it precedes 0086's prod load so the import can seed stages) keeps the
-prospecting effort inside the app, connected to quotes/MSA/QuickBooks.
+0086 just put 188 cold prospects in the app. The point of importing them is to *work*
+them — and what makes outreach work (and builds trust) is keeping the promises you make.
+A lightweight commitment tracker turns the imported pool into a worked follow-up queue
+without building a CRM.
