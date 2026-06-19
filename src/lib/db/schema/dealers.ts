@@ -28,6 +28,18 @@ export const dealers = pgTable(
     // "outbound", "trade show". Distinct from `audience_sources` (per-campaign
     // audience list). Lookup-formalized in v2 once values stabilize.
     acquiredVia: text('acquired_via'),
+    // Rooftop switchboard line (0086 Atlantic BD import). A dealer-level
+    // attribute, NOT a contact identifier — multiple rooftops share one number,
+    // which the `contact_identifiers` active-unique index forbids. The QBO push
+    // (0086) prefers this for the Customer `PrimaryPhone` over the contact phone.
+    phone: text('phone'),
+    // Vehicle brand the rooftop carries ("FCA", "Ford/Lincoln", "General
+    // Motors"). Free-form text from the BD list (0086); not yet a lookup.
+    manufacturer: text('manufacturer'),
+    // Free-form dealer notes. The BD-list import (0086) folds Group / Contact
+    // Verification / Co-op eligibility / original sheet notes into a readable
+    // block here; otherwise hand-entered.
+    notes: text('notes'),
     // Durable link to the QuickBooks Online `Customer.Id` this dealer mirrors
     // (0069). Nullable: dealers created in-app or seeded by the 0060 name-match
     // import start unlinked; the on-demand QB sync backfills the ID onto a

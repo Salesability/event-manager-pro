@@ -288,6 +288,13 @@
       "when": 1781565684779,
       "tag": "0040_wealthy_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1781889306090,
+      "tag": "0041_strong_slyde",
+      "breakpoints": true
     }
   ]
 }

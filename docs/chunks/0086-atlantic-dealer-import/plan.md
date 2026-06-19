@@ -7,9 +7,9 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate + source prep + prod-overlap probe | Done | - |
-| 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Pending | - |
-| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Pending | - |
+| 1: Decision gate + source prep + prod-overlap probe | Done | `4e5781e` |
+| 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer` | Done | - |
+| 3: Wire `loadDealer` + QBO push to read `dealers.phone` | In Progress | - |
 | 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Pending | - |
 | 5: Sandbox dry-run + verify | Pending | - |
 | 6: Prod migration + run + verify | Pending | - |
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - The settled mapping/contact/dedup decisions from the scoping conversation are pre-recorded in `intent.md`; Phase 1's job is to **lock the remaining opens** (source format, idempotency key, prod-overlap handling, city→address) + run the **read-only prod-overlap probe** before any write.
@@ -64,11 +64,11 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] **Decide city→address** (D6) — **city only** (province is its own column).
 
 #### Phase 2: Schema migration — `dealers.notes` / `.phone` / `.manufacturer`
-- [ ] Invoke the **`db-conventions`** skill first.
-- [ ] Add `notes: text('notes')`, `phone: text('phone')`, `manufacturer: text('manufacturer')` (all nullable) to `src/lib/db/schema/dealers.ts`.
-- [ ] `drizzle-kit generate` → `0041_*`; **verify the journal `when` > `0040`'s** ([[project-drizzle-journal-when-gotcha]]).
-- [ ] Apply to **sandbox** (direct/session-pooler 5432); verify the columns exist.
-- [ ] Update `docs/wiki/data-model.md` (dealers gains notes/phone/manufacturer).
+- [x] Invoke the **`db-conventions`** skill first. (Additive nullable columns → no backfill, no index.)
+- [x] Add `phone`, `manufacturer`, `notes` (all nullable `text()`) to `src/lib/db/schema/dealers.ts` (next to `acquiredVia`).
+- [x] `drizzle-kit generate` → `0041_strong_slyde.sql` (3 `ADD COLUMN`, no auth-schema noise); journal `when` `1781889306090` > `0040`'s `1781565684779` ✓.
+- [x] Applied to **sandbox** (session pooler 5432); verified the 3 columns exist (`information_schema` → all nullable text).
+- [x] Updated `docs/wiki/data-model.md` (ER block + entity-catalog row) + `docs/wiki/log.md` entry.
 
 #### Phase 3: Wire `loadDealer` + QBO push to read `dealers.phone`
 - [ ] Extend `loadDealer` (`queries.ts`) projection to return `phone` / `manufacturer` / `notes`.
