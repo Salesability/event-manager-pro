@@ -137,7 +137,16 @@ expected to be low" assumption and the naive name+address dedup:
 name/phone (exact + fuzzy) evidence + a `suggested_action`. Fuzzy matching requires a
 shared **distinctive** token (group/family name, excluding brand + city words) so a
 brand+place coincidence (`Audi St John's` vs `BMW St John's`) doesn't false-match.
-Baseline: **158 import-new · 67 skip-existing · 49 review**. The owner vets the 49
+
+**Phone as the rooftop discriminator (owner steer):** a distinct phone ⇒ a distinct
+rooftop. So a group-name fuzzy match whose phone matches **nothing** in prod **and**
+differs in brand or town is reclassified `import-new` as a *new rooftop of an existing
+group* (e.g. the app has 2 O'Regan's dealers but the BD list has 14 O'Regan's rooftops,
+each with its own phone → 12 are new). Near-identical-name pairs (same brand+town, e.g.
+`Fairley & Stevens` vs `Fairley and Stevens`) stay in `review` so a typo-dup isn't
+auto-imported.
+
+Baseline: **181 import-new · 67 skip-existing · 26 review**. The owner vets the 26
 `review` rows; the import (Phase 4, to be rewired) honors the vetted `suggested_action`
 keyed by name+city instead of doing its own prod dedup. The QBO DisplayName layer
 (D7) folds in once the prod QBO token is reconnected (expired 2026-06-17).

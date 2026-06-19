@@ -131,8 +131,28 @@ for (const b of bd) {
     matchType = 'phone-shared'; action = 'review'; match = byPhone[0]; evidence = `phone match but SHARED/toll-free → "${byPhone[0].name}" (likely a group, not same rooftop)`;
   } else {
     const fz = bestFuzzy(b);
-    if (fz) { matchType = 'fuzzy-name'; action = 'review'; match = fz.p; evidence = `fuzzy name ~ "${fz.p.name}" (score ${fz.score.toFixed(2)})`; }
-    else { matchType = 'none'; action = 'import-new'; evidence = 'no name/phone/fuzzy match'; }
+    if (fz) {
+      // Reached the fuzzy branch ⇒ this rooftop's phone matched NO prod dealer.
+      // Owner's rule: a distinct phone means a distinct rooftop. So a group-name
+      // match (O'Regan's, Hickman, Lounsbury…) with a distinct phone AND a
+      // different brand OR a different town is a NEW rooftop of an existing group,
+      // not the matched dealer. Near-identical-name variants (same brand+town,
+      // e.g. "Fairley & Stevens" vs "Fairley and Stevens") stay in review so a
+      // typo-dup isn't auto-imported.
+      const brandBD = [...sigTokens(b.name)].filter((t) => BRAND.has(t));
+      const brandProd = [...sigTokens(fz.p.name)].filter((t) => BRAND.has(t));
+      const brandDiffers = brandBD.length > 0 && brandProd.length > 0 && !brandBD.some((t) => brandProd.includes(t));
+      const cityWords = sigTokens(b.city);
+      const prodAddr = sigTokens(fz.p.address || '');
+      const townDiffers = cityWords.size > 0 && ![...cityWords].some((t) => prodAddr.has(t));
+      if (b.phone && (brandDiffers || townDiffers)) {
+        matchType = 'group-other-rooftop'; action = 'import-new'; match = fz.p;
+        evidence = `same group as "${fz.p.name}" but distinct phone + ${brandDiffers ? 'different brand' : 'different town'} → new rooftop`;
+      } else {
+        matchType = 'fuzzy-name'; action = 'review'; match = fz.p;
+        evidence = `fuzzy name ~ "${fz.p.name}" (score ${fz.score.toFixed(2)})`;
+      }
+    } else { matchType = 'none'; action = 'import-new'; evidence = 'no name/phone/fuzzy match'; }
   }
 
   tally[action]++;
