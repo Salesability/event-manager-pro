@@ -16,6 +16,7 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import { recordAudit } from '@/features/audit/actions';
 import { EMAIL_RE, field, parseOptionalId } from '@/features/schedule/validators';
+import { type DuplicateResult, findExistingContactByIdentifier } from '@/features/dealers/dedup';
 import { personFormSchema } from './person-schema';
 
 // Three-state result so the UI can distinguish a clean success from a partial
@@ -25,6 +26,9 @@ import { personFormSchema } from './person-schema';
 // 0020 Phase 3 eval.
 type ActionResult =
   | { ok: true; contactId?: number; warning?: string }
+  // 0085: an email/phone collision on create surfaces the existing contact so
+  // the People form can point the admin at it ("belongs to Jane Smith — open").
+  | { duplicate: DuplicateResult }
   | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 
 type FieldErrors = Record<string, string[] | undefined>;
@@ -94,6 +98,27 @@ function toActionResult(err: unknown): ActionResult {
     }
   }
   throw err;
+}
+
+// 0085 Phase 2 (D4): a "person" IS a contact, so an email/phone collision can't
+// be a new row — surface the existing contact informationally so the form points
+// the admin at it. Read-only; runs after the create tx rolled back on the throw.
+async function contactDuplicateResult(
+  err: IdentifierConflictError,
+): Promise<{ duplicate: DuplicateResult } | null> {
+  const match = await findExistingContactByIdentifier(
+    err.kind === 'email' ? { email: err.value } : { phone: err.value },
+  );
+  if (!match) return null;
+  return {
+    duplicate: {
+      kind: 'contact',
+      via: err.kind,
+      contactId: match.contactId,
+      name: `${match.firstName} ${match.lastName}`.trim(),
+      matchedValue: err.value,
+    },
+  };
 }
 
 // Supabase auth.users.id is a v4 UUID. Validate format before letting Postgres
@@ -417,6 +442,13 @@ export const createPerson = capabilityClient('person:create')
       return contactRow.id;
     });
   } catch (err) {
+    // 0085 Phase 2 (D4): point the admin at the contact that already holds this
+    // email/phone instead of a generic "already linked" toast. The tx rolled
+    // back on the throw, so no orphan/partial row remains.
+    if (err instanceof IdentifierConflictError) {
+      const dup = await contactDuplicateResult(err);
+      if (dup) return dup;
+    }
     return toActionResult(err);
   }
 

@@ -25,6 +25,7 @@ import { ensureAvailabilityOwnership } from './availability-authz';
 import { reconcileCampaignCalendar } from './calendar-sync';
 import { loadDealer } from './queries';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
+import { type DuplicateResult, findExistingContactByIdentifier } from '@/features/dealers/dedup';
 import { availabilityFormSchema } from './availability-schema';
 import { lookupFormSchema } from './lookup-schema';
 import { parseCampaignInput, parseId } from './validators';
@@ -42,6 +43,9 @@ type ActionResult =
   // booking dialog's "+ Add", chunk 0056) can auto-select the new dealer.
   // Optional + ignored by every other action that returns this shape.
   | { ok: true; dealerId?: number }
+  // 0085: a create-time duplicate was detected; the action returns the match
+  // (instead of throwing/blind-inserting) so the form can offer reuse/link.
+  | { duplicate: DuplicateResult }
   | { error: string; fieldErrors?: Record<string, string[] | undefined> };
 type AvailabilityKind = 'statutory_holiday' | 'company_closure' | 'coach_unavailable';
 
@@ -63,6 +67,49 @@ function toActionResult(err: unknown): ActionResult {
     return { error: `That ${noun} is already linked to another contact.` };
   }
   throw err;
+}
+
+// 0085: the create-time dedup decision flags the client re-submits with after
+// seeing a duplicate prompt. Read straight off FormData (control-plane, not
+// dealer data) so `dealerFormSchema` stays focused on the dealer fields and the
+// form's `zodResolver` doesn't grow phantom fields.
+type DealerDecision = {
+  createAnyway: boolean;
+  reuseContactId: number | null;
+  linkQuickbooksId: string | null;
+};
+function parseDealerDecision(formData: FormData): DealerDecision {
+  const reuseRaw = formData.get('reuseContactId');
+  const linkRaw = formData.get('linkQuickbooksId');
+  return {
+    createAnyway: formData.get('createAnyway') === '1',
+    reuseContactId:
+      typeof reuseRaw === 'string' && /^\d+$/.test(reuseRaw) ? Number(reuseRaw) : null,
+    linkQuickbooksId:
+      typeof linkRaw === 'string' && linkRaw.trim() ? linkRaw.trim() : null,
+  };
+}
+
+// 0085: turn an identifier collision into an informational duplicate result
+// naming the contact that already holds the email/phone, so the form can say
+// "that email belongs to Jane Smith" instead of a generic toast. Read-only;
+// runs after the tx has rolled back on the conflict.
+async function contactDuplicateResult(
+  err: IdentifierConflictError,
+): Promise<{ duplicate: DuplicateResult } | null> {
+  const match = await findExistingContactByIdentifier(
+    err.kind === 'email' ? { email: err.value } : { phone: err.value },
+  );
+  if (!match) return null;
+  return {
+    duplicate: {
+      kind: 'contact',
+      via: err.kind,
+      contactId: match.contactId,
+      name: `${match.firstName} ${match.lastName}`.trim(),
+      matchedValue: err.value,
+    },
+  };
 }
 
 type DealerStatus = 'prospect' | 'active';
@@ -153,6 +200,36 @@ export const createDealer = capabilityClient('dealer:create')
     const status: DealerStatus = v.status ?? 'active';
     const acquiredVia: string | null = v.acquiredVia ? v.acquiredVia : null;
 
+    const decision = parseDealerDecision(formData);
+    const wantsContact = !!(contactFirst || contactLast);
+
+    // 0085 Phase 2: warn before blind-inserting a contact whose email/phone
+    // already belongs to another contact. Skipped once the coach has chosen to
+    // reuse the match (`reuseContactId`) or to create anyway. The DB
+    // active-uniqueness index is still the backstop on a create-anyway collision.
+    if (
+      !decision.createAnyway &&
+      decision.reuseContactId == null &&
+      wantsContact &&
+      (contactEmail || contactPhone)
+    ) {
+      const match = await findExistingContactByIdentifier({
+        email: contactEmail,
+        phone: contactPhone,
+      });
+      if (match) {
+        return {
+          duplicate: {
+            kind: 'contact',
+            via: match.matchedKind,
+            contactId: match.contactId,
+            name: `${match.firstName} ${match.lastName}`.trim(),
+            matchedValue: match.matchedValue,
+          },
+        };
+      }
+    }
+
     let newDealerId: number;
     try {
       newDealerId = await db.transaction(async (tx) => {
@@ -170,22 +247,32 @@ export const createDealer = capabilityClient('dealer:create')
           })
           .returning({ id: dealers.id });
 
+        const reuseContactId = decision.reuseContactId;
         const hasContact = contactFirst || contactLast;
-        if (!hasContact) return dealerRow.id;
+        if (!hasContact && reuseContactId == null) return dealerRow.id;
 
-        const [contactRow] = await tx
-          .insert(contacts)
-          .values({
-            firstName: contactFirst,
-            lastName: contactLast,
-            createdById: userId,
-            updatedById: userId,
-          })
-          .returning({ id: contacts.id });
+        // 0085 Phase 2: reuse links the existing contact (its name + identifiers
+        // stay as they are — we only add the dealer link); otherwise insert a
+        // fresh contact as before.
+        let contactId: number;
+        if (reuseContactId != null) {
+          contactId = reuseContactId;
+        } else {
+          const [contactRow] = await tx
+            .insert(contacts)
+            .values({
+              firstName: contactFirst,
+              lastName: contactLast,
+              createdById: userId,
+              updatedById: userId,
+            })
+            .returning({ id: contacts.id });
+          contactId = contactRow.id;
+        }
 
         await tx.insert(dealerContacts).values({
           dealerId: dealerRow.id,
-          contactId: contactRow.id,
+          contactId,
           role: 'staff',
           source: 'admin',
           createdById: userId,
@@ -194,16 +281,29 @@ export const createDealer = capabilityClient('dealer:create')
 
         // 0023 Phase 4: every dealer-side contact gets a `dealer` team-member
         // role too, so the People-admin filter / People dialog can surface
-        // them and Phase 5's "every contact has a role" invariant holds.
-        await tx.insert(teamMemberRoles).values({
-          contactId: contactRow.id,
-          role: 'dealer',
-          createdById: userId,
-          updatedById: userId,
-        });
+        // them and Phase 5's "every contact has a role" invariant holds. 0085:
+        // upsert (un-archive on conflict) so a *reused* contact that already
+        // carries the role — possibly archived — doesn't trip the
+        // `(contact_id, role)` unique index.
+        await tx
+          .insert(teamMemberRoles)
+          .values({
+            contactId,
+            role: 'dealer',
+            createdById: userId,
+            updatedById: userId,
+          })
+          .onConflictDoUpdate({
+            target: [teamMemberRoles.contactId, teamMemberRoles.role],
+            set: { archivedAt: null, updatedById: userId },
+          });
 
-        await swapPrimaryIdentifier(tx, contactRow.id, 'email', contactEmail, userId);
-        await swapPrimaryIdentifier(tx, contactRow.id, 'phone', contactPhone, userId);
+        // Reuse keeps the existing contact's identifiers untouched; only a
+        // freshly inserted contact gets its primary email/phone set here.
+        if (reuseContactId == null) {
+          await swapPrimaryIdentifier(tx, contactId, 'email', contactEmail, userId);
+          await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
+        }
         return dealerRow.id;
       });
     } catch (err) {
@@ -213,21 +313,24 @@ export const createDealer = capabilityClient('dealer:create')
     // Best-effort: an active dealer auto-creates a QBO Customer + links (0084).
     // Prospects are not pushed (avoids cluttering QuickBooks with leads). Built
     // inline from the just-saved data — no extra read; never blocks the save.
+    // 0085: on a *reused* contact the typed name/email may differ from the
+    // contact actually linked, so reload to push the true denormalized values.
     if (status === 'active') {
-      await autoPushActiveDealerToQuickbooks(
-        {
-          id: newDealerId,
-          name,
-          address: address || null,
-          province: v.province || null,
-          quickbooksId: null,
-          contactFirstName: contactFirst || null,
-          contactLastName: contactLast || null,
-          primaryEmail: contactEmail || null,
-          primaryPhone: contactPhone || null,
-        },
-        userId,
-      );
+      const toPush =
+        decision.reuseContactId == null
+          ? {
+              id: newDealerId,
+              name,
+              address: address || null,
+              province: v.province || null,
+              quickbooksId: null,
+              contactFirstName: contactFirst || null,
+              contactLastName: contactLast || null,
+              primaryEmail: contactEmail || null,
+              primaryPhone: contactPhone || null,
+            }
+          : await loadDealer(newDealerId);
+      if (toPush) await autoPushActiveDealerToQuickbooks(toPush, userId);
     }
 
     revalidatePath('/dealerships');
@@ -389,6 +492,13 @@ export const updateDealer = capabilityClient('dealer:edit')
         await swapPrimaryIdentifier(tx, contactId, 'phone', contactPhone, userId);
       });
     } catch (err) {
+      // 0085 Phase 2 (D4): surface a contact-identifier collision as an
+      // informational duplicate result ("that email belongs to Jane Smith")
+      // rather than the generic toast. The tx already rolled back on the throw.
+      if (err instanceof IdentifierConflictError) {
+        const dup = await contactDuplicateResult(err);
+        if (dup) return dup;
+      }
       return toActionResult(err);
     }
     if (notFound) return { error: 'Dealer not found.' };

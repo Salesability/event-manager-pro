@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   getValidAccessToken: vi.fn(),
   pushDealerToQuickbooks: vi.fn(),
   loadDealer: vi.fn(),
+  // 0085 — the create-time dedup lookups. Mocked so the action's dup checks are
+  // driven per-test without the real db-stub needing the join chain.
+  findExistingContactByIdentifier: vi.fn(),
+  findExistingDealerByNameAddress: vi.fn(),
   dbResults: [] as unknown[][],
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ table: string; patch: unknown }>,
@@ -44,6 +48,11 @@ vi.mock('@/lib/quickbooks/dealer-push', () => ({
   pushDealerToQuickbooks: mocks.pushDealerToQuickbooks,
 }));
 vi.mock('@/features/schedule/queries', () => ({ loadDealer: mocks.loadDealer }));
+// 0085 — stub the dedup lookups so each test controls match/no-match directly.
+vi.mock('@/features/dealers/dedup', () => ({
+  findExistingContactByIdentifier: mocks.findExistingContactByIdentifier,
+  findExistingDealerByNameAddress: mocks.findExistingDealerByNameAddress,
+}));
 
 vi.mock('@/lib/db', () => {
   function tableName(t: unknown): string {
@@ -61,6 +70,8 @@ vi.mock('@/lib/db', () => {
         mocks.inserts.push({ table: tableName(table), values });
         return {
           returning: async () => mocks.dbResults.shift() ?? [{ id: 999 }],
+          // 0085 — the dealer-side `teamMemberRoles` insert upserts now.
+          onConflictDoUpdate: () => Promise.resolve(),
         };
       },
     }),
@@ -135,6 +146,10 @@ beforeEach(() => {
   mocks.getValidAccessToken.mockResolvedValue({ realmId: 'realm-1', accessToken: 'access-1' });
   mocks.pushDealerToQuickbooks.mockResolvedValue({ action: 'created', qbId: 'qb-1' });
   mocks.loadDealer.mockResolvedValue(null);
+  // 0085 defaults: no duplicate found, so the existing create tests insert as
+  // before. Phase 2/3/4 tests override these per-case.
+  mocks.findExistingContactByIdentifier.mockResolvedValue(null);
+  mocks.findExistingDealerByNameAddress.mockResolvedValue(null);
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
@@ -220,6 +235,72 @@ describe('createDealer', () => {
       'Acquired-via must be 200 characters or fewer.',
     ]);
   });
+
+  // 0085 Phase 2 — contact email/phone dedup guard.
+  it('returns a contact duplicate (no insert) when the email already belongs to another contact', async () => {
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
+    const result = await call(
+      createDealer(
+        fd({ name: 'Acme', contactFirst: 'Jane', contactLast: 'Doe', contactEmail: 'jane@x.io' }),
+      ),
+    );
+    expect(result).toEqual({
+      duplicate: { kind: 'contact', via: 'email', contactId: 7, name: 'Jane Smith', matchedValue: 'jane@x.io' },
+    });
+    // Returned before the transaction — nothing inserted.
+    expect(mocks.inserts).toHaveLength(0);
+  });
+
+  it('reuseContactId links the existing contact instead of inserting a new one', async () => {
+    const result = await call(
+      createDealer(
+        fd({
+          name: 'Acme',
+          contactFirst: 'Jane',
+          contactLast: 'Doe',
+          contactEmail: 'jane@x.io',
+          reuseContactId: '7',
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    // No new contact row; the dealer link points at the reused contact.
+    expect(mocks.inserts.find((i) => i.table === 'contacts')).toBeUndefined();
+    const link = mocks.inserts.find((i) => i.table === 'dealer_contacts');
+    expect((link!.values as Record<string, unknown>).contactId).toBe(7);
+    // Dedup check is skipped once a reuse decision is present.
+    expect(mocks.findExistingContactByIdentifier).not.toHaveBeenCalled();
+  });
+
+  it('createAnyway skips the dedup check and inserts a fresh contact', async () => {
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
+    const result = await call(
+      createDealer(
+        fd({
+          name: 'Acme',
+          contactFirst: 'Jane',
+          contactLast: 'Doe',
+          contactEmail: 'jane@x.io',
+          createAnyway: '1',
+        }),
+      ),
+    );
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.findExistingContactByIdentifier).not.toHaveBeenCalled();
+    expect(mocks.inserts.find((i) => i.table === 'contacts')).toBeDefined();
+  });
 });
 
 describe('updateDealer', () => {
@@ -274,6 +355,33 @@ describe('updateDealer', () => {
     mocks.dbResults.push([]);
     const result = await call(updateDealer(fd({ id: '99', name: 'Acme' })));
     expect(result).toEqual({ error: 'Dealer not found.' });
+  });
+
+  // 0085 Phase 2 (D4) — an inline-contact email collision surfaces the owner as
+  // an informational duplicate, not the generic "already linked" toast.
+  it('surfaces a contact duplicate when the edited email belongs to another contact', async () => {
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
+    // dbResults order, in tx call sequence:
+    //  1) guarded dealer UPDATE → one row (found)
+    //  2) existing dealer_contacts links → none (new-contact branch)
+    //  3) contact insert returning → the new contact id
+    //  4) swapPrimaryIdentifier(email) existing-primary select → none
+    //  5) swapPrimaryIdentifier(email) conflict select → a *different* contact → throw
+    mocks.dbResults.push([{ id: 42 }], [], [{ id: 55 }], [], [{ contactId: 7 }]);
+    const result = await call(
+      updateDealer(
+        fd({ id: '42', name: 'Acme', contactFirst: 'Jane', contactLast: 'Doe', contactEmail: 'jane@x.io' }),
+      ),
+    );
+    expect(result).toEqual({
+      duplicate: { kind: 'contact', via: 'email', contactId: 7, name: 'Jane Smith', matchedValue: 'jane@x.io' },
+    });
   });
 });
 

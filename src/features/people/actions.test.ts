@@ -7,6 +7,10 @@ const mocks = vi.hoisted(() => ({
   recordAudit: vi.fn(),
   adminCreateUser: vi.fn(),
   adminUpdateUserById: vi.fn(),
+  // 0085 — create-time dedup lookups, mocked so the contact-collision test
+  // controls the match without driving the lookup's own queries.
+  findExistingContactByIdentifier: vi.fn(),
+  findExistingDealerByNameAddress: vi.fn(),
   // Queue of arrays returned by successive `db.select(...).from(...).where(...).limit?(...)` calls.
   selectResults: [] as unknown[][],
   // Each tx callback's nested selects use the same queue, plus mutation
@@ -59,6 +63,12 @@ vi.mock('@/lib/supabase/admin', () => ({
 // design; closing that gap is a parked follow-up. Defined inside the
 // `vi.mock` factory because the factory is hoisted above other top-level
 // declarations.
+// 0085 — stub the dedup lookups so the contact-collision test controls match/no-match.
+vi.mock('@/features/dealers/dedup', () => ({
+  findExistingContactByIdentifier: mocks.findExistingContactByIdentifier,
+  findExistingDealerByNameAddress: mocks.findExistingDealerByNameAddress,
+}));
+
 vi.mock('@/lib/db', () => {
   function tableName(t: unknown): string {
     if (typeof t === 'object' && t != null) {
@@ -161,6 +171,8 @@ beforeEach(() => {
     error: null,
   });
   mocks.adminUpdateUserById.mockResolvedValue({ error: null });
+  mocks.findExistingContactByIdentifier.mockResolvedValue(null);
+  mocks.findExistingDealerByNameAddress.mockResolvedValue(null);
   mocks.selectResults = [];
   mocks.inserts = [];
   mocks.updates = [];
@@ -222,6 +234,29 @@ describe('createPerson', () => {
     expect(await call(createPerson(fd))).toEqual({ ok: true, contactId: 999 });
     // No auth user provisioned (dealer doesn't imply app access).
     expect(mocks.adminCreateUser).not.toHaveBeenCalled();
+  });
+
+  // 0085 Phase 2 (D4) — an email already held by another contact surfaces that
+  // contact informationally instead of the generic "already linked" toast.
+  it('surfaces a contact duplicate when the email belongs to another contact', async () => {
+    mocks.findExistingContactByIdentifier.mockResolvedValue({
+      contactId: 7,
+      firstName: 'Jane',
+      lastName: 'Smith',
+      matchedKind: 'email',
+      matchedValue: 'jane@x.io',
+    });
+    const fd = new FormData();
+    fd.set('firstName', 'New');
+    fd.set('lastName', 'Person');
+    fd.set('email', 'jane@x.io');
+    fd.append('roles', 'dealer');
+    // swapPrimaryIdentifier(email): existing-primary select → none; conflict
+    // select → a *different* contact → throws IdentifierConflictError.
+    mocks.selectResults = [[], [{ contactId: 7 }]];
+    expect(await call(createPerson(fd))).toEqual({
+      duplicate: { kind: 'contact', via: 'email', contactId: 7, name: 'Jane Smith', matchedValue: 'jane@x.io' },
+    });
   });
 
   it('rejects an unsupported role like "staff"', async () => {
