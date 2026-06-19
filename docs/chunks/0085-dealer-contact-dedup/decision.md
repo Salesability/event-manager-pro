@@ -139,6 +139,15 @@ passing the id through to the insert.
 | `linkQuickbooksId`| — | ✓ | — | insert dealer **born-linked**            |
 | `createAnyway`   | — | — | — | insert as today (DB index still backstops) |
 
+## D8 — `updateDealer` rename stays unguarded (Phase 3 deferral)
+
+The name+address dup guard is **create-only**. Renaming an existing dealer *into*
+a collision (`updateDealer`) is a rarer, edit-time case and the edit form already
+shows the dealer you're editing, so a "you just became a duplicate" prompt mid-edit
+is lower-value and higher-friction. Deferred — re-open if duplicate-via-rename
+shows up in practice. (The contact-identifier guard on `updateDealer` still ships
+in Phase 2; only the dealer name+address rename check is deferred.)
+
 ## Out of scope (re-confirming intent non-goals)
 
 No remediation/merge of existing dups; no name-only contact matching; no hard

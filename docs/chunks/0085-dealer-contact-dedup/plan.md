@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Decision gate + shared dedup-lookup helpers | Done | `32b72fc` |
 | 2: Contact email/phone guard in Server Actions (+ orphan-row fix) | Done | `7219e0e` |
-| 3: Dealer name+address guard in `createDealer` (app-local) | Pending | - |
+| 3: Dealer name+address guard in `createDealer` (app-local) | Done | `af24bd8` |
 | 4: Create-time QuickBooks `Customer`-by-name check + link-on-match | Pending | - |
 | 5: Client reuse / link affordance on the forms | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/auth.md` — keep the existing `requireRole` gating on the touched actions unchanged.
 - **QB best-effort principle (0077/0084)** — a dormant/erroring QuickBooks must never block the dealer save; the Phase-4 QB check degrades to "skip + proceed" on any connection/query failure, raising the link prompt *only* on a successful match.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -82,10 +82,10 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Tests: contact match → `{ duplicate }` (no insert); `reuseContactId` links existing (no new contact, dedup skipped); `createAnyway` skips the check + inserts; `updateDealer`/`createPerson` surface the informational duplicate. _(Real-DB orphan-row + rollback → Phase 6.)_
 
 #### Phase 3: Dealer name+address guard in `createDealer` (app-local)
-- [ ] `createDealer`: call `findExistingDealerByNameAddress` before the dealer insert (~159-171); on match return the duplicate-detected result with the existing dealer id.
-- [ ] Honor `createAnyway: true` to allow a deliberate same-name dealer (different lot, etc.).
-- [ ] Leave `updateDealer` rename unguarded for now (renaming to collide is a rarer, edit-time case — note in `decision.md` if deferred).
-- [ ] Tests: matching name+address → duplicate-detected; case/whitespace-insensitive match; createAnyway inserts.
+- [x] `createDealer`: `findExistingDealerByNameAddress` runs **first** (before the contact check); on match returns `{ duplicate: { kind:'dealer-local', dealerId, name, address } }`. Skipped on `createAnyway` / `linkQuickbooksId`.
+- [x] `createAnyway: true` skips the check → allows a deliberate same-name dealer (different lot).
+- [x] `updateDealer` rename left unguarded — deferred, see [`decision.md`](decision.md) **D8** (edit-time collision is rarer + lower-value).
+- [x] Tests: name+address match → `{ duplicate }` (no insert, contact check not reached); createAnyway skips + inserts. _(SQL case/whitespace-insensitivity → Phase 6 integration.)_
 
 #### Phase 4: Create-time QuickBooks `Customer`-by-name check + link-on-match
 - [ ] Add `findCustomerByDisplayName(name, realmId, accessToken)` to `client.ts` (anchor `fetchCustomers:211`): `SELECT * FROM Customer WHERE DisplayName = '…'` (escape quotes), return the single match or null; `QboAuthError` on 401, same as siblings.
