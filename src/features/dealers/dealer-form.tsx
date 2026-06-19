@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +19,15 @@ import { CA_PROVINCES } from '@/lib/ca-provinces';
 import { createDealer, updateDealer } from '@/features/schedule/actions';
 import type { Dealer } from '@/features/schedule/queries';
 import { dealerFormSchema, type DealerFormValues } from './dealer-schema';
+import type { DuplicateResult } from './duplicate-types';
+import { DuplicateNotice, duplicateMessage } from './duplicate-notice';
+
+// 0085: the decision flags the form re-submits after a duplicate prompt.
+type DealerDecision = {
+  reuseContactId?: number;
+  linkQuickbooksId?: string;
+  createAnyway?: boolean;
+};
 
 // 0045 Phase 2 — schema-as-contract: `dealerFormSchema` now lives in the
 // sibling `dealer-schema.ts` module and is imported by both this component
@@ -78,6 +87,9 @@ export function DealerForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // 0085: a create-time duplicate the action surfaced; drives the reuse/link
+  // affordance below. Cleared on a fresh submit or once resolved.
+  const [duplicate, setDuplicate] = useState<DuplicateResult | null>(null);
 
   const form = useForm<DealerFormValues>({
     resolver: zodResolver(dealerFormSchema),
@@ -106,12 +118,22 @@ export function DealerForm({
     if (autoFocus) setFocus('name');
   }, [autoFocus, setFocus]);
 
-  const onSubmit = handleSubmit((values) => {
+  function submit(values: DealerFormValues, decision?: DealerDecision) {
     startTransition(async () => {
       const action = mode === 'create' ? createDealer : updateDealer;
       const fd = valuesToFormData(values, mode === 'edit' ? dealer?.id : undefined);
-      const result = toLegacyResult<{ ok: true; dealerId?: number }>(await action(fd));
+      // 0085: append the duplicate-resolution decision to this submit, if any.
+      if (decision?.reuseContactId != null) {
+        fd.set('reuseContactId', String(decision.reuseContactId));
+      }
+      if (decision?.linkQuickbooksId) fd.set('linkQuickbooksId', decision.linkQuickbooksId);
+      if (decision?.createAnyway) fd.set('createAnyway', '1');
+
+      const result = toLegacyResult<
+        { ok: true; dealerId?: number } | { duplicate: DuplicateResult }
+      >(await action(fd));
       if ('ok' in result) {
+        setDuplicate(null);
         toast.success(mode === 'create' ? 'Dealer added' : 'Dealer saved');
         router.refresh();
         onSuccess?.(
@@ -119,11 +141,28 @@ export function DealerForm({
             ? { id: result.dealerId, name: values.name }
             : undefined,
         );
+      } else if ('duplicate' in result) {
+        setDuplicate(result.duplicate);
       } else {
+        setDuplicate(null);
         toast.error(result.error);
       }
     });
+  }
+
+  const onSubmit = handleSubmit((values) => {
+    setDuplicate(null);
+    submit(values);
   });
+
+  // Re-submit the current form values carrying a resolution decision.
+  const resolveWith = (decision: DealerDecision) => submit(form.getValues(), decision);
+
+  function openExistingDealer(dealerId: number) {
+    setDuplicate(null);
+    onCancel?.();
+    router.push(`/dealerships/${dealerId}`);
+  }
 
   const hideStatusSelect = defaultStatus != null && mode === 'create';
 
@@ -226,6 +265,72 @@ export function DealerForm({
           <Description>Up to 200 characters.</Description>
         </Field>
       </FieldGroup>
+
+      {duplicate && (
+        <DuplicateNotice message={duplicateMessage(duplicate)}>
+          {duplicate.kind === 'dealer-local' && (
+            <>
+              <Button
+                type="button"
+                color="brand"
+                compact
+                onClick={() => openExistingDealer(duplicate.dealerId)}
+              >
+                Open existing dealer
+              </Button>
+              <Button
+                type="button"
+                outline
+                compact
+                disabled={pending}
+                onClick={() => resolveWith({ createAnyway: true })}
+              >
+                Create anyway
+              </Button>
+            </>
+          )}
+          {duplicate.kind === 'dealer-quickbooks' && (
+            <>
+              <Button
+                type="button"
+                color="brand"
+                compact
+                disabled={pending}
+                onClick={() => resolveWith({ linkQuickbooksId: duplicate.quickbooksId })}
+              >
+                Link to the QuickBooks customer
+              </Button>
+              <Button
+                type="button"
+                outline
+                compact
+                disabled={pending}
+                onClick={() => resolveWith({ createAnyway: true })}
+              >
+                Create anyway
+              </Button>
+            </>
+          )}
+          {duplicate.kind === 'contact' && (
+            <>
+              {mode === 'create' && (
+                <Button
+                  type="button"
+                  color="brand"
+                  compact
+                  disabled={pending}
+                  onClick={() => resolveWith({ reuseContactId: duplicate.contactId })}
+                >
+                  Use {duplicate.name}
+                </Button>
+              )}
+              <Button type="button" outline compact onClick={() => setDuplicate(null)}>
+                {mode === 'create' ? 'Use a different contact' : 'Dismiss'}
+              </Button>
+            </>
+          )}
+        </DuplicateNotice>
+      )}
 
       <div className="mt-2 flex justify-end gap-2">
         {onCancel && (

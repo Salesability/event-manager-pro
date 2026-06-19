@@ -2,6 +2,10 @@ import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contactIdentifiers, contacts, dealers } from '@/lib/db/schema';
 
+// Re-export the result contract from its types-only home (client forms import it
+// from there to avoid this module's server-side DB imports).
+export type { DuplicateResult } from './duplicate-types';
+
 // Create-time duplicate-detection lookups (chunk 0085). The one-time import
 // scripts dedup carefully — email/phone for contacts
 // (`scripts/import-from-sheets.ts:246-273`), `lower(name)+lower(address)` for
@@ -30,16 +34,6 @@ export type DealerMatch = {
   name: string;
   address: string | null;
 };
-
-// The duplicate-detected result an action returns instead of throwing (D1). The
-// client re-submits with a decision flag (`reuseContactId` / `linkQuickbooksId` /
-// `createAnyway`). `dealer-quickbooks` is raised by the Phase-4 QB-by-name check,
-// not by a lookup here — it lives in this union because the union is the single
-// shared contract the forms narrow on.
-export type DuplicateResult =
-  | { kind: 'contact'; via: 'email' | 'phone'; contactId: number; name: string; matchedValue: string }
-  | { kind: 'dealer-local'; dealerId: number; name: string; address: string | null }
-  | { kind: 'dealer-quickbooks'; quickbooksId: string; name: string };
 
 // Find an existing ACTIVE contact holding this email or phone. Mirrors the import
 // path: email checked first, then phone; only un-archived identifiers count

@@ -86,7 +86,7 @@ export function BookingForm({
 }: BookingFormProps) {
   const action = mode === 'create' ? createCampaign : updateCampaign;
   const [state, formAction, pending] = useActionState<State, FormData>(
-    async (_prev, fd) => toLegacyResult(await action(fd)),
+    async (_prev, fd) => toLegacyResult<{ ok: true }>(await action(fd)),
     null,
   );
 

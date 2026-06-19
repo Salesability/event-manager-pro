@@ -28,6 +28,8 @@ import { Input } from '@/components/catalyst/input';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archivePerson, createPerson, updatePerson } from '@/features/people/actions';
+import type { DuplicateResult } from '@/features/dealers/duplicate-types';
+import { DuplicateNotice, duplicateMessage } from '@/features/dealers/duplicate-notice';
 import type {
   AdminPersonRow,
   DealerContactRole,
@@ -323,6 +325,9 @@ function dealerLinksFromPerson(person?: AdminPersonRow): DealerLinkDraft[] {
 
 type PersonFormState =
   | { ok: true; contactId?: number; warning?: string }
+  // 0085: an email/phone already held by another contact — surfaced
+  // informationally (a "person" IS a contact, so no create-anyway/re-link).
+  | { duplicate: DuplicateResult }
   | { error: string }
   | null;
 
@@ -389,9 +394,9 @@ function PersonForm({
         );
         if (!ok) return null;
       }
-      return toLegacyResult<{ ok: true; contactId?: number; warning?: string }>(
-        await action(fd),
-      );
+      return toLegacyResult<
+        { ok: true; contactId?: number; warning?: string } | { duplicate: DuplicateResult }
+      >(await action(fd));
     },
     null,
   );
@@ -409,13 +414,15 @@ function PersonForm({
       }
       router.refresh();
       onSuccess();
-    } else {
+    } else if ('error' in state) {
       // Hard failure — keep the dialog open. Refresh anyway because some
       // error paths revalidate (e.g. race-loss bans the just-created auth
       // user); the table should reflect that.
       toast.error(state.error);
       router.refresh();
     }
+    // 0085: a `{ duplicate }` state is rendered inline below — no toast/refresh;
+    // the dialog stays open so the admin can fix the email or cancel.
   }, [state, mode, router, onSuccess]);
 
   function setDealerLink(i: number, patch: Partial<DealerLinkDraft>) {
@@ -607,6 +614,10 @@ function PersonForm({
             </div>
           ))}
         </div>
+      )}
+
+      {state && 'duplicate' in state && (
+        <DuplicateNotice message={duplicateMessage(state.duplicate)} />
       )}
 
       <div className="mt-2 flex justify-end gap-2">

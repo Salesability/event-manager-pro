@@ -26,11 +26,14 @@ type AnySafeActionResult = {
 
 export type LegacyFieldErrors = Record<string, string[] | undefined>;
 
-export type LegacyActionResult<TOk extends { ok: true } = { ok: true }> =
+// `TOk` is `extends object` (not `extends { ok: true }`) so a caller can pass a
+// success-union that also carries the 0085 `{ duplicate }` variant and narrow on
+// it. The default stays `{ ok: true }`, so existing call sites are unchanged.
+export type LegacyActionResult<TOk extends object = { ok: true }> =
   | TOk
   | { error: string; fieldErrors?: LegacyFieldErrors };
 
-export function toLegacyResult<TOk extends { ok: true } = { ok: true }>(
+export function toLegacyResult<TOk extends object = { ok: true }>(
   result: AnySafeActionResult | undefined | null,
 ): LegacyActionResult<TOk> {
   if (!result) return { error: 'No response from server.' };
@@ -42,7 +45,7 @@ export function toLegacyResult<TOk extends { ok: true } = { ok: true }>(
   }
   if ('data' in result && result.data) {
     const data = result.data as
-      | { ok?: boolean; error?: string; fieldErrors?: LegacyFieldErrors }
+      | { ok?: boolean; error?: string; duplicate?: unknown; fieldErrors?: LegacyFieldErrors }
       | (TOk & { error?: undefined })
       | undefined;
     if (data && 'error' in data && typeof data.error === 'string') {
@@ -62,6 +65,11 @@ export function toLegacyResult<TOk extends { ok: true } = { ok: true }>(
       // straight through — the caller can read additional fields the action
       // returned. The default `TOk = {ok: true}` keeps this safe at the
       // narrow call sites that only check `'ok' in result`.
+      return data as TOk;
+    }
+    // 0085: a create-time duplicate-detected result — pass it through so the form
+    // can render the reuse/link affordance and re-submit with a decision.
+    if (data && 'duplicate' in data && data.duplicate) {
       return data as TOk;
     }
   }

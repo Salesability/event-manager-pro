@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,8 @@ import { Input } from '@/components/catalyst/input';
 import { Button } from '@/components/catalyst/button';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
+import type { DuplicateResult } from '@/features/dealers/duplicate-types';
+import { DuplicateNotice, duplicateMessage } from '@/features/dealers/duplicate-notice';
 import { createPerson } from './actions';
 import {
   coachFormSchema,
@@ -38,6 +40,9 @@ export function CoachAddForm({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // 0085: an email/phone already held by another contact — surfaced
+  // informationally (a coach IS a contact, so no create-anyway / re-link).
+  const [duplicate, setDuplicate] = useState<DuplicateResult | null>(null);
   const form = useForm<CoachFormValues>({
     resolver: zodResolver(coachFormSchema),
     defaultValues: { firstName: '', lastName: '', email: '', phone: '' },
@@ -51,12 +56,11 @@ export function CoachAddForm({
   }, [setFocus]);
 
   const onSubmit = handleSubmit((values) => {
+    setDuplicate(null);
     startTransition(async () => {
-      const result = toLegacyResult<{
-        ok: true;
-        contactId?: number;
-        warning?: string;
-      }>(await createPerson(coachValuesToFormData(values)));
+      const result = toLegacyResult<
+        { ok: true; contactId?: number; warning?: string } | { duplicate: DuplicateResult }
+      >(await createPerson(coachValuesToFormData(values)));
       if ('ok' in result) {
         if (result.warning) toast.error(result.warning);
         else toast.success('Coach added');
@@ -68,6 +72,8 @@ export function CoachAddForm({
             lastName: values.lastName,
           });
         }
+      } else if ('duplicate' in result) {
+        setDuplicate(result.duplicate);
       } else {
         toast.error(result.error);
       }
@@ -114,6 +120,13 @@ export function CoachAddForm({
           <Input id="coach-phone" type="tel" {...register('phone')} />
         </Field>
       </FieldGroup>
+      {duplicate && (
+        <DuplicateNotice message={duplicateMessage(duplicate)}>
+          <Button type="button" outline compact onClick={() => setDuplicate(null)}>
+            Dismiss
+          </Button>
+        </DuplicateNotice>
+      )}
       <div className="mt-2 flex justify-end gap-2">
         <Button type="button" outline onClick={onCancel}>
           Cancel
