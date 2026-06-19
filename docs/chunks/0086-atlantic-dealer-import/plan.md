@@ -90,8 +90,15 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] **Re-run** against sandbox → **0 dealers / 0 contacts / 0 links inserted** (274 skip-existing, 462 reuse-db, 10 reuse-by-title, 472 already-linked); batch counts unchanged (274/442/471). Idempotent ✓.
 - [x] Smoke (web-test): `/dealerships` renders 200, no console errors; **"Prospect (274)"** filter present; imported rows render (Acura of Moncton/Atlantic Acura/Acadia Toyota — name + GM contact + email + city + `prospect`). _Caveat: `dealers.phone`/manufacturer/notes are stored + consumed by the QBO push but not surfaced in the dealer UI (no roster UI in scope); the list shows the contact phone (null for imports)._
 
-#### Phase 6: Prod migration + run + verify
+#### Phase 4/5 addendum — prod-overlap pivot to a vetted worksheet (D8)
+The Phase-1 prod probe (owner-run 2026-06-19) found the prod overlap is **large + messy** (67 name-matches; dealer groups share phones + postal codes across distinct brand rooftops; BD list is city-only) — the naive name+address dedup would have created ~67 dups. So:
+- [x] Added `scripts/atlantic-reconcile.mjs` → `scripts/data/atlantic-reconciliation.csv` (read-only, name+phone+fuzzy with a distinctive-token gate + a "distinct phone ⇒ distinct rooftop" rule for group expansion, e.g. O'Regan's 12 brand rooftops). Owner **vetted** the 26 ambiguous rows → **188 import-new · 86 skip-existing** (`95144fd`).
+- [x] Rewired `import-atlantic-dealers.ts` to **honor the worksheet's `suggested_action`** (keyed by name+city) instead of its own prod dedup; `skip-existing` rows never insert; anything not `import-new` is skipped-with-warning (never guessed) (`276b9b7`).
+- [x] **Re-validated on sandbox** (reset the old 274 batch first): dry-run 6 flagged / 86 vetted-skip / 188 import-new / 0 unvetted; real run 188 dealers + 302 contacts + 312 links; **re-run = 0 inserts** (idempotent); spot-checks confirm O'Regan's 12 brand rooftops imported + 2 Hyundai skipped, Central Nova Hyundai+Subaru imported, Audi Moncton/King's County Honda skipped, MINI Moncton/Halifax Chrysler imported.
+
+#### Phase 6: Prod migration + run + verify (owner-gated)
+- [x] Read-only prod-overlap probe + reconciliation worksheet run against prod + owner-vetted (above). _(QBO DisplayName layer still optional — prod QBO token expired 2026-06-17; reconnect to add it as a 3rd signal, non-blocking.)_
 - [ ] Apply `0041` to **prod** first (`pnpm db:migrate:prod`, session pooler 5432); verify columns. _(Owner-gated; gcloud reauth may be needed — [[project-prod-gcp]].)_
-- [ ] `--dry-run` against **prod** → review dispositions (esp. existing-dealer/QBO overlaps) before writing.
-- [ ] Real run against **prod**; verify counts + spot-checks; **no QB writes** (all prospects).
+- [ ] `--dry-run` against **prod** (`./scripts/with-prod-db.sh pnpm dlx tsx scripts/import-atlantic-dealers.ts --dry-run`) → expect **188 import-new / 86 skip-existing / 0 unvetted**; review before writing.
+- [ ] Real run against **prod** → ~188 new prospect dealers + their contacts; verify counts + spot-checks; **no QB writes** (all prospects).
 - [ ] Record the prod import in `CURRENT.md` (counts, date); note QB activation is deferred per-dealer.
