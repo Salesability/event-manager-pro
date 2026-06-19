@@ -8,6 +8,7 @@ import {
   exchangeCodeForTokens,
   fetchCustomerById,
   fetchCustomers,
+  findCustomerByDisplayName,
   fetchEstimateById,
   fetchItems,
   fetchTaxCodes,
@@ -155,6 +156,38 @@ describe('fetchCustomers', () => {
   it('raises QboAuthError on a 401', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
     await expect(fetchCustomers('realm-123', 'expired')).rejects.toBeInstanceOf(QboAuthError);
+  });
+});
+
+describe('findCustomerByDisplayName (0085)', () => {
+  it('queries active Customers filtered by exact DisplayName and returns the single match', async () => {
+    fetchMock.mockResolvedValueOnce(
+      fakeJson({ QueryResponse: { Customer: [{ Id: '42', DisplayName: 'Acme Motors' }] } }),
+    );
+    const match = await findCustomerByDisplayName('Acme Motors', 'realm-123', 'access-1');
+    expect(match).toEqual({ Id: '42', DisplayName: 'Acme Motors' });
+    const query = decodeURIComponent(fetchMock.mock.calls[0][0] as string);
+    expect(query).toContain("WHERE Active = true AND DisplayName = 'Acme Motors'");
+    expect(query).toContain('MAXRESULTS 1');
+  });
+
+  it("backslash-escapes an embedded single quote (O'Brien)", async () => {
+    fetchMock.mockResolvedValueOnce(fakeJson({ QueryResponse: { Customer: [] } }));
+    await findCustomerByDisplayName("O'Brien Auto", 'realm-123', 'access-1');
+    const query = decodeURIComponent(fetchMock.mock.calls[0][0] as string);
+    expect(query).toContain("DisplayName = 'O\\'Brien Auto'");
+  });
+
+  it('returns null when no Customer matches', async () => {
+    fetchMock.mockResolvedValueOnce(fakeJson({ QueryResponse: {} }));
+    expect(await findCustomerByDisplayName('Nobody', 'realm-123', 'access-1')).toBeNull();
+  });
+
+  it('raises QboAuthError on a 401', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}), text: async () => '' });
+    await expect(
+      findCustomerByDisplayName('Acme', 'realm-123', 'expired'),
+    ).rejects.toBeInstanceOf(QboAuthError);
   });
 });
 

@@ -20,6 +20,7 @@ import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import { isAdmin } from '@/lib/auth/require-admin';
 import { recordAudit } from '@/features/audit/actions';
 import { getValidAccessToken } from '@/lib/quickbooks/connection';
+import { findCustomerByDisplayName } from '@/lib/quickbooks/client';
 import { type DealerToPush, pushDealerToQuickbooks } from '@/lib/quickbooks/dealer-push';
 import { ensureAvailabilityOwnership } from './availability-authz';
 import { reconcileCampaignCalendar } from './calendar-sync';
@@ -92,6 +93,41 @@ function parseDealerDecision(formData: FormData): DealerDecision {
     linkQuickbooksId:
       typeof linkRaw === 'string' && linkRaw.trim() ? linkRaw.trim() : null,
   };
+}
+
+// 0085 Phase 4: best-effort create-time QuickBooks check. Resolves to the
+// matched Customer (Id + display name) when the new dealer's name already exists
+// as a QBO Customer, or null when there's no match / QB is dormant / the query
+// errors or exceeds the ceiling. NEVER throws — a QB outage must not block
+// creating a dealer (mirrors `autoPushActiveDealerToQuickbooks`). The timeout
+// bounds the live round-trip (token refresh + one query) so a slow QuickBooks
+// degrades to "skip", not "hang the save".
+const QB_NAME_CHECK_TIMEOUT_MS = 4000;
+async function findQuickbooksCustomerMatch(
+  name: string,
+): Promise<{ quickbooksId: string; name: string } | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const check = (async () => {
+      const { realmId, accessToken } = await getValidAccessToken();
+      const customer = await findCustomerByDisplayName(name, realmId, accessToken);
+      return customer?.Id
+        ? { quickbooksId: customer.Id, name: customer.DisplayName ?? name }
+        : null;
+    })();
+    const timeout = new Promise<null>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('QBO name check timed out')),
+        QB_NAME_CHECK_TIMEOUT_MS,
+      );
+    });
+    return await Promise.race([check, timeout]);
+  } catch {
+    // best-effort: dormant connection, query error, or timeout → skip the check.
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 // 0085: turn an identifier collision into an informational duplicate result
@@ -253,6 +289,25 @@ export const createDealer = capabilityClient('dealer:create')
       }
     }
 
+    // 0085 Phase 4: catch the case app-local dedup can't see — a Customer that
+    // exists directly in QuickBooks but was never pulled into the app, which
+    // today saves an unlinked orphan because the auto-push swallows Intuit's
+    // 6240. Only for an *active* dealer (prospects don't push to QB, so the
+    // composer's inline prospect-create stays fast — no QB round-trip). Skipped
+    // on `createAnyway` / `linkQuickbooksId`. Best-effort: a miss/outage → create.
+    if (status === 'active' && !decision.createAnyway && decision.linkQuickbooksId == null) {
+      const qbMatch = await findQuickbooksCustomerMatch(name);
+      if (qbMatch) {
+        return {
+          duplicate: {
+            kind: 'dealer-quickbooks',
+            quickbooksId: qbMatch.quickbooksId,
+            name: qbMatch.name,
+          },
+        };
+      }
+    }
+
     let newDealerId: number;
     try {
       newDealerId = await db.transaction(async (tx) => {
@@ -265,6 +320,10 @@ export const createDealer = capabilityClient('dealer:create')
             province: v.province || null,
             status,
             acquiredVia: acquiredVia as string | null,
+            // 0085 Phase 4: born linked when the coach chose to link to an
+            // existing QBO Customer, so the auto-push below takes the *update*
+            // branch (no duplicate Customer created).
+            ...(decision.linkQuickbooksId ? { quickbooksId: decision.linkQuickbooksId } : {}),
             createdById: userId,
             updatedById: userId,
           })
@@ -346,7 +405,8 @@ export const createDealer = capabilityClient('dealer:create')
               name,
               address: address || null,
               province: v.province || null,
-              quickbooksId: null,
+              // 0085 Phase 4: a born-linked dealer pushes via the update branch.
+              quickbooksId: decision.linkQuickbooksId ?? null,
               contactFirstName: contactFirst || null,
               contactLastName: contactLast || null,
               primaryEmail: contactEmail || null,

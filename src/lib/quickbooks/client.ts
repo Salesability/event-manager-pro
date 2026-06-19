@@ -246,6 +246,40 @@ export async function fetchCustomers(
   return all;
 }
 
+// Read-only: the single active Customer whose `DisplayName` matches exactly
+// (chunk 0085). QBO `DisplayName` uniqueness is case-insensitive, so `=` is the
+// right operator — a match here is precisely what Intuit's 6240 duplicate-name
+// rule would reject on create, so the create-time dealer dup check can offer
+// "link to the existing Customer" instead of spawning a second one. Returns the
+// matched Customer or null. `QboAuthError` on 401, like the sibling reads.
+export async function findCustomerByDisplayName(
+  name: string,
+  realmId: string,
+  accessToken: string,
+): Promise<QboCustomer | null> {
+  const cfg = qboConfig();
+  // QBO query string literals are single-quoted; backslash-escape embedded
+  // backslashes first, then single quotes, so a name like `O'Brien's` is safe.
+  const escaped = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const query = `SELECT * FROM Customer WHERE Active = true AND DisplayName = '${escaped}' STARTPOSITION 1 MAXRESULTS 1`;
+  const url = `${cfg.apiBase}/v3/company/${realmId}/query?query=${encodeURIComponent(
+    query,
+  )}&minorversion=${MINOR_VERSION}`;
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+  });
+  if (res.status === 401) {
+    throw new QboAuthError('QBO returned 401 — the access token is expired or invalid.');
+  }
+  if (!res.ok) {
+    throw new Error(`QBO query ${res.status}: ${await res.text()}`);
+  }
+
+  const json = (await res.json()) as { QueryResponse?: { Customer?: QboCustomer[] } };
+  return json.QueryResponse?.Customer?.[0] ?? null;
+}
+
 export type QboCompanyInfo = {
   CompanyName?: string;
   LegalName?: string;

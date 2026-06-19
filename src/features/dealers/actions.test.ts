@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   // driven per-test without the real db-stub needing the join chain.
   findExistingContactByIdentifier: vi.fn(),
   findExistingDealerByNameAddress: vi.fn(),
+  // 0085 Phase 4 — the read-only QBO Customer-by-name lookup.
+  findCustomerByDisplayName: vi.fn(),
   dbResults: [] as unknown[][],
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ table: string; patch: unknown }>,
@@ -52,6 +54,11 @@ vi.mock('@/features/schedule/queries', () => ({ loadDealer: mocks.loadDealer }))
 vi.mock('@/features/dealers/dedup', () => ({
   findExistingContactByIdentifier: mocks.findExistingContactByIdentifier,
   findExistingDealerByNameAddress: mocks.findExistingDealerByNameAddress,
+}));
+// 0085 Phase 4 — stub the QBO Customer-by-name read (schedule/actions imports
+// only this from the client module).
+vi.mock('@/lib/quickbooks/client', () => ({
+  findCustomerByDisplayName: mocks.findCustomerByDisplayName,
 }));
 
 vi.mock('@/lib/db', () => {
@@ -150,6 +157,7 @@ beforeEach(() => {
   // before. Phase 2/3/4 tests override these per-case.
   mocks.findExistingContactByIdentifier.mockResolvedValue(null);
   mocks.findExistingDealerByNameAddress.mockResolvedValue(null);
+  mocks.findCustomerByDisplayName.mockResolvedValue(null);
   mocks.dbResults = [];
   mocks.inserts = [];
   mocks.updates = [];
@@ -331,6 +339,53 @@ describe('createDealer', () => {
     expect(result).toEqual({ ok: true, dealerId: 999 });
     expect(mocks.findExistingDealerByNameAddress).not.toHaveBeenCalled();
     expect(mocks.inserts.find((i) => i.table === 'dealers')).toBeDefined();
+  });
+
+  // 0085 Phase 4 — create-time QuickBooks Customer-by-name check + link-on-match.
+  it('returns an "exists in QuickBooks" duplicate when the name matches a QBO Customer', async () => {
+    mocks.findCustomerByDisplayName.mockResolvedValue({ Id: 'QB-99', DisplayName: 'Acme Motors' });
+    const result = await call(createDealer(fd({ name: 'Acme Motors' })));
+    expect(result).toEqual({
+      duplicate: { kind: 'dealer-quickbooks', quickbooksId: 'QB-99', name: 'Acme Motors' },
+    });
+    expect(mocks.inserts).toHaveLength(0);
+  });
+
+  it('linkQuickbooksId creates the dealer born-linked (no QB name query)', async () => {
+    const result = await call(
+      createDealer(fd({ name: 'Acme Motors', linkQuickbooksId: 'QB-99' })),
+    );
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    // The QB dup check is skipped...
+    expect(mocks.findCustomerByDisplayName).not.toHaveBeenCalled();
+    // ...and the dealer is inserted already linked, so the push updates (not
+    // creates) the matched Customer.
+    const dealerInsert = mocks.inserts.find((i) => i.table === 'dealers');
+    expect((dealerInsert!.values as Record<string, unknown>).quickbooksId).toBe('QB-99');
+    expect(mocks.pushDealerToQuickbooks).toHaveBeenCalled();
+    expect(mocks.pushDealerToQuickbooks.mock.calls[0][0]).toMatchObject({ quickbooksId: 'QB-99' });
+  });
+
+  it('skips the QB check and still creates when QuickBooks is dormant (best-effort)', async () => {
+    mocks.findCustomerByDisplayName.mockResolvedValue({ Id: 'QB-99', DisplayName: 'Acme Motors' });
+    mocks.getValidAccessToken.mockRejectedValue(new Error('no QuickBooks connection'));
+    const result = await call(createDealer(fd({ name: 'Acme Motors' })));
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.inserts.find((i) => i.table === 'dealers')).toBeDefined();
+  });
+
+  it('createAnyway skips the QB name query', async () => {
+    mocks.findCustomerByDisplayName.mockResolvedValue({ Id: 'QB-99', DisplayName: 'Acme Motors' });
+    const result = await call(createDealer(fd({ name: 'Acme Motors', createAnyway: '1' })));
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.findCustomerByDisplayName).not.toHaveBeenCalled();
+  });
+
+  it('does not run the QB check for a prospect (no QB round-trip on inline-add)', async () => {
+    mocks.findCustomerByDisplayName.mockResolvedValue({ Id: 'QB-99', DisplayName: 'Acme Motors' });
+    const result = await call(createDealer(fd({ name: 'Acme Motors', status: 'prospect' })));
+    expect(result).toEqual({ ok: true, dealerId: 999 });
+    expect(mocks.findCustomerByDisplayName).not.toHaveBeenCalled();
   });
 });
 
