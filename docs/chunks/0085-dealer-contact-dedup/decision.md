@@ -118,6 +118,14 @@ any connection/query error → **skip + proceed to create** (best-effort, mirror
 never blocks the dealer save; only a *successful query returning a match* raises the
 link prompt.
 
+**Build refinement — gate the network QB check on `status === 'active'`.** Only
+active dealers push to QB (0084), so the QB-name check runs only when the new
+dealer is active. This keeps the composer's inline **prospect**-create path fast
+(no QB round-trip) and aligns "QB matters" with "the dealer that actually pushes."
+The cheap local dealer-name + contact checks still run for prospects. (A
+prospect→active conversion does not re-run the QB check — acceptable gap; a
+`convertProspectToActive` QB-dedup could be a later follow-up.)
+
 ## D7 — Link-on-match push behavior
 
 On `linkQuickbooksId`, the dealer is inserted with `quickbooks_id` already set, so

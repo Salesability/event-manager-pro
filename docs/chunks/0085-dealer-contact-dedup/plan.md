@@ -10,7 +10,7 @@
 | 1: Decision gate + shared dedup-lookup helpers | Done | `32b72fc` |
 | 2: Contact email/phone guard in Server Actions (+ orphan-row fix) | Done | `7219e0e` |
 | 3: Dealer name+address guard in `createDealer` (app-local) | Done | `af24bd8` |
-| 4: Create-time QuickBooks `Customer`-by-name check + link-on-match | Pending | - |
+| 4: Create-time QuickBooks `Customer`-by-name check + link-on-match | Done | `2dd1095` |
 | 5: Client reuse / link affordance on the forms | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -55,7 +55,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/auth.md` — keep the existing `requireRole` gating on the touched actions unchanged.
 - **QB best-effort principle (0077/0084)** — a dormant/erroring QuickBooks must never block the dealer save; the Phase-4 QB check degrades to "skip + proceed" on any connection/query failure, raising the link prompt *only* on a successful match.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -88,12 +88,12 @@ existing file, the anchor is the nearest sibling method in that same file.
 - [x] Tests: name+address match → `{ duplicate }` (no insert, contact check not reached); createAnyway skips + inserts. _(SQL case/whitespace-insensitivity → Phase 6 integration.)_
 
 #### Phase 4: Create-time QuickBooks `Customer`-by-name check + link-on-match
-- [ ] Add `findCustomerByDisplayName(name, realmId, accessToken)` to `client.ts` (anchor `fetchCustomers:211`): `SELECT * FROM Customer WHERE DisplayName = '…'` (escape quotes), return the single match or null; `QboAuthError` on 401, same as siblings.
-- [ ] `createDealer`: **after** the local name+address check finds no match and **only if** no `createAnyway`/`linkQuickbooksId` decision is present, run the QB check — `getValidAccessToken` (dormant → skip), query by name, with the Phase-1 timeout ceiling; on a match return an "exists in QuickBooks" result (Customer Id + name).
-- [ ] Best-effort: any QB connection/query error or timeout → swallow + proceed to create (mirror `autoPushActiveDealerToQuickbooks:109-119`); a QB outage never blocks the save.
-- [ ] Honor `linkQuickbooksId`: create the dealer with `quickbooks_id` set to the matched Customer — so it's born linked and the existing auto-push (0084) takes the *update* branch (no duplicate Customer created).
-- [ ] Honor `createAnyway: true`: skip the QB check and create + push as today (push may hit a swallowed 6240 → unlinked, unchanged behavior).
-- [ ] Tests (mock the QB client): match → "exists in QuickBooks" result; link → dealer created with `quickbooks_id` set, no create-Customer call; dormant/error → check skipped, create proceeds; createAnyway → no QB query.
+- [x] Added `findCustomerByDisplayName(name, realmId, accessToken)` to `client.ts`: `SELECT * FROM Customer WHERE Active = true AND DisplayName = '…' MAXRESULTS 1` (backslash-escapes `\` then `'`), returns the single match or null; `QboAuthError` on 401.
+- [x] `createDealer`: after local name+address + contact checks, runs the QB check — `getValidAccessToken` → `findCustomerByDisplayName`, 4000ms `Promise.race` ceiling; on a match returns `{ duplicate: { kind:'dealer-quickbooks', quickbooksId, name } }`. **Gated on `status === 'active'`** (D6 refinement — prospects don't push, keeps the inline composer fast); skipped on `createAnyway`/`linkQuickbooksId`.
+- [x] Best-effort `findQuickbooksCustomerMatch`: dormant/query-error/timeout → null → create proceeds (never throws).
+- [x] `linkQuickbooksId`: dealer inserted with `quickbooks_id` set (born-linked) → the auto-push (0084) inline payload carries it → *update* branch (no duplicate Customer).
+- [x] `createAnyway: true`: skips the QB query → creates + pushes as today.
+- [x] Tests (mock QB client): match → `dealer-quickbooks` result; link → born-linked insert + push gets a linked dealer, no QB query; dormant → skipped + create; createAnyway → no query; prospect → no query. Plus `client.test.ts`: query/escaping/null/401.
 
 #### Phase 5: Client reuse / link affordance on the forms
 - [ ] `dealer-form.tsx`: on a local-duplicate result, show a Callout ("Looks like *{name}* already exists") with **Use existing** + **Create anyway**; on an "exists in QuickBooks" result, show **Link to the QuickBooks customer** + **Create anyway** (shared Catalyst `Button`); re-submit with the decision (`reuseExistingId` / `linkQuickbooksId` / `createAnyway`).
