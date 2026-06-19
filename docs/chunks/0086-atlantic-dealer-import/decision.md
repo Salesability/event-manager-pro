@@ -112,6 +112,36 @@ before any prod write, and the owner confirms handling at the Phase-6 gate.
   needed until it's activated). No backfill-on-import. The 0085 dedup helpers already
   implement skip-existing-dealer; "leave unlinked" is the no-op default for prospects.
 
+## D8 — Prod overlap is large + messy → reconciliation worksheet (supersedes D6/D7 for prod)
+
+The read-only prod probe (2026-06-19, owner-run) overturned the intent's "overlap is
+expected to be low" assumption and the naive name+address dedup:
+
+- **0** of 274 match prod by name+**address** — existing prod dealers carry *street*
+  addresses (QBO-seeded) while the BD list has city-only, so the address key never
+  fires (D6's caveat, at scale). **Address is unusable as a key.**
+- **67** match by **name** (exact, same province); **~83** match by name **or phone**.
+- **Phone helps** (catches name-variants the address key missed: `Audi Moncton`↔`Audi
+  of Moncton`, `Hickmans Chrysler`↔`Hickman Chrysler Dodge Jeep`) **but is not clean**
+  — dealer GROUPS share switchboards + toll-free numbers across distinct brand
+  rooftops (`Halifax Chrysler`/`Steele Mazda` share 902-455-0566; Rallye group shares
+  an 800 line).
+- **Postal code is unusable**: (a) not in the Excel (city only), and (b) not unique
+  even in prod — auto groups cluster multiple brand rooftops at one postal
+  (`E1A9A3` = Subaru/Acura/Audi/VW of Moncton). The owner's "same postal ⇒ dup"
+  intuition does **not** hold for car dealerships.
+
+**Decision:** no single auto-key is trustworthy → put a human in the loop via a
+**reconciliation worksheet** (`scripts/atlantic-reconcile.mjs` →
+`scripts/data/atlantic-reconciliation.csv`, read-only): one row per rooftop with
+name/phone (exact + fuzzy) evidence + a `suggested_action`. Fuzzy matching requires a
+shared **distinctive** token (group/family name, excluding brand + city words) so a
+brand+place coincidence (`Audi St John's` vs `BMW St John's`) doesn't false-match.
+Baseline: **158 import-new · 67 skip-existing · 49 review**. The owner vets the 49
+`review` rows; the import (Phase 4, to be rewired) honors the vetted `suggested_action`
+keyed by name+city instead of doing its own prod dedup. The QBO DisplayName layer
+(D7) folds in once the prod QBO token is reconnected (expired 2026-06-17).
+
 ## Out of scope (restated from intent non-goals)
 
 No activation / QB push; no BD-workflow tracking in-app (dropped columns); no
