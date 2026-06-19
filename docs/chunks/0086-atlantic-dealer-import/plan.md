@@ -12,7 +12,7 @@
 | 3: Wire `loadDealer` + QBO push to read `dealers.phone` | Done | `458e865` |
 | 4: Import script — parse → 3-layer dedup → upsert dealers + contacts | Done | `a482d68` |
 | 5: Sandbox dry-run + verify | Done | (sandbox-only, no code commit) |
-| 6: Prod migration + run + verify | Pending (owner-gated) | - |
+| 6: Prod migration + run + verify | Done | (prod 0041 + import 2026-06-19) |
 
 A one-time, idempotent import of the cleaned 281-rooftop Atlantic Canada BD list
 into the app as **prospect** dealers (no QB push — prospects don't push, 0084),
@@ -45,7 +45,7 @@ existing file, the anchor is the nearest sibling method in that same file.
 - `docs/wiki/go-live-accounts.md` + [[project-prod-db]] / [[project-prod-gcp]] — prod DB ops go through `scripts/with-prod-db.sh` / `pnpm db:migrate:prod` (session pooler 5432); apply migration **before** the prod import; prod gcloud reauth gotcha.
 - **0084 / 0085 reuse** — prospects don't push (status-gated); the dedup helpers + `findCustomerByDisplayName` are the dedup engine; `findExistingContactByIdentifier` makes a shared-email person one contact with many dealer links.
 
-**Overall Progress:** 83% (5/6 phases complete — Phase 6 is the owner-gated prod step)
+**Overall Progress:** 100% (6/6 phases complete — shipped to prod 2026-06-19)
 
 **Chunk-end `/eval` (code, Phases 1–5):** **PASS with warnings** — [eval-2026-06-19-1359](eval-2026-06-19-1359.md). Static clean (tsc, **1182 pass/2 skip** serial, **0 new lint**), browser smoke PASS (`/dealerships` Prospect (274) + imported detail render, 0 console errors), Codex 0 High/0 Med/2 Low (both by-design/out-of-scope → parked **0086-a** no-DB-unique-on-name+address, **0086-b** archived-contact reuse). Run before the prod step so the owner has a clean gate; the chunk does **not** auto-close (Phase 6 prod is owner-gated).
 
@@ -98,7 +98,7 @@ The Phase-1 prod probe (owner-run 2026-06-19) found the prod overlap is **large 
 
 #### Phase 6: Prod migration + run + verify (owner-gated)
 - [x] Read-only prod-overlap probe + reconciliation worksheet run against prod + owner-vetted (above). _(QBO DisplayName layer still optional — prod QBO token expired 2026-06-17; reconnect to add it as a 3rd signal, non-blocking.)_
-- [ ] Apply `0041` to **prod** first (`pnpm db:migrate:prod`, session pooler 5432); verify columns. _(Owner-gated; gcloud reauth may be needed — [[project-prod-gcp]].)_
-- [ ] `--dry-run` against **prod** (`./scripts/with-prod-db.sh pnpm dlx tsx scripts/import-atlantic-dealers.ts --dry-run`) → expect **188 import-new / 86 skip-existing / 0 unvetted**; review before writing.
-- [ ] Real run against **prod** → ~188 new prospect dealers + their contacts; verify counts + spot-checks; **no QB writes** (all prospects).
-- [ ] Record the prod import in `CURRENT.md` (counts, date); note QB activation is deferred per-dealer.
+- [x] Applied `0041` to **prod** 2026-06-19 (`pnpm db:migrate:prod`, session pooler 5432); verified the 3 nullable columns exist. (prod DB `0040` → `0041`.)
+- [x] `--dry-run` against **prod** → **188 import-new / 86 skip-existing / 0 unvetted / 0 already-in-prod-by-name+addr** (confirmed the 188 are genuinely new).
+- [x] Real run against **prod** 2026-06-19 → **188 prospect dealers + 294 contacts + 312 links** inserted; 86 vetted-skip; **0 QB-linked / 0 active** (no QB writes — all prospects). Verified: 188 all `status='prospect'` (NB:62/NL:40/NS:71/PE:15); total prod dealers **333 = 145 + 188, no duplicates**; O'Regan's 12 brand rooftops imported + 2 Hyundai skipped; Central Nova Hyundai+Subaru imported; MINI Moncton imported. Read-only prod re-run dry-run = **0 dealers would-insert** (idempotent).
+- [x] Recorded the prod import in `CURRENT.md`; QB activation is deferred per-dealer (a prospect pushes only when activated, 0084).
