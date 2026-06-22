@@ -143,12 +143,12 @@ export function DealersAdmin({
   function pushParams(next: { q?: string; status?: StatusPill }) {
     const sp = new URLSearchParams(window.location.search);
     if (next.q !== undefined) {
-      next.q ? sp.set('q', next.q) : sp.delete('q');
+      if (next.q) sp.set('q', next.q);
+      else sp.delete('q');
     }
     if (next.status !== undefined) {
-      next.status && next.status !== 'active'
-        ? sp.set('status', next.status)
-        : sp.delete('status');
+      if (next.status && next.status !== 'active') sp.set('status', next.status);
+      else sp.delete('status');
       // Commitment filters are Prospect-only — drop them when leaving that view
       // so they don't linger silently in the URL.
       if (next.status !== 'prospect') QUEUE_PARAMS.forEach((k) => sp.delete(k));
@@ -163,7 +163,8 @@ export function DealersAdmin({
   function pushParam(key: (typeof QUEUE_PARAMS)[number], value: string | boolean) {
     const sp = new URLSearchParams(window.location.search);
     const v = value === true ? '1' : value === false ? '' : value;
-    v ? sp.set(key, v) : sp.delete(key);
+    if (v) sp.set(key, v);
+    else sp.delete(key);
     const qs = sp.toString();
     startTransition(() => {
       router.replace(qs ? `${pathname}?${qs}` : pathname);
