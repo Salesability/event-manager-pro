@@ -7,8 +7,12 @@ import {
 import {
   ACTIVITY_KIND_LABELS,
   ACTIVITY_KINDS,
+  addDaysIso,
   DEALER_PRIORITIES,
   DEALER_PRIORITY_LABELS,
+  isIdle,
+  isOverdue,
+  matchesDueBucket,
   PIPELINE_STAGE_LABELS,
   PIPELINE_STAGES,
 } from './pipeline';
@@ -37,5 +41,62 @@ describe('every value has a human label', () => {
   });
   it('activity kinds', () => {
     for (const k of ACTIVITY_KINDS) expect(ACTIVITY_KIND_LABELS[k]).toBeTruthy();
+  });
+});
+
+// ---- Commitment-queue bucketing (Phase 5) -----------------------------------
+const TODAY = '2026-06-22';
+
+describe('addDaysIso', () => {
+  it('adds days across a month boundary', () => {
+    expect(addDaysIso('2026-06-28', 7)).toBe('2026-07-05');
+  });
+  it('subtracts with negatives', () => {
+    expect(addDaysIso('2026-06-22', -1)).toBe('2026-06-21');
+  });
+});
+
+describe('isOverdue', () => {
+  it('is true for a past due date', () => {
+    expect(isOverdue('2026-06-21', TODAY)).toBe(true);
+  });
+  it('is false for today or future', () => {
+    expect(isOverdue(TODAY, TODAY)).toBe(false);
+    expect(isOverdue('2026-06-23', TODAY)).toBe(false);
+  });
+  it('is false when there is no due date', () => {
+    expect(isOverdue(null, TODAY)).toBe(false);
+  });
+});
+
+describe('matchesDueBucket', () => {
+  it('overdue = strictly before today', () => {
+    expect(matchesDueBucket('2026-06-21', TODAY, 'overdue')).toBe(true);
+    expect(matchesDueBucket(TODAY, TODAY, 'overdue')).toBe(false);
+  });
+  it('today = exactly today', () => {
+    expect(matchesDueBucket(TODAY, TODAY, 'today')).toBe(true);
+    expect(matchesDueBucket('2026-06-23', TODAY, 'today')).toBe(false);
+  });
+  it('week = today through +7 days inclusive (excludes overdue + further out)', () => {
+    expect(matchesDueBucket(TODAY, TODAY, 'week')).toBe(true);
+    expect(matchesDueBucket('2026-06-29', TODAY, 'week')).toBe(true); // +7
+    expect(matchesDueBucket('2026-06-30', TODAY, 'week')).toBe(false); // +8
+    expect(matchesDueBucket('2026-06-21', TODAY, 'week')).toBe(false); // overdue
+  });
+  it('never matches a null due date', () => {
+    for (const b of ['overdue', 'today', 'week'] as const) {
+      expect(matchesDueBucket(null, TODAY, b)).toBe(false);
+    }
+  });
+});
+
+describe('isIdle', () => {
+  it('is idle with no / blank next action', () => {
+    expect(isIdle(null)).toBe(true);
+    expect(isIdle('   ')).toBe(true);
+  });
+  it('is not idle with a real next action', () => {
+    expect(isIdle('Call Tuesday')).toBe(false);
   });
 });
