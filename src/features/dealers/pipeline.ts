@@ -54,3 +54,50 @@ export const ACTIVITY_KIND_LABELS: Record<ActivityKind, string> = {
   note: 'Note',
   other: 'Other',
 };
+
+// ---- Commitment-queue bucketing (Phase 5) -----------------------------------
+// All date math is on 'YYYY-MM-DD' strings (lexical compare == chronological),
+// so the queue never depends on Date-object timezone behaviour.
+
+export type DueBucket = 'overdue' | 'today' | 'week';
+
+export const DUE_BUCKET_LABELS: Record<DueBucket, string> = {
+  overdue: 'Overdue',
+  today: 'Due today',
+  week: 'Due this week',
+};
+
+/** Add `days` to an ISO date string, returning a new 'YYYY-MM-DD'. */
+export function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A next-action is overdue when its due date is strictly before today. */
+export function isOverdue(nextActionAt: string | null, todayIso: string): boolean {
+  return nextActionAt != null && nextActionAt < todayIso;
+}
+
+/** Whether a due date falls in the given bucket (relative to `todayIso`). */
+export function matchesDueBucket(
+  nextActionAt: string | null,
+  todayIso: string,
+  bucket: DueBucket,
+): boolean {
+  if (!nextActionAt) return false;
+  switch (bucket) {
+    case 'overdue':
+      return nextActionAt < todayIso;
+    case 'today':
+      return nextActionAt === todayIso;
+    case 'week':
+      // today through +7 days inclusive (the near-term commitment window).
+      return nextActionAt >= todayIso && nextActionAt <= addDaysIso(todayIso, 7);
+  }
+}
+
+/** Idle = no next action promised (the rep owes this dealer a commitment). */
+export function isIdle(nextAction: string | null): boolean {
+  return nextAction == null || nextAction.trim() === '';
+}

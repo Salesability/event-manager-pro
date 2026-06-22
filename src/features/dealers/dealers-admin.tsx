@@ -18,6 +18,17 @@ import { archiveDealer, convertProspectToActive } from '@/features/schedule/acti
 import type { Dealer } from '@/features/schedule/queries';
 import { buildDealersColumns } from '@/features/dealers/dealers-columns';
 import { DealerForm } from '@/features/dealers/dealer-form';
+import {
+  DEALER_PRIORITIES,
+  DEALER_PRIORITY_LABELS,
+  DUE_BUCKET_LABELS,
+  type DueBucket,
+  isIdle,
+  matchesDueBucket,
+  PIPELINE_STAGE_LABELS,
+  PIPELINE_STAGES,
+  type PipelineStage,
+} from '@/features/dealers/pipeline';
 
 type StatusPill = 'active' | 'prospect' | 'archived';
 
@@ -30,6 +41,9 @@ function pillClass(active: boolean): string {
     ? 'rounded-full border border-brand-500 bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700 transition'
     : 'rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 }
+
+const QUEUE_SELECT_CLASS =
+  'h-7 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-700 outline-none transition focus:border-brand-500 focus:ring-3 focus:ring-brand-500/20';
 
 function matchesPill(dealer: Dealer, pill: StatusPill): boolean {
   // Archived takes precedence: `archivedAt IS NOT NULL` regardless of status.
@@ -65,7 +79,25 @@ function buildArchiveConfirmMessage(dealer: Dealer): string {
   return `Archive ${dealer.name}? Existing campaigns keep their reference. Contact-link rows are preserved in history but the dealer disappears from the People page and Dealer pickers. Continue?`;
 }
 
-export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
+// Today as 'YYYY-MM-DD' in the viewer's local time — the due-bucket / overdue
+// reference. Computed per render (cheap) so it stays correct across midnight.
+function localTodayIso(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+function isDueBucket(v: string): v is DueBucket {
+  return v === 'overdue' || v === 'today' || v === 'week';
+}
+
+export function DealersAdmin({
+  dealers,
+  currentUserId = null,
+}: {
+  dealers: Dealer[];
+  /** The signed-in user's auth uuid — drives the "Mine" commitment filter. */
+  currentUserId?: string | null;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -79,6 +111,23 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const rawStatus = params.get('status') ?? '';
   const pill: StatusPill = isStatusPill(rawStatus) ? rawStatus : 'active';
 
+  // Commitment-queue filters (0087 Phase 5) — only meaningful on the Prospect
+  // view. All URL-driven so a shared link / back-nav restores the queue state.
+  const showQueue = pill === 'prospect';
+  const rawDue = params.get('due') ?? '';
+  const dueFilter: DueBucket | null = isDueBucket(rawDue) ? rawDue : null;
+  const mineFilter = params.get('mine') === '1';
+  const idleFilter = params.get('idle') === '1';
+  const rawStage = params.get('stage') ?? '';
+  const stageFilter = (PIPELINE_STAGES as readonly string[]).includes(rawStage)
+    ? (rawStage as PipelineStage)
+    : null;
+  const rawPriority = params.get('priority') ?? '';
+  const priorityFilter = (DEALER_PRIORITIES as readonly string[]).includes(rawPriority)
+    ? rawPriority
+    : null;
+  const todayIso = localTodayIso();
+
   const [globalFilter, setGlobalFilter] = useState(qFromUrl);
   const [prevQFromUrl, setPrevQFromUrl] = useState(qFromUrl);
   if (qFromUrl !== prevQFromUrl) {
@@ -89,6 +138,8 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
   const [, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const QUEUE_PARAMS = ['due', 'mine', 'idle', 'stage', 'priority'] as const;
+
   function pushParams(next: { q?: string; status?: StatusPill }) {
     const sp = new URLSearchParams(window.location.search);
     if (next.q !== undefined) {
@@ -98,7 +149,21 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
       next.status && next.status !== 'active'
         ? sp.set('status', next.status)
         : sp.delete('status');
+      // Commitment filters are Prospect-only — drop them when leaving that view
+      // so they don't linger silently in the URL.
+      if (next.status !== 'prospect') QUEUE_PARAMS.forEach((k) => sp.delete(k));
     }
+    const qs = sp.toString();
+    startTransition(() => {
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    });
+  }
+
+  // Single queue-filter param setter (value '' / false clears the key).
+  function pushParam(key: (typeof QUEUE_PARAMS)[number], value: string | boolean) {
+    const sp = new URLSearchParams(window.location.search);
+    const v = value === true ? '1' : value === false ? '' : value;
+    v ? sp.set(key, v) : sp.delete(key);
     const qs = sp.toString();
     startTransition(() => {
       router.replace(qs ? `${pathname}?${qs}` : pathname);
@@ -111,11 +176,19 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
     debounceRef.current = setTimeout(() => pushParams({ q: value }), 250);
   }
 
+  const queueFiltered =
+    mineFilter || idleFilter || dueFilter != null || stageFilter != null || priorityFilter != null;
   const isFiltered = globalFilter.trim().length > 0 || pill !== 'active';
   const clearFilters = () => {
     setGlobalFilter('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     pushParams({ q: '', status: 'active' });
+  };
+  const clearQueueFilters = () => {
+    const sp = new URLSearchParams(window.location.search);
+    QUEUE_PARAMS.forEach((k) => sp.delete(k));
+    const qs = sp.toString();
+    startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname));
   };
 
   function archive(dealer: Dealer) {
@@ -149,21 +222,41 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
     });
   }
 
-  const filteredDealers = useMemo(
-    () => dealers.filter((d) => matchesPill(d, pill)),
-    [dealers, pill],
-  );
+  const filteredDealers = useMemo(() => {
+    let rows = dealers.filter((d) => matchesPill(d, pill));
+    if (showQueue) {
+      if (mineFilter) rows = rows.filter((d) => d.ownerId === currentUserId);
+      if (idleFilter) rows = rows.filter((d) => isIdle(d.nextAction));
+      if (dueFilter) rows = rows.filter((d) => matchesDueBucket(d.nextActionAt, todayIso, dueFilter));
+      if (stageFilter) rows = rows.filter((d) => d.pipelineStage === stageFilter);
+      if (priorityFilter) rows = rows.filter((d) => d.priority === priorityFilter);
+    }
+    return rows;
+  }, [
+    dealers,
+    pill,
+    showQueue,
+    mineFilter,
+    idleFilter,
+    dueFilter,
+    stageFilter,
+    priorityFilter,
+    currentUserId,
+    todayIso,
+  ]);
 
   const columns = useMemo(
     () =>
       buildDealersColumns({
         onArchive: archive,
         onActivate: activate,
+        view: showQueue ? 'queue' : 'default',
+        todayIso,
       }),
     // See people-admin.tsx — `archive`/`activate` close over per-render state setters but
     // their identity is stable; rebuild is cheap given the column count.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [showQueue, todayIso],
   );
 
   const counts = useMemo(
@@ -224,13 +317,89 @@ export function DealersAdmin({ dealers }: { dealers: Dealer[] }) {
           </Can>
         }
       />
-      <p className="mt-2 text-xs text-zinc-500">{filteredDealers.length} dealers</p>
+
+      {showQueue && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Queue
+          </span>
+          {currentUserId && (
+            <button
+              type="button"
+              aria-pressed={mineFilter}
+              onClick={() => pushParam('mine', !mineFilter)}
+              className={pillClass(mineFilter)}
+            >
+              Mine
+            </button>
+          )}
+          {(['overdue', 'today', 'week'] as DueBucket[]).map((b) => (
+            <button
+              key={b}
+              type="button"
+              aria-pressed={dueFilter === b}
+              onClick={() => pushParam('due', dueFilter === b ? '' : b)}
+              className={pillClass(dueFilter === b)}
+            >
+              {DUE_BUCKET_LABELS[b]}
+            </button>
+          ))}
+          <button
+            type="button"
+            aria-pressed={idleFilter}
+            onClick={() => pushParam('idle', !idleFilter)}
+            className={pillClass(idleFilter)}
+          >
+            No commitment
+          </button>
+          <select
+            aria-label="Filter by stage"
+            value={stageFilter ?? ''}
+            onChange={(e) => pushParam('stage', e.target.value)}
+            className={QUEUE_SELECT_CLASS}
+          >
+            <option value="">All stages</option>
+            {PIPELINE_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {PIPELINE_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by priority"
+            value={priorityFilter ?? ''}
+            onChange={(e) => pushParam('priority', e.target.value)}
+            className={QUEUE_SELECT_CLASS}
+          >
+            <option value="">Any priority</option>
+            {DEALER_PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {DEALER_PRIORITY_LABELS[p]}
+              </option>
+            ))}
+          </select>
+          {queueFiltered && (
+            <button
+              type="button"
+              onClick={clearQueueFilters}
+              className="text-xs font-medium text-zinc-500 underline transition hover:text-zinc-900"
+            >
+              Clear queue filters
+            </button>
+          )}
+        </div>
+      )}
+
+      <p className="mt-2 text-xs text-zinc-500">
+        {filteredDealers.length} {showQueue ? 'in queue' : 'dealers'}
+      </p>
 
       <div className="mt-3">
         <DataTable
+          key={showQueue ? 'queue' : 'default'}
           columns={columns}
           data={filteredDealers}
-          initialSorting={[{ id: 'name', desc: false }]}
+          initialSorting={[{ id: showQueue ? 'due' : 'name', desc: false }]}
           initialPageSize={50}
           globalFilter={globalFilter}
           onGlobalFilterChange={setGlobalFilter}

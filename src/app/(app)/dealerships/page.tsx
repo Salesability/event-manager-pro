@@ -1,4 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
+import { getUser } from '@/lib/supabase/session';
 import { PageHeader } from '@/components/app/page-header';
 import { loadDealersIncludingArchived } from '@/features/schedule/queries';
 import { DealersAdmin } from '@/features/dealers/dealers-admin';
@@ -8,7 +9,7 @@ import { DealersAdmin } from '@/features/dealers/dealers-admin';
 // them client-side.
 export default async function DealershipsPage() {
   await assertCan('admin:access'); // expected: server-only
-  const dealers = await loadDealersIncludingArchived();
+  const [dealers, user] = await Promise.all([loadDealersIncludingArchived(), getUser()]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -16,7 +17,7 @@ export default async function DealershipsPage() {
         title="Dealers"
         description="Every dealer account — active, prospect, and archived."
       />
-      <DealersAdmin dealers={dealers} />
+      <DealersAdmin dealers={dealers} currentUserId={user?.id ?? null} />
     </div>
   );
 }
