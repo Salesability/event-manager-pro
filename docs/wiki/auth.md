@@ -104,6 +104,7 @@ When an admin saves a person via `/admin/people`, both surfaces are written in t
 |---|---|
 | Person CRUD (create / update / archive / adopt-orphan) | `assertCan('person:create' \| 'person:edit' \| 'person:archive' \| 'person:adopt-orphan')` |
 | Dealer CRUD (create / update / archive) | `assertCan('dealer:create' \| 'dealer:edit' \| 'dealer:archive')` — admin-only since 2026-05-08 (`/dealerships` page itself was admin-gated by 0028; the actions caught up post-0029) |
+| Dealer pipeline (`setDealerPipeline`, `logDealerActivity`) | `capabilityClient('dealer:edit')` — admin-only (0087 prospecting layer; stage/priority/owner/next-action patch + the `dealer_activities` touch-log). `setDealerPipeline` is locked server-side once the dealer is `active`. |
 | Campaign CRUD (create / update / cancel) | `assertCan('campaign:create' \| 'campaign:edit' \| 'campaign:cancel')` — admin-only since 2026-05-08 (booking is back-office work; coach is field-only) |
 | Outbound email (client / coach confirmations, share-link) | `assertCan('email:send')` — admin-only since 2026-05-08 (admin → external comms, sent after admin books) |
 | Lookup admin (campaign styles, sales lead sources × create/update/archive) | `assertCan('lookup:edit')` |

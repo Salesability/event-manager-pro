@@ -1,8 +1,9 @@
 import 'server-only';
-import { and, asc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { formatYearMonth } from '@/lib/dates';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
+import type { ActivityKind, DealerPriority, PipelineStage } from '@/features/dealers/pipeline';
 import {
   availabilityBlocks,
   billingAdjustments,
@@ -10,6 +11,7 @@ import {
   campaignStyles,
   contactIdentifiers,
   contacts,
+  dealerActivities,
   dealerContacts,
   dealers,
   audienceSources,
@@ -34,16 +36,45 @@ export type Dealer = {
   contactLastName: string | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
+  // Prospecting pipeline (0087). All nullable — active/existing dealers carry no
+  // funnel position. `ownerId` is the coach's auth-user uuid; `ownerName` is the
+  // resolved display name (null if the owner has no contacts row / display name).
+  pipelineStage: PipelineStage | null;
+  priority: DealerPriority | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  nextAction: string | null;
+  /** Calendar date 'YYYY-MM-DD' (a `date` column), or null. */
+  nextActionAt: string | null;
+  lastContactedAt: Date | null;
+  stageChangedAt: Date | null;
 };
 
 export type Coach = {
   id: number;
+  /** Auth-user uuid (nullable — a coach seeded ahead of provisioning has none).
+   *  The dealer-owner picklist (0087) submits this; only coaches WITH a userId
+   *  are assignable since `dealers.owner_id` FKs `auth.users`. */
+  userId: string | null;
   firstName: string;
   lastName: string;
   displayName: string;
   specialty: string | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
+};
+
+// One logged touch on a dealer (0087). Rendered as the recent-activity list on
+// the dealer panel (a lite per-dealer timeline). `actorName` is the resolved
+// display name of who logged it (null if unresolvable).
+export type DealerActivity = {
+  id: number;
+  dealerId: number;
+  kind: ActivityKind;
+  note: string | null;
+  occurredAt: Date;
+  createdById: string | null;
+  actorName: string | null;
 };
 
 export type Campaign = {
@@ -201,6 +232,21 @@ async function fetchPrimaryIdentifiers(contactIds: number[]) {
   return map;
 }
 
+// Resolve a set of `dealers.owner_id` auth uuids → coach display names by
+// joining `contacts` on `user_id` (0087). Returns a map keyed by uuid; missing
+// keys (owner with no contacts row / archived) resolve to a null ownerName.
+async function fetchOwnerNames(ownerIds: (string | null)[]) {
+  const unique = Array.from(new Set(ownerIds.filter((v): v is string => v != null)));
+  if (!unique.length) return new Map<string, string>();
+  const rows = await db
+    .select({ userId: contacts.userId, displayName: contacts.displayName })
+    .from(contacts)
+    .where(and(inArray(contacts.userId, unique), isNull(contacts.archivedAt)));
+  const map = new Map<string, string>();
+  for (const r of rows) if (r.userId) map.set(r.userId, r.displayName);
+  return map;
+}
+
 async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dealer[]> {
   const rows = await db
     .select({
@@ -212,6 +258,13 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       status: dealers.status,
       acquiredVia: dealers.acquiredVia,
       archivedAt: dealers.archivedAt,
+      pipelineStage: dealers.pipelineStage,
+      priority: dealers.priority,
+      ownerId: dealers.ownerId,
+      nextAction: dealers.nextAction,
+      nextActionAt: dealers.nextActionAt,
+      lastContactedAt: dealers.lastContactedAt,
+      stageChangedAt: dealers.stageChangedAt,
     })
     .from(dealers)
     .where(opts.includeArchived ? undefined : isNull(dealers.archivedAt))
@@ -222,6 +275,7 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
   const idents = await fetchPrimaryIdentifiers(
     Array.from(primaryContacts.values(), (v) => v.contactId)
   );
+  const ownerNames = await fetchOwnerNames(rows.map((r) => r.ownerId));
 
   return rows.map((r) => {
     const link = primaryContacts.get(r.id);
@@ -240,6 +294,14 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       contactLastName: link?.lastName ?? null,
       primaryEmail: ident?.email ?? null,
       primaryPhone: ident?.phone ?? null,
+      pipelineStage: r.pipelineStage,
+      priority: r.priority,
+      ownerId: r.ownerId,
+      ownerName: r.ownerId ? (ownerNames.get(r.ownerId) ?? null) : null,
+      nextAction: r.nextAction,
+      nextActionAt: r.nextActionAt,
+      lastContactedAt: r.lastContactedAt,
+      stageChangedAt: r.stageChangedAt,
     };
   });
 }
@@ -287,6 +349,13 @@ export async function loadDealer(
       phone: dealers.phone,
       manufacturer: dealers.manufacturer,
       notes: dealers.notes,
+      pipelineStage: dealers.pipelineStage,
+      priority: dealers.priority,
+      ownerId: dealers.ownerId,
+      nextAction: dealers.nextAction,
+      nextActionAt: dealers.nextActionAt,
+      lastContactedAt: dealers.lastContactedAt,
+      stageChangedAt: dealers.stageChangedAt,
     })
     .from(dealers)
     .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
@@ -297,6 +366,7 @@ export async function loadDealer(
   const link = primaryContacts.get(row.id);
   const idents = await fetchPrimaryIdentifiers(link ? [link.contactId] : []);
   const ident = link ? idents.get(link.contactId) : undefined;
+  const ownerNames = await fetchOwnerNames([row.ownerId]);
 
   return {
     id: row.id,
@@ -316,13 +386,54 @@ export async function loadDealer(
     contactLastName: link?.lastName ?? null,
     primaryEmail: ident?.email ?? null,
     primaryPhone: ident?.phone ?? null,
+    pipelineStage: row.pipelineStage,
+    priority: row.priority,
+    ownerId: row.ownerId,
+    ownerName: row.ownerId ? (ownerNames.get(row.ownerId) ?? null) : null,
+    nextAction: row.nextAction,
+    nextActionAt: row.nextActionAt,
+    lastContactedAt: row.lastContactedAt,
+    stageChangedAt: row.stageChangedAt,
   };
+}
+
+// Recent logged touches for a dealer (0087) — the panel's recent-activity list.
+// Newest first by `occurred_at`; `limit` caps the lite timeline (default 20).
+export async function loadDealerActivities(
+  dealerId: number,
+  limit = 20,
+): Promise<DealerActivity[]> {
+  const rows = await db
+    .select({
+      id: dealerActivities.id,
+      dealerId: dealerActivities.dealerId,
+      kind: dealerActivities.kind,
+      note: dealerActivities.note,
+      occurredAt: dealerActivities.occurredAt,
+      createdById: dealerActivities.createdById,
+    })
+    .from(dealerActivities)
+    .where(eq(dealerActivities.dealerId, dealerId))
+    .orderBy(desc(dealerActivities.occurredAt), desc(dealerActivities.id))
+    .limit(limit);
+
+  const actorNames = await fetchOwnerNames(rows.map((r) => r.createdById));
+  return rows.map((r) => ({
+    id: r.id,
+    dealerId: r.dealerId,
+    kind: r.kind,
+    note: r.note,
+    occurredAt: r.occurredAt,
+    createdById: r.createdById,
+    actorName: r.createdById ? (actorNames.get(r.createdById) ?? null) : null,
+  }));
 }
 
 export async function loadCoaches(): Promise<Coach[]> {
   const rows = await db
     .select({
       id: contacts.id,
+      userId: contacts.userId,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       displayName: contacts.displayName,
@@ -376,6 +487,7 @@ export async function loadCoaches(): Promise<Coach[]> {
     const ident = primaryByContact.get(r.id);
     return {
       id: r.id,
+      userId: r.userId,
       firstName: r.firstName,
       lastName: r.lastName,
       displayName: r.displayName,
@@ -390,6 +502,7 @@ export async function loadCoach(id: number): Promise<Coach | null> {
   const [row] = await db
     .select({
       id: contacts.id,
+      userId: contacts.userId,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
       displayName: contacts.displayName,
@@ -412,6 +525,7 @@ export async function loadCoach(id: number): Promise<Coach | null> {
   const ident = idents.get(row.id);
   return {
     id: row.id,
+    userId: row.userId,
     firstName: row.firstName,
     lastName: row.lastName,
     displayName: row.displayName,

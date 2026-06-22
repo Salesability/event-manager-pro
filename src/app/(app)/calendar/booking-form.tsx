@@ -178,6 +178,9 @@ export function BookingForm({
             ...prev,
             {
               id: coach.id,
+              // optimistic insert — the auth-user link isn't known here; a
+              // refetch fills it. Not used as a pipeline-owner from this picker.
+              userId: null,
               firstName: coach.firstName,
               lastName: coach.lastName,
               displayName: `${coach.firstName} ${coach.lastName}`.trim(),

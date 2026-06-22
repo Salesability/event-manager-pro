@@ -10,6 +10,7 @@ import {
   campaignStyles,
   contactIdentifiers,
   contacts,
+  dealerActivities,
   dealerContacts,
   dealers,
   audienceSources,
@@ -26,6 +27,7 @@ import { ensureAvailabilityOwnership } from './availability-authz';
 import { reconcileCampaignCalendar } from './calendar-sync';
 import { loadDealer } from './queries';
 import { dealerFormSchema } from '@/features/dealers/dealer-schema';
+import { dealerPipelineSchema, logActivitySchema } from '@/features/dealers/pipeline-schema';
 import {
   type DuplicateResult,
   findExistingContactByIdentifier,
@@ -699,6 +701,131 @@ export const convertProspectToActive = capabilityClient('dealer:edit')
 
     revalidatePath('/dealerships');
     revalidatePath('/production');
+    return { ok: true };
+  });
+
+// ---------- Prospecting pipeline (0087) ----------
+
+// Patch a dealer's pipeline fields (stage / priority / owner / next-action /
+// due-date). Omit-when-absent like `updateDealer`: a field the form doesn't
+// submit is preserved; a present-but-empty field clears to null — EXCEPT `stage`,
+// where '' means "no change" (a prospect always carries a real stage). Stamps
+// `stage_changed_at` only on a real transition (read by the 0088 dashboard's
+// stalled-in-stage blocker). Locked once the dealer is `active` — winning leaves
+// the funnel (won = `status='active'` via `convertProspectToActive`).
+// validation: dealerPipelineSchema (safeParse over FormData).
+export const setDealerPipeline = capabilityClient('dealer:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid dealer id.' };
+
+    const parsed = dealerPipelineSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return { error: firstFieldError(fieldErrors) ?? 'Invalid pipeline input.', fieldErrors };
+    }
+    const v = parsed.data;
+
+    const patch: Record<string, unknown> = { updatedById: userId };
+    const stagePatch = formData.has('stage') && v.stage ? v.stage : undefined;
+    if (stagePatch !== undefined) patch.pipelineStage = stagePatch;
+    if (formData.has('priority')) patch.priority = v.priority || null;
+    if (formData.has('ownerId')) patch.ownerId = v.ownerId || null;
+    if (formData.has('nextAction')) patch.nextAction = v.nextAction || null;
+    if (formData.has('nextActionAt')) patch.nextActionAt = v.nextActionAt || null;
+
+    let notFound = false;
+    let locked = false;
+    await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ stage: dealers.pipelineStage, status: dealers.status })
+        .from(dealers)
+        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+        .limit(1);
+      if (!current) {
+        notFound = true;
+        return;
+      }
+      if (current.status === 'active') {
+        locked = true;
+        return;
+      }
+      if (stagePatch !== undefined && stagePatch !== current.stage) {
+        patch.stageChangedAt = new Date();
+      }
+      await tx
+        .update(dealers)
+        .set(patch)
+        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)));
+    });
+    if (notFound) return { error: 'Dealer not found.' };
+    if (locked) return { error: 'Pipeline is locked once a dealer is active.' };
+
+    revalidatePath('/dealerships');
+    return { ok: true };
+  });
+
+// Log a touch on a dealer (call / email / meeting / note / other): inserts a
+// `dealer_activities` row, stamps `dealers.last_contacted_at` to the touch time,
+// and optionally sets the next promise in the same submit. Does NOT append to
+// `dealers.notes` (decision.md D4 — the activity log is the trail).
+// validation: logActivitySchema (safeParse over FormData).
+export const logDealerActivity = capabilityClient('dealer:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid dealer id.' };
+
+    const parsed = logActivitySchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      const fieldErrors = parsed.error.flatten().fieldErrors;
+      return { error: firstFieldError(fieldErrors) ?? 'Invalid activity input.', fieldErrors };
+    }
+    const v = parsed.data;
+    // Backdated touches anchor at noon UTC so the calendar date is stable across
+    // timezones; default to now when no date is supplied.
+    const occurredAt = v.occurredAt ? new Date(`${v.occurredAt}T12:00:00Z`) : new Date();
+
+    let notFound = false;
+    await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ id: dealers.id })
+        .from(dealers)
+        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
+        .limit(1);
+      if (!current) {
+        notFound = true;
+        return;
+      }
+
+      await tx.insert(dealerActivities).values({
+        dealerId: id,
+        kind: v.kind,
+        note: (v.note ?? '') || null,
+        occurredAt,
+        createdById: userId,
+        updatedById: userId,
+      });
+
+      const dealerPatch: Record<string, unknown> = {
+        lastContactedAt: occurredAt,
+        updatedById: userId,
+      };
+      if (formData.has('nextAction')) dealerPatch.nextAction = v.nextAction || null;
+      if (formData.has('nextActionAt')) dealerPatch.nextActionAt = v.nextActionAt || null;
+      await tx
+        .update(dealers)
+        .set(dealerPatch)
+        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)));
+    });
+    if (notFound) return { error: 'Dealer not found.' };
+
+    revalidatePath('/dealerships');
     return { ok: true };
   });
 

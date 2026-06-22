@@ -116,7 +116,13 @@ vi.mock('@/lib/db', () => {
   };
 });
 
-import { convertProspectToActive, createDealer, updateDealer } from '../schedule/actions';
+import {
+  convertProspectToActive,
+  createDealer,
+  logDealerActivity,
+  setDealerPipeline,
+  updateDealer,
+} from '../schedule/actions';
 
 async function call<T>(
   p: Promise<{ data?: T; serverError?: string; validationErrors?: unknown } | undefined | null>,
@@ -651,5 +657,151 @@ describe('auto-push to QuickBooks (0084)', () => {
     expect(result).toEqual({ error: 'Dealer not found.' });
     expect(mocks.loadDealer).not.toHaveBeenCalled();
     expect(mocks.pushDealerToQuickbooks).not.toHaveBeenCalled();
+  });
+});
+
+// ---- 0087 prospecting pipeline -----------------------------------------------
+
+// The select inside the action reads the current `{ stage, status }` to (a) gate
+// active-locked dealers and (b) decide whether to stamp `stage_changed_at`. Seed
+// it via dbResults; the following UPDATE consumes the next (empty) result.
+function seedCurrent(over: Record<string, unknown> = {}) {
+  mocks.dbResults.push([{ stage: 'new', status: 'prospect', ...over }]);
+}
+
+describe('setDealerPipeline', () => {
+  it('patches only submitted fields (omit-when-absent)', async () => {
+    seedCurrent();
+    await call(setDealerPipeline(fd({ id: '42', stage: 'contacted', priority: 'high' })));
+    const upd = mocks.updates.find((u) => u.table === 'dealers');
+    const patch = upd!.patch as Record<string, unknown>;
+    expect(patch.pipelineStage).toBe('contacted');
+    expect(patch.priority).toBe('high');
+    // owner / next-action absent from the form → absent from the patch.
+    expect('ownerId' in patch).toBe(false);
+    expect('nextAction' in patch).toBe(false);
+    expect('nextActionAt' in patch).toBe(false);
+  });
+
+  it('clears a present-but-empty field to null (next-action), but stage="" is no-op', async () => {
+    seedCurrent({ stage: 'contacted' });
+    await call(setDealerPipeline(fd({ id: '42', stage: '', nextAction: '', nextActionAt: '' })));
+    const patch = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect(patch.nextAction).toBeNull();
+    expect(patch.nextActionAt).toBeNull();
+    // stage='' means "no change" — never written.
+    expect('pipelineStage' in patch).toBe(false);
+    expect('stageChangedAt' in patch).toBe(false);
+  });
+
+  it('stamps stage_changed_at only on a real transition', async () => {
+    seedCurrent({ stage: 'new' });
+    await call(setDealerPipeline(fd({ id: '42', stage: 'researching' })));
+    const patch = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect(patch.stageChangedAt).toBeInstanceOf(Date);
+  });
+
+  it('does NOT stamp stage_changed_at when the stage is unchanged', async () => {
+    seedCurrent({ stage: 'contacted' });
+    await call(setDealerPipeline(fd({ id: '42', stage: 'contacted', priority: 'low' })));
+    const patch = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect('stageChangedAt' in patch).toBe(false);
+  });
+
+  it('sets the owner uuid and clears it with ""', async () => {
+    const owner = '11111111-1111-1111-1111-111111111111';
+    seedCurrent();
+    await call(setDealerPipeline(fd({ id: '42', ownerId: owner })));
+    expect((mocks.updates.at(-1)!.patch as Record<string, unknown>).ownerId).toBe(owner);
+
+    mocks.updates = [];
+    seedCurrent();
+    await call(setDealerPipeline(fd({ id: '42', ownerId: '' })));
+    expect((mocks.updates.at(-1)!.patch as Record<string, unknown>).ownerId).toBeNull();
+  });
+
+  it('rejects a non-uuid owner', async () => {
+    const result = await call(setDealerPipeline(fd({ id: '42', ownerId: 'not-a-uuid' })));
+    expect(result).toMatchObject({ error: 'Invalid owner.' });
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('is locked once the dealer is active', async () => {
+    seedCurrent({ status: 'active' });
+    const result = await call(setDealerPipeline(fd({ id: '42', stage: 'negotiation' })));
+    expect(result).toEqual({ error: 'Pipeline is locked once a dealer is active.' });
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('returns not-found when the dealer is missing/archived', async () => {
+    mocks.dbResults.push([]); // current-row select misses
+    const result = await call(setDealerPipeline(fd({ id: '99', stage: 'contacted' })));
+    expect(result).toEqual({ error: 'Dealer not found.' });
+    expect(mocks.updates).toHaveLength(0);
+  });
+});
+
+describe('logDealerActivity', () => {
+  it('inserts a dealer_activities row and stamps last_contacted_at', async () => {
+    mocks.dbResults.push([{ id: 42 }]); // dealer-exists select
+    await call(logDealerActivity(fd({ id: '42', kind: 'call', note: 'Left a voicemail' })));
+
+    const ins = mocks.inserts.find((i) => i.table === 'dealer_activities');
+    const values = ins!.values as Record<string, unknown>;
+    expect(values.dealerId).toBe(42);
+    expect(values.kind).toBe('call');
+    expect(values.note).toBe('Left a voicemail');
+    expect(values.occurredAt).toBeInstanceOf(Date);
+    expect(values.createdById).toBe('admin-uuid');
+
+    const upd = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect(upd.lastContactedAt).toBeInstanceOf(Date);
+    // No next-action submitted → not touched.
+    expect('nextAction' in upd).toBe(false);
+  });
+
+  it('honors a backdated occurredAt (noon UTC anchor)', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    await call(logDealerActivity(fd({ id: '42', kind: 'meeting', occurredAt: '2026-06-01' })));
+    const values = mocks.inserts.find((i) => i.table === 'dealer_activities')!.values as Record<
+      string,
+      unknown
+    >;
+    expect((values.occurredAt as Date).toISOString()).toBe('2026-06-01T12:00:00.000Z');
+  });
+
+  it('sets the next promise in the same submit', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    await call(
+      logDealerActivity(
+        fd({ id: '42', kind: 'email', nextAction: 'Send pricing', nextActionAt: '2026-07-01' }),
+      ),
+    );
+    const upd = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect(upd.nextAction).toBe('Send pricing');
+    expect(upd.nextActionAt).toBe('2026-07-01');
+  });
+
+  it('stores a null note when none is given', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    await call(logDealerActivity(fd({ id: '42', kind: 'note' })));
+    const values = mocks.inserts.find((i) => i.table === 'dealer_activities')!.values as Record<
+      string,
+      unknown
+    >;
+    expect(values.note).toBeNull();
+  });
+
+  it('rejects an invalid activity kind', async () => {
+    const result = await call(logDealerActivity(fd({ id: '42', kind: 'fax' })));
+    expect(result).toMatchObject({ error: 'Pick an activity type.' });
+    expect(mocks.inserts.filter((i) => i.table === 'dealer_activities')).toHaveLength(0);
+  });
+
+  it('returns not-found when the dealer is missing/archived', async () => {
+    mocks.dbResults.push([]); // dealer-exists select misses
+    const result = await call(logDealerActivity(fd({ id: '99', kind: 'call' })));
+    expect(result).toEqual({ error: 'Dealer not found.' });
+    expect(mocks.inserts.filter((i) => i.table === 'dealer_activities')).toHaveLength(0);
   });
 });

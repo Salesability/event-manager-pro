@@ -147,6 +147,18 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'dealer:edit — admin-only since 2026-05-08; prospect → active flip',
   },
+  {
+    label: 'setDealerPipeline',
+    invoke: () => scheduleActions.setDealerPipeline(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'dealer:edit — admin-only (0087 pipeline stage/priority/owner/next-action patch)',
+  },
+  {
+    label: 'logDealerActivity',
+    invoke: () => scheduleActions.logDealerActivity(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'dealer:edit — admin-only (0087 dealer_activities touch-log insert)',
+  },
 
   // ---- Campaign CRUD (3) — admin-only -----------------------------------
   {
