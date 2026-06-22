@@ -12,8 +12,8 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — stage list, owner source, activity kinds, notes-append | Done | (doc) |
-| 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Done | - |
-| 3: Server actions + query projections (set pipeline/stage, log activity, won) | Pending | - |
+| 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Done | `2c8a80c` |
+| 3: Server actions + query projections (set pipeline/stage, log activity, won) | Done | - |
 | 4: Dealer-detail panel — stage + commitment + log-activity + recent-activity list | Pending | - |
 | 5: Dealer-list commitment queue (columns + overdue/due/idle filters + sort) | Pending | - |
 | 6: Tests + smoke | Pending | - |
@@ -42,7 +42,7 @@ auto-stage, consent modeling, and outbound send (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (dealers shape; `dealer_contacts.lastContactedAt` precedent), `commercial-spine.md` (won = `convertProspectToActive`), `layout.md` (panel + list primitives), `auth.md` (gating + matrix), **`db-conventions` skill**.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - **Migration expected** (Phase 2: 2 enums + ~7 nullable cols on `dealers` + the `dealer_activities` table + indexes). This chunk owns it; **0088 adds no migration**.
@@ -65,12 +65,13 @@ auto-stage, consent modeling, and outbound send (all later).
 - [x] `drizzle-kit generate` → `drizzle/0042_low_slipstream.sql` (3 enums + table + 7 cols + indexes; hand-appended the RLS block + the backfill); journal `when` verified monotonic; applied **sandbox** + verified (7 cols, table+RLS, **188/188 prospects→`new`**, 0 active w/ stage).
 - [x] Update `docs/wiki/data-model.md` (dealers pipeline fields + the new table + enums + ER diagram).
 
-#### Phase 3: Server actions + query projections
-- [ ] `setDealerPipeline` (`dealer:edit`; patches stage/priority/owner/next_action/next_action_at; stamps `stage_changed_at` on stage change; omit-when-absent patch like `updateDealer`).
-- [ ] `logDealerActivity` (`dealer:edit`; inserts a `dealer_activities` row (kind+note+occurred_at+actor); updates `dealers.last_contacted_at`; optionally sets the next action in the same call).
-- [ ] **Won:** "Mark won" routes through `convertProspectToActive` (status→active + QBO push) — no new status logic.
-- [ ] Extend `loadDealers`/`loadDealer` projections (pipeline fields + owner name); load recent activities for the panel.
-- [ ] Gate-matrix rows (`docs/wiki/auth.md`). Unit tests (patch semantics, activity insert + last-contacted stamp, `stage_changed_at` on transition, won→convert reuse, capability deny).
+#### Phase 3: Server actions + query projections ✅
+- [x] `setDealerPipeline` (`dealer:edit`; patches stage/priority/owner/next_action/next_action_at; stamps `stage_changed_at` on transition; omit-when-absent patch; **locked once `active`**). → `schedule/actions.ts`
+- [x] `logDealerActivity` (`dealer:edit`; inserts a `dealer_activities` row (kind+note+occurred_at+actor); stamps `dealers.last_contacted_at`; optionally sets the next action). → `schedule/actions.ts`
+- [x] **Won:** "Mark won" routes through `convertProspectToActive` (no new status logic — panel will call the existing action in Phase 4).
+- [x] Extend `loadDealers`/`loadDealer` projections (pipeline fields + resolved `ownerName`); `loadDealerActivities(dealerId)` for the recent list; `loadCoaches`/`loadCoach` now carry `userId` (owner picklist source). New `fetchOwnerNames` resolver. → `schedule/queries.ts`
+- [x] Shared value/label module `src/features/dealers/pipeline.ts` + zod `src/features/dealers/pipeline-schema.ts`.
+- [x] Gate-matrix rows: executable twin (`action-gate-matrix.ts`, 2 rows) + `auth.md` narrative. Unit tests (patch semantics, owner set/clear + non-uuid reject, `stage_changed_at` on transition only, active-lock, activity insert + last-contacted stamp + backdate + next-promise, invalid-kind reject, not-found) + a pipeline⇄DB-enum drift guard (`pipeline.test.ts`). **34 new tests, all green.**
 
 #### Phase 4: Dealer-detail panel
 - [ ] `DealerPipelinePanel` in a `<Section>` on `/dealerships/[id]`: stage dropdown (`PipelineStageBadge`), priority, owner select, next-action + due-date, last-contacted (relative); **Log activity** (kind + note); **recent-activity list** (last N); **Mark won** (prospect-only).
