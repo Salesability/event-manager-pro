@@ -104,7 +104,9 @@ vi.mock('@/lib/db', () => {
           orderBy: () => next(),
           then: (onFulfilled: (v: unknown[]) => unknown) => next().then(onFulfilled),
         };
-        return { where: () => terminal };
+        const withWhere = { where: () => terminal };
+        // 0087 `ownerIsCoach` uses `.from().innerJoin().where().limit()`.
+        return { ...withWhere, innerJoin: () => withWhere };
       },
     }),
   };
@@ -662,11 +664,18 @@ describe('auto-push to QuickBooks (0084)', () => {
 
 // ---- 0087 prospecting pipeline -----------------------------------------------
 
-// The select inside the action reads the current `{ stage, status }` to (a) gate
-// active-locked dealers and (b) decide whether to stamp `stage_changed_at`. Seed
-// it via dbResults; the following UPDATE consumes the next (empty) result.
+// setDealerPipeline reads the current `{ stage, status }` (to gate active-locked
+// dealers + decide stage_changed_at), then runs a guarded UPDATE ... returning.
+// seedCurrent queues BOTH: the current-row select, then a one-row UPDATE result
+// (the happy path where the dealer was still a prospect at write time).
 function seedCurrent(over: Record<string, unknown> = {}) {
-  mocks.dbResults.push([{ stage: 'new', status: 'prospect', ...over }]);
+  mocks.dbResults.push([{ stage: 'new', status: 'prospect', ...over }]); // current-row select
+  mocks.dbResults.push([{ id: 42 }]); // guarded UPDATE ... returning (still prospect)
+}
+// ownerIsCoach runs a select BEFORE the tx when an owner is being set; queue its
+// result first.
+function seedCoach(found = true) {
+  mocks.dbResults.push(found ? [{ id: 1 }] : []);
 }
 
 describe('setDealerPipeline', () => {
@@ -708,16 +717,26 @@ describe('setDealerPipeline', () => {
     expect('stageChangedAt' in patch).toBe(false);
   });
 
-  it('sets the owner uuid and clears it with ""', async () => {
+  it('sets a coach owner uuid and clears it with ""', async () => {
     const owner = '11111111-1111-1111-1111-111111111111';
+    seedCoach(true); // ownerIsCoach → yes
     seedCurrent();
     await call(setDealerPipeline(fd({ id: '42', ownerId: owner })));
     expect((mocks.updates.at(-1)!.patch as Record<string, unknown>).ownerId).toBe(owner);
 
     mocks.updates = [];
+    // Clearing (ownerId='') skips the coach check entirely.
     seedCurrent();
     await call(setDealerPipeline(fd({ id: '42', ownerId: '' })));
     expect((mocks.updates.at(-1)!.patch as Record<string, unknown>).ownerId).toBeNull();
+  });
+
+  it('rejects a non-coach owner (decision D2 — action-layer enforcement)', async () => {
+    seedCoach(false); // ownerIsCoach → no match
+    const owner = '22222222-2222-2222-2222-222222222222';
+    const result = await call(setDealerPipeline(fd({ id: '42', ownerId: owner })));
+    expect(result).toMatchObject({ error: 'Owner must be a coach.' });
+    expect(mocks.updates).toHaveLength(0);
   });
 
   it('rejects a non-uuid owner', async () => {
@@ -733,6 +752,13 @@ describe('setDealerPipeline', () => {
     expect(mocks.updates).toHaveLength(0);
   });
 
+  it('treats a concurrent activate (guarded UPDATE matches 0 rows) as locked', async () => {
+    mocks.dbResults.push([{ stage: 'new', status: 'prospect' }]); // read says prospect…
+    mocks.dbResults.push([]); // …but the status='prospect' UPDATE matched nothing
+    const result = await call(setDealerPipeline(fd({ id: '42', stage: 'negotiation' })));
+    expect(result).toEqual({ error: 'Pipeline is locked once a dealer is active.' });
+  });
+
   it('returns not-found when the dealer is missing/archived', async () => {
     mocks.dbResults.push([]); // current-row select misses
     const result = await call(setDealerPipeline(fd({ id: '99', stage: 'contacted' })));
@@ -742,8 +768,8 @@ describe('setDealerPipeline', () => {
 });
 
 describe('logDealerActivity', () => {
-  it('inserts a dealer_activities row and stamps last_contacted_at', async () => {
-    mocks.dbResults.push([{ id: 42 }]); // dealer-exists select
+  it('touches the dealer (last_contacted_at) then inserts the activity row', async () => {
+    mocks.dbResults.push([{ id: 42 }]); // guarded dealer UPDATE ... returning (not archived)
     await call(logDealerActivity(fd({ id: '42', kind: 'call', note: 'Left a voicemail' })));
 
     const ins = mocks.inserts.find((i) => i.table === 'dealer_activities');
@@ -798,8 +824,14 @@ describe('logDealerActivity', () => {
     expect(mocks.inserts.filter((i) => i.table === 'dealer_activities')).toHaveLength(0);
   });
 
-  it('returns not-found when the dealer is missing/archived', async () => {
-    mocks.dbResults.push([]); // dealer-exists select misses
+  it('rejects an impossible date (round-trip validation)', async () => {
+    const result = await call(logDealerActivity(fd({ id: '42', kind: 'call', occurredAt: '2026-02-31' })));
+    expect(result).toMatchObject({ error: 'Enter a valid date.' });
+    expect(mocks.inserts.filter((i) => i.table === 'dealer_activities')).toHaveLength(0);
+  });
+
+  it('does NOT insert when the dealer touch matches 0 rows (missing/archived/concurrent archive)', async () => {
+    mocks.dbResults.push([]); // guarded dealer UPDATE matched nothing
     const result = await call(logDealerActivity(fd({ id: '99', kind: 'call' })));
     expect(result).toEqual({ error: 'Dealer not found.' });
     expect(mocks.inserts.filter((i) => i.table === 'dealer_activities')).toHaveLength(0);

@@ -706,6 +706,26 @@ export const convertProspectToActive = capabilityClient('dealer:edit')
 
 // ---------- Prospecting pipeline (0087) ----------
 
+// Action-layer enforcement of the coaches-only owner picklist (decision D2): the
+// `owner_id` FK stays generic `auth.users`, so a forged request could otherwise
+// set any user as owner. Confirms the uuid belongs to an active coach.
+async function ownerIsCoach(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .innerJoin(
+      teamMemberRoles,
+      and(
+        eq(teamMemberRoles.contactId, contacts.id),
+        eq(teamMemberRoles.role, 'coach'),
+        isNull(teamMemberRoles.archivedAt),
+      ),
+    )
+    .where(and(eq(contacts.userId, userId), isNull(contacts.archivedAt)))
+    .limit(1);
+  return !!row;
+}
+
 // Patch a dealer's pipeline fields (stage / priority / owner / next-action /
 // due-date). Omit-when-absent like `updateDealer`: a field the form doesn't
 // submit is preserved; a present-but-empty field clears to null — EXCEPT `stage`,
@@ -729,16 +749,23 @@ export const setDealerPipeline = capabilityClient('dealer:edit')
     }
     const v = parsed.data;
 
+    // Coaches-only owner enforcement at the action layer (decision D2).
+    const ownerIdPatch = formData.has('ownerId') ? v.ownerId || null : undefined;
+    if (ownerIdPatch && !(await ownerIsCoach(ownerIdPatch))) {
+      return { error: 'Owner must be a coach.' };
+    }
+
     const patch: Record<string, unknown> = { updatedById: userId };
     const stagePatch = formData.has('stage') && v.stage ? v.stage : undefined;
     if (stagePatch !== undefined) patch.pipelineStage = stagePatch;
     if (formData.has('priority')) patch.priority = v.priority || null;
-    if (formData.has('ownerId')) patch.ownerId = v.ownerId || null;
+    if (ownerIdPatch !== undefined) patch.ownerId = ownerIdPatch;
     if (formData.has('nextAction')) patch.nextAction = v.nextAction || null;
     if (formData.has('nextActionAt')) patch.nextActionAt = v.nextActionAt || null;
 
     let notFound = false;
     let locked = false;
+    let updated: { id: number }[] = [];
     await db.transaction(async (tx) => {
       const [current] = await tx
         .select({ stage: dealers.pipelineStage, status: dealers.status })
@@ -756,13 +783,19 @@ export const setDealerPipeline = capabilityClient('dealer:edit')
       if (stagePatch !== undefined && stagePatch !== current.stage) {
         patch.stageChangedAt = new Date();
       }
-      await tx
+      // Guard on status='prospect' so a `convertProspectToActive` that commits
+      // between the read above and this write can't slip a pipeline edit onto a
+      // now-active dealer (TOCTOU). Zero rows back ⇒ it flipped under us.
+      updated = await tx
         .update(dealers)
         .set(patch)
-        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)));
+        .where(and(eq(dealers.id, id), eq(dealers.status, 'prospect'), isNull(dealers.archivedAt)))
+        .returning({ id: dealers.id });
     });
     if (notFound) return { error: 'Dealer not found.' };
-    if (locked) return { error: 'Pipeline is locked once a dealer is active.' };
+    if (locked || !updated.length) {
+      return { error: 'Pipeline is locked once a dealer is active.' };
+    }
 
     revalidatePath('/dealerships');
     return { ok: true };
@@ -793,12 +826,21 @@ export const logDealerActivity = capabilityClient('dealer:edit')
 
     let notFound = false;
     await db.transaction(async (tx) => {
-      const [current] = await tx
-        .select({ id: dealers.id })
-        .from(dealers)
+      // Touch the dealer first, guarded on `archivedAt IS NULL` — if a concurrent
+      // archive committed, zero rows come back and we skip the insert rather than
+      // orphan an activity on an archived dealer.
+      const dealerPatch: Record<string, unknown> = {
+        lastContactedAt: occurredAt,
+        updatedById: userId,
+      };
+      if (formData.has('nextAction')) dealerPatch.nextAction = v.nextAction || null;
+      if (formData.has('nextActionAt')) dealerPatch.nextActionAt = v.nextActionAt || null;
+      const touched = await tx
+        .update(dealers)
+        .set(dealerPatch)
         .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)))
-        .limit(1);
-      if (!current) {
+        .returning({ id: dealers.id });
+      if (!touched.length) {
         notFound = true;
         return;
       }
@@ -811,17 +853,6 @@ export const logDealerActivity = capabilityClient('dealer:edit')
         createdById: userId,
         updatedById: userId,
       });
-
-      const dealerPatch: Record<string, unknown> = {
-        lastContactedAt: occurredAt,
-        updatedById: userId,
-      };
-      if (formData.has('nextAction')) dealerPatch.nextAction = v.nextAction || null;
-      if (formData.has('nextActionAt')) dealerPatch.nextActionAt = v.nextActionAt || null;
-      await tx
-        .update(dealers)
-        .set(dealerPatch)
-        .where(and(eq(dealers.id, id), isNull(dealers.archivedAt)));
     });
     if (notFound) return { error: 'Dealer not found.' };
 

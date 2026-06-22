@@ -13,12 +13,22 @@ import { ACTIVITY_KINDS, DEALER_PRIORITIES, PIPELINE_STAGES } from './pipeline';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// A real calendar date: passes the shape check AND round-trips (rejects
+// `2026-02-31` → would silently roll to Mar 3, and `2026-99-99` → would make
+// Postgres throw on the `date` column). Anchored at UTC midnight to avoid TZ
+// drift in the comparison.
+function isRealIsoDate(v: string): boolean {
+  if (!ISO_DATE_RE.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
 // A calendar date (YYYY-MM-DD) or '' (= clear). next_action_at is a `date`
 // column, so no time-of-day.
 const dateOrEmpty = z
   .string()
   .trim()
-  .refine((v) => v === '' || ISO_DATE_RE.test(v), 'Enter a valid date.');
+  .refine((v) => v === '' || isRealIsoDate(v), 'Enter a valid date.');
 
 // owner picklist submits a coach's auth-user uuid, or '' to clear.
 const ownerOrEmpty = z
