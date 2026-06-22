@@ -11,7 +11,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate — stage list, owner source, activity kinds, notes-append | Pending | - |
+| 1: Decision gate — stage list, owner source, activity kinds, notes-append | Done | (doc) |
 | 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Pending | - |
 | 3: Server actions + query projections (set pipeline/stage, log activity, won) | Pending | - |
 | 4: Dealer-detail panel — stage + commitment + log-activity + recent-activity list | Pending | - |
@@ -51,12 +51,12 @@ auto-stage, consent modeling, and outbound send (all later).
 
 ### Phase Checklist
 
-#### Phase 1: Decision gate
-- [ ] **Stage enum** — confirm `new / researching / contacted / follow_up / meeting_booked / proposal_sent / negotiation / on_hold / lost`; won = `active` (not a stage); `on_hold`/`lost` are stages; `lost` does **not** auto-archive. Write `decision.md`.
-- [ ] **Owner source** — coaches only vs all staff. Lean: all staff.
-- [ ] **Activity `kind`** — `call / email / meeting / note / other`? Confirm.
-- [ ] **Notes-append** — does log-activity also append to `dealers.notes`? Lean: no (the log is the trail).
-- [ ] **0086 backfill** — default the 188 to `pipeline_stage='new'`.
+#### Phase 1: Decision gate — ✅ resolved 2026-06-22 ([decision.md](decision.md))
+- [x] **Stage enum** — **full 9-stage list** confirmed: `new / researching / contacted / follow_up / meeting_booked / proposal_sent / negotiation / on_hold / lost`; won = `active` (not a stage); `on_hold`/`lost` are stages; `lost` does **not** auto-archive. (D1)
+- [x] **Owner source** — **coaches only** (owner overrode the "all staff" lean → `loadCoaches`; column stays uuid→auth.users so a future widen needs no migration). (D2)
+- [x] **Activity `kind`** — **`call / email / meeting / note / other`** confirmed. (D3)
+- [x] **Notes-append** — **no** — log-activity does not touch `dealers.notes`; the activity log is the trail. (D4)
+- [x] **0086 backfill** — default the 188 to `pipeline_stage='new'`. (D5)
 
 #### Phase 2: Schema — fields + activity table
 - [ ] Invoke the **`db-conventions`** skill first.
