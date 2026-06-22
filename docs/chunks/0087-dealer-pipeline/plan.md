@@ -12,7 +12,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — stage list, owner source, activity kinds, notes-append | Done | (doc) |
-| 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Pending | - |
+| 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Done | - |
 | 3: Server actions + query projections (set pipeline/stage, log activity, won) | Pending | - |
 | 4: Dealer-detail panel — stage + commitment + log-activity + recent-activity list | Pending | - |
 | 5: Dealer-list commitment queue (columns + overdue/due/idle filters + sort) | Pending | - |
@@ -42,7 +42,7 @@ auto-stage, consent modeling, and outbound send (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (dealers shape; `dealer_contacts.lastContactedAt` precedent), `commercial-spine.md` (won = `convertProspectToActive`), `layout.md` (panel + list primitives), `auth.md` (gating + matrix), **`db-conventions` skill**.
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - **Migration expected** (Phase 2: 2 enums + ~7 nullable cols on `dealers` + the `dealer_activities` table + indexes). This chunk owns it; **0088 adds no migration**.
@@ -58,12 +58,12 @@ auto-stage, consent modeling, and outbound send (all later).
 - [x] **Notes-append** — **no** — log-activity does not touch `dealers.notes`; the activity log is the trail. (D4)
 - [x] **0086 backfill** — default the 188 to `pipeline_stage='new'`. (D5)
 
-#### Phase 2: Schema — fields + activity table
-- [ ] Invoke the **`db-conventions`** skill first.
-- [ ] `dealers` (+ nullable): `pipeline_stage` (new enum), `priority` (new enum), `owner_id` (uuid→`auth.users`, set null), `next_action` (text), `next_action_at` (date), `last_contacted_at` (tstz), `stage_changed_at` (tstz). Indexes `(pipeline_stage)`, `(owner_id)`, `(next_action_at)`.
-- [ ] `dealer_activities`: `id`, `dealer_id` (FK cascade), `kind` (enum), `note` (text null), `occurred_at` (tstz, default now), `actors` + `timestamps`. Indexes `(dealer_id)`, `(created_by_id, occurred_at)`.
-- [ ] `drizzle-kit generate`; verify journal `when`; apply **sandbox**; verify. Backfill 0086 prospects → `pipeline_stage='new'`.
-- [ ] Update `docs/wiki/data-model.md` (dealers pipeline fields + the new table + enums).
+#### Phase 2: Schema — fields + activity table ✅
+- [x] Invoke the **`db-conventions`** skill first.
+- [x] `dealers` (+ nullable): `pipeline_stage` (new enum), `priority` (new enum), `owner_id` (uuid→`auth.users`, set null), `next_action` (text), `next_action_at` (date), `last_contacted_at` (tstz), `stage_changed_at` (tstz). Indexes `(pipeline_stage)`, `(owner_id)`, `(next_action_at)`. → `src/lib/db/schema/dealers.ts`
+- [x] `dealer_activities`: `id`, `dealer_id` (FK cascade), `kind` (enum), `note` (text null), `occurred_at` (tstz, default now), `actors` + `timestamps`. Indexes `(dealer_id)`, `(created_by_id, occurred_at)`, `(updated_by_id)`. → `src/lib/db/schema/dealer-activities.ts` (+ `index.ts` export)
+- [x] `drizzle-kit generate` → `drizzle/0042_low_slipstream.sql` (3 enums + table + 7 cols + indexes; hand-appended the RLS block + the backfill); journal `when` verified monotonic; applied **sandbox** + verified (7 cols, table+RLS, **188/188 prospects→`new`**, 0 active w/ stage).
+- [x] Update `docs/wiki/data-model.md` (dealers pipeline fields + the new table + enums + ER diagram).
 
 #### Phase 3: Server actions + query projections
 - [ ] `setDealerPipeline` (`dealer:edit`; patches stage/priority/owner/next_action/next_action_at; stamps `stage_changed_at` on stage change; omit-when-absent patch like `updateDealer`).
