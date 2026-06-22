@@ -295,6 +295,13 @@
       "when": 1781889306090,
       "tag": "0041_strong_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1782135262220,
+      "tag": "0042_low_slipstream",
+      "breakpoints": true
     }
   ]
 }

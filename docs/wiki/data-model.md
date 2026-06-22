@@ -61,9 +61,11 @@ erDiagram
     contacts ||--o{ availability_blocks : "coach_id · CASCADE"
 
     dealers ||--o{ dealer_contacts : "dealer_id · CASCADE"
+    dealers ||--o{ dealer_activities : "dealer_id · CASCADE"
     dealers ||--o{ campaigns : "dealer_id · RESTRICT"
     dealers ||--o{ quotes : "dealer_id · RESTRICT"
     dealers ||--o{ master_service_agreements : "dealer_id · RESTRICT"
+    auth_users ||--o{ dealers : "owner_id · SET NULL"
 
     campaign_styles ||--o{ campaigns : "style_id"
     audience_sources ||--o{ campaigns : "audience_source_id"
@@ -121,6 +123,20 @@ erDiagram
         text manufacturer "nullable · brand"
         text notes "nullable"
         text quickbooks_id "nullable · UNIQUE partial"
+        dealer_pipeline_stage pipeline_stage "nullable · 0087 funnel"
+        dealer_priority priority "nullable · high|medium|low"
+        uuid owner_id FK "→ auth.users · SET NULL · coach"
+        text next_action "nullable · rep promise"
+        date next_action_at "nullable · due date"
+        timestamptz last_contacted_at "nullable · 0087"
+        timestamptz stage_changed_at "nullable · read by 0088"
+    }
+    dealer_activities {
+        bigint id PK
+        bigint dealer_id FK "CASCADE"
+        dealer_activity_kind kind "call|email|meeting|note|other"
+        text note "nullable"
+        timestamptz occurred_at "default now"
     }
     campaigns {
         bigint id PK
@@ -343,7 +359,8 @@ Edges left out of the diagrams for clarity:
 | `team_member_roles` | `id` bigint | `contact_id` (FK contacts, cascade), `role` enum (`admin\|staff\|coach\|viewer\|dealer`), `specialty` (nullable, used when `role='coach'`) — UNIQUE on `(contact_id, role)` |
 | `dealer_contacts` | `id` bigint | `dealer_id` (FK dealers), `contact_id` (FK contacts), `role` enum (`customer\|staff\|prospect`), `do_not_contact`, `since` date, `source` text, `last_contacted_at`, `title` text (used when `role='staff'`) — UNIQUE on `(dealer_id, contact_id, role)` |
 | `contact_identifiers` | `id` bigint | `contact_id` (FK contacts, cascade), `kind` enum (`email\|phone`), `value` (normalized), `is_primary` |
-| `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address` (city-only for BD-list prospects, 0086), `province` enum (`ca_province`: 13 CA province/territory codes, **nullable** — drives quote sales tax, 0065), `status` enum (`prospect\|active`, default `active`), `acquired_via` text (nullable; `'Atlantic Canada BD list'` for the 0086 import batch), `phone` text (nullable, 0086 — rooftop switchboard line; a **dealer-level** attribute, NOT a contact identifier, since rooftops share numbers the `contact_identifiers` active-unique index forbids; the QBO push prefers it for the Customer `PrimaryPhone`), `manufacturer` text (nullable, 0086 — vehicle brand, free-form e.g. "FCA"/"Ford/Lincoln"/"General Motors"), `notes` text (nullable, 0086 — free-form; the BD import folds Group/Contact-Verification/Co-op/sheet-notes into a readable block), `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL` — durable link to the QBO `Customer.Id`, 0069; written **both directions**: backfilled by the QBO→app sync at `/admin/quickbooks` (0069) and by the app→QBO **Push to QuickBooks** action on `/dealerships/[id]` (0070 — create-a-Customer-then-backfill, or update-if-already-linked). **As of 0084 the push is also automatic + best-effort** (the app is the dealer master): creating an **active** dealer, flipping a prospect active (`convertProspectToActive`), or **editing** an active-or-linked dealer auto-runs the 0070 push from inside `createDealer`/`convertProspectToActive`/`updateDealer` — a dormant/erroring QuickBooks (or an Intuit 6240 duplicate-name) never blocks the dealer save, leaving it unlinked. Prospects don't push. The pushed `Customer` now also carries the primary contact's `GivenName`/`FamilyName` (0084), not just company + email/phone. The QB→app **Sync stays non-clobbering** — it only creates QB-only dealers + links, never overwriting app data) |
+| `dealers` | `id` bigint | `public_id` (nanoid, UNIQUE), `name`, `address` (city-only for BD-list prospects, 0086), `province` enum (`ca_province`: 13 CA province/territory codes, **nullable** — drives quote sales tax, 0065), `status` enum (`prospect\|active`, default `active`), `acquired_via` text (nullable; `'Atlantic Canada BD list'` for the 0086 import batch), `phone` text (nullable, 0086 — rooftop switchboard line; a **dealer-level** attribute, NOT a contact identifier, since rooftops share numbers the `contact_identifiers` active-unique index forbids; the QBO push prefers it for the Customer `PrimaryPhone`), `manufacturer` text (nullable, 0086 — vehicle brand, free-form e.g. "FCA"/"Ford/Lincoln"/"General Motors"), `notes` text (nullable, 0086 — free-form; the BD import folds Group/Contact-Verification/Co-op/sheet-notes into a readable block), `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL` — durable link to the QBO `Customer.Id`, 0069; written **both directions**: backfilled by the QBO→app sync at `/admin/quickbooks` (0069) and by the app→QBO **Push to QuickBooks** action on `/dealerships/[id]` (0070 — create-a-Customer-then-backfill, or update-if-already-linked). **As of 0084 the push is also automatic + best-effort** (the app is the dealer master): creating an **active** dealer, flipping a prospect active (`convertProspectToActive`), or **editing** an active-or-linked dealer auto-runs the 0070 push from inside `createDealer`/`convertProspectToActive`/`updateDealer` — a dormant/erroring QuickBooks (or an Intuit 6240 duplicate-name) never blocks the dealer save, leaving it unlinked. Prospects don't push. The pushed `Customer` now also carries the primary contact's `GivenName`/`FamilyName` (0084), not just company + email/phone. The QB→app **Sync stays non-clobbering** — it only creates QB-only dealers + links, never overwriting app data). **Prospecting pipeline (0087, all nullable):** `pipeline_stage` enum (`dealer_pipeline_stage`, 9 stages new→lost; won is not a stage), `priority` enum (`dealer_priority`: high/medium/low), `owner_id` (FK auth.users, SET NULL — coach picklist), `next_action` text + `next_action_at` date (commitment queue), `last_contacted_at` + `stage_changed_at` timestamptz (the latter read by 0088). See the *Prospecting pipeline* prose under [Dealers](#dealers) |
+| `dealer_activities` | `id` bigint | `dealer_id` (FK dealers, **CASCADE**), `kind` enum (`dealer_activity_kind`: `call\|email\|meeting\|note\|other`), `note` text (nullable), `occurred_at` timestamptz (default now) + `actors`/`timestamps` — per-dealer touch log (0087); `logDealerActivity` inserts + stamps `dealers.last_contacted_at`. Composite index `(created_by_id, occurred_at)` + `(dealer_id)`. RLS-on (service_role + staff) |
 | `service_items` | `id` bigint | `code` (UNIQUE), `label`, `unit_price` numeric(10,2) (nullable; blank = "variable"), `description`, `sort_order`, `quickbooks_id` text (nullable, **UNIQUE partial index** `WHERE quickbooks_id IS NOT NULL`, 0071) — flat quote-composer catalog (0066 dropped the legacy `unit` enum + `unit_price_min`/`max`). **As of 0071, QuickBooks is the item master:** this catalog is a read-through mirror of the connected QBO company's Items, populated only by the on-demand **Sync** action on `/admin/quickbooks` (create / overwrite-from-QBO / archive QBO-removed / hard-delete legacy unlinked; 0083 folded the former "Pull items" button into the one Sync button). **No in-app item CRUD** — the `/admin/lookups` catalog editor + the `createServiceItem`/`updateServiceItem`/`archiveServiceItem` actions were removed. See [`commercial-spine.md`](commercial-spine.md) |
 | `vehicles` | `id` bigint | `vin` (UNIQUE, normalized), `year`, `make`, `model`, `trim` — one row per physical vehicle, persists across owners |
 | `vehicle_ownerships` | `id` bigint | `vehicle_id` (FK vehicles), `contact_id` (FK contacts), `acquired_at`, `sold_at` (nullable) — junction; one open ownership per vehicle |
@@ -480,6 +497,27 @@ Lifecycle columns (added 0035 Phase 2):
 Update-action concurrency: `updateDealer` is patch-style on `status` and `acquired_via` — omitted-from-FormData fields don't appear in SET, so a concurrent `convertProspectToActive` flip can't be clobbered by a stale edit. The status transition action itself is a guarded UPDATE keyed on `(id, status='prospect', archived_at IS NULL)` — idempotent on already-active or archived rows.
 
 The table is named `dealers` (matching the STAR Standard's *Dealer Profile* noun). The 99% case is automotive dealerships; STAR's umbrella also covers marine, powersports, medium/heavy-duty trucks, and construction equipment dealers, so the name holds even if we expand beyond cars.
+
+#### Prospecting pipeline (added 0087)
+
+Layered onto `dealers` to give reps a place to keep the small promises that win trust ("call Tuesday", "send pricing Friday") — see [0087 intent](../chunks/0087-dealer-pipeline/intent.md). **All columns are nullable**: active/existing dealers don't need a funnel position; the 188 cold Atlantic prospects (0086) were backfilled to `pipeline_stage='new'` in `drizzle/0042_low_slipstream.sql`.
+
+- `pipeline_stage` enum (`dealer_pipeline_stage`: `new · researching · contacted · follow_up · meeting_booked · proposal_sent · negotiation · on_hold · lost`) — funnel position. Enum order = funnel order. **Won is NOT a stage** — winning a prospect is `status='active'` via `convertProspectToActive` (+ the 0084 QBO push), so the pipeline and the commercial spine stay one system. `on_hold`/`lost` ARE stages (so the 0088 dashboard counts them); `lost` does NOT auto-archive. Indexed (`dealers_pipeline_stage_idx`).
+- `priority` enum (`dealer_priority`: `high · medium · low`) — rep-set work priority.
+- `owner_id` (uuid FK → `auth.users`, `ON DELETE SET NULL`) — the coach who owns working this dealer. The **picklist is coaches-only** (0087 decision D2), enforced at the Server Action / picklist layer; the FK stays generic `auth.users` so a future widen to all-staff needs no migration. Indexed (`dealers_owner_id_idx`).
+- `next_action` text + `next_action_at` date — the rep's current promise (their words) and its due date. Drives the `/dealerships` **commitment queue**: overdue (loud) / due-soon / idle (no next action). `next_action_at` is indexed (`dealers_next_action_at_idx`) for the queue sort.
+- `last_contacted_at` timestamptz — stamped by `logDealerActivity` on the last logged touch (distinct from the per-contact `dealer_contacts.last_contacted_at`).
+- `stage_changed_at` timestamptz — stamped on every `pipeline_stage` change. Written by 0087; **read by the 0088 dashboard's "stalled in stage" blocker** (added now so 0088 needs no migration).
+
+`setDealerPipeline` patches these (omit-when-absent, like `updateDealer`) and stamps `stage_changed_at` on a stage transition; both are `dealer:edit`-gated.
+
+### `dealer_activities` — per-dealer touch log (added 0087)
+
+One row per logged touch (call / email / meeting / note / other). `logDealerActivity` (`dealer:edit`) inserts a row AND stamps `dealers.last_contacted_at`; it does **not** append to `dealers.notes` (0087 decision D4 — the activity log is the trail now; `notes` stays free-form). The dealer panel renders the recent N as a lite per-dealer timeline (rich timeline + Kanban are v2).
+
+- `dealer_id` (FK → dealers, **CASCADE**), `kind` enum (`dealer_activity_kind`), `note` text (nullable), `occurred_at` timestamptz (default now; rep-settable so a forgotten call can be backfilled), + `timestamps` + `actors`.
+- `created_by_id` = who logged it (the 0088 dashboard counts activity by rep). Composite index `(created_by_id, occurred_at)` serves the by-rep read + the FK; plus `(dealer_id)` for the per-dealer timeline.
+- RLS-on with the standard two policies (service_role permit-all + authenticated `is_staff_member()`), matching `dealer_contacts`.
 
 ## Contacts (vehicles, identifiers, dedup, privacy)
 

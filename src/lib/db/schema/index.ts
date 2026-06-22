@@ -7,6 +7,7 @@ export * from './campaign-styles';
 export * from './campaigns';
 export * from './contact-identifiers';
 export * from './contacts';
+export * from './dealer-activities';
 export * from './dealer-contacts';
 export * from './dealers';
 export * from './master-service-agreements';
