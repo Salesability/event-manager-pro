@@ -9,9 +9,10 @@ import {
   DealerStatusBadge,
   MsaStatusBadge,
 } from '@/components/app/status-badge';
-import { loadDealer } from '@/features/schedule/queries';
+import { loadCoaches, loadDealer, loadDealerActivities } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
+import { DealerPipelinePanel } from '@/features/dealers/dealer-pipeline-panel';
 import { DealerForm } from '@/features/dealers/dealer-form';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { MsaSendForSignatureButton } from '@/features/msa/msa-send-button';
@@ -42,11 +43,13 @@ export default async function DealerDetailPage({
   const dealer = await loadDealer(id);
   if (!dealer) notFound();
 
-  const [quotes, msa, qbConnection, recipientResult] = await Promise.all([
+  const [quotes, msa, qbConnection, recipientResult, coaches, activities] = await Promise.all([
     loadQuotesByDealer(id),
     loadActiveOrPendingMsa(id),
     getConnection(),
     resolveQuoteRecipient(id),
+    loadCoaches(),
+    loadDealerActivities(id),
   ]);
 
   // 0082: the MSA is sent for signature from here (the dealer page), on its own
@@ -126,6 +129,12 @@ export default async function DealerDetailPage({
       <Section title="Details" variant="card">
         <DealerForm mode="edit" dealer={dealer} autoFocus={false} />
       </Section>
+
+      {!dealer.archivedAt && (
+        <Section title="Pipeline" variant="card">
+          <DealerPipelinePanel dealer={dealer} coaches={coaches} activities={activities} />
+        </Section>
+      )}
 
       {qbConnection && (
         <Section title="QuickBooks" variant="card">
