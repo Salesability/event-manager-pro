@@ -1,10 +1,10 @@
 # Dealer pipeline — management dashboard — Intent
 
-**Created:** 2026-06-19 (split out of [`0087-dealer-pipeline`](../0087-dealer-pipeline/plan.md) — the rep operational layer). **Depends on 0087** (reads its schema; **no migration of its own**).
+**Created:** 2026-06-19 (split out of [`0087-dealer-pipeline`](../closed/0087-dealer-pipeline/plan.md) — the rep operational layer). **Depends on 0087** (reads its schema; **no migration of its own**).
 
 ## Problem
 
-[0087](../0087-dealer-pipeline/plan.md) gives **reps** the tools to work prospects (stage,
+[0087](../closed/0087-dealer-pipeline/plan.md) gives **reps** the tools to work prospects (stage,
 commitment/next-action, owner, and a `dealer_activities` touch-log) — but **management** has
 no view over it. They want to **see progress *and* understand why it stalls** — exactly what
 the BD-tracker spreadsheet's Dashboard tab gave them, now over live app data:

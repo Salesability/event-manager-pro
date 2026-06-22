@@ -1,7 +1,7 @@
 # Dealer pipeline — rep commitments + activity log — Plan
 
 **Intent:** [`intent.md`](intent.md)
-**Started:** _reframed + split 2026-06-19. This chunk = the rep operational layer + the shared data model; the management dashboard is [`0088-dealer-pipeline-dashboard`](../0088-dealer-pipeline-dashboard/plan.md). Ready to build pending the owner's go + the Phase-1 calls._
+**Started:** _reframed + split 2026-06-19. This chunk = the rep operational layer + the shared data model; the management dashboard is [`0088-dealer-pipeline-dashboard`](../../0088-dealer-pipeline-dashboard/plan.md). Ready to build pending the owner's go + the Phase-1 calls._
 
 > **Status note:** **not active** — `CURRENT.md` Plan is `_None_`. Owns the schema (stages,
 > commitment fields, `dealer_activities`) so 0088 needs no migration. 0086 sequencing
@@ -22,7 +22,7 @@ The rep-facing prospecting layer: a per-dealer **next-action + due-date + owner 
 priority**, a **`dealer_activities` touch-log** (call/email/meeting/note → recent-activity
 list + `last_contacted_at`), and an **overdue/due/idle commitment queue** on `/dealerships`
 ("don't drop the ball"). Won = `convertProspectToActive`. This chunk **owns the data model**
-the [0088 dashboard](../0088-dealer-pipeline-dashboard/plan.md) reads (incl. `stage_changed_at`
+the [0088 dashboard](../../0088-dealer-pipeline-dashboard/plan.md) reads (incl. `stage_changed_at`
 for its stalled-blocker). v1 excludes the dashboard, a Kanban board, the rich timeline UI,
 auto-stage, consent modeling, and outbound send (all later).
 

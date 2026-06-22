@@ -1,7 +1,7 @@
 # Dealer pipeline — management dashboard — Plan
 
 **Intent:** [`intent.md`](intent.md)
-**Started:** _scaffolded 2026-06-19 as the fast-follow to [`0087-dealer-pipeline`](../0087-dealer-pipeline/plan.md). **Blocked on 0087** (reads its schema). No migration of its own._
+**Started:** _scaffolded 2026-06-19 as the fast-follow to [`0087-dealer-pipeline`](../closed/0087-dealer-pipeline/plan.md). **Blocked on 0087** (reads its schema). No migration of its own._
 
 > **Status note:** **not active** + **depends on 0087** — don't build until 0087 has shipped
 > the `dealers` pipeline fields + the `dealer_activities` table. Read-only/UI-only chunk.

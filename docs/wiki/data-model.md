@@ -500,7 +500,7 @@ The table is named `dealers` (matching the STAR Standard's *Dealer Profile* noun
 
 #### Prospecting pipeline (added 0087)
 
-Layered onto `dealers` to give reps a place to keep the small promises that win trust ("call Tuesday", "send pricing Friday") — see [0087 intent](../chunks/0087-dealer-pipeline/intent.md). **All columns are nullable**: active/existing dealers don't need a funnel position; the 188 cold Atlantic prospects (0086) were backfilled to `pipeline_stage='new'` in `drizzle/0042_low_slipstream.sql`.
+Layered onto `dealers` to give reps a place to keep the small promises that win trust ("call Tuesday", "send pricing Friday") — see [0087 intent](../chunks/closed/0087-dealer-pipeline/intent.md). **All columns are nullable**: active/existing dealers don't need a funnel position; the 188 cold Atlantic prospects (0086) were backfilled to `pipeline_stage='new'` in `drizzle/0042_low_slipstream.sql`.
 
 - `pipeline_stage` enum (`dealer_pipeline_stage`: `new · researching · contacted · follow_up · meeting_booked · proposal_sent · negotiation · on_hold · lost`) — funnel position. Enum order = funnel order. **Won is NOT a stage** — winning a prospect is `status='active'` via `convertProspectToActive` (+ the 0084 QBO push), so the pipeline and the commercial spine stay one system. `on_hold`/`lost` ARE stages (so the 0088 dashboard counts them); `lost` does NOT auto-archive. Indexed (`dealers_pipeline_stage_idx`).
 - `priority` enum (`dealer_priority`: `high · medium · low`) — rep-set work priority.
