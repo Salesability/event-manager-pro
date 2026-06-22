@@ -13,8 +13,8 @@
 |-------|--------|--------|
 | 1: Decision gate — stage list, owner source, activity kinds, notes-append | Done | (doc) |
 | 2: Schema — pipeline/commitment fields on `dealers` + `dealer_activities` table | Done | `2c8a80c` |
-| 3: Server actions + query projections (set pipeline/stage, log activity, won) | Done | - |
-| 4: Dealer-detail panel — stage + commitment + log-activity + recent-activity list | Pending | - |
+| 3: Server actions + query projections (set pipeline/stage, log activity, won) | Done | `1041793` |
+| 4: Dealer-detail panel — stage + commitment + log-activity + recent-activity list | Done | - |
 | 5: Dealer-list commitment queue (columns + overdue/due/idle filters + sort) | Pending | - |
 | 6: Tests + smoke | Pending | - |
 
@@ -42,7 +42,7 @@ auto-stage, consent modeling, and outbound send (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (dealers shape; `dealer_contacts.lastContactedAt` precedent), `commercial-spine.md` (won = `convertProspectToActive`), `layout.md` (panel + list primitives), `auth.md` (gating + matrix), **`db-conventions` skill**.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - **Migration expected** (Phase 2: 2 enums + ~7 nullable cols on `dealers` + the `dealer_activities` table + indexes). This chunk owns it; **0088 adds no migration**.
@@ -73,9 +73,9 @@ auto-stage, consent modeling, and outbound send (all later).
 - [x] Shared value/label module `src/features/dealers/pipeline.ts` + zod `src/features/dealers/pipeline-schema.ts`.
 - [x] Gate-matrix rows: executable twin (`action-gate-matrix.ts`, 2 rows) + `auth.md` narrative. Unit tests (patch semantics, owner set/clear + non-uuid reject, `stage_changed_at` on transition only, active-lock, activity insert + last-contacted stamp + backdate + next-promise, invalid-kind reject, not-found) + a pipeline⇄DB-enum drift guard (`pipeline.test.ts`). **34 new tests, all green.**
 
-#### Phase 4: Dealer-detail panel
-- [ ] `DealerPipelinePanel` in a `<Section>` on `/dealerships/[id]`: stage dropdown (`PipelineStageBadge`), priority, owner select, next-action + due-date, last-contacted (relative); **Log activity** (kind + note); **recent-activity list** (last N); **Mark won** (prospect-only).
-- [ ] RHF + zod + `<Field>`; shared Catalyst `Button`. Stage/commitment locked once `active`.
+#### Phase 4: Dealer-detail panel ✅
+- [x] `DealerPipelinePanel` (`src/features/dealers/dealer-pipeline-panel.tsx`) in a `<Section title="Pipeline">` on `/dealerships/[id]` (non-archived only): commitment summary (stage `PipelineStageBadge` + priority `PriorityBadge` + owner + last-contacted relative), next-action banner, stage/priority/owner/next-action+due editor, **Log activity** (kind + when + note + optional next-promise), **recent-activity list** (last 20 via `loadDealerActivities`), **Mark won** (`convertProspectToActive`). Added `PipelineStageBadge`/`PriorityBadge` to `status-badge.tsx`.
+- [x] RHF + zod (`dealerPipelineSchema`/`logActivitySchema`) + `<Field>`; shared Catalyst `Button`; native `<select>` per dealer-form precedent. **Locked once `active`** — panel renders read-only history (no editors, no Mark-won). Page loads `loadCoaches()` (owner picklist) + `loadDealerActivities()`.
 
 #### Phase 5: Dealer-list commitment queue
 - [ ] Columns: stage / next-action / due-date / owner / priority; overdue rendered loud.
