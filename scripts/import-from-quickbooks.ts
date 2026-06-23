@@ -319,11 +319,11 @@ async function findOrCreateStaffContact(
   }
 
   // Name-only fallback: a QBO customer carries at most one contact person, so
-  // if this dealer already has a staff link reuse it rather than duplicate.
+  // if this dealer already has a link reuse it rather than duplicate.
   const existingStaff = await db
     .select({ contactId: dealerContacts.contactId })
     .from(dealerContacts)
-    .where(and(eq(dealerContacts.dealerId, dealerId), eq(dealerContacts.role, 'staff')))
+    .where(eq(dealerContacts.dealerId, dealerId))
     .limit(1);
   if (existingStaff.length > 0) return existingStaff[0].contactId;
 
@@ -500,7 +500,6 @@ async function main() {
       .values({
         dealerId,
         contactId,
-        role: 'staff',
         source: SOURCE,
       })
       .onConflictDoNothing();

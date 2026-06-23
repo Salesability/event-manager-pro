@@ -274,12 +274,12 @@ async function findOrCreateContactForClient(
   }
 
   // Name-only fallback: legacy Clients data is one customer per dealer, so if
-  // this dealer already has a customer link we reuse that contact rather than
-  // create a duplicate.
+  // this dealer already has a link we reuse that contact rather than create a
+  // duplicate.
   const existing = await db
     .select({ contactId: dealerContacts.contactId })
     .from(dealerContacts)
-    .where(and(eq(dealerContacts.dealerId, dealerId), eq(dealerContacts.role, 'customer')))
+    .where(eq(dealerContacts.dealerId, dealerId))
     .limit(1);
   if (existing.length > 0) return existing[0].contactId;
 
@@ -341,7 +341,6 @@ async function importClients(): Promise<Map<string, number>> {
       .values({
         dealerId,
         contactId,
-        role: 'customer',
         source: 'sheets-import',
       })
       .onConflictDoNothing();

@@ -350,8 +350,6 @@ async function syncDealerLinks(
       await tx.insert(dealerContacts).values({
         contactId,
         dealerId: want.dealerId,
-        // Vestigial NOT-NULL placeholder until 0089 Phase 4 drops the column.
-        role: 'staff',
         isPrimary: want.isPrimary,
         source: 'admin-people',
       });

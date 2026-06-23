@@ -93,7 +93,6 @@ async function findStaffContactIdByTitle(dealerId: number, title: string): Promi
     .where(
       and(
         eq(dealerContacts.dealerId, dealerId),
-        eq(dealerContacts.role, 'staff'),
         eq(dealerContacts.title, title),
         isNull(dealerContacts.archivedAt),
       ),
@@ -297,7 +296,7 @@ async function main(): Promise<void> {
       if (!DRY_RUN && contactId != null) {
         const lr = await db
           .insert(dealerContacts)
-          .values({ dealerId, contactId, role: 'staff', title: c.title, source: ATLANTIC_IMPORT_SOURCE })
+          .values({ dealerId, contactId, title: c.title, source: ATLANTIC_IMPORT_SOURCE })
           .onConflictDoNothing()
           .returning({ id: dealerContacts.id });
         if (lr.length) stats.linksInserted++;

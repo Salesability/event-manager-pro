@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -8,9 +8,9 @@ import { contactIdentifiers, contacts, dealerContacts, dealers } from '@/lib/db/
 
 // Integration test for `resolveQuoteRecipient` against a real DB. The resolver is
 // pure DB (always mocked in the action unit tests), so it needs a real-row test.
-// Validates the hotfix (A): the recipient is the dealer's priority-primary contact
-// (staff > customer > prospect) with a primary email — NOT a customer-only rule,
-// which rejected every UI-created / 0086-imported dealer (all tagged `staff`).
+// Validates the 0089 model: the recipient is the dealer's designated primary
+// contact (`is_primary`) with a primary email, falling back to the lowest-id
+// emailable contact when the primary is emailless or unset (decision.md D3).
 //
 // Everything runs inside an always-rolled-back transaction. The resolver uses the
 // app `db` (not tx-injectable), so the query below is kept in lock-step with
@@ -32,9 +32,8 @@ class Rollback extends Error {}
 
 type TestDb = PostgresJsDatabase<typeof schema>;
 type Tx = Parameters<Parameters<TestDb['transaction']>[0]>[0];
-type Role = 'customer' | 'staff' | 'prospect';
 
-describe.skipIf(!dbUrl)('resolveQuoteRecipient priority (hotfix A)', () => {
+describe.skipIf(!dbUrl)('resolveQuoteRecipient primary designation (0089)', () => {
   let sqlClient: ReturnType<typeof postgres>;
   let db: TestDb;
 
@@ -69,7 +68,7 @@ describe.skipIf(!dbUrl)('resolveQuoteRecipient priority (hotfix A)', () => {
   async function addContact(
     tx: Tx,
     dealerId: number,
-    role: Role,
+    isPrimary: boolean,
     firstName: string,
     email: string | null,
   ): Promise<void> {
@@ -77,7 +76,7 @@ describe.skipIf(!dbUrl)('resolveQuoteRecipient priority (hotfix A)', () => {
       .insert(contacts)
       .values({ firstName, lastName: 'Test' })
       .returning({ id: contacts.id });
-    await tx.insert(dealerContacts).values({ dealerId, contactId: c.id, role });
+    await tx.insert(dealerContacts).values({ dealerId, contactId: c.id, isPrimary });
     if (email) {
       await tx
         .insert(contactIdentifiers)
@@ -85,7 +84,7 @@ describe.skipIf(!dbUrl)('resolveQuoteRecipient priority (hotfix A)', () => {
     }
   }
 
-  // Mirrors resolveQuoteRecipient exactly (same joins + priority order).
+  // Mirrors resolveQuoteRecipient exactly (same joins + is_primary ordering).
   async function recipientEmail(tx: Tx, dealerId: number): Promise<string | null> {
     const [row] = await tx
       .select({ email: contactIdentifiers.value })
@@ -104,44 +103,51 @@ describe.skipIf(!dbUrl)('resolveQuoteRecipient priority (hotfix A)', () => {
         ),
       )
       .where(and(eq(dealerContacts.dealerId, dealerId), isNull(dealerContacts.archivedAt)))
-      .orderBy(
-        sql`case ${dealerContacts.role} when 'staff' then 0 when 'customer' then 1 when 'prospect' then 2 else 3 end`,
-        asc(dealerContacts.id),
-      )
+      .orderBy(desc(dealerContacts.isPrimary), asc(dealerContacts.id))
       .limit(1);
     return row?.email ?? null;
   }
 
-  it('resolves a STAFF contact with a primary email (the 0086-prospect bug)', async () => {
+  it('resolves the designated primary contact with a primary email', async () => {
     await inRolledBackTx(async (tx) => {
       const id = await seedDealer(tx);
-      await addContact(tx, id, 'staff', 'Jonathan', 'gm@rooftop.test');
+      await addContact(tx, id, true, 'Jonathan', 'gm@rooftop.test');
       expect(await recipientEmail(tx, id)).toBe('gm@rooftop.test');
     });
   });
 
-  it('prefers the higher-priority contact (staff over customer)', async () => {
+  it('prefers the designated primary over a non-primary, regardless of id order', async () => {
     await inRolledBackTx(async (tx) => {
       const id = await seedDealer(tx);
-      await addContact(tx, id, 'customer', 'Cust', 'cust@x.test');
-      await addContact(tx, id, 'staff', 'Staff', 'staff@x.test');
-      expect(await recipientEmail(tx, id)).toBe('staff@x.test');
+      // Non-primary inserted first (lower id) — id-only ordering would pick it.
+      await addContact(tx, id, false, 'Other', 'other@x.test');
+      await addContact(tx, id, true, 'Primary', 'primary@x.test');
+      expect(await recipientEmail(tx, id)).toBe('primary@x.test');
     });
   });
 
-  it('skips an emailless higher-priority contact for an emailable lower-priority one', async () => {
+  it('skips an emailless primary for an emailable non-primary (D3 fallback)', async () => {
     await inRolledBackTx(async (tx) => {
       const id = await seedDealer(tx);
-      await addContact(tx, id, 'staff', 'NoEmail', null); // higher priority, no email
-      await addContact(tx, id, 'customer', 'HasEmail', 'cust@x.test');
-      expect(await recipientEmail(tx, id)).toBe('cust@x.test');
+      await addContact(tx, id, true, 'NoEmail', null); // primary, but no email
+      await addContact(tx, id, false, 'HasEmail', 'fallback@x.test');
+      expect(await recipientEmail(tx, id)).toBe('fallback@x.test');
+    });
+  });
+
+  it('falls back to the lowest-id emailable contact when no primary is set', async () => {
+    await inRolledBackTx(async (tx) => {
+      const id = await seedDealer(tx);
+      await addContact(tx, id, false, 'First', 'first@x.test');
+      await addContact(tx, id, false, 'Second', 'second@x.test');
+      expect(await recipientEmail(tx, id)).toBe('first@x.test');
     });
   });
 
   it('returns nothing when no contact has a primary email (fail-closed)', async () => {
     await inRolledBackTx(async (tx) => {
       const id = await seedDealer(tx);
-      await addContact(tx, id, 'staff', 'NoEmail', null);
+      await addContact(tx, id, true, 'NoEmail', null);
       expect(await recipientEmail(tx, id)).toBeNull();
     });
   });

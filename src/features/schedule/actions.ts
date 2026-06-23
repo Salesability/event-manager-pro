@@ -374,9 +374,6 @@ export const createDealer = capabilityClient('dealer:create')
         await tx.insert(dealerContacts).values({
           dealerId: dealerRow.id,
           contactId,
-          // role kept as a vestigial NOT-NULL placeholder until 0089 Phase 4
-          // drops the column; the new is_primary designation is what's read.
-          role: 'staff',
           // First (and only) contact of a brand-new dealer → its primary (0089).
           isPrimary: true,
           source: 'admin',
@@ -565,8 +562,6 @@ export const updateDealer = capabilityClient('dealer:edit')
         await tx.insert(dealerContacts).values({
           dealerId: id,
           contactId,
-          // Vestigial NOT-NULL placeholder until 0089 Phase 4 drops the column.
-          role: 'staff',
           // This branch only runs when the dealer has no active link yet, so the
           // new contact is its primary (0089).
           isPrimary: true,
