@@ -9,7 +9,7 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Pending | - |
+| 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Done | (doc) |
 | 2: Schema — add the primary designation (expand) + migration + backfill | Pending | - |
 | 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Pending | - |
 | 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Pending | - |
@@ -37,7 +37,7 @@ Expand→migrate→contract so the column add + backfill ship before any drop.
 journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-model.md`
 (dealer_contacts shape + the recipient send-flow), `docs/wiki/auth.md`.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Notes:**
 - **Migration expected** (Phase 2 add + Phase 4 drop — two migrations, expand then contract).
@@ -50,11 +50,11 @@ journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-
 
 ### Phase Checklist
 
-#### Phase 1: Decision gate
-- [ ] **Designation shape** — `is_primary` boolean (+ partial-unique `WHERE is_primary`) vs `primary | additional` enum. Lean: `is_primary` boolean. Write `decision.md`.
-- [ ] **Keep a descriptive role?** — title-only vs an optional `billing` flag. Lean: title-only v1.
-- [ ] **Tiebreak** — >1 / 0 primary fallback (lowest-id primary; else lowest-id emailable). Confirm.
-- [ ] **Backfill rule** — current priority-primary → primary; confirm it matches the displayed contact.
+#### Phase 1: Decision gate — see [decision.md](decision.md)
+- [x] **Designation shape** — `is_primary` boolean (+ partial-unique `WHERE is_primary`). Owner: no use for an enum. Role enum dropped in Phase 4 (D1).
+- [x] **Keep a descriptive role?** — title-only v1; no billing flag (D2).
+- [x] **Tiebreak** — lowest-id primary → fallback lowest-id emailable → fail-closed (D3).
+- [x] **Backfill rule** — reproduce each dealer's current displayed priority-primary; converges on the 0091 GM (D4).
 
 #### Phase 2: Schema — add designation (expand) + backfill
 - [ ] Invoke the **`db-conventions`** skill first.
