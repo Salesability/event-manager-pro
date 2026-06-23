@@ -159,21 +159,23 @@ describe('loadAdminPeople', () => {
           contactId: 9,
           dealerId: 100,
           dealerName: 'Capital Ford',
-          role: 'customer',
+          isPrimary: true,
+          title: 'General Manager',
         },
         {
           contactId: 9,
-          dealerId: 100,
-          dealerName: 'Capital Ford',
-          role: 'staff',
+          dealerId: 200,
+          dealerName: 'Lakeside Toyota',
+          isPrimary: false,
+          title: null,
         },
       ],
       [], // identifiers
     ];
     const [row] = await loadAdminPeople();
     expect(row.dealerLinks).toEqual([
-      { dealerId: 100, dealerName: 'Capital Ford', role: 'customer' },
-      { dealerId: 100, dealerName: 'Capital Ford', role: 'staff' },
+      { dealerId: 100, dealerName: 'Capital Ford', isPrimary: true, title: 'General Manager' },
+      { dealerId: 200, dealerName: 'Lakeside Toyota', isPrimary: false, title: null },
     ]);
     expect(row.roles).toEqual([]);
     expect(row.hasAppAccess).toBe(false);

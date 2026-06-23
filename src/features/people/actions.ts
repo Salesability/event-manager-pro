@@ -57,10 +57,7 @@ const ROLES_REQUIRING_APP_ACCESS: ReadonlySet<V1TeamRole> = new Set([
   'coach',
 ]);
 
-const DEALER_CONTACT_ROLES = ['customer', 'staff', 'prospect'] as const;
-type DealerContactRole = (typeof DEALER_CONTACT_ROLES)[number];
-
-type DealerLinkInput = { dealerId: number; role: DealerContactRole };
+type DealerLinkInput = { dealerId: number; isPrimary: boolean };
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -152,24 +149,24 @@ function parseRolesField(formData: FormData): V1TeamRole[] | { error: string } {
 function parseDealerLinksField(
   formData: FormData,
 ): DealerLinkInput[] | { error: string } {
-  // Encoded as repeated `dealerLinks=<dealerId>:<role>` form fields. Avoids
-  // JSON-in-FormData and matches how `roles` is shaped.
+  // Encoded as repeated `dealerLinks=<dealerId>:<0|1>` form fields (the 0|1 flag
+  // is the is_primary designation, 0089). Avoids JSON-in-FormData and matches how
+  // `roles` is shaped. One link per dealer; a duplicate dealer keeps the first.
   const raw = formData.getAll('dealerLinks').map((v) => String(v));
   const out: DealerLinkInput[] = [];
-  const seen = new Set<string>();
+  const seen = new Set<number>();
   for (const entry of raw) {
-    const [dealerIdStr, role] = entry.split(':');
+    const [dealerIdStr, primaryFlag] = entry.split(':');
     const dealerId = Number(dealerIdStr);
     if (!Number.isInteger(dealerId) || dealerId <= 0) {
       return { error: `Invalid dealer link: '${entry}'.` };
     }
-    if (!DEALER_CONTACT_ROLES.includes(role as DealerContactRole)) {
-      return { error: `Invalid dealer-contact role: '${role}'.` };
+    if (primaryFlag !== '0' && primaryFlag !== '1') {
+      return { error: `Invalid dealer-link primary flag: '${entry}'.` };
     }
-    const key = `${dealerId}:${role}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ dealerId, role: role as DealerContactRole });
+    if (seen.has(dealerId)) continue;
+    seen.add(dealerId);
+    out.push({ dealerId, isPrimary: primaryFlag === '1' });
   }
   return out;
 }
@@ -302,42 +299,73 @@ async function syncDealerLinks(
   contactId: number,
   desired: DealerLinkInput[],
 ) {
+  // 0089: a link's identity is now just (contact, dealer) — one row per pair —
+  // with `is_primary` a mutable attribute. (Legacy data may carry >1 row per
+  // pair from the retired role split; we operate on a representative row and
+  // leave any siblings to the dedup chunk.)
   const existing = await tx
     .select({
       id: dealerContacts.id,
       dealerId: dealerContacts.dealerId,
-      role: dealerContacts.role,
+      isPrimary: dealerContacts.isPrimary,
       archivedAt: dealerContacts.archivedAt,
     })
     .from(dealerContacts)
     .where(eq(dealerContacts.contactId, contactId));
 
-  const desiredKey = (l: DealerLinkInput) => `${l.dealerId}:${l.role}`;
-  const existingKey = (l: { dealerId: number; role: DealerContactRole }) =>
-    `${l.dealerId}:${l.role}`;
-
-  const desiredKeys = new Set(desired.map(desiredKey));
-  const existingByKey = new Map(existing.map((l) => [existingKey(l), l]));
+  const desiredDealerIds = new Set(desired.map((l) => l.dealerId));
+  const existingByDealer = new Map<number, typeof existing>();
+  for (const row of existing) {
+    const arr = existingByDealer.get(row.dealerId) ?? [];
+    arr.push(row);
+    existingByDealer.set(row.dealerId, arr);
+  }
+  // Representative row to update in place: prefer an active primary, else the
+  // lowest-id active row, else the lowest-id archived row (to un-archive).
+  const pickRep = (rows: typeof existing) =>
+    rows.find((r) => r.archivedAt == null && r.isPrimary) ??
+    [...rows].filter((r) => r.archivedAt == null).sort((a, b) => a.id - b.id)[0] ??
+    [...rows].sort((a, b) => a.id - b.id)[0];
 
   for (const want of desired) {
-    const row = existingByKey.get(desiredKey(want));
-    if (!row) {
+    // Honor the one-primary-per-dealer index: demote any OTHER contact's active
+    // primary at this dealer before promoting this one (mirrors the
+    // demote-then-set shape of swapPrimaryIdentifier).
+    if (want.isPrimary) {
+      await tx
+        .update(dealerContacts)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(dealerContacts.dealerId, want.dealerId),
+            ne(dealerContacts.contactId, contactId),
+            eq(dealerContacts.isPrimary, true),
+            isNull(dealerContacts.archivedAt),
+          ),
+        );
+    }
+
+    const rows = existingByDealer.get(want.dealerId);
+    if (!rows || rows.length === 0) {
       await tx.insert(dealerContacts).values({
         contactId,
         dealerId: want.dealerId,
-        role: want.role,
+        // Vestigial NOT-NULL placeholder until 0089 Phase 4 drops the column.
+        role: 'staff',
+        isPrimary: want.isPrimary,
         source: 'admin-people',
       });
-    } else if (row.archivedAt != null) {
+    } else {
+      const rep = pickRep(rows);
       await tx
         .update(dealerContacts)
-        .set({ archivedAt: null })
-        .where(eq(dealerContacts.id, row.id));
+        .set({ archivedAt: null, isPrimary: want.isPrimary })
+        .where(eq(dealerContacts.id, rep.id));
     }
   }
 
   const toArchive = existing
-    .filter((r) => r.archivedAt == null && !desiredKeys.has(existingKey(r)))
+    .filter((r) => r.archivedAt == null && !desiredDealerIds.has(r.dealerId))
     .map((r) => r.id);
   if (toArchive.length) {
     await tx

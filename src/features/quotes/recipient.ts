@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contactIdentifiers, contacts, dealerContacts } from '@/lib/db/schema';
 
@@ -8,20 +8,19 @@ import { contactIdentifiers, contacts, dealerContacts } from '@/lib/db/schema';
 // to one person — the dealer's **primary contact's** primary email — for v1.
 // Multi-recipient (cc'ing additional contacts, bcc'ing the coach) is deferred.
 //
-// Recipient selection mirrors how `loadDealers` picks a dealer's primary contact
-// (`DEALER_CONTACT_ROLE_PRIORITY` = staff > customer > prospect): the highest-
-// priority **non-archived** `dealer_contacts` row that has a non-archived primary
-// email, breaking ties by the lowest `dealer_contacts.id`. It does NOT require
-// `role = 'customer'` — UI-created dealers + the 0086 Atlantic / QBO imports all
-// tag their contact `staff`, so a customer-only rule rejected nearly every dealer
-// (the displayed primary contact is the staff one). Picking the same priority-
-// primary the dealer page already shows keeps the recipient consistent with the
-// UI. The proper role rationalization (explicit primary/billing designation) is
-// its own chunk; this is the unblock.
+// Recipient selection keys off the explicit `dealer_contacts.is_primary`
+// designation (0089), superseding hotfix A's `DEALER_CONTACT_ROLE_PRIORITY`
+// heuristic. Among the dealer's **non-archived** contacts that have a
+// non-archived primary email, the designated primary (`is_primary = true`) is
+// chosen first, falling back to the lowest `dealer_contacts.id` emailable
+// contact. Because the query inner-joins an emailable identifier, a primary
+// contact with no email is automatically skipped in favour of the next emailable
+// one — exactly the deterministic fallback decision.md D3 specifies.
 //
 // Source of truth:
-//   - any non-archived `dealer_contacts` row for the dealer (role is a priority
-//     tiebreak, no longer a hard filter).
+//   - any non-archived `dealer_contacts` row for the dealer (`is_primary` is the
+//     ordering key, not a hard filter — so an emailless primary never strands
+//     the send).
 //   - `contact_identifiers.kind = 'email' AND is_primary = true` for that
 //     contact (archived rows excluded) — emailless contacts are skipped, so the
 //     pick is the highest-priority contact that can actually be emailed.
@@ -70,11 +69,10 @@ export async function resolveQuoteRecipient(
         isNull(dealerContacts.archivedAt),
       ),
     )
-    // Same priority as loadDealers' DEALER_CONTACT_ROLE_PRIORITY (staff > customer
-    // > prospect), then lowest id — so the recipient matches the dealer page's
-    // displayed primary contact.
+    // Designated primary first (0089), then lowest id — matching the dealer
+    // page's displayed primary contact (loadDealers also reads is_primary).
     .orderBy(
-      sql`case ${dealerContacts.role} when 'staff' then 0 when 'customer' then 1 when 'prospect' then 2 else 3 end`,
+      desc(dealerContacts.isPrimary),
       asc(dealerContacts.id),
     )
     .limit(1);

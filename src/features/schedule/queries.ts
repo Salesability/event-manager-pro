@@ -148,24 +148,20 @@ export type AvailabilityBlock = {
   reason: string | null;
 };
 
-// dealer_contact_role priority for "primary contact" display: a dealer can have
-// several active links (staff, customer, prospect); pick whichever is most
-// authoritative. Importer wrote 'customer' for legacy Contact Person rows; the
-// new CRUD writes 'staff'. Reads accept either so already-imported dealers
-// don't lose their contact info on the Lists view.
-const DEALER_CONTACT_ROLE_PRIORITY = { staff: 0, customer: 1, prospect: 2 } as const;
-
+// A dealer's displayed primary contact (0089): the explicitly designated
+// `is_primary` link, falling back to the lowest-id link when none is set. This
+// is the same pick the recipient resolver and the dealer page use — ordering by
+// is_primary first then id, and keeping the first non-archived link per dealer
+// (whose contact is also non-archived).
 async function fetchPrimaryDealerContacts(dealerIds: number[]) {
   if (!dealerIds.length) return new Map<number, { contactId: number; firstName: string; lastName: string }>();
 
   const links = await db
     .select({
       dealerId: dealerContacts.dealerId,
-      role: dealerContacts.role,
       contactId: contacts.id,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
-      linkId: dealerContacts.id,
     })
     .from(dealerContacts)
     .innerJoin(contacts, eq(contacts.id, dealerContacts.contactId))
@@ -176,23 +172,20 @@ async function fetchPrimaryDealerContacts(dealerIds: number[]) {
         isNull(contacts.archivedAt)
       )
     )
-    .orderBy(asc(dealerContacts.dealerId), asc(dealerContacts.id));
+    .orderBy(
+      asc(dealerContacts.dealerId),
+      desc(dealerContacts.isPrimary),
+      asc(dealerContacts.id)
+    );
 
-  const byDealer = new Map<
-    number,
-    { contactId: number; firstName: string; lastName: string; rolePriority: number }
-  >();
+  const byDealer = new Map<number, { contactId: number; firstName: string; lastName: string }>();
   for (const link of links) {
-    const priority = DEALER_CONTACT_ROLE_PRIORITY[link.role];
-    const current = byDealer.get(link.dealerId);
-    if (!current || priority < current.rolePriority) {
-      byDealer.set(link.dealerId, {
-        contactId: link.contactId,
-        firstName: link.firstName,
-        lastName: link.lastName,
-        rolePriority: priority,
-      });
-    }
+    if (byDealer.has(link.dealerId)) continue;
+    byDealer.set(link.dealerId, {
+      contactId: link.contactId,
+      firstName: link.firstName,
+      lastName: link.lastName,
+    });
   }
   return byDealer;
 }

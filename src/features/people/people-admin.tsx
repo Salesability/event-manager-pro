@@ -10,7 +10,6 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Checkbox } from '@/components/catalyst/checkbox';
-import { Listbox, ListboxOption, ListboxLabel } from '@/components/catalyst/listbox';
 import type { ColumnFiltersState } from '@tanstack/react-table';
 import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
 import { Can } from '@/components/auth/can';
@@ -32,7 +31,6 @@ import type { DuplicateResult } from '@/features/dealers/duplicate-types';
 import { DuplicateNotice, duplicateMessage } from '@/features/dealers/duplicate-notice';
 import type {
   AdminPersonRow,
-  DealerContactRole,
   DealerLink,
 } from '@/features/people/queries';
 import { buildPeopleColumns } from '@/features/people/people-columns';
@@ -64,12 +62,12 @@ function toggleRoleFilter(
   return [...others, { id: 'roles', value: next }];
 }
 
-function toggleCustomerFilter(
+function togglePrimaryFilter(
   prev: ColumnFiltersState,
   enabled: boolean,
 ): ColumnFiltersState {
   const others = prev.filter((f) => f.id !== 'dealerLinks');
-  if (enabled) return [...others, { id: 'dealerLinks', value: 'has-customer' }];
+  if (enabled) return [...others, { id: 'dealerLinks', value: 'has-primary' }];
   return others;
 }
 
@@ -108,8 +106,6 @@ function pillClass(active: boolean): string {
     : 'rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-500 transition hover:border-brand-500 hover:text-brand-700';
 }
 
-const DEALER_CONTACT_ROLES: DealerContactRole[] = ['customer', 'staff', 'prospect'];
-
 export function PeopleAdmin({
   people,
   dealers,
@@ -136,8 +132,8 @@ export function PeopleAdmin({
     (columnFilters.find((f) => f.id === 'roles')?.value as string[] | undefined) ?? [];
   const coachActive = rolesFilterValue.includes('coach');
   const adminActive = rolesFilterValue.includes('admin');
-  const customerActive = columnFilters.some(
-    (f) => f.id === 'dealerLinks' && f.value === 'has-customer',
+  const primaryActive = columnFilters.some(
+    (f) => f.id === 'dealerLinks' && f.value === 'has-primary',
   );
   const isFiltered = globalFilter.trim().length > 0 || columnFilters.length > 0;
   const clearFilters = () => {
@@ -220,13 +216,13 @@ export function PeopleAdmin({
         </button>
         <button
           type="button"
-          aria-pressed={customerActive}
+          aria-pressed={primaryActive}
           onClick={() =>
-            setColumnFilters((prev) => toggleCustomerFilter(prev, !customerActive))
+            setColumnFilters((prev) => togglePrimaryFilter(prev, !primaryActive))
           }
-          className={pillClass(customerActive)}
+          className={pillClass(primaryActive)}
         >
-          Customer-side
+          Primary contact
         </button>
       </div>
 
@@ -295,7 +291,8 @@ function buildArchiveConfirmMessage(person: AdminPersonRow): string {
   const facets: string[] = [];
   for (const role of person.roles) facets.push(`drop ${role} role`);
   for (const link of person.dealerLinks) {
-    facets.push(`end relationship with ${link.dealerName} (${link.role})`);
+    const what = link.title ?? (link.isPrimary ? 'primary contact' : 'contact');
+    facets.push(`end relationship with ${link.dealerName} (${what})`);
   }
   if (person.hasAppAccess) {
     const email = person.authUser?.email ?? person.email;
@@ -313,13 +310,13 @@ function buildArchiveConfirmMessage(person: AdminPersonRow): string {
   return `This archive will: ${list}. The contact record stays. Continue?`;
 }
 
-type DealerLinkDraft = { dealerId: string; role: DealerContactRole };
+type DealerLinkDraft = { dealerId: string; isPrimary: boolean };
 
 function dealerLinksFromPerson(person?: AdminPersonRow): DealerLinkDraft[] {
   if (!person) return [];
   return person.dealerLinks.map<DealerLinkDraft>((d: DealerLink) => ({
     dealerId: String(d.dealerId),
-    role: d.role,
+    isPrimary: d.isPrimary,
   }));
 }
 
@@ -430,7 +427,7 @@ function PersonForm({
   }
 
   function addDealerLink() {
-    setDealerLinks((prev) => [...prev, { dealerId: '', role: 'staff' }]);
+    setDealerLinks((prev) => [...prev, { dealerId: '', isPrimary: false }]);
   }
 
   function removeDealerLink(i: number) {
@@ -458,7 +455,7 @@ function PersonForm({
             key={`dl-${i}`}
             type="hidden"
             name="dealerLinks"
-            value={`${l.dealerId}:${l.role}`}
+            value={`${l.dealerId}:${l.isPrimary ? '1' : '0'}`}
           />
         ))}
 
@@ -589,20 +586,14 @@ function PersonForm({
                   </ComboboxOption>
                 )}
               </Combobox>
-              <Listbox
-                value={link.role}
-                onChange={(v) =>
-                  setDealerLink(i, { role: v as DealerContactRole })
-                }
-                placeholder="role"
-                aria-label="Role"
-              >
-                {DEALER_CONTACT_ROLES.map((r) => (
-                  <ListboxOption key={r} value={r}>
-                    <ListboxLabel>{r}</ListboxLabel>
-                  </ListboxOption>
-                ))}
-              </Listbox>
+              <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-zinc-700">
+                <Checkbox
+                  checked={link.isPrimary}
+                  onChange={(v) => setDealerLink(i, { isPrimary: v })}
+                  aria-label="Primary contact for this dealer"
+                />
+                Primary
+              </label>
               <Button
                 type="button"
                 color="red"

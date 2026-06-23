@@ -11,12 +11,11 @@ import {
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { TeamMemberRole } from '@/lib/auth/load-team-membership';
 
-export type DealerContactRole = 'customer' | 'staff' | 'prospect';
-
 export type DealerLink = {
   dealerId: number;
   dealerName: string;
-  role: DealerContactRole;
+  isPrimary: boolean;
+  title: string | null;
 };
 
 export type AdminPersonAuth = {
@@ -98,14 +97,16 @@ export async function loadAdminPeople(): Promise<AdminPersonRow[]> {
   }
 
   // Dealer-side relationships, joined to dealer names so the row can render
-  // a `<dealer name> (role)` chip without a second round-trip in the client.
+  // a `<dealer name> · <title / Primary>` chip without a second round-trip in
+  // the client.
   const dealerLinkRows = contactIds.length
     ? await db
         .select({
           contactId: dealerContacts.contactId,
           dealerId: dealerContacts.dealerId,
           dealerName: dealers.name,
-          role: dealerContacts.role,
+          isPrimary: dealerContacts.isPrimary,
+          title: dealerContacts.title,
         })
         .from(dealerContacts)
         .innerJoin(dealers, eq(dealers.id, dealerContacts.dealerId))
@@ -125,7 +126,8 @@ export async function loadAdminPeople(): Promise<AdminPersonRow[]> {
     arr.push({
       dealerId: link.dealerId,
       dealerName: link.dealerName,
-      role: link.role,
+      isPrimary: link.isPrimary,
+      title: link.title,
     });
     dealerLinksByContact.set(link.contactId, arr);
   }

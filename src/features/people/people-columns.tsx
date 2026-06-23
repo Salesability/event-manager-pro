@@ -119,11 +119,11 @@ export function buildPeopleColumns(
       id: 'dealerLinks',
       accessorFn: (p) => p.dealerLinks.length,
       header: 'Dealers',
-      // Only filter we need today is "has any customer-side relationship".
+      // Only filter we need today is "is a primary contact somewhere" (0089).
       // Generalize when a per-dealer filter shows up.
       filterFn: (row, _columnId, filterValue: string) => {
-        if (filterValue !== 'has-customer') return true;
-        return row.original.dealerLinks.some((l) => l.role === 'customer');
+        if (filterValue !== 'has-primary') return true;
+        return row.original.dealerLinks.some((l) => l.isPrimary);
       },
       cell: ({ row }) => {
         const p = row.original;
@@ -132,15 +132,19 @@ export function buildPeopleColumns(
         }
         return (
           <div className="flex flex-wrap gap-1">
-            {p.dealerLinks.map((d: DealerLink, i: number) => (
-              <Badge
-                key={`${d.dealerId}:${d.role}:${i}`}
-                color="zinc"
-                title={`${d.role} at ${d.dealerName}`}
-              >
-                {d.dealerName} · {d.role}
-              </Badge>
-            ))}
+            {p.dealerLinks.map((d: DealerLink, i: number) => {
+              const label = d.title ?? (d.isPrimary ? 'Primary' : 'Contact');
+              return (
+                <Badge
+                  key={`${d.dealerId}:${i}`}
+                  color={d.isPrimary ? 'brand' : 'zinc'}
+                  title={`${label}${d.isPrimary ? ' · primary' : ''} at ${d.dealerName}`}
+                >
+                  {d.dealerName} · {label}
+                  {d.isPrimary && d.title ? ' · primary' : ''}
+                </Badge>
+              );
+            })}
           </div>
         );
       },

@@ -302,14 +302,14 @@ describe('createPerson', () => {
     });
   });
 
-  it('rejects an invalid dealer-contact role', async () => {
+  it('rejects an invalid dealer-link primary flag', async () => {
     const fd = new FormData();
     fd.set('firstName', 'Tilley');
     fd.set('lastName', 'Shaye');
     fd.append('roles', 'dealer');
     fd.append('dealerLinks', '100:bogus');
     expect(await call(createPerson(fd))).toEqual({
-      error: "Invalid dealer-contact role: 'bogus'.",
+      error: "Invalid dealer-link primary flag: '100:bogus'.",
     });
   });
 

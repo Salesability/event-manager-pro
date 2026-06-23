@@ -374,7 +374,11 @@ export const createDealer = capabilityClient('dealer:create')
         await tx.insert(dealerContacts).values({
           dealerId: dealerRow.id,
           contactId,
+          // role kept as a vestigial NOT-NULL placeholder until 0089 Phase 4
+          // drops the column; the new is_primary designation is what's read.
           role: 'staff',
+          // First (and only) contact of a brand-new dealer → its primary (0089).
+          isPrimary: true,
           source: 'admin',
           createdById: userId,
           updatedById: userId,
@@ -520,16 +524,16 @@ export const updateDealer = capabilityClient('dealer:edit')
       const hasContactInputs = contactFirst || contactLast || contactEmail || contactPhone;
       if (!hasContactInputs) return;
 
-      // Mirror loadDealers' priority (staff > customer > prospect): edit the
-      // existing primary link in place rather than creating a duplicate when
-      // the imported link is role='customer'.
+      // Edit the dealer's primary contact in place (0089: the is_primary link,
+      // falling back to the lowest-id link) rather than creating a duplicate —
+      // matches the contact loadDealers displays.
       const links = await tx
-        .select({ id: dealerContacts.id, contactId: dealerContacts.contactId, role: dealerContacts.role })
+        .select({ id: dealerContacts.id, contactId: dealerContacts.contactId, isPrimary: dealerContacts.isPrimary })
         .from(dealerContacts)
         .where(and(eq(dealerContacts.dealerId, id), isNull(dealerContacts.archivedAt)));
-      const rolePriority = { staff: 0, customer: 1, prospect: 2 } as const;
       const link = links.length
-        ? links.reduce((best, cur) => (rolePriority[cur.role] < rolePriority[best.role] ? cur : best))
+        ? (links.find((l) => l.isPrimary) ??
+           links.reduce((best, cur) => (cur.id < best.id ? cur : best)))
         : null;
 
       let contactId: number;
@@ -561,7 +565,11 @@ export const updateDealer = capabilityClient('dealer:edit')
         await tx.insert(dealerContacts).values({
           dealerId: id,
           contactId,
+          // Vestigial NOT-NULL placeholder until 0089 Phase 4 drops the column.
           role: 'staff',
+          // This branch only runs when the dealer has no active link yet, so the
+          // new contact is its primary (0089).
+          isPrimary: true,
           source: 'admin',
           createdById: userId,
           updatedById: userId,
