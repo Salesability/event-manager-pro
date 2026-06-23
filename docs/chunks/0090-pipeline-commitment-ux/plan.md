@@ -10,7 +10,7 @@ Pipeline panel only. UI + small server affordance; **no migration** (reuses `dea
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — save model, Done-kind default, escape hatch, byproduct-logging | Done | - |
-| 2: Server — "complete next action" path (reuse/extend `logDealerActivity`) | Pending | - |
+| 2: Server — "complete next action" path (reuse/extend `logDealerActivity`) | Done | - |
 | 3: Panel reshape — next-action hero + Done flow + compact metadata row | Pending | - |
 | 4: Tests + smoke | Pending | - |
 
@@ -31,7 +31,7 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 
 **Conventions referenced:** `docs/wiki/data-model.md` (pipeline + `dealer_activities`), `docs/wiki/layout.md` (panel/Button primitives), `docs/wiki/auth.md` (only if a new gated action lands). **No `db-conventions`** — no schema change expected.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Notes:**
 - **No migration.** If Phase 1 unexpectedly wants a new column (e.g. a `next_action_completed_at`), revisit — but the lean design reuses what 0087 shipped.
@@ -47,8 +47,8 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 - [x] **Byproduct logging** — confirm `dealer_activities` writes stay (0088 counts) vs next-action-only. Lean: keep. Write `decision.md`. → **D4: keep. See [decision.md](decision.md) (incl. D5 mechanics).**
 
 #### Phase 2: Server — "complete next action"
-- [ ] Implement Done as a `logDealerActivity` call (kind + optional note + the new next-action in one submit) OR a thin dedicated path if cleaner; stamp `last_contacted_at`; clear/replace `next_action`.
-- [ ] Unit tests for the Done path (records a row, stamps last-contacted, advances the promise; archived/active guards still hold). Gate-matrix row only if a new exported action is added.
+- [x] Implement Done as a `logDealerActivity` call (kind + optional note + the new next-action in one submit) OR a thin dedicated path if cleaner; stamp `last_contacted_at`; clear/replace `next_action`. → **No server change needed (D5): `logDealerActivity` already inserts the touch, stamps `last_contacted_at`, and patches `next_action` when present (replace when typed, clear to null when blank).**
+- [x] Unit tests for the Done path (records a row, stamps last-contacted, advances the promise; archived/active guards still hold). Gate-matrix row only if a new exported action is added. → **Added "clears the completed commitment when Done sends an empty next-action" to `actions.test.ts`; the replace-promise + backdate + 0-rows-guard cases were already covered. No new exported action ⇒ no gate-matrix row.**
 
 #### Phase 3: Panel reshape
 - [ ] Next-action **hero** at the top: prominent commitment field + due + Save (per Phase-1 save model); show overdue/ due-soon styling consistent with the queue.

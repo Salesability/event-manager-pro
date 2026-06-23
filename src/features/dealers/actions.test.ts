@@ -808,6 +808,22 @@ describe('logDealerActivity', () => {
     expect(upd.nextActionAt).toBe('2026-07-01');
   });
 
+  // 0090 Done flow: marking the current commitment done WITHOUT typing a next
+  // promise sends nextAction/nextActionAt as present-but-empty → the action
+  // clears the completed commitment to null (advances "see → do → Done → idle").
+  it('clears the completed commitment when Done sends an empty next-action', async () => {
+    mocks.dbResults.push([{ id: 42 }]);
+    await call(
+      logDealerActivity(fd({ id: '42', kind: 'call', nextAction: '', nextActionAt: '' })),
+    );
+    const upd = mocks.updates.find((u) => u.table === 'dealers')!.patch as Record<string, unknown>;
+    expect(upd.nextAction).toBeNull();
+    expect(upd.nextActionAt).toBeNull();
+    // The touch is still recorded (byproduct logging — D4).
+    expect(mocks.inserts.find((i) => i.table === 'dealer_activities')).toBeTruthy();
+    expect(upd.lastContactedAt).toBeInstanceOf(Date);
+  });
+
   it('stores a null note when none is given', async () => {
     mocks.dbResults.push([{ id: 42 }]);
     await call(logDealerActivity(fd({ id: '42', kind: 'note' })));
