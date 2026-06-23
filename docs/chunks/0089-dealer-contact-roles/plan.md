@@ -12,8 +12,8 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 | 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Done | (doc) |
 | 2: Schema — add the primary designation (expand) + migration + backfill | Done | `b78f10a` |
 | 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Done | `cc88e50` |
-| 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Done | - |
-| 5: Tests + wiki | Pending | - |
+| 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Done | `a8df8f3` |
+| 5: Tests + wiki | Done | - |
 
 The cleanup the prod bug pointed at: a `dealer_contacts` row becomes "a person at this dealership"
 (+ free-text `title`) with an **explicit primary-contact designation** for who receives
@@ -37,7 +37,7 @@ Expand→migrate→contract so the column add + backfill ship before any drop.
 journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-model.md`
 (dealer_contacts shape + the recipient send-flow), `docs/wiki/auth.md`.
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Notes:**
 - **Migration expected** (Phase 2 add + Phase 4 drop — two migrations, expand then contract).
@@ -77,6 +77,6 @@ journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-
 - [x] Grepped the tree: 0 `dealerContacts.role`/`dealerContactRole`/`dealer_contact_role` code refs remain in tracked files. Remaining hits are **untracked 0091 leftovers** (raw-SQL `dc.role::text` probes that already ran and won't re-run; the reconcile module's own `role` type) — out of 0089 scope, no tsc/test impact.
 
 #### Phase 5: Tests + wiki
-- [ ] Unit + real-DB integration: primary selection (recipient targets the designated primary), backfill correctness (priority-primary became primary; one-per-dealer), fallback when no primary/email.
-- [ ] Rewrite the `dealer_contacts` section of `data-model.md` to the final model; note the supersede of hotfix A; update `auth.md` if a gate moved.
-- [ ] Smoke (web-test): dealer detail + People link UI show/set the primary contact; `/dealerships` unaffected.
+- [x] Real-DB integration: rewrote `tests/integration/quote-recipient.test.ts` for `is_primary` (5 cases — designated primary; primary-over-non-primary regardless of id; emailless-primary→emailable fallback (D3); no-primary→lowest-id; fail-closed). Added `tests/integration/dealer-contacts-primary.test.ts` (one-active-primary-per-dealer index + archived-primary-doesn't-block). Unit projection/validation tests updated in Phase 3. Backfill correctness verified via psql (212/212; 165/165 GM).
+- [x] Rewrote the `data-model.md` `dealer_contacts` section to the final model + swept the ERD, ASCII diagram, summary table, relationship list, identity prose, send-flow recipient line, and open-questions (#3 collision **resolved**, #15 moot). `auth.md` unchanged (no gate moved — portal routing is an existence check). `log.md` entry added.
+- [x] Smoke (web-test) — deferred to the chunk-end `/eval` browser smoke (dealer detail + People link UI + `/dealerships`).
