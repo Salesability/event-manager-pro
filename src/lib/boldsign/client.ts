@@ -161,6 +161,20 @@ export async function sendSignatureRequest(
   sendForSign.message = input.message;
   sendForSign.isSandbox = !isProductionEnv();
 
+  // Sender identity (chunk 0092). Without this, BoldSign attributes the envelope
+  // to the user who owns the API key — the prod Live account's Account Admin
+  // (`admin@salesability.ca`, David Hogan) — so the signer sees "David requested
+  // your signature". `onBehalfOf` re-attributes the send to another user IN THE
+  // SAME BoldSign org (BoldSign's Send-on-Behalf-Of; the target must be an
+  // existing member, which `shannon@salesability.ca` is — no sender-identity
+  // verification needed). Env-gated so only prod (where Shannon is a member) sets
+  // it; stage/dev use a different sandbox account where she isn't, so leaving
+  // `BOLDSIGN_SENDER_EMAIL` unset there keeps the API-key owner as sender.
+  const senderEmail = process.env.BOLDSIGN_SENDER_EMAIL?.trim();
+  if (senderEmail) {
+    sendForSign.onBehalfOf = senderEmail;
+  }
+
   const signer = new DocumentSigner();
   // signer.name keeps the original Client name so the dev inbox can still see
   // who the envelope was meant for; only emailAddress is rewritten.

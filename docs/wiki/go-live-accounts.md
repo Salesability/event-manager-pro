@@ -139,6 +139,17 @@ the app when a customer has signed.
 - Which **region** you chose → `BOLDSIGN_API_BASE_URL` (Canada = `https://api-ca.boldsign.com`)
 - *(The developer generates `BOLDSIGN_WEBHOOK_SECRET` themselves when registering the webhook.)*
 
+**Sender identity — who the signer sees (chunk 0092).** BoldSign attributes each envelope to
+**whichever org member owns the API key**, *not* to the MSA's named signatory. The prod Live
+account (team "Default", CA region) is owned by **`admin@salesability.ca` — David Hogan, Account
+Admin**; **`shannon@salesability.ca` — Shannon Tilley** is an **Active Member** of the same team
+(verified via `GET /v1/users/list` 2026-06-23). So by default envelopes read "David Hogan requested
+your signature." To send *as Shannon* instead, set **`BOLDSIGN_SENDER_EMAIL=shannon@salesability.ca`**
+on the prod service — `sendSignatureRequest` passes it as `SendForSign.onBehalfOf` (BoldSign
+Send-on-Behalf-Of). This needs **no sender-identity verification and no role change** because Shannon
+is already a member; an `onBehalfOf` email that isn't a member is rejected, so leave the var **unset**
+on stage/dev (different sandbox account). After setting it, redeploy and confirm via **Send Test MSA**.
+
 ---
 
 ## 4. Google Cloud — hosting, PDF storage, and "Sign in with Google"

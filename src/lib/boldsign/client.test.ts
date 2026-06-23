@@ -72,6 +72,7 @@ beforeEach(() => {
   __resetForTests();
   delete process.env.BOLDSIGN_API_KEY;
   delete process.env.APP_ENV;
+  delete process.env.BOLDSIGN_SENDER_EMAIL;
 });
 
 afterEach(() => {
@@ -203,6 +204,25 @@ describe('sendSignatureRequest', () => {
       metaData?: Record<string, string>;
     };
     expect(sent.metaData).toEqual({ msaId: '42' });
+  });
+
+  it('sets onBehalfOf from BOLDSIGN_SENDER_EMAIL when present (sender identity, chunk 0092)', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_live_abc';
+    process.env.APP_ENV = 'production';
+    process.env.BOLDSIGN_SENDER_EMAIL = ' shannon@salesability.ca ';
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as { onBehalfOf?: string };
+    // Trimmed, matching the BOLDSIGN_API_BASE_URL/EMAIL_DEV_TO env-handling style.
+    expect(sent.onBehalfOf).toBe('shannon@salesability.ca');
+  });
+
+  it('omits onBehalfOf when BOLDSIGN_SENDER_EMAIL is unset (default: send as API-key owner)', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    delete process.env.BOLDSIGN_SENDER_EMAIL;
+    await sendSignatureRequest(sample);
+    const sent = mocks.sendDocumentCalls[0] as { onBehalfOf?: string };
+    expect(sent.onBehalfOf).toBeUndefined();
   });
 
   it('builds Initial fields before the Signature when initialsAnchors are supplied', async () => {

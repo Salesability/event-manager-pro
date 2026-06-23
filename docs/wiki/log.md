@@ -13,6 +13,11 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-23 — BoldSign envelopes can send *as* a chosen org member (`onBehalfOf`, chunk 0092)
+
+- Captured a previously-undocumented fact in [`go-live-accounts.md`](go-live-accounts.md) §3 BoldSign: BoldSign attributes each signature-request envelope to **the API-key owner**, not the MSA's named signatory. The prod Live account is owned by **`admin@salesability.ca` (David Hogan, Account Admin)**; **`shannon@salesability.ca` (Shannon Tilley)** is an **Active Member** of the same team (verified live via `GET /v1/users/list`). Result: envelopes read "David Hogan requested your signature."
+- New env var **`BOLDSIGN_SENDER_EMAIL`** → `sendSignatureRequest` sets `SendForSign.onBehalfOf` (Send-on-Behalf-Of). Set `=shannon@salesability.ca` on prod to send as Shannon; needs no sender-identity verification / role change (she's already a member). Env-gated → leave unset on stage/dev (different sandbox account; an unknown `onBehalfOf` is rejected). Code shipped inert; prod cutover (set var + redeploy + Send Test MSA) is the remaining owner step.
+
 ## 2026-06-23 — `dealer_contacts.role` retired for an explicit `is_primary` (chunk 0089, migrations 0043+0044)
 
 - Rewrote the [`data-model.md`](data-model.md) `dealer_contacts` section: the `role` enum (`customer | staff | prospect`) was a category error and is **gone**. A row is now "a person at this dealership" — free-text `title` for what they do + a boolean **`is_primary`** marking the quotes/MSAs recipient. Updated the ERD, the ASCII identity diagram, the summary table, the relationship list, the identity/junction prose, the send-flow recipient line, and the open-questions (the `staff`-in-two-enums collision #3 is now **resolved**; the `role='staff' → title NOT NULL` rule in #15 is **moot**).

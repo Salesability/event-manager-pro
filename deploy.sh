@@ -271,6 +271,15 @@ fi
 if [ -n "${EMAIL_DEV_TO:-}" ]; then
     ENV_VARS+="${ENV_DELIM}EMAIL_DEV_TO=${EMAIL_DEV_TO}"
 fi
+# BOLDSIGN_SENDER_EMAIL re-attributes signature-request envelopes to another
+# member of the BoldSign org (Send-on-Behalf-Of, chunk 0092) — prod sets it to
+# shannon@salesability.ca so envelopes come from her, not the API-key owner
+# (admin@salesability.ca). Optional: only baked when set locally; absent means
+# the sender stays the API-key owner. Stage/dev use a different sandbox account
+# where Shannon isn't a member, so leave it unset there.
+if [ -n "${BOLDSIGN_SENDER_EMAIL:-}" ]; then
+    ENV_VARS+="${ENV_DELIM}BOLDSIGN_SENDER_EMAIL=${BOLDSIGN_SENDER_EMAIL}"
+fi
 # BOLDSIGN_API_BASE_URL picks the regional API host (US default unset; EU =
 # api-eu.boldsign.com; CA = api-ca.boldsign.com). Optional — only included
 # when set locally; absent means Cloud Run uses the US default at runtime.
