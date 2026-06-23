@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -159,6 +159,21 @@ export function DealerPipelinePanel({
     defaultValues: { kind: 'call', note: '', occurredAt: todayInputValue() },
     mode: 'onTouched',
   });
+
+  // RHF seeds defaultValues once at mount; after a Done/Save advances or clears
+  // the commitment and router.refresh() updates the `dealer` prop, the edit/set
+  // form would otherwise still hold the pre-mutation value and could re-submit it
+  // (silently clobbering the refreshed commitment). Re-sync to server truth
+  // whenever the commitment changes — the edit/set UI is always closed at that
+  // point (submit handlers flip heroMode back to 'view'), so this never wipes an
+  // in-progress edit.
+  const nextFormReset = nextForm.reset;
+  useEffect(() => {
+    nextFormReset({
+      nextAction: dealer.nextAction ?? '',
+      nextActionAt: dealer.nextActionAt ?? '',
+    });
+  }, [dealer.nextAction, dealer.nextActionAt, nextFormReset]);
 
   function submitDone(values: LogActivityValues) {
     startTransition(async () => {
