@@ -13,6 +13,18 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-23 — `dealer_contacts.role` retired for an explicit `is_primary` (chunk 0089, migrations 0043+0044)
+
+- Rewrote the [`data-model.md`](data-model.md) `dealer_contacts` section: the `role` enum (`customer | staff | prospect`) was a category error and is **gone**. A row is now "a person at this dealership" — free-text `title` for what they do + a boolean **`is_primary`** marking the quotes/MSAs recipient. Updated the ERD, the ASCII identity diagram, the summary table, the relationship list, the identity/junction prose, the send-flow recipient line, and the open-questions (the `staff`-in-two-enums collision #3 is now **resolved**; the `role='staff' → title NOT NULL` rule in #15 is **moot**).
+- Expand→migrate→contract: `0043` added `is_primary` + a partial-unique `(dealer_id) WHERE is_primary AND archived_at IS NULL` (one active primary per dealer) and **backfilled** each dealer's then-displayed priority-primary so nothing visibly moved (212/212 dealers; converged on the 0091 GM — 165/165 GM-titled dealers kept the GM as primary). `0044` dropped the `role` column, its two indexes, and the `dealer_contact_role` enum (added a plain `(dealer_id)` index).
+- `resolveQuoteRecipient` + `loadDealers` now read `is_primary` (lowest-id emailable fallback); the People link UI sets primary via a per-link checkbox; supersedes hotfix A's priority heuristic (`9489978`). Both sandbox migrations applied; **not yet on prod** (deploy `0043`→`0044` to the prod DB before shipping the code).
+
+## 2026-06-23 — Atlantic dealer contact refresh (chunk 0091, data-only, no schema change)
+
+- Applied the Atlantic BD tracker's authoritative **GM + GSM/SM** contacts to the **86 `skip-existing`** prod dealers that 0086's insert-only import had left untouched (un-parks **0086-c**). The GM becomes each dealer's **primary** contact (repointed into the lowest-linkId staff slot — Option A, since running ahead of [0089](../chunks/0089-dealer-contact-roles/plan.md)'s explicit primary designation); prior contacts are **kept** (D6), not deleted. 104 contacts created, 40 GM-repoints, 74 SM links; idempotent.
+- Propagated to QuickBooks: **62 Customers** updated (contact-only sparse `GivenName`/`FamilyName`/`PrimaryEmailAddr` — omits `DisplayName` to dodge the 6240 duplicate-name check on duplicate-dealer rooftops).
+- No schema/migration change, so no `data-model.md` edit — the durable facts are the data state + the per-dealer `dealer_contacts.title` of `General Manager`/`Sales Manager` (the same convention 0086 used for the 188 import-new dealers). History: [`docs/chunks/closed/0091-atlantic-dealer-contact-refresh/`](../chunks/closed/0091-atlantic-dealer-contact-refresh/plan.md). Parked follow-ups: **0091-a** (archive stale shared-rooftop links), **0086-a** (duplicate dealer records — Parkway Hyundai / Sydney Mazda).
+
 ## 2026-06-19 — `dealers` gains `phone` / `manufacturer` / `notes` (chunk 0086, migration 0041)
 
 - Updated [`data-model.md`](data-model.md): `dealers` adds three **nullable text** columns for the Atlantic Canada BD-list import — `phone` (rooftop switchboard line; a dealer-level attribute, **not** a contact identifier, since rooftops share numbers the `contact_identifiers` active-unique index forbids), `manufacturer` (vehicle brand, free-form), `notes` (free-form; the import folds Group/Contact-Verification/Co-op/sheet-notes into a readable block). Also noted `address` is city-only for BD-list prospects and `acquired_via='Atlantic Canada BD list'` is the batch tag.
