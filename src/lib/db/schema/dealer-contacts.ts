@@ -41,6 +41,14 @@ export const dealerContacts = pgTable(
     ...archivable,
   },
   (table) => [
+    // One active link per (dealer, contact) (0089) — replaces the dropped
+    // (dealer_id, contact_id, role) unique now that role is gone, so the
+    // "one row per (dealer, contact)" model is actually enforced and the
+    // import scripts' onConflictDoNothing stays idempotent. Scoped to
+    // non-archived rows so a contact can be re-linked after being archived.
+    uniqueIndex('dealer_contacts_dealer_contact_active_unique')
+      .on(table.dealerId, table.contactId)
+      .where(sql`archived_at IS NULL`),
     // One active primary contact per dealer (0089). Scoped to non-archived rows
     // so an archived former-primary never blocks designating a new one.
     uniqueIndex('dealer_contacts_one_primary_per_dealer_unique')

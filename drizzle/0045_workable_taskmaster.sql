@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "dealer_contacts_dealer_contact_active_unique" ON "dealer_contacts" USING btree ("dealer_id","contact_id") WHERE archived_at IS NULL;

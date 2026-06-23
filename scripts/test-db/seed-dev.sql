@@ -28,9 +28,9 @@ WITH c AS (
 INSERT INTO contact_identifiers (contact_id, kind, value, is_primary)
 SELECT id, 'email', lower(first_name) || '@dealer.test', true FROM c;
 
-INSERT INTO dealer_contacts (dealer_id, contact_id, role) VALUES
-  (1, 1, 'customer'),
-  (2, 2, 'customer');
+INSERT INTO dealer_contacts (dealer_id, contact_id, is_primary) VALUES
+  (1, 1, true),
+  (2, 2, true);
 
 -- Draft quote 1 (Acme) — 3 picked lines, one with a per-quote price override
 -- (bdc-call tuned $2.25 → $2.00) so the composer shows the "Catalogue: …" diff.

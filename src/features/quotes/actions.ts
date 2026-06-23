@@ -746,8 +746,8 @@ export const sendQuote = capabilityClient('quote:edit')
 
     // Send/re-send flow (0046 unified):
     //   1. Pre-load row + dealer; reject terminal statuses (accepted/declined).
-    //   2. Resolve the customer recipient (primary email of the dealer's
-    //      first 'customer' contact); fail closed before any side-effects.
+    //   2. Resolve the recipient (primary email of the dealer's designated
+    //      is_primary contact, 0089); fail closed before any side-effects.
     //   3. Render the PDF from the persisted snapshot (overwrite on re-send).
     //   4. Atomic guarded UPDATE — sets status='sent' + sentAt=now +
     //      pdfStorageKey + recipient denorm, WHERE status NOT IN
