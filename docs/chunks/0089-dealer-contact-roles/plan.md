@@ -10,7 +10,7 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Done | (doc) |
-| 2: Schema — add the primary designation (expand) + migration + backfill | Pending | - |
+| 2: Schema — add the primary designation (expand) + migration + backfill | Done | - |
 | 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Pending | - |
 | 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Pending | - |
 | 5: Tests + wiki | Pending | - |
@@ -37,7 +37,7 @@ Expand→migrate→contract so the column add + backfill ship before any drop.
 journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-model.md`
 (dealer_contacts shape + the recipient send-flow), `docs/wiki/auth.md`.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Notes:**
 - **Migration expected** (Phase 2 add + Phase 4 drop — two migrations, expand then contract).
@@ -57,10 +57,10 @@ journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-
 - [x] **Backfill rule** — reproduce each dealer's current displayed priority-primary; converges on the 0091 GM (D4).
 
 #### Phase 2: Schema — add designation (expand) + backfill
-- [ ] Invoke the **`db-conventions`** skill first.
-- [ ] Add the designation column/index to `dealer_contacts.ts`; `drizzle-kit generate`; verify journal `when`.
-- [ ] Hand-write the backfill (each dealer's priority-primary → primary) into the migration; apply **sandbox**; verify counts (one primary per dealer with a contact; the 24 customer + 313 staff covered).
-- [ ] Update `data-model.md` (new designation; mark the old role enum "being retired").
+- [x] Invoke the **`db-conventions`** skill first.
+- [x] Add the designation column/index to `dealer_contacts.ts` (`is_primary` + partial-unique `WHERE is_primary AND archived_at IS NULL`); `drizzle-kit generate` → `0043_milky_layla_miller.sql`; journal `when` verified > 0042.
+- [x] Hand-wrote the backfill (DISTINCT ON priority-primary → `is_primary`) into `0043`; applied **sandbox**; verified: **212 dealers w/ contact → 212 primaries (one each)**; 313 staff + 24 customer + 0 prospect; **165/165 GM-titled dealers have the GM as primary** (0091 convergence, 0 divergence).
+- [x] Updated `data-model.md` — `is_primary` bullet + transition banner marking `role` being retired (full rewrite deferred to Phase 5).
 
 #### Phase 3: Migrate reads
 - [ ] `resolveQuoteRecipient` → filter/order by the designation instead of the role `case` (keep the emailable + deterministic-fallback shape).
