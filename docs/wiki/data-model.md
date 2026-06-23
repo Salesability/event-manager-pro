@@ -448,25 +448,29 @@ Coaches are not a separate table — a coach is a `contacts` row with one `team_
 
 Login routing: any `team_member_roles` row → internal app; otherwise, portal access via `dealer_contacts`. A contact who somehow holds rows in both (e.g. a coach we hired from a dealership who's still listed in `dealer_contacts(role='staff')` historically) routes to the internal app.
 
-### `dealer_contacts` — dealer ↔ contact (many-to-many, role-tagged)
+### `dealer_contacts` — dealer ↔ contact (many-to-many)
 
-The same person can be related to multiple dealers, and to a single dealer in multiple roles. `dealer_contacts` is the junction:
+> **In transition (0089, expand→migrate→contract).** The `role` enum (`customer | staff | prospect`) is **being retired** — it was a category error (the *dealership* is the customer; `staff`/`prospect` carried no real relationship and `staff` collided with the us-side `team_member_roles` meaning). It's superseded by an explicit **`is_primary`** designation marking who receives quotes/MSAs. As of Phase 2 the `is_primary` column + its backfill have shipped (migration `0043`) and `role` still exists; Phase 3 moves all reads onto `is_primary`, Phase 4 drops `role` + the `dealer_contact_role` enum. The bullets below describe the in-transition shape.
+
+The same person can be related to multiple dealers. `dealer_contacts` is the junction:
 
 - `dealer_id` (FK dealers, `ON DELETE CASCADE`)
 - `contact_id` (FK contacts, `ON DELETE CASCADE`)
-- `role` enum: `customer | staff | prospect`
-- `do_not_contact` boolean — dealer-scoped opt-out (CASL is brand-scoped; consent doesn't propagate across dealers). Meaningful for `customer`/`prospect` outreach; N/A but stored for `staff` rows for schema uniformity.
-- `since` (date) — when this relationship started (purchase date for `customer`, hire date for `staff`, lead-add date for `prospect`)
+- `is_primary` boolean (0089, default false) — the **explicit primary-contact designation**: the person who receives this dealer's quotes/MSAs. At most one active primary per dealer (partial-unique index below). Backfilled (migration `0043`) to each dealer's then-current displayed primary contact (reproducing the legacy role-priority pick), so nothing visibly moved; converged on the 0091 GM where one was set (verified: 165/165 GM-titled dealers have the GM as primary).
+- `role` enum: `customer | staff | prospect` — **legacy, being retired** (see banner). Still written/read through Phase 2; gone in Phase 4.
+- `do_not_contact` boolean — dealer-scoped opt-out (CASL is brand-scoped; consent doesn't propagate across dealers).
+- `since` (date) — when this relationship started
 - `source` text — provenance of the relationship (import, manual entry, campaign N, dealership HR)
 - `last_contacted_at` (nullable) — for cross-campaign suppression
-- `title` text (nullable) — job title at the dealer; only set when `role='staff'`. Sparse on customer/prospect rows; pragmatic over a separate `dealer_staff_details` side table at this scale.
+- `title` text (nullable) — job title at the dealer (e.g. "General Manager"/"Sales Manager", set by the 0091 Atlantic refresh). The durable home for "what they do" once `role` is gone.
 - mixins: `timestamps`, `actors`, `archivable`
 
 Indexes:
 
-- UNIQUE `(dealer_id, contact_id, role)` — *one row per (dealer, contact, role)* combination. A staff-member-who-also-bought-a-car gets two rows (one `customer`, one `staff`). This is the data-integrity boundary.
-- Index on `(dealer_id, role)` for "list this dealer's customers / staff / prospects".
-- Index on `(contact_id)` for "show all dealers and roles for this person".
+- UNIQUE `(dealer_id)` `WHERE is_primary AND archived_at IS NULL` (0089) — at most one **active** primary contact per dealer. Scoped to non-archived rows so an archived former-primary never blocks designating a new one.
+- UNIQUE `(dealer_id, contact_id, role)` — legacy, dropped in Phase 4 with `role`.
+- Index on `(dealer_id, role)` — legacy, dropped in Phase 4 with `role`.
+- Index on `(contact_id)` for "show all dealers for this person".
 
 Why two rows per (dealer, contact) when there are multiple roles, instead of one row with an array of roles or a bitmask: simpler queries (`WHERE role='customer'`), simpler uniqueness, and per-role state (DNC, source, since, title) is genuinely separate per role. Two rows is more normalized; we prefer the schema cost over the integrity loss. Same principle that drives `team_member_roles` to two-rows-per-multi-role-staff.
 
