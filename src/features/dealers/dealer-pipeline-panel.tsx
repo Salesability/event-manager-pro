@@ -301,8 +301,10 @@ export function DealerPipelinePanel({
         </h3>
         <form onSubmit={activityForm.handleSubmit(logActivity)} className="flex flex-col gap-3">
           <FieldGroup>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[max-content_1fr]">
-              <Field>
+            {/* Type + When are both short — keep them content-sized and
+                left-aligned rather than stretching the date input full-width. */}
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
+              <Field className="sm:w-40">
                 <Label htmlFor="ac-kind">Type</Label>
                 <select id="ac-kind" className={SELECT_CLASS} {...activityForm.register('kind')}>
                   {ACTIVITY_KINDS.map((k) => (
@@ -312,7 +314,7 @@ export function DealerPipelinePanel({
                   ))}
                 </select>
               </Field>
-              <Field>
+              <Field className="sm:w-48">
                 <Label htmlFor="ac-occurredAt">When</Label>
                 <Input id="ac-occurredAt" type="date" {...activityForm.register('occurredAt')} />
               </Field>
