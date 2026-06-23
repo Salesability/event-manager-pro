@@ -246,6 +246,27 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       path.join(process.cwd(), 'public', 'saledayevents-logo.jpg'),
     );
     const logo = await doc.embedJpg(logoBytes);
+
+    // Salesability's pre-applied counter-signature. The MSA is a standing,
+    // company-authorized template — President Shannon Tilley executes it for
+    // every Client — so her signature is baked into the rendered PDF here
+    // rather than collected as a second BoldSign signer. The Client therefore
+    // receives an already-counter-signed agreement and only adds their own
+    // signature. (A real second BoldSign signer was deliberately avoided: the
+    // `onBehalfOf` ownership transfer 403-locked the signed-PDF webhook in
+    // chunk 0092.) The asset is required — a missing file fails the render
+    // loud rather than shipping a blank "For Salesability" block.
+    const senderSigBytes = await readFile(
+      path.join(process.cwd(), 'public', 'shannon-signature.png'),
+    ).catch(() => null);
+    if (!senderSigBytes) {
+      return {
+        error:
+          'renderMsaPdf failed: Salesability signature asset is missing at public/shannon-signature.png.',
+      };
+    }
+    const senderSig = await doc.embedPng(senderSigBytes);
+
     const logoH = 50;
     const logoW = (logo.width / logo.height) * logoH;
     page.drawImage(logo, {
@@ -383,6 +404,21 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       thickness: 0.5,
       color: black,
     });
+    // Pre-applied Salesability signature: scale to fit the left column and
+    // sit just above its underline (the Client's BoldSign signature lands the
+    // same way on the right underline at sign time). Aspect ratio preserved;
+    // capped to the column width and a fixed visual height.
+    const SENDER_SIG_MAX_H = 26;
+    const senderSigScale = Math.min(
+      colWidth / senderSig.width,
+      SENDER_SIG_MAX_H / senderSig.height,
+    );
+    page.drawImage(senderSig, {
+      x: leftColX,
+      y: y + 2,
+      width: senderSig.width * senderSigScale,
+      height: senderSig.height * senderSigScale,
+    });
     // Capture the BoldSign signature-field anchor. The visual underline sits
     // at pdf-lib y (bottom-left origin); BoldSign uses a TOP-left origin
     // (confirmed by the 0055 live smoke — a field sent at the underline's
@@ -405,6 +441,17 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     y -= 11;
     page.drawText('shannon@salesability.ca', { x: leftColX, y, size: 9, font, color: grey });
     page.drawText(sanitize(data.signerEmail), { x: rightColX, y, size: 9, font, color: grey });
+    // Salesability execution date (left column only). The Client's own date is
+    // stamped by BoldSign at sign time; §2.i ties the term start to the
+    // Client's signature, so this date records when Salesability executed.
+    y -= 11;
+    page.drawText(`Signed: ${longDate(data.issuedDate)}`, {
+      x: leftColX,
+      y,
+      size: 9,
+      font,
+      color: grey,
+    });
 
     // Footer: template version on the last page only. Helps support requests
     // by making "what prose did they sign?" visible without consulting the DB.
