@@ -11,8 +11,8 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 |-------|--------|--------|
 | 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Done | (doc) |
 | 2: Schema — add the primary designation (expand) + migration + backfill | Done | `b78f10a` |
-| 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Done | - |
-| 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Pending | - |
+| 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Done | `cc88e50` |
+| 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Done | - |
 | 5: Tests + wiki | Pending | - |
 
 The cleanup the prod bug pointed at: a `dealer_contacts` row becomes "a person at this dealership"
@@ -37,7 +37,7 @@ Expand→migrate→contract so the column add + backfill ship before any drop.
 journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-model.md`
 (dealer_contacts shape + the recipient send-flow), `docs/wiki/auth.md`.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Notes:**
 - **Migration expected** (Phase 2 add + Phase 4 drop — two migrations, expand then contract).
@@ -72,8 +72,9 @@ journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-
 - [x] Writers (`schedule/actions.ts` createDealer/updateDealer) set `is_primary: true` on a new dealer's first contact; `updateDealer` edits the `is_primary` link in place. `role: 'staff'` kept as a vestigial NOT-NULL placeholder until Phase 4.
 
 #### Phase 4: Contract — drop the legacy enum
-- [ ] Once no code reads `dealer_contacts.role`, migration to drop the column + `dealer_contact_role` pgEnum (verify no FK/index left). Apply **sandbox**.
-- [ ] Grep the tree for stray `dealer_contact_role` / `'customer'|'staff'|'prospect'` literals.
+- [x] Removed `role` + the `dealerContactRole` enum + the `(dealer,contact,role)` unique + `(dealer,role)` index from `dealer-contacts.ts`; added a plain `dealer_contacts_dealer_id_idx` to preserve dealer-side lookups. Migration `0044_calm_skullbuster.sql` (drop 2 indexes, add dealer_id index, drop column, drop type) — applied **sandbox** (verified: role column 0, `dealer_contact_role` type 0, `is_primary` present).
+- [x] Removed the vestigial `role: 'staff'` writes from app code (createDealer/updateDealer/syncDealerLinks) + the existing-link role filters & inserts from the tracked import scripts (`import-from-sheets`/`-atlantic-dealers`/`-quickbooks`).
+- [x] Grepped the tree: 0 `dealerContacts.role`/`dealerContactRole`/`dealer_contact_role` code refs remain in tracked files. Remaining hits are **untracked 0091 leftovers** (raw-SQL `dc.role::text` probes that already ran and won't re-run; the reconcile module's own `role` type) — out of 0089 scope, no tsc/test impact.
 
 #### Phase 5: Tests + wiki
 - [ ] Unit + real-DB integration: primary selection (recipient targets the designated primary), backfill correctness (priority-primary became primary; one-per-dealer), fallback when no primary/email.
