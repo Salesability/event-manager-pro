@@ -424,10 +424,10 @@ describe('sendQuote', () => {
     expect(tplArg.validUntilDate).toBe(quoteData.validUntilDate);
   });
 
-  it('fails closed when the dealer has no customer-contact primary email (no render, no transition)', async () => {
+  it('fails closed when the dealer has no contact with a primary email (no render, no transition)', async () => {
     mocks.dbResults.push([DRAFT_ROW], [DEALER_ROW]);
     mocks.resolveQuoteRecipient.mockResolvedValueOnce({
-      error: 'Dealer has no customer contact with a primary email address. Add a customer contact before sending.',
+      error: 'Dealer has no contact with a primary email address. Add a contact email before sending.',
     });
     const result = await call(sendQuote(fd({ quoteId: '42' })));
     expect((result as { error: string }).error).toContain('primary email');

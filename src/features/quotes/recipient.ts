@@ -1,26 +1,34 @@
 import 'server-only';
 
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { contactIdentifiers, contacts, dealerContacts } from '@/lib/db/schema';
 
-// Resolves the customer recipient that a Quote email should go to. The Quote
-// email goes to one person — the dealer's primary customer contact's primary
-// email — for v1. Multi-recipient (cc'ing additional customer contacts,
-// bcc'ing the coach) is deferred to v2.
+// Resolves the recipient that a Quote / MSA email should go to. The email goes
+// to one person — the dealer's **primary contact's** primary email — for v1.
+// Multi-recipient (cc'ing additional contacts, bcc'ing the coach) is deferred.
+//
+// Recipient selection mirrors how `loadDealers` picks a dealer's primary contact
+// (`DEALER_CONTACT_ROLE_PRIORITY` = staff > customer > prospect): the highest-
+// priority **non-archived** `dealer_contacts` row that has a non-archived primary
+// email, breaking ties by the lowest `dealer_contacts.id`. It does NOT require
+// `role = 'customer'` — UI-created dealers + the 0086 Atlantic / QBO imports all
+// tag their contact `staff`, so a customer-only rule rejected nearly every dealer
+// (the displayed primary contact is the staff one). Picking the same priority-
+// primary the dealer page already shows keeps the recipient consistent with the
+// UI. The proper role rationalization (explicit primary/billing designation) is
+// its own chunk; this is the unblock.
 //
 // Source of truth:
-//   - `dealer_contacts.role = 'customer'` for the quote's dealer (archived
-//     rows excluded).
+//   - any non-archived `dealer_contacts` row for the dealer (role is a priority
+//     tiebreak, no longer a hard filter).
 //   - `contact_identifiers.kind = 'email' AND is_primary = true` for that
-//     contact (archived rows excluded).
-//   - Single email per send (multi-customer-contact dealers pick the
-//     deterministically-lowest `dealer_contacts.id`).
+//     contact (archived rows excluded) — emailless contacts are skipped, so the
+//     pick is the highest-priority contact that can actually be emailed.
 //
-// Fail-closed shape: returns `{ error }` when the dealer has no customer
-// contact, or that contact has no primary email. The caller surfaces the
-// error to the coach; we don't silently fall back to a "drop the email"
-// behaviour.
+// Fail-closed shape: returns `{ error }` when the dealer has no contact with a
+// primary email. The caller surfaces the error to the coach; we don't silently
+// fall back to a "drop the email" behaviour.
 
 export type QuoteRecipient = {
   email: string;
@@ -59,17 +67,22 @@ export async function resolveQuoteRecipient(
     .where(
       and(
         eq(dealerContacts.dealerId, dealerId),
-        eq(dealerContacts.role, 'customer'),
         isNull(dealerContacts.archivedAt),
       ),
     )
-    .orderBy(asc(dealerContacts.id))
+    // Same priority as loadDealers' DEALER_CONTACT_ROLE_PRIORITY (staff > customer
+    // > prospect), then lowest id — so the recipient matches the dealer page's
+    // displayed primary contact.
+    .orderBy(
+      sql`case ${dealerContacts.role} when 'staff' then 0 when 'customer' then 1 when 'prospect' then 2 else 3 end`,
+      asc(dealerContacts.id),
+    )
     .limit(1);
 
   if (!row) {
     return {
       error:
-        'Dealer has no customer contact with a primary email address. Add a customer contact before sending.',
+        'Dealer has no contact with a primary email address. Add a contact email before sending.',
     };
   }
 
