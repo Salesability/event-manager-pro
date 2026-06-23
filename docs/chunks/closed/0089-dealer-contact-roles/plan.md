@@ -13,7 +13,7 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 | 2: Schema — add the primary designation (expand) + migration + backfill | Done | `b78f10a` |
 | 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Done | `cc88e50` |
 | 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Done | `a8df8f3` |
-| 5: Tests + wiki | Done | - |
+| 5: Tests + wiki | Done | `ce52564` |
 
 The cleanup the prod bug pointed at: a `dealer_contacts` row becomes "a person at this dealership"
 (+ free-text `title`) with an **explicit primary-contact designation** for who receives
