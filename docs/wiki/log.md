@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-23 — MSA now carries a pre-applied Salesability counter-signature
+
+- **New state:** the MSA renderer (`src/lib/pdf/render-msa.ts`) embeds `public/shannon-signature.png` in the left **"For Salesability"** column above the underline, with "Shannon Tilley, President" + email + a **"Signed: <issuedDate>"** line. The Client receives an **already-counter-signed** MSA; the BoldSign envelope stays **single-signer** (Client only) — no second signer, no `client.ts`/webhook/DB change.
+- **Why not a real second BoldSign signer:** avoids re-introducing the `onBehalfOf` ownership-transfer 403 that breaks the signed-PDF webhook (see entry below, chunk 0092). The asset is **required** — a missing PNG fails the render loud rather than shipping a blank block.
+- **The committed PNG is a generated script-font signature** (Brush Script "Shannon Tilley"), adopted as the final Salesability execution mark (owner decision 2026-06-23) — mirrors how e-sign platforms render an adopted typed signature. Swappable for a handwritten scan later at the same path with no code change.
+- Page touched: [`commercial-spine.md`](commercial-spine.md) → "The MSA envelope" → Signing field + new Salesability counter-signature bullet.
+
 ## 2026-06-23 — ⚠️ `onBehalfOf` breaks the signed-MSA webhook — reverted (chunk 0092)
 
 - **Correction to the same-day entry below.** Shipped + deployed `BOLDSIGN_SENDER_EMAIL` → `SendForSign.onBehalfOf` to make prod MSA envelopes come from Shannon (rev `-00034-5pp`), then **rolled it back same day** (rev `-00035-c8h`; var removed from the service AND `.env.production.local`).
