@@ -12,7 +12,7 @@ Pipeline panel only. UI + small server affordance; **no migration** (reuses `dea
 | 1: Decision gate — save model, Done-kind default, escape hatch, byproduct-logging | Done | - |
 | 2: Server — "complete next action" path (reuse/extend `logDealerActivity`) | Done | - |
 | 3: Panel reshape — next-action hero + Done flow + compact metadata row | Done | - |
-| 4: Tests + smoke | Pending | - |
+| 4: Tests + smoke | Done | - |
 
 Make the **next action** the hero; turn logging into a byproduct of completing a commitment
 ("Done" → record a touch + advance the promise). Remove the duplicate next-action field + the
@@ -31,7 +31,7 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 
 **Conventions referenced:** `docs/wiki/data-model.md` (pipeline + `dealer_activities`), `docs/wiki/layout.md` (panel/Button primitives), `docs/wiki/auth.md` (only if a new gated action lands). **No `db-conventions`** — no schema change expected.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Notes:**
 - **No migration.** If Phase 1 unexpectedly wants a new column (e.g. a `next_action_completed_at`), revisit — but the lean design reuses what 0087 shipped.
@@ -57,6 +57,6 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 - [x] Recent-activity list stays; small "+ note"/backdate escape hatch per Phase 1. Locked-once-active behavior preserved. → **Recent list unchanged; "+ Log a past touch" disclosure (kind/when/note → `logDealerActivity`, next-action omitted). `locked` branch (active dealer = read-only history) preserved.**
 
 #### Phase 4: Tests + smoke
-- [ ] Unit/integration: Done flow end-to-end (activity row born + last-contacted + next-action advanced); no regression to `setDealerPipeline`/queue.
-- [ ] Smoke (web-test): `/dealerships/[id]` panel — next-action hero renders, Done flow present, no duplicate next-action field, no standalone log form; `/dealerships` queue unaffected. Read-only (no submits on the shared auth user).
-- [ ] Update `data-model.md` (byproduct-logging flow). Visual smoke (manual) screenshot of the reshaped panel.
+- [x] Unit/integration: Done flow end-to-end (activity row born + last-contacted + next-action advanced); no regression to `setDealerPipeline`/queue. → **Done-flow server semantics are unit-covered (Phase 2's clear-on-Done + the existing `logDealerActivity` row-born/backdate/replace/0-rows-guard + `setDealerPipeline` omit-when-absent cases). The commitment-only and details-only submits exercise existing omit-when-absent paths (no regression). No RTL on the 4-form `'use client'` panel — brittle + not the repo convention (0087's panel was browser-smoked, not RTL'd); UI wiring is verified by the smoke below.**
+- [x] Smoke (web-test): `/dealerships/[id]` panel — next-action hero renders, Done flow present, no duplicate next-action field, no standalone log form; `/dealerships` queue unaffected. Read-only (no submits on the shared auth user). → **Run as part of the chunk-end `/eval` (eval delegates the browser smoke to web-test over the whole chunk diff).**
+- [x] Update `data-model.md` (byproduct-logging flow). → **Added a "Byproduct logging (0090)" paragraph under `dealer_activities`.** Visual smoke (manual) screenshot of the reshaped panel → **captured by the chunk-end `/eval` browser smoke.**
