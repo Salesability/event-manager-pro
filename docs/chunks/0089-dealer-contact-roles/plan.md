@@ -10,8 +10,8 @@ with an explicit, user-editable primary-contact designation and drops the legacy
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — designation shape (`is_primary` vs `primary\|additional`), keep-a-role?, tiebreak, backfill rule | Done | (doc) |
-| 2: Schema — add the primary designation (expand) + migration + backfill | Done | - |
-| 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Pending | - |
+| 2: Schema — add the primary designation (expand) + migration + backfill | Done | `b78f10a` |
+| 3: Migrate reads — recipient resolver + queries priority + people badge/dropdown/validation | Done | - |
 | 4: Contract — drop the legacy `dealer_contact_role` enum/usage once reads are off it | Pending | - |
 | 5: Tests + wiki | Pending | - |
 
@@ -37,7 +37,7 @@ Expand→migrate→contract so the column add + backfill ship before any drop.
 journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-model.md`
 (dealer_contacts shape + the recipient send-flow), `docs/wiki/auth.md`.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Notes:**
 - **Migration expected** (Phase 2 add + Phase 4 drop — two migrations, expand then contract).
@@ -63,11 +63,13 @@ journal `when` gotcha [[project_drizzle_journal_when_gotcha]]), `docs/wiki/data-
 - [x] Updated `data-model.md` — `is_primary` bullet + transition banner marking `role` being retired (full rewrite deferred to Phase 5).
 
 #### Phase 3: Migrate reads
-- [ ] `resolveQuoteRecipient` → filter/order by the designation instead of the role `case` (keep the emailable + deterministic-fallback shape).
-- [ ] `queries.ts` → primary-contact selection reads the designation (retire `DEALER_CONTACT_ROLE_PRIORITY` once nothing needs it).
-- [ ] `people-columns.tsx` "Customer" badge/filter → rephrase to "Primary" or drop.
-- [ ] `people-admin.tsx` link UI → a "primary contact" toggle; `people/actions.ts` validation updated.
-- [ ] `people/queries.ts` projection → carry the designation, drop `role`.
+- [x] `resolveQuoteRecipient` → order by `desc(is_primary), asc(id)` (the emailable inner-join already gives D3's deterministic fallback); dropped the role `case` + `sql` import.
+- [x] `queries.ts` `fetchPrimaryDealerContacts` → reads `is_primary` (order by `is_primary` then id, first-per-dealer); retired `DEALER_CONTACT_ROLE_PRIORITY`.
+- [x] `people-columns.tsx` badge → `dealerName · <title|Primary|Contact>` (brand color when primary); filter `has-customer` → `has-primary` (`l.isPrimary`).
+- [x] `people-admin.tsx` link UI → per-link **Primary** checkbox (replaced the role Listbox); wire format `dealerId:<0|1>`; "Customer-side" pill → "Primary contact"; archive message uses title/primary.
+- [x] `people/actions.ts` → `parseDealerLinksField` parses the `0|1` flag; `syncDealerLinks` keys on `(contact, dealer)` + sets `is_primary` with **demote-other-primary** (honors the one-per-dealer index). Updated `queries.test.ts` + `actions.test.ts`.
+- [x] `people/queries.ts` projection → `DealerLink` carries `is_primary` + `title`, dropped `role` (+ the `DealerContactRole` type).
+- [x] Writers (`schedule/actions.ts` createDealer/updateDealer) set `is_primary: true` on a new dealer's first contact; `updateDealer` edits the `is_primary` link in place. `role: 'staff'` kept as a vestigial NOT-NULL placeholder until Phase 4.
 
 #### Phase 4: Contract — drop the legacy enum
 - [ ] Once no code reads `dealer_contacts.role`, migration to drop the column + `dealer_contact_role` pgEnum (verify no FK/index left). Apply **sandbox**.
