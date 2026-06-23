@@ -13,10 +13,16 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-23 — ⚠️ `onBehalfOf` breaks the signed-MSA webhook — reverted (chunk 0092)
+
+- **Correction to the same-day entry below.** Shipped + deployed `BOLDSIGN_SENDER_EMAIL` → `SendForSign.onBehalfOf` to make prod MSA envelopes come from Shannon (rev `-00034-5pp`), then **rolled it back same day** (rev `-00035-c8h`; var removed from the service AND `.env.production.local`).
+- **Root cause (live-verified):** `onBehalfOf` makes the envelope come from Shannon *but transfers document ownership to her and locks the API-key owner (David's key, used by the app) out of the document* — `GET /v1/document/download` + `/properties` → **403 Forbidden**, doc absent from the key's `list`/`teamlist`/`behalfList`. Our webhook downloads the signed PDF with that key (`route.ts:101` `getSignedFileBytes`) **before** flipping the MSA `active`, so the 403 → webhook 502 → **MSA never activates, signed PDF never archived.** A normal (non-behalf) doc downloads 200 with the same key — proving the cause.
+- **Correct path forward** (owner decision pending, captured in [`go-live-accounts.md`](go-live-accounts.md) §3): use a BoldSign API key generated **under Shannon's user** (documents owned by Shannon = from Shannon AND downloadable by her key). The `onBehalfOf` code stays in `client.ts` env-gated + inert; the env var stays unset.
+
 ## 2026-06-23 — BoldSign envelopes can send *as* a chosen org member (`onBehalfOf`, chunk 0092)
 
 - Captured a previously-undocumented fact in [`go-live-accounts.md`](go-live-accounts.md) §3 BoldSign: BoldSign attributes each signature-request envelope to **the API-key owner**, not the MSA's named signatory. The prod Live account is owned by **`admin@salesability.ca` (David Hogan, Account Admin)**; **`shannon@salesability.ca` (Shannon Tilley)** is an **Active Member** of the same team (verified live via `GET /v1/users/list`). Result: envelopes read "David Hogan requested your signature."
-- New env var **`BOLDSIGN_SENDER_EMAIL`** → `sendSignatureRequest` sets `SendForSign.onBehalfOf` (Send-on-Behalf-Of). Set `=shannon@salesability.ca` on prod to send as Shannon; needs no sender-identity verification / role change (she's already a member). Env-gated → leave unset on stage/dev (different sandbox account; an unknown `onBehalfOf` is rejected). Code shipped inert; prod cutover (set var + redeploy + Send Test MSA) is the remaining owner step.
+- New env var **`BOLDSIGN_SENDER_EMAIL`** → `sendSignatureRequest` sets `SendForSign.onBehalfOf` (Send-on-Behalf-Of). **⚠️ Superseded by the entry above — `onBehalfOf` breaks the signed-MSA download; do not set this var.**
 
 ## 2026-06-23 — `dealer_contacts.role` retired for an explicit `is_primary` (chunk 0089, migrations 0043+0044)
 

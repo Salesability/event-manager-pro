@@ -144,11 +144,24 @@ the app when a customer has signed.
 account (team "Default", CA region) is owned by **`admin@salesability.ca` — David Hogan, Account
 Admin**; **`shannon@salesability.ca` — Shannon Tilley** is an **Active Member** of the same team
 (verified via `GET /v1/users/list` 2026-06-23). So by default envelopes read "David Hogan requested
-your signature." To send *as Shannon* instead, set **`BOLDSIGN_SENDER_EMAIL=shannon@salesability.ca`**
-on the prod service — `sendSignatureRequest` passes it as `SendForSign.onBehalfOf` (BoldSign
-Send-on-Behalf-Of). This needs **no sender-identity verification and no role change** because Shannon
-is already a member; an `onBehalfOf` email that isn't a member is rejected, so leave the var **unset**
-on stage/dev (different sandbox account). After setting it, redeploy and confirm via **Send Test MSA**.
+your signature."
+
+> ⚠️ **Do NOT use `onBehalfOf` / `BOLDSIGN_SENDER_EMAIL` for this — it breaks the signed-MSA
+> webhook.** Tried 2026-06-23 (chunk 0092) and rolled back same day. Setting
+> `SendForSign.onBehalfOf=shannon@…` *does* make the envelope come from Shannon, but it **transfers
+> document ownership to Shannon and locks the API-key owner (David's key, which the app uses) out of
+> the document**: `GET /v1/document/download` and `/properties` return **403 Forbidden**, and the doc
+> is invisible in the key's `list`/`teamlist`/`behalfList`. Our webhook downloads the signed PDF with
+> that key (`route.ts` → `getSignedFileBytes`) *before* flipping the MSA to `active`, so a 403 there
+> makes the webhook 502 → **the signed MSA never activates and the PDF is never archived.** The
+> `onBehalfOf` code stays in `client.ts` (env-gated, inert) but the env var must stay **unset**.
+
+**Correct way to send *as Shannon* (not yet done — owner decision pending):** point the prod app at a
+BoldSign API key generated **under Shannon's user**. Then documents are *owned by Shannon* — sent from
+Shannon **and** downloadable by her key (webhook works). Steps: promote Shannon to Admin (so she can
+generate an API key) → she creates a Live key → swap the prod `boldsign-api-key` secret to it →
+redeploy. Keep `BOLDSIGN_SENDER_EMAIL` unset. Verify via Send Test MSA: from Shannon **and** the
+webhook download returns 200.
 
 ---
 

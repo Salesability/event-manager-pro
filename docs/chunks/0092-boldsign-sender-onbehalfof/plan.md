@@ -36,17 +36,30 @@ BoldSign team, so no sender-identity verification / role change is needed.
       `log.md`.
 - [x] `tsc + test` green for the boldsign suite.
 
-### Phase 3 — prod cutover · Status: Done (deploy) / owner-verify pending
-- [x] Set `BOLDSIGN_SENDER_EMAIL=shannon@salesability.ca` on prod + redeploy.
-      **✅ Deployed 2026-06-23** — added the var to `.env.production.local`
-      (durable; deploy.sh uses `--set-env-vars`, so it must be sourced each
-      deploy), ran `DEPLOY_CONFIRM=production ./deploy.sh` → rev
-      **`event-manager-pro-00034-5pp`** (image `:20260623-222123`, us-east4).
-      Verified on the live revision: `BOLDSIGN_SENDER_EMAIL=shannon@salesability.ca`
-      + `APP_ENV=production`; domain `/`→307, `/login`→200.
-- [ ] **Owner-verify:** sign in to `eventpro.salesability.ca` as admin →
-      **Send Test MSA** (`/admin/send-test-msa`) to your own email → confirm the
-      BoldSign request now arrives **from Shannon Tilley**, not David.
+### Phase 3 — prod cutover · Status: ❌ REVERTED (onBehalfOf breaks the webhook)
+- [x] Deployed `BOLDSIGN_SENDER_EMAIL` (rev `-00034-5pp`) — envelope DID come from
+      Shannon, but the test send exposed a **critical regression**.
+- [x] **Root cause (live-verified):** `onBehalfOf` transfers document ownership to
+      Shannon and **403-locks the app's API key (David's) out of the doc** —
+      `download` + `properties` return `403 Forbidden`; the doc is absent from the
+      key's `list`/`teamlist`/`behalfList` (a normal doc 200s with the same key).
+      The webhook downloads the signed PDF with that key (`route.ts:101`
+      `getSignedFileBytes`) **before** flipping the MSA `active`, so the 403 →
+      webhook 502 → **MSA never activates, signed PDF never archived.**
+- [x] **Rolled back 2026-06-23** — `gcloud run services update --remove-env-vars`
+      → rev **`event-manager-pro-00035-c8h`**; also removed the var from
+      `.env.production.local` (so the next `./deploy.sh` can't re-add it). Verified:
+      var absent from the service + the file; domain `/`→307, `/login`→200. Prod is
+      back to working (sends as David, downloads succeed, MSAs activate).
+
+### Phase 4 — the CORRECT fix (Shannon-owned API key) · Status: Not started (owner decision)
+- [ ] Promote Shannon to Admin in BoldSign (so she can generate an API key).
+- [ ] Shannon generates a **Live** API key under her user.
+- [ ] Swap the prod `boldsign-api-key` secret to Shannon's key + redeploy; keep
+      `BOLDSIGN_SENDER_EMAIL` unset.
+- [ ] Verify: Send Test MSA → from Shannon **AND** webhook `download` returns 200.
+      Watch the one in-flight David-owned MSA (Summerside Hyundai, pre-switch) —
+      Shannon's key may 403 on it if signed after the swap.
 
 ## Progress Tracker
 
@@ -54,11 +67,13 @@ BoldSign team, so no sender-identity verification / role change is needed.
 |-------|--------|-------|
 | 1 — code + env wiring | Done | env-gated `onBehalfOf`; inert when unset |
 | 2 — tests + docs | Done | 2 new unit tests; wiki + log ingested |
-| 3 — prod cutover | Done (deploy) | rev `-00034-5pp`; env var live; Send Test MSA owner-verify pending |
+| 3 — prod cutover | ❌ Reverted | `onBehalfOf` 403-locks the app key out of the doc → webhook can't download the signed PDF → MSA won't activate. Rolled back to rev `-00035-c8h`. |
+| 4 — Shannon-owned API key | Not started | the correct fix; owner decision (promote Shannon → her key → swap secret) |
 
 ## Chunk-end gate
 
-Phases 1–2 shipped the inert code; Phase 3 deployed it to prod with the env var
-live (rev `-00034-5pp`). Only remaining: the owner's Send Test MSA visual
-confirmation that the request now reads "from Shannon Tilley." Close the chunk
-once confirmed.
+The `onBehalfOf` approach (Phases 1–3) is a **dead end** — it severs the app's
+API access to the document, breaking the signed-MSA webhook. Code is left in
+place but inert (env var unset). The chunk's goal ("envelopes from Shannon")
+moves to **Phase 4: swap the prod app to a Shannon-owned BoldSign API key.**
+Don't close until Phase 4 ships (or the goal is explicitly dropped).
