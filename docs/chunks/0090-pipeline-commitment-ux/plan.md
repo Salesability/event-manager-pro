@@ -11,7 +11,7 @@ Pipeline panel only. UI + small server affordance; **no migration** (reuses `dea
 |-------|--------|--------|
 | 1: Decision gate — save model, Done-kind default, escape hatch, byproduct-logging | Done | - |
 | 2: Server — "complete next action" path (reuse/extend `logDealerActivity`) | Done | - |
-| 3: Panel reshape — next-action hero + Done flow + compact metadata row | Pending | - |
+| 3: Panel reshape — next-action hero + Done flow + compact metadata row | Done | - |
 | 4: Tests + smoke | Pending | - |
 
 Make the **next action** the hero; turn logging into a byproduct of completing a commitment
@@ -31,7 +31,7 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 
 **Conventions referenced:** `docs/wiki/data-model.md` (pipeline + `dealer_activities`), `docs/wiki/layout.md` (panel/Button primitives), `docs/wiki/auth.md` (only if a new gated action lands). **No `db-conventions`** — no schema change expected.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Notes:**
 - **No migration.** If Phase 1 unexpectedly wants a new column (e.g. a `next_action_completed_at`), revisit — but the lean design reuses what 0087 shipped.
@@ -51,10 +51,10 @@ standalone 5-field log form. Keep `dealer_activities` writes so the 0088 dashboa
 - [x] Unit tests for the Done path (records a row, stamps last-contacted, advances the promise; archived/active guards still hold). Gate-matrix row only if a new exported action is added. → **Added "clears the completed commitment when Done sends an empty next-action" to `actions.test.ts`; the replace-promise + backdate + 0-rows-guard cases were already covered. No new exported action ⇒ no gate-matrix row.**
 
 #### Phase 3: Panel reshape
-- [ ] Next-action **hero** at the top: prominent commitment field + due + Save (per Phase-1 save model); show overdue/ due-soon styling consistent with the queue.
-- [ ] **Done** affordance on the current next-action → records the touch (kind default per Phase 1) + prompts for the next promise; remove the standalone 5-field Log-activity form.
-- [ ] Stage / Priority / Owner → compact secondary row.
-- [ ] Recent-activity list stays; small "+ note"/backdate escape hatch per Phase 1. Locked-once-active behavior preserved.
+- [x] Next-action **hero** at the top: prominent commitment field + due + Save (per Phase-1 save model); show overdue/ due-soon styling consistent with the queue. → **Brand-tinted hero section; idle shows a "Set commitment" form; a set commitment shows loud text + `DueChip` (overdue red ⚠ / due-today amber, matching the queue column) + Done + Edit.**
+- [x] **Done** affordance on the current next-action → records the touch (kind default per Phase 1) + prompts for the next promise; remove the standalone 5-field Log-activity form. → **`Done` opens an inline kind(=Call default)+note+next-commitment+due form → `logDealerActivity` in one submit. The always-on 5-field log form is gone (replaced by the collapsed escape hatch).**
+- [x] Stage / Priority / Owner → compact secondary row. → **Single compact badge/value row (+ Last contacted) with a collapsed "Edit details" → 3 selects + Save (`setDealerPipeline`, next-action omitted so the commitment is preserved).**
+- [x] Recent-activity list stays; small "+ note"/backdate escape hatch per Phase 1. Locked-once-active behavior preserved. → **Recent list unchanged; "+ Log a past touch" disclosure (kind/when/note → `logDealerActivity`, next-action omitted). `locked` branch (active dealer = read-only history) preserved.**
 
 #### Phase 4: Tests + smoke
 - [ ] Unit/integration: Done flow end-to-end (activity row born + last-contacted + next-action advanced); no regression to `setDealerPipeline`/queue.
