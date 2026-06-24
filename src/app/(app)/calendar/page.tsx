@@ -1,4 +1,3 @@
-import { loadCurrentMembership } from '@/lib/auth/load-team-membership';
 import {
   loadAvailabilityBlocks,
   loadCampaignStyles,
@@ -19,7 +18,7 @@ export default async function CalendarPage() {
   const rangeStart = isoDate(new Date(today.getFullYear() - 1, 0, 1));
   const rangeEnd = isoDate(new Date(today.getFullYear() + 1, 11, 31));
 
-  const [coaches, campaigns, blocks, dealers, styles, sources, membership] =
+  const [coaches, campaigns, blocks, dealers, styles, sources] =
     await Promise.all([
       loadCoaches(),
       loadCampaigns(),
@@ -27,7 +26,6 @@ export default async function CalendarPage() {
       loadDealers(),
       loadCampaignStyles(),
       loadAudienceSources(),
-      loadCurrentMembership(),
     ]);
 
   // Hide cancelled campaigns from the calendar by default.
@@ -51,7 +49,6 @@ export default async function CalendarPage() {
       styles={styles}
       sources={sources}
       mode="app"
-      viewerCoachId={membership?.coachContactId ?? null}
     />
   );
 }

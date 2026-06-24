@@ -37,12 +37,6 @@ type Props = {
   blocks: AvailabilityBlock[];
   mode: Mode;
   forcedCoachId?: number;
-  // The signed-in viewer's coach contact id, when they have a team_member_roles
-  // row with role='coach'. Used as the initial value of activeCoachFilter so
-  // a coach lands on /calendar already pre-filtered to their own bookings —
-  // legacy parity with deprecated/index.html doLogin() lines 702-710. The
-  // user can clear/swap the filter via the existing pills.
-  viewerCoachId?: number | null;
   dealers?: Dealer[];
   styles?: LookupOption[];
   sources?: LookupOption[];
@@ -106,7 +100,6 @@ export function CalendarView({
   blocks,
   mode,
   forcedCoachId,
-  viewerCoachId = null,
   dealers = [],
   styles = [],
   sources = [],
@@ -122,8 +115,10 @@ export function CalendarView({
 
   const [month, setMonth] = useState<number>(today.getMonth());
   const [year, setYear] = useState<number>(today.getFullYear());
+  // Default to "All coaches" (null). `forcedCoachId` (share mode) still hard-
+  // scopes to one coach; in app mode the viewer can swap via the pills.
   const [activeCoachFilter, setActiveCoachFilter] = useState<number | null>(
-    forcedCoachId ?? viewerCoachId ?? null
+    forcedCoachId ?? null
   );
   const scopedCoachId = forcedCoachId ?? activeCoachFilter;
 
