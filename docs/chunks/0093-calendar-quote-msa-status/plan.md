@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Data — require quote → event link + reconcile entry points | Done | - |
 | 2: Queries — quote + MSA status + protected/exposed | Done | - |
-| 3: Event-detail commercial surface — badges + exposed + CTAs | Pending | - |
+| 3: Event-detail commercial surface — badges + exposed + CTAs | Done | - |
 | 4: Booking hand-off + ribbon exposure marker | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `quotes` / `campaigns` / `master_service_agreements` columns + FK directions; update when `campaignId` lands.
 - `db-conventions` skill — additive nullable FK, migrate on the **session pooler (5432)**, Drizzle journal `when` gotcha, sandbox-before-prod.
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests; integration tests come last (Phase 5).
@@ -60,10 +60,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit tests: quote accepted vs none vs expired; MSA active vs pending vs none; protected/exposed truth table (`commercial-status.test.ts`, 8 cases)
 
 #### Phase 3: Event-detail commercial surface
-- [ ] `event-detail.tsx`: render `QuoteStatusBadge` (or "No quote yet") + `MsaStatusBadge` (or "No active MSA") + a prominent **"⚠ Commercially exposed"** / **"✓ Protected"** line driven by the Phase-2 predicate
-- [ ] CTA **"Create Quote"** when no/incomplete quote (carry `campaignId` + `dealerId`, as today)
-- [ ] CTA **"Send MSA for signature"** when the client has no active MSA (link to the dealer MSA panel — the existing send surface; no inline send)
-- [ ] Visual smoke (manual): exposed card (no quote / no MSA) and protected card (accepted quote + active MSA) → screenshot path
+- [x] `event-detail.tsx`: render `QuoteStatusBadge` (or "No quote yet") + `MsaStatusBadge` (or "No active MSA") + a prominent **"⚠ Commercially exposed"** / **"✓ Protected"** banner driven by the Phase-2 predicate. Wired the Phase-2 resolver through `calendar/page.tsx` → `calendar-view` (`commercialStatus` prop, string-keyed for RSC serialization) → `EventDetail`
+- [x] CTA **"Create Quote"** (kept — already carries `campaignId` + `dealerId`)
+- [x] CTA **"Send MSA"** when the client has no active MSA → links to the dealer MSA panel (gated `admin:access`, who can actually send)
+- [ ] Visual smoke (manual): exposed card (no quote / no MSA) and protected card → deferred to the SME try-through / chunk-end smoke (Chrome driver not available in this session)
 
 #### Phase 4: Booking → "Create quote now?" hand-off + ribbon exposure marker
 - [ ] On **"Book Event" success**, replace `closeDialog` with a **directive next-step prompt**: "✓ Event booked — <dealer>, <dates>. Lock in the commercial side:" → **`[ Create quote now → ]`** (primary), **`[ Send MSA ]`** (only if the client has no active MSA → link to the dealer MSA panel), **`I'll do this later`** (quiet skip → close; event stays flagged exposed). Needs `createCampaign` to return the new campaign (or refetch by id) so the prompt knows the dealer/dates + can prefill the composer
