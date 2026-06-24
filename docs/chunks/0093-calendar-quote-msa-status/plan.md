@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Data — require quote → event link + reconcile entry points | Done | - |
-| 2: Queries — quote + MSA status + protected/exposed | Pending | - |
+| 2: Queries — quote + MSA status + protected/exposed | Done | - |
 | 3: Event-detail commercial surface — badges + exposed + CTAs | Pending | - |
 | 4: Booking hand-off + ribbon exposure marker | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `quotes` / `campaigns` / `master_service_agreements` columns + FK directions; update when `campaignId` lands.
 - `db-conventions` skill — additive nullable FK, migrate on the **session pooler (5432)**, Drizzle journal `when` gotcha, sandbox-before-prod.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests; integration tests come last (Phase 5).
@@ -54,10 +54,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit test: `createQuote` **rejects** when `campaignId` is absent / event missing / event belongs to another client; **persists** + audits it when present (`actions.test.ts`)
 
 #### Phase 2: Queries — quote + MSA status + protected/exposed
-- [ ] Resolver: given a campaign, return its linked quote (`quotes.campaignId = campaign.id`, latest) + `displayStatusKey`, and the dealer's MSA via `loadActiveOrPendingMsa(dealerId)`
-- [ ] `commerciallyProtected = quote?.status === 'accepted' && msa?.status === 'active'`; `exposed = !commerciallyProtected`
-- [ ] Fold the projection into the calendar's campaign load (`src/features/schedule/queries.ts`) so ribbons + detail get status without N extra round-trips
-- [ ] Unit tests: quote accepted vs none vs expired; MSA active vs pending vs none; protected/exposed truth table
+- [x] Resolver: `loadCommercialStatusByCampaign(campaigns)` (`src/features/schedule/commercial-status.ts`) — batch (2 queries, no N+1): latest linked quote per campaign (`quoteDisplayStatus` incl. derived `expired`) + dealer's active-or-pending MSA
+- [x] `exposed = !(quoteStatus === 'accepted' && msaStatus === 'active')` — pure `isExposed()` predicate
+- [x] ~~Fold the projection into the calendar's campaign load~~ → moved to Phases 3/4 (wired where it's consumed — the calendar page loads it + passes to detail/ribbon — so the diff stays coherent, no unused prop)
+- [x] Unit tests: quote accepted vs none vs expired; MSA active vs pending vs none; protected/exposed truth table (`commercial-status.test.ts`, 8 cases)
 
 #### Phase 3: Event-detail commercial surface
 - [ ] `event-detail.tsx`: render `QuoteStatusBadge` (or "No quote yet") + `MsaStatusBadge` (or "No active MSA") + a prominent **"⚠ Commercially exposed"** / **"✓ Protected"** line driven by the Phase-2 predicate
