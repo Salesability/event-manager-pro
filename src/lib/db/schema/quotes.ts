@@ -16,6 +16,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { actors, bigIdentity, timestamps } from './_columns';
 import { audienceSources } from './audience-sources';
+import { campaigns } from './campaigns';
 import { dealers } from './dealers';
 
 // Quote = the accepted contract per Salesability MSA §1.iii ("Each Quote …
@@ -52,6 +53,18 @@ export const quotes = pgTable(
     dealerId: bigint('dealer_id', { mode: 'number' })
       .notNull()
       .references(() => dealers.id, { onDelete: 'restrict' }),
+    // 0093: every quote scopes to an event (campaign). App-required at create
+    // time (`createQuote` rejects a missing campaignId), but the column stays
+    // NULLABLE so legacy pre-0093 rows tolerate it — they're backfilled
+    // best-effort from `campaigns.acceptedQuoteId`. `set null` on delete mirrors
+    // the other optional FKs here: deleting a campaign must not cascade away the
+    // commercial record. (Circular import with campaigns.ts — campaigns FKs
+    // quotes via `acceptedQuoteId` — resolved by the lazy `AnyPgColumn` ref,
+    // same pattern as `previousQuoteId` below.)
+    campaignId: bigint('campaign_id', { mode: 'number' }).references(
+      (): AnyPgColumn => campaigns.id,
+      { onDelete: 'set null' }
+    ),
     // 0082: the `msa_id` FK was dropped — a quote no longer links to an MSA (the
     // MSA signs on its own envelope, the quote has its own send→accept flow).
     status: quoteStatus('status').notNull().default('draft'),
@@ -100,6 +113,7 @@ export const quotes = pgTable(
   (table) => [
     index('quotes_dealer_id_idx').on(table.dealerId),
     index('quotes_dealer_id_status_idx').on(table.dealerId, table.status),
+    index('quotes_campaign_id_idx').on(table.campaignId),
     index('quotes_audience_source_id_idx').on(table.audienceSourceId),
     index('quotes_previous_quote_id_idx').on(table.previousQuoteId),
     index('quotes_created_by_id_idx').on(table.createdById),

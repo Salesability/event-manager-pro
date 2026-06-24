@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { KeyValueStrip, type KeyValueItem } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
@@ -44,7 +44,7 @@ import {
   MAX_TOTAL_ATTACHMENT_BYTES,
   type QuoteAttachmentView,
 } from '@/features/quotes/attachments';
-import type { Dealer } from '@/features/schedule/queries';
+import type { Campaign, Dealer } from '@/features/schedule/queries';
 import type { QuoteStatus } from '@/features/quotes/queries';
 import type { ServiceItem } from '@/features/services/queries';
 import {
@@ -101,6 +101,11 @@ export type Recipient = { email: string; firstName: string } | { error: string }
 
 type Props = {
   dealers: Dealer[];
+  /** 0093: the dealer's events (campaigns) the quote can scope to. Create-mode
+   *  only — the composer filters to the selected dealer and requires one (every
+   *  quote scopes to an event). Empty/omitted in edit-mode (the row already has
+   *  its campaign). */
+  campaigns?: Campaign[];
   /** Province → sales-tax rates (0065). Drives the live tax preview + label. */
   taxRates: TaxRate[];
   catalog: ServiceItem[];
@@ -161,6 +166,9 @@ type LineFieldValue = z.infer<typeof lineFieldSchema>;
 
 const quoteFormSchema = z.object({
   dealerId: z.number().int().positive().nullable(),
+  // 0093: the event this quote scopes to. Nullable in the schema (edit-mode
+  // doesn't use it), required at create-mode save time (guarded in onSaveDraft).
+  campaignId: z.number().int().positive().nullable(),
   quoteNotes: z.string().max(1000),
   lines: z.array(lineFieldSchema),
 });
@@ -208,6 +216,7 @@ function toPickedLines(
 
 export function QuoteComposer({
   dealers,
+  campaigns = [],
   taxRates,
   catalog,
   initialDealerId,
@@ -266,10 +275,13 @@ export function QuoteComposer({
     }));
     return {
       dealerId: initial?.dealerId ?? initialDealerId,
+      // Create-mode: default to the prefilled campaign (from a "Create quote now"
+      // booking hand-off or an event's "Create Quote" link). Edit-mode ignores it.
+      campaignId: initial ? null : initialCampaignId,
       quoteNotes: initial?.quoteNotes ?? '',
       lines,
     };
-  }, [initial, initialDealerId, catalogByCode]);
+  }, [initial, initialDealerId, initialCampaignId, catalogByCode]);
 
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
@@ -317,6 +329,26 @@ export function QuoteComposer({
     () => dealers.find((d) => d.id === watched.dealerId) ?? null,
     [dealers, watched.dealerId],
   );
+
+  // 0093: events the quote can scope to — the selected dealer's non-cancelled
+  // campaigns. Empty until a dealer is chosen. Create-mode only.
+  const eventOptions = useMemo(() => {
+    if (!watched.dealerId) return [];
+    return campaigns
+      .filter((c) => c.dealerId === watched.dealerId && c.status !== 'cancelled')
+      .map((c) => ({ value: String(c.id), label: eventLabel(c) }));
+  }, [campaigns, watched.dealerId]);
+
+  // When the dealer changes, drop a now-mismatched event so a quote can't carry
+  // a campaign from a different client (the server guards this too, but clearing
+  // it keeps the picker honest). Skipped in edit-mode (no event picker).
+  useEffect(() => {
+    if (isEdit) return;
+    const current = form.getValues('campaignId');
+    if (current != null && !eventOptions.some((o) => o.value === String(current))) {
+      form.setValue('campaignId', null, { shouldValidate: false });
+    }
+  }, [eventOptions, isEdit, form]);
   const ratePct = useMemo(
     () => rateForProvince(taxRates, selectedDealer?.province ?? null) ?? 0,
     [taxRates, selectedDealer],
@@ -397,7 +429,13 @@ export function QuoteComposer({
           }
           return;
         }
+        // 0093: every quote scopes to an event — block create-mode save without one.
+        if (!values.campaignId) {
+          toast.error('Pick an event for this quote.');
+          return;
+        }
         fd.set('dealerId', String(values.dealerId));
+        fd.set('campaignId', String(values.campaignId));
         const result = toLegacyResult<{ ok: true; quoteId: number }>(await createQuote(fd));
         if ('ok' in result) {
           toast.success(`Draft saved (quote #${result.quoteId})`);
@@ -672,10 +710,47 @@ export function QuoteComposer({
               />
             )}
           </div>
-          {initialCampaignId ? (
-            <p className="text-xs text-zinc-500">
-              Tied to campaign #{initialCampaignId}. Full campaign-linkage wiring lands later.
-            </p>
+          {!isEdit ? (
+            <div className={fieldClass}>
+              <span className={labelClass}>
+                Event<span className="ml-0.5 text-red-700">*</span>
+              </span>
+              {!watched.dealerId ? (
+                <span className={`mt-1 block ${labelClass}`}>Select a dealer first.</span>
+              ) : eventOptions.length === 0 ? (
+                <span className={`mt-1 block ${labelClass}`}>
+                  This client has no events yet — book one on the Calendar, then start the quote
+                  from it.
+                </span>
+              ) : (
+                <Controller
+                  control={control}
+                  name="campaignId"
+                  render={({ field }) => {
+                    const selected = field.value
+                      ? eventOptions.find((o) => o.value === String(field.value)) ?? null
+                      : null;
+                    return (
+                      <Combobox
+                        options={eventOptions}
+                        displayValue={(item) => item?.label ?? ''}
+                        value={selected}
+                        onChange={(item) => field.onChange(item ? Number(item.value) : null)}
+                        placeholder="Pick an event…"
+                        aria-label="Event"
+                      >
+                        {(item) => (
+                          <ComboboxOption value={item}>
+                            <ComboboxLabel>{item.label}</ComboboxLabel>
+                          </ComboboxOption>
+                        )}
+                      </Combobox>
+                    );
+                  }}
+                />
+              )}
+              <span className={`mt-1 block ${labelClass}`}>Every quote is tied to an event.</span>
+            </div>
           ) : null}
         </div>
 
@@ -1146,4 +1221,22 @@ function formatSentRelative(sentAt: Date): string {
 function dealerLabel(d: Dealer): string {
   if (d.status === 'prospect') return `${d.name} (prospect)`;
   return d.name;
+}
+
+// 0093: event picker label — dates + format (+ a status tag for non-booked).
+// UTC parse to match the calendar's date handling (campaign dates are `date`,
+// not timestamptz, so no TZ shift).
+function eventLabel(c: Campaign): string {
+  const fmt = (iso: string) =>
+    new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  const range = c.startDate === c.endDate ? fmt(c.startDate) : `${fmt(c.startDate)}–${fmt(c.endDate)}`;
+  const parts = [range];
+  if (c.styleLabel) parts.push(c.styleLabel);
+  if (c.status !== 'booked') parts.push(`(${c.status})`);
+  return parts.join(' · ');
 }

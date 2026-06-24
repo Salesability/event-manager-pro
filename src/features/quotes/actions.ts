@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { dealers, masterServiceAgreements, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
+import { campaigns, dealers, masterServiceAgreements, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { dealerTaxRatePct } from '@/features/tax-rates/queries';
 import { recordAudit } from '@/features/audit/actions';
@@ -245,6 +245,14 @@ export const createQuote = capabilityClient('quote:edit')
     const dealerId = parseId(formData, 'dealerId');
     if (dealerId == null) return { error: 'Dealer is required.' };
 
+    // 0093: every quote scopes to an event. Required — a quote with no campaign
+    // is rejected (the event-less entry points route through an event step first;
+    // the campaign↔dealer match is enforced inside the tx below).
+    const campaignId = parseId(formData, 'campaignId');
+    if (campaignId == null) {
+      return { error: 'An event is required — start the quote from an event.' };
+    }
+
     // 0065: snapshot the dealer's province sales-tax rate; tax auto-derives from
     // it unless the coach typed an override.
     const ratePct = await dealerTaxRatePct(dealerId);
@@ -272,6 +280,7 @@ export const createQuote = capabilityClient('quote:edit')
 
     const baseInsert = {
       dealerId,
+      campaignId,
       inputs: inputsSnapshot,
       taxPct: pctString(ratePct),
       createdById: userId,
@@ -301,6 +310,21 @@ export const createQuote = capabilityClient('quote:edit')
         return { ok: false as const, error: 'Dealer not found or archived.' };
       }
 
+      // 0093: the event must exist and belong to this dealer — the FK guarantees
+      // existence, but not that the campaign is the dealer's, so guard the match
+      // explicitly (a tampered/stale campaignId for another client is rejected).
+      const [campaign] = await tx
+        .select({ dealerId: campaigns.dealerId })
+        .from(campaigns)
+        .where(eq(campaigns.id, campaignId))
+        .limit(1);
+      if (!campaign) {
+        return { ok: false as const, error: 'Event not found.' };
+      }
+      if (campaign.dealerId !== dealerId) {
+        return { ok: false as const, error: 'Event belongs to a different client.' };
+      }
+
       const [inserted] = await tx
         .insert(quotes)
         .values(insertValues)
@@ -321,7 +345,7 @@ export const createQuote = capabilityClient('quote:edit')
       action: 'quote.create',
       targetTable: 'quotes',
       targetId: result.quoteId,
-      payload: { dealerId },
+      payload: { dealerId, campaignId },
     });
 
     revalidateQuoteViews();

@@ -1,5 +1,5 @@
 import { assertCan } from '@/lib/auth/assert-can';
-import { loadDealers } from '@/features/schedule/queries';
+import { loadCampaigns, loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer } from '@/features/quotes/quote-composer';
@@ -7,12 +7,11 @@ import { QuoteComposer } from '@/features/quotes/quote-composer';
 // Quote composer entry point. Admin || coach (`quote:edit`); coaches own
 // their drafts per the multi-tenant-by-coach model. The page reads
 // `?dealerId=` and/or `?campaignId=` from the query string to preselect the
-// composer's header context.
+// composer's dealer + event.
 //
-// `campaignId` plumbing is **post-MVP for 0035** — we resolve the id here so
-// the composer can surface a "Tied to campaign #X" label, but full campaign
-// linkage (Quote → Campaign FK in the create payload) is deferred to 7.2
-// Contract phase. v1 just shows the linkage as context.
+// 0093: every quote scopes to an event. `loadCampaigns()` feeds the composer's
+// required Event picker (filtered to the chosen dealer); `?campaignId=` prefills
+// it (an event's "Create Quote" link, or the "Create quote now" booking hand-off).
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -26,8 +25,9 @@ export default async function NewQuotePage({
   const initialDealerId = pickFirst(sp.dealerId);
   const initialCampaignId = pickFirst(sp.campaignId);
 
-  const [dealers, catalog, taxRates] = await Promise.all([
+  const [dealers, campaigns, catalog, taxRates] = await Promise.all([
     loadDealers(),
+    loadCampaigns(),
     loadServiceItems(),
     loadTaxRates(),
   ]);
@@ -36,6 +36,7 @@ export default async function NewQuotePage({
     <div className="flex flex-col gap-6">
       <QuoteComposer
         dealers={dealers}
+        campaigns={campaigns}
         taxRates={taxRates}
         catalog={catalog}
         initialDealerId={parseIntOrNull(initialDealerId)}

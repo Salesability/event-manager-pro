@@ -234,23 +234,25 @@ beforeEach(() => {
 });
 
 describe('createQuote', () => {
-  it('inserts a draft quote for an active dealer and emits audit', async () => {
-    mocks.dbResults.push([{ id: 7 }], [{ id: 42 }]);
+  it('inserts a draft quote for an active dealer + event and emits audit', async () => {
+    // FIFO inside the tx: dealer lock → event (campaign) lookup → quote insert.
+    mocks.dbResults.push([{ id: 7 }], [{ dealerId: 7 }], [{ id: 42 }]);
 
-    const result = await call(createQuote(fd({ dealerId: '7' })));
+    const result = await call(createQuote(fd({ dealerId: '7', campaignId: '15' })));
 
     expect(result).toEqual({ ok: true, quoteId: 42 });
     expect(mocks.inserts).toHaveLength(1);
     expect(mocks.inserts[0].table).toBe('quotes');
     const values = mocks.inserts[0].values as Record<string, unknown>;
     expect(values.dealerId).toBe(7);
+    expect(values.campaignId).toBe(15);
     expect(values.inputs).toMatchObject({ audienceSize: 500, eventDays: 1 });
     expect(values.createdById).toBe('coach-uuid');
     expect(mocks.recordAudit).toHaveBeenCalledWith({
       action: 'quote.create',
       targetTable: 'quotes',
       targetId: 42,
-      payload: { dealerId: 7 },
+      payload: { dealerId: 7, campaignId: 15 },
     });
   });
 
@@ -261,10 +263,36 @@ describe('createQuote', () => {
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
 
+  it('rejects when campaignId is missing (every quote scopes to an event)', async () => {
+    const result = await call(createQuote(fd({ dealerId: '7' })));
+    expect(result).toEqual({
+      error: 'An event is required — start the quote from an event.',
+    });
+    expect(mocks.inserts).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
   it('rejects when dealer is missing or archived', async () => {
     mocks.dbResults.push([]); // dealer lookup returns nothing (archivedAt-aware)
-    const result = await call(createQuote(fd({ dealerId: '99' })));
+    const result = await call(createQuote(fd({ dealerId: '99', campaignId: '15' })));
     expect(result).toEqual({ error: 'Dealer not found or archived.' });
+    expect(mocks.inserts).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the event does not exist', async () => {
+    mocks.dbResults.push([{ id: 7 }], []); // dealer ok, campaign lookup empty
+    const result = await call(createQuote(fd({ dealerId: '7', campaignId: '15' })));
+    expect(result).toEqual({ error: 'Event not found.' });
+    expect(mocks.inserts).toHaveLength(0);
+    expect(mocks.recordAudit).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the event belongs to a different client', async () => {
+    // dealer lock ok (id 7), but the campaign is dealer 8's.
+    mocks.dbResults.push([{ id: 7 }], [{ dealerId: 8 }]);
+    const result = await call(createQuote(fd({ dealerId: '7', campaignId: '15' })));
+    expect(result).toEqual({ error: 'Event belongs to a different client.' });
     expect(mocks.inserts).toHaveLength(0);
     expect(mocks.recordAudit).not.toHaveBeenCalled();
   });
@@ -1228,12 +1256,13 @@ describe('setQuoteInputs (0062 picker path)', () => {
 
 describe('createQuote (0062 picker path)', () => {
   it('persists a picked-line draft: quotes insert + quote_line_items insert', async () => {
-    // catalog SELECT (before tx), dealer FOR-UPDATE SELECT, quotes insert id.
-    mocks.dbResults.push(CATALOG_FIXTURE, [{ id: 7 }], [{ id: 99 }]);
+    // catalog SELECT (before tx), dealer FOR-UPDATE SELECT, event lookup, quotes insert id.
+    mocks.dbResults.push(CATALOG_FIXTURE, [{ id: 7 }], [{ dealerId: 7 }], [{ id: 99 }]);
     const result = await call(
       createQuote(
         fd({
           dealerId: '7',
+          campaignId: '15',
           lines: JSON.stringify([{ serviceItemId: 1, qty: 1, price: 6900 }]),
           tax: '0',
           quoteNotes: 'VIP setup',
@@ -1256,7 +1285,11 @@ describe('createQuote (0062 picker path)', () => {
     mocks.dbResults.push(CATALOG_FIXTURE);
     const result = await call(
       createQuote(
-        fd({ dealerId: '7', lines: JSON.stringify([{ serviceItemId: 999, qty: 1, price: 10 }]) }),
+        fd({
+          dealerId: '7',
+          campaignId: '15',
+          lines: JSON.stringify([{ serviceItemId: 999, qty: 1, price: 10 }]),
+        }),
       ),
     );
     expect((result as { error: string }).error).toContain('catalogue');
