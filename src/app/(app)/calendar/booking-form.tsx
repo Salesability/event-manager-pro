@@ -166,8 +166,12 @@ export function BookingForm({
     const dealer = nextId ? dealersById.get(Number(nextId)) : null;
     if (!dealer) return;
     const fullName = [dealer.contactFirstName, dealer.contactLastName].filter(Boolean).join(' ');
+    // Phone: prefer the contact's own number, fall back to the dealership
+    // rooftop line (`dealers.phone`, 0086) — many imported contacts carry only
+    // an email, so without the fallback the Phone field stays blank.
+    const phoneVal = dealer.primaryPhone ?? dealer.phone ?? null;
     if (!touched.contact && fullName) setContact(fullName);
-    if (!touched.phone && dealer.primaryPhone) setPhone(dealer.primaryPhone);
+    if (!touched.phone && phoneVal) setPhone(phoneVal);
     if (!touched.email && dealer.primaryEmail) setEmail(dealer.primaryEmail);
   }
 

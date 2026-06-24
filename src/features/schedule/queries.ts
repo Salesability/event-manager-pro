@@ -36,6 +36,11 @@ export type Dealer = {
   contactLastName: string | null;
   primaryEmail: string | null;
   primaryPhone: string | null;
+  /** Dealership rooftop phone (`dealers.phone`, 0086) — distinct from the
+   *  contact's `primaryPhone`. Populated by `loadDealers` so the booking form's
+   *  auto-fill can fall back to it when the contact has no phone on file.
+   *  Optional: other dealer loaders don't project it. */
+  phone?: string | null;
   // Prospecting pipeline (0087). All nullable — active/existing dealers carry no
   // funnel position. `ownerId` is the coach's auth-user uuid; `ownerName` is the
   // resolved display name (null if the owner has no contacts row / display name).
@@ -258,6 +263,7 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       nextActionAt: dealers.nextActionAt,
       lastContactedAt: dealers.lastContactedAt,
       stageChangedAt: dealers.stageChangedAt,
+      phone: dealers.phone,
     })
     .from(dealers)
     .where(opts.includeArchived ? undefined : isNull(dealers.archivedAt))
@@ -287,6 +293,7 @@ async function loadDealersInner(opts: { includeArchived: boolean }): Promise<Dea
       contactLastName: link?.lastName ?? null,
       primaryEmail: ident?.email ?? null,
       primaryPhone: ident?.phone ?? null,
+      phone: r.phone ?? null,
       pipelineStage: r.pipelineStage,
       priority: r.priority,
       ownerId: r.ownerId,
