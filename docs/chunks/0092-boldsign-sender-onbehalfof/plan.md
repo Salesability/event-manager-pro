@@ -52,22 +52,31 @@ BoldSign team, so no sender-identity verification / role change is needed.
       var absent from the service + the file; domain `/`→307, `/login`→200. Prod is
       back to working (sends as David, downloads succeed, MSAs activate).
 
-### Phase 4 — the CORRECT fix (Shannon-owned API key) · Status: In progress (key created 2026-06-24)
+### Phase 4 — the CORRECT fix (Shannon-owned API key) · Status: Deployed 2026-06-24 (owner-verify pending)
 - [x] Promote Shannon to Admin in BoldSign (so she can generate an API key). — done 2026-06-24.
 - [x] Shannon generates a **Live** API key under her user. — done 2026-06-24 (owner).
 - [x] **Shannon's key staged as `boldsign-api-key` v4** (2026-06-24, enabled, now
-      `:latest`). v3 = David's key stays enabled as the rollback. Cloud Run pins the
-      version per-revision, so prod still serves v3 until a redeploy.
-- [ ] **Prod redeploy (HELD — staging only, owner's call):**
-      `GCP_REGION=us-east4 DEPLOY_CONFIRM=production ./deploy.sh` — the new revision
-      picks up `boldsign-api-key:latest` (v4). Keep `BOLDSIGN_SENDER_EMAIL` unset.
-      Rollback = `gcloud secrets versions disable 4 --project=eventpro-498313` (v3
-      becomes latest again) → redeploy.
-- [ ] Verify: Send Test MSA → from Shannon **AND** webhook `download` returns 200.
-      ⚠️ Watch the one in-flight David-owned MSA (Summerside Hyundai, pre-switch) —
-      Shannon's key may 403 on it if signed after the swap (the same ownership 403 that
-      killed `onBehalfOf` in Phase 3). Confirm it's already signed/voided before the
-      swap, or accept that one envelope may need a manual archive.
+      `:latest`). v3 = David's key stays enabled as the rollback. ⚠️ **Correction:** the
+      service mounts `boldsign-api-key:latest` (the revision spec stores `:latest`, NOT a
+      pinned number) — so staging v4 did **not** safely hold prod on v3; any cold-started
+      instance after v4 became `:latest` would resolve v4. A true hold needs an explicit
+      `:N` pin or disabling the newer version. The 0093 deploy (`-00037`, 15:09, after v4
+      at 15:04) had almost certainly already been serving v4 on cold starts.
+- [x] **Prod redeploy — DONE 2026-06-24** via `GCP_REGION=us-east4
+      DEPLOY_CONFIRM=production ./deploy.sh` → rev **`event-manager-pro-00038-w2z`**
+      (image `:20260624-194431`, us-east4), serving 100%. Mounts `boldsign-api-key:latest`
+      (v4) with `BOLDSIGN_SENDER_EMAIL` **unset** (confirmed absent on the revision).
+      Domain smoke healthy (`/`→307, `/login`→200, `/calendar`+`/quotes/new`→307).
+      Rollback = `gcloud secrets versions disable 4 --project=eventpro-498313` (v3 becomes
+      latest again) → redeploy.
+- [ ] **Verify (owner action):** Send Test MSA → confirm envelope is **from Shannon**
+      AND a real sign → webhook `download` returns 200 → MSA flips `active`.
+      ⚠️ **The in-flight Summerside Hyundai MSA is STILL `pending`/unsigned** with an
+      envelope out (sent under David's v3 key, checked prod 2026-06-24). If the dealer
+      signs it now (prod on Shannon's v4 key), Shannon's key may **403** on the webhook
+      download → MSA won't auto-activate, PDF won't archive (the same ownership 403 that
+      killed `onBehalfOf` in Phase 3). Options: void + re-send under Shannon's key, or
+      accept that one envelope may need a manual archive.
 
 ## Progress Tracker
 
@@ -76,7 +85,7 @@ BoldSign team, so no sender-identity verification / role change is needed.
 | 1 — code + env wiring | Done | env-gated `onBehalfOf`; inert when unset |
 | 2 — tests + docs | Done | 2 new unit tests; wiki + log ingested |
 | 3 — prod cutover | ❌ Reverted | `onBehalfOf` 403-locks the app key out of the doc → webhook can't download the signed PDF → MSA won't activate. Rolled back to rev `-00035-c8h`. |
-| 4 — Shannon-owned API key | In progress | Shannon promoted + Live key created + **staged as `boldsign-api-key` v4** (2026-06-24, `:latest`; v3 = David's key still enabled as rollback). Remaining: prod redeploy (HELD — owner staging) + Send Test MSA verify (watch the in-flight Summerside MSA). |
+| 4 — Shannon-owned API key | Deployed 2026-06-24 | Shannon promoted + Live key (`boldsign-api-key` v4). **Prod redeployed → rev `-00038-w2z`** (mounts v4 via `:latest`, `BOLDSIGN_SENDER_EMAIL` unset, smoke healthy). Remaining: owner Send-Test-MSA verify (from-Shannon + webhook download 200). ⚠️ Summerside Hyundai MSA still `pending`/unsigned (David-key envelope) — at 403 risk if signed now. |
 
 ## Chunk-end gate
 
