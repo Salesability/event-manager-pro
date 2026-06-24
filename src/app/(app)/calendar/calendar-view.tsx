@@ -57,7 +57,9 @@ type DialogState =
   | { kind: 'detail'; campaign: Campaign }
   | { kind: 'create'; date?: string }
   | { kind: 'edit'; campaign: Campaign }
-  | { kind: 'availability' };
+  | { kind: 'availability' }
+  // 0093: post-booking "Create quote now?" hand-off.
+  | { kind: 'booked-prompt'; campaignId: number; dealerId: number };
 
 const MONTHS = [
   'January',
@@ -369,6 +371,19 @@ export function CalendarView({
         bar.style.background = color.bg;
         bar.style.borderLeft = `3px solid ${color.border}`;
 
+        // 0093: "commercially exposed" marker — a booked event with no accepted
+        // quote and/or no active MSA. Amber dot at the ribbon's leading edge,
+        // legible over the per-coach colour. App mode only (share mode carries
+        // no commercial status).
+        if (mode === 'app' && commercialStatus[String(ev.id)]?.exposed) {
+          const dot = document.createElement('span');
+          dot.className = 'mr-1 flex-shrink-0 rounded-full ring-1 ring-white/70';
+          dot.style.width = '7px';
+          dot.style.height = '7px';
+          dot.style.background = '#f59e0b'; // amber-500
+          bar.appendChild(dot);
+        }
+
         const lbl = document.createElement('span');
         lbl.className = 'truncate text-[10px] font-semibold text-white';
         lbl.textContent = clientName;
@@ -392,7 +407,7 @@ export function CalendarView({
         overlay.appendChild(bar);
       }
     }
-  }, [slotAssignment, getCoachColor, mode]);
+  }, [slotAssignment, getCoachColor, mode, commercialStatus]);
 
   useLayoutEffect(() => {
     drawRibbons();
@@ -606,7 +621,15 @@ export function CalendarView({
                 styles={styles}
                 sources={sources}
                 defaultStartDate={dialog.date}
-                onSuccess={closeDialog}
+                onSuccess={(booked) =>
+                  booked
+                    ? setDialog({
+                        kind: 'booked-prompt',
+                        campaignId: booked.campaignId,
+                        dealerId: booked.dealerId,
+                      })
+                    : closeDialog()
+                }
               />
             </>
           )}
@@ -631,6 +654,33 @@ export function CalendarView({
                 Add, edit, or remove calendar blocks for holidays, closures, and coach time off.
               </DialogDescription>
               <AvailabilityAdmin blocks={blocks} coaches={coaches} />
+            </>
+          )}
+          {dialog.kind === 'booked-prompt' && (
+            <>
+              <DialogTitle>Event booked ✓</DialogTitle>
+              <DialogDescription>
+                Lock in the commercial side now so this booking is protected — an accepted
+                quote and a signed MSA are what put the cancellation fee (MSA §2.iii) in force.
+              </DialogDescription>
+              <div className="mt-4 flex flex-col gap-2">
+                <Button
+                  color="brand"
+                  href={`/quotes/new?campaignId=${dialog.campaignId}&dealerId=${dialog.dealerId}`}
+                >
+                  Create quote now →
+                </Button>
+                <Button outline href={`/dealerships/${dialog.dealerId}`}>
+                  Send MSA for signature
+                </Button>
+                <button
+                  type="button"
+                  onClick={closeDialog}
+                  className="mt-1 text-sm font-medium text-zinc-500 transition hover:text-zinc-700"
+                >
+                  I&rsquo;ll do this later
+                </button>
+              </div>
             </>
           )}
         </Dialog>

@@ -48,8 +48,9 @@ function firstFieldError(fieldErrors: FieldErrors): string | undefined {
 type ActionResult =
   // `dealerId` is set only by `createDealer` so inline-create callers (the
   // booking dialog's "+ Add", chunk 0056) can auto-select the new dealer.
-  // Optional + ignored by every other action that returns this shape.
-  | { ok: true; dealerId?: number }
+  // `campaignId` is set only by `createCampaign` (0093) so the booking dialog
+  // can hand off into "Create quote now?". Both optional + ignored elsewhere.
+  | { ok: true; dealerId?: number; campaignId?: number }
   // 0085: a create-time duplicate was detected; the action returns the match
   // (instead of throwing/blind-inserting) so the form can offer reuse/link.
   | { duplicate: DuplicateResult }
@@ -912,7 +913,9 @@ export const createCampaign = capabilityClient('campaign:create')
     await reconcileCampaignCalendar(created.id, userId);
 
     revalidateCampaignViews();
-    return { ok: true };
+    // 0093: surface the new campaign so the booking dialog can hand off into
+    // "Create quote now?" (prefill the composer with this event + its dealer).
+    return { ok: true, campaignId: created.id, dealerId: input.dealerId };
   });
 
 export const updateCampaign = capabilityClient('campaign:edit')

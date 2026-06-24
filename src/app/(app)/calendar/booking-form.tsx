@@ -38,7 +38,12 @@ import type { Campaign, Coach, Dealer, LookupOption } from '@/features/schedule/
 // the UX clearly wins from the swap).
 
 type Mode = 'create' | 'edit';
-type State = { ok: true } | { error: string } | null;
+// 0093: create returns the new campaign so the dialog can hand off into
+// "Create quote now?" (prefill the composer with this event + its dealer).
+type State = { ok: true; campaignId?: number; dealerId?: number } | { error: string } | null;
+
+/** Passed to `onSuccess` on a create — present only in create-mode. */
+export type BookedEvent = { campaignId: number; dealerId: number };
 
 type BookingFormProps = {
   mode: Mode;
@@ -48,7 +53,10 @@ type BookingFormProps = {
   styles: LookupOption[];
   sources: LookupOption[];
   defaultStartDate?: string;
-  onSuccess: () => void;
+  /** Called on save. On a create, receives the new event so the caller can
+   *  open the "Create quote now?" hand-off; on edit/cancel it's called with no
+   *  argument (caller just closes). */
+  onSuccess: (booked?: BookedEvent) => void;
 };
 
 // Native-select styling mirrors shadcn's <Input> chrome so the form reads as
@@ -86,7 +94,8 @@ export function BookingForm({
 }: BookingFormProps) {
   const action = mode === 'create' ? createCampaign : updateCampaign;
   const [state, formAction, pending] = useActionState<State, FormData>(
-    async (_prev, fd) => toLegacyResult<{ ok: true }>(await action(fd)),
+    async (_prev, fd) =>
+      toLegacyResult<{ ok: true; campaignId?: number; dealerId?: number }>(await action(fd)),
     null,
   );
 
@@ -198,7 +207,13 @@ export function BookingForm({
     if (!state) return;
     if ('ok' in state) {
       toast.success(mode === 'create' ? 'Campaign added' : 'Campaign saved');
-      onSuccess();
+      // Create → hand the new event back so the caller can prompt "Create quote
+      // now?"; edit → plain close (no argument).
+      if (mode === 'create' && state.campaignId != null && state.dealerId != null) {
+        onSuccess({ campaignId: state.campaignId, dealerId: state.dealerId });
+      } else {
+        onSuccess();
+      }
     } else {
       toast.error(state.error);
     }
@@ -460,7 +475,7 @@ export function BookingForm({
       </FieldGroup>
 
       <div className="mt-2 flex justify-end gap-2">
-        <Button outline type="button" onClick={onSuccess}>
+        <Button outline type="button" onClick={() => onSuccess()}>
           Cancel
         </Button>
         <Button type="submit" color="brand" disabled={pending}>
