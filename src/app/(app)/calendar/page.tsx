@@ -7,6 +7,10 @@ import {
   loadDealers,
   loadAudienceSources,
 } from '@/features/schedule/queries';
+import {
+  loadCommercialStatusByCampaign,
+  type CommercialStatus,
+} from '@/features/schedule/commercial-status';
 import { CalendarView } from './calendar-view';
 
 export default async function CalendarPage() {
@@ -29,10 +33,19 @@ export default async function CalendarPage() {
   // Hide cancelled campaigns from the calendar by default.
   const visibleCampaigns = campaigns.filter((c) => c.status !== 'cancelled');
 
+  // 0093: per-event quote + per-client MSA standing (+ exposed flag), keyed by
+  // campaign id (string keys so the plain object crosses the server→client
+  // boundary — a Map wouldn't serialize). Drives the event-detail badges + the
+  // ribbon "exposed" marker.
+  const statusMap = await loadCommercialStatusByCampaign(visibleCampaigns);
+  const commercialStatus: Record<string, CommercialStatus> = {};
+  for (const [id, s] of statusMap) commercialStatus[String(id)] = s;
+
   return (
     <CalendarView
       coaches={coaches}
       campaigns={visibleCampaigns}
+      commercialStatus={commercialStatus}
       blocks={blocks}
       dealers={dealers}
       styles={styles}

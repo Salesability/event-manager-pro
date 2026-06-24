@@ -4,6 +4,7 @@ import { useTransition } from 'react';
 import { Can } from '@/components/auth/can';
 import { Badge } from '@/components/catalyst/badge';
 import { Button } from '@/components/catalyst/button';
+import { MsaStatusBadge, QuoteStatusBadge } from '@/components/app/status-badge';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { cancelCampaign, resyncCampaign } from '@/features/schedule/actions';
@@ -11,15 +12,19 @@ import {
   sendClientCampaignConfirmation,
   sendCoachCampaignConfirmation,
 } from '@/features/email/actions';
+import type { CommercialStatus } from '@/features/schedule/commercial-status';
 import type { Campaign } from '@/features/schedule/queries';
 
 type EventDetailProps = {
   campaign: Campaign;
+  /** 0093: per-event quote + per-client MSA standing (+ exposed flag). Omitted
+   *  for cancelled events (no commercial surface). */
+  commercial?: CommercialStatus;
   onEdit: () => void;
   onClose: () => void;
 };
 
-export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
+export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDetailProps) {
   const [pending, startTransition] = useTransition();
 
   function onCancel() {
@@ -86,6 +91,22 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {commercial && (
+        <div
+          className={
+            commercial.exposed
+              ? 'flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900'
+              : 'flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-900'
+          }
+        >
+          <span aria-hidden>{commercial.exposed ? '⚠' : '✓'}</span>
+          <span>
+            {commercial.exposed
+              ? 'Commercially exposed — no accepted quote and/or active MSA, so the cancellation fee (MSA §2.iii) is not yet in force. Lock it in below.'
+              : 'Protected — accepted quote + active MSA.'}
+          </span>
+        </div>
+      )}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Row label="Date" value={dateLabel} />
         <Row label="Dealership" value={campaign.dealerName} />
@@ -128,6 +149,30 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
             }
           />
         )}
+        {commercial && (
+          <Row
+            label="Quote"
+            value={
+              commercial.quoteStatus ? (
+                <QuoteStatusBadge status={commercial.quoteStatus} />
+              ) : (
+                <span className="text-zinc-500">No quote yet</span>
+              )
+            }
+          />
+        )}
+        {commercial && (
+          <Row
+            label="MSA"
+            value={
+              commercial.msaStatus ? (
+                <MsaStatusBadge status={commercial.msaStatus} />
+              ) : (
+                <span className="text-zinc-500">No active MSA</span>
+              )
+            }
+          />
+        )}
       </dl>
 
       <div className="mt-2 flex flex-wrap items-center justify-end gap-2 border-t border-zinc-200 pt-4">
@@ -162,6 +207,16 @@ export function EventDetail({ campaign, onEdit, onClose }: EventDetailProps) {
               href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
             >
               Create Quote
+            </Button>
+          </Can>
+        )}
+        {campaign.status !== 'cancelled' && commercial && commercial.msaStatus !== 'active' && (
+          // The MSA is per-client and sent from the dealer page (admin-only).
+          // Surfaced here only when the client has no active MSA — the other
+          // half of "protect the commitment".
+          <Can capability="admin:access">
+            <Button outline compact href={`/dealerships/${campaign.dealerId}`}>
+              Send MSA
             </Button>
           </Can>
         )}

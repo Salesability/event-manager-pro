@@ -23,6 +23,7 @@ import type {
   Dealer,
   LookupOption,
 } from '@/features/schedule/queries';
+import type { CommercialStatus } from '@/features/schedule/commercial-status';
 import { AvailabilityAdmin } from '@/features/schedule/availability-admin';
 import { BookingForm } from './booking-form';
 import { clampToGrid, GRID_LAST_INDEX } from './calendar-grid';
@@ -45,6 +46,10 @@ type Props = {
   dealers?: Dealer[];
   styles?: LookupOption[];
   sources?: LookupOption[];
+  /** 0093: per-event quote + per-client MSA standing (+ exposed flag), keyed by
+   *  campaign id (string). Drives the event-detail badges + the ribbon marker.
+   *  App mode only; absent in share mode. */
+  commercialStatus?: Record<string, CommercialStatus>;
 };
 
 type DialogState =
@@ -103,6 +108,7 @@ export function CalendarView({
   dealers = [],
   styles = [],
   sources = [],
+  commercialStatus = {},
 }: Props) {
   const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
   const closeDialog = useCallback(() => setDialog({ kind: 'closed' }), []);
@@ -584,6 +590,7 @@ export function CalendarView({
               <DialogTitle>Campaign Detail</DialogTitle>
               <EventDetail
                 campaign={dialog.campaign}
+                commercial={commercialStatus[String(dialog.campaign.id)]}
                 onEdit={() => setDialog({ kind: 'edit', campaign: dialog.campaign })}
                 onClose={closeDialog}
               />
