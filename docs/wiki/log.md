@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-24 — Shannon-owned BoldSign Live key created (chunk 0092 Phase 4)
+
+- **New state:** Shannon (`shannon@salesability.ca`) was promoted to BoldSign Admin and generated a **Live** API key under her own user — the prerequisite for sending MSA envelopes *as Shannon* without the `onBehalfOf` webhook-403 (Phases 1–3 dead end).
+- **Staged 2026-06-24:** Shannon's key added as `boldsign-api-key` **v4** (enabled, now `:latest`; v3 = David's key stays enabled as the rollback). **Held:** prod redeploy + Send Test MSA verify — Cloud Run pins the version per-revision, so prod still serves v3 until a redeploy. ⚠️ Watch the in-flight David-owned MSA (Summerside Hyundai) — Shannon's key may 403 on it if signed after the swap.
+- Pages touched: [`go-live-accounts.md`](go-live-accounts.md) §3 BoldSign ("Correct way to send as Shannon"). Chunk plan: `../chunks/0092-boldsign-sender-onbehalfof/plan.md` Phase 4.
+
 ## 2026-06-24 — Calendar surfaces commercial status + encourages upfront quote/MSA (chunk 0093)
 
 - **New state:** every Quote scopes to an event — `quotes.campaign_id` (nullable FK → `campaigns.id`, migration `0046`; backfill of accepted quotes from `accepted_quote_id` in `0047`). `createQuote` **requires** it (rejects + dealer-match guard); the quote composer gained a required **Event** picker (decision C). The calendar now resolves per-event quote + per-client MSA status (`loadCommercialStatusByCampaign`) and flags **exposed** events (`!(accepted quote && active MSA)`): event-detail badges + "⚠ exposed / ✓ protected" banner + Create-Quote/Send-MSA CTAs, and an amber ribbon dot. Booking hands off into a **"Create quote now?"** prompt (navigates to the prefilled composer; skippable).

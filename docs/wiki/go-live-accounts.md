@@ -156,12 +156,16 @@ your signature."
 > makes the webhook 502 → **the signed MSA never activates and the PDF is never archived.** The
 > `onBehalfOf` code stays in `client.ts` (env-gated, inert) but the env var must stay **unset**.
 
-**Correct way to send *as Shannon* (not yet done — owner decision pending):** point the prod app at a
+**Correct way to send *as Shannon* (in progress 2026-06-24):** point the prod app at a
 BoldSign API key generated **under Shannon's user**. Then documents are *owned by Shannon* — sent from
-Shannon **and** downloadable by her key (webhook works). Steps: promote Shannon to Admin (so she can
-generate an API key) → she creates a Live key → swap the prod `boldsign-api-key` secret to it →
-redeploy. Keep `BOLDSIGN_SENDER_EMAIL` unset. Verify via Send Test MSA: from Shannon **and** the
-webhook download returns 200.
+Shannon **and** downloadable by her key (webhook works). Steps: ✅ promote Shannon to Admin → ✅ she
+creates a **Live** key (both done 2026-06-24) → ✅ staged as `boldsign-api-key` **v4** (now `:latest`;
+v3 = David's key still enabled as the rollback) → ⏳ **prod redeploy** (held — owner staging) so a new
+revision picks up `:latest`, then verify. Keep `BOLDSIGN_SENDER_EMAIL` unset. Verify via Send Test MSA: from Shannon **and**
+the webhook download returns 200. ⚠️ Cloud Run pins the secret version per-revision, so the swap only
+takes effect after a prod redeploy; and any **in-flight David-owned MSA** (e.g. Summerside Hyundai)
+may 403 on Shannon's key if signed *after* the swap — confirm it's signed/voided first, and keep
+David's key (the current `boldsign-api-key` v3) re-addable as the rollback.
 
 ---
 
