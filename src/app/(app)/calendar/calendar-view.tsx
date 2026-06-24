@@ -670,9 +670,14 @@ export function CalendarView({
                 >
                   Create quote now →
                 </Button>
-                <Button outline href={`/dealerships/${dialog.dealerId}`}>
-                  Send MSA for signature
-                </Button>
+                {/* MSA send lives on the (admin-gated) dealer page — only show
+                    the shortcut to those who can actually use it, matching the
+                    event-detail CTA (eval Codex Low). */}
+                <Can capability="admin:access">
+                  <Button outline href={`/dealerships/${dialog.dealerId}`}>
+                    Send MSA for signature
+                  </Button>
+                </Can>
                 <button
                   type="button"
                   onClick={closeDialog}

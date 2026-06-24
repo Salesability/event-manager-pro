@@ -31,6 +31,30 @@ export function isExposed(
   return !(quoteStatus === 'accepted' && msaStatus === 'active');
 }
 
+/** The MSA standing the calendar should show for a dealer — mirrors the accept
+ *  gate (`acceptQuote`): an `active` row only counts as active while `expiresAt`
+ *  is in the future (the expiry sweep that would flip a stale row to `expired`
+ *  isn't built yet, so an `active` row past its expiry must NOT read as
+ *  protected). Precedence: valid-active > expired-active > pending > none. */
+export function effectiveMsaStatus(
+  rows: { status: MsaStatus; expiresAt: Date | null }[],
+  nowMs: number = Date.now(),
+): MsaStatus | null {
+  let sawExpiredActive = false;
+  let sawPending = false;
+  for (const r of rows) {
+    if (r.status === 'active') {
+      if (r.expiresAt == null || r.expiresAt.getTime() >= nowMs) return 'active';
+      sawExpiredActive = true;
+    } else if (r.status === 'pending') {
+      sawPending = true;
+    }
+  }
+  if (sawExpiredActive) return 'expired';
+  if (sawPending) return 'pending';
+  return null;
+}
+
 /** Derived quote display status — mirrors `features/quotes/queries.ts:127`: an
  *  expired `sent` quote paints `expired` (the row itself stays `sent`). */
 export function quoteDisplayStatus(q: {
@@ -82,11 +106,14 @@ export async function loadCommercialStatusByCampaign(
     if (!cur || q.id > cur.id) latestByCampaign.set(q.campaignId, q);
   }
 
-  // MSA per dealer: active wins over pending; everything else is "no MSA".
+  // MSA per dealer — active (and not past expiry) wins over pending; an
+  // active-but-expired row reads as `expired` (= not protected), matching the
+  // accept gate. `expiresAt` is required for that check.
   const msaRows = await db
     .select({
       dealerId: masterServiceAgreements.dealerId,
       status: masterServiceAgreements.status,
+      expiresAt: masterServiceAgreements.expiresAt,
     })
     .from(masterServiceAgreements)
     .where(
@@ -95,13 +122,16 @@ export async function loadCommercialStatusByCampaign(
         inArray(masterServiceAgreements.status, ['active', 'pending']),
       ),
     );
-  const msaByDealer = new Map<number, MsaStatus>();
+  const rowsByDealer = new Map<number, { status: MsaStatus; expiresAt: Date | null }[]>();
   for (const m of msaRows) {
-    if (m.status === 'active') {
-      msaByDealer.set(m.dealerId, 'active');
-    } else if (msaByDealer.get(m.dealerId) !== 'active') {
-      msaByDealer.set(m.dealerId, 'pending');
-    }
+    const arr = rowsByDealer.get(m.dealerId) ?? [];
+    arr.push({ status: m.status, expiresAt: m.expiresAt });
+    rowsByDealer.set(m.dealerId, arr);
+  }
+  const msaByDealer = new Map<number, MsaStatus>();
+  for (const [dealerId, rows] of rowsByDealer) {
+    const eff = effectiveMsaStatus(rows);
+    if (eff) msaByDealer.set(dealerId, eff);
   }
 
   for (const c of campaigns) {

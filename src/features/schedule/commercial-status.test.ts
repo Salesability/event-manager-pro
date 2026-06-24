@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { isExposed, quoteDisplayStatus } from './commercial-status';
+import { effectiveMsaStatus, isExposed, quoteDisplayStatus } from './commercial-status';
 
 describe('isExposed', () => {
   // Protected = accepted quote AND active MSA. Everything else is exposed.
@@ -25,6 +25,54 @@ describe('isExposed', () => {
 
   it('is exposed when both are missing (a bare booked date)', () => {
     expect(isExposed(null, null)).toBe(true);
+  });
+});
+
+describe('effectiveMsaStatus (matches the accept gate: active only while unexpired)', () => {
+  const NOW = 1_000_000_000_000;
+  const future = new Date(NOW + 86_400_000);
+  const past = new Date(NOW - 86_400_000);
+
+  it('reports a non-expired active MSA as active', () => {
+    expect(effectiveMsaStatus([{ status: 'active', expiresAt: future }], NOW)).toBe('active');
+  });
+
+  it('treats a null expiresAt as not-expired (active)', () => {
+    expect(effectiveMsaStatus([{ status: 'active', expiresAt: null }], NOW)).toBe('active');
+  });
+
+  it('downgrades an active-but-expired MSA to expired (so it is NOT protected)', () => {
+    expect(effectiveMsaStatus([{ status: 'active', expiresAt: past }], NOW)).toBe('expired');
+  });
+
+  it('prefers a valid active over an expired-active or pending', () => {
+    expect(
+      effectiveMsaStatus(
+        [
+          { status: 'active', expiresAt: past },
+          { status: 'pending', expiresAt: null },
+          { status: 'active', expiresAt: future },
+        ],
+        NOW,
+      ),
+    ).toBe('active');
+  });
+
+  it('expired-active outranks pending', () => {
+    expect(
+      effectiveMsaStatus(
+        [
+          { status: 'pending', expiresAt: null },
+          { status: 'active', expiresAt: past },
+        ],
+        NOW,
+      ),
+    ).toBe('expired');
+  });
+
+  it('reports pending when that is all there is, and null when empty', () => {
+    expect(effectiveMsaStatus([{ status: 'pending', expiresAt: null }], NOW)).toBe('pending');
+    expect(effectiveMsaStatus([], NOW)).toBeNull();
   });
 });
 

@@ -313,10 +313,15 @@ export const createQuote = capabilityClient('quote:edit')
       // 0093: the event must exist and belong to this dealer — the FK guarantees
       // existence, but not that the campaign is the dealer's, so guard the match
       // explicitly (a tampered/stale campaignId for another client is rejected).
+      // Lock the campaign row (`FOR UPDATE`) like the dealer row above: without
+      // it a concurrent `updateCampaign` could repoint `campaigns.dealerId`
+      // between this read and the insert, persisting a quote whose dealer no
+      // longer matches its event (TOCTOU — eval Codex High).
       const [campaign] = await tx
         .select({ dealerId: campaigns.dealerId })
         .from(campaigns)
         .where(eq(campaigns.id, campaignId))
+        .for('update')
         .limit(1);
       if (!campaign) {
         return { ok: false as const, error: 'Event not found.' };
