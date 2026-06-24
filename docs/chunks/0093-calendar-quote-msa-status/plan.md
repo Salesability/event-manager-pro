@@ -50,7 +50,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Generate the migration via `db-conventions` (drizzle-kit), verify journal `when` ordering, apply to **sandbox** (session pooler 5432)
 - [ ] `createQuote`: make `campaignId` **required** (Zod, not optional) — reject a quote with no event; persist it on insert
 - [ ] Thread `campaignId` from `/quotes/new` → composer → `createQuote` (the event "Create Quote" CTA already passes `?campaignId=`)
-- [ ] **Reconcile the event-less entry points** (Open question e — settle before coding): the bare "New Quote" on `/quotes` (`quotes/page.tsx:23`), and "Create Quote" on the dealer page (`dealerships/[id]/page.tsx:238,253`) + dealer-list row (`dealers-columns.tsx:301`) must supply an event (route through event select/create, or remove). A required `campaignId` breaks these until reconciled — in-scope here.
+- [ ] **Reconcile the event-less entry points via an event step (decision B):** "Create Quote" on the dealer page (`dealerships/[id]/page.tsx:238,253`) + dealer-list row (`dealers-columns.tsx:301`) → first pick an existing event (campaign) for that dealer or **Book a new event** (reuse `BookingForm`), then continue to the composer with the chosen `campaignId`. The bare "New Quote" on `/quotes` (`quotes/page.tsx:23`) has no dealer → dealer-select → event-select/create → composer. A required `campaignId` breaks these until reconciled — in-scope here. Anchor the event-chooser on the existing dealer→campaign load + `BookingForm`.
 - [ ] Backfill existing accepted quotes from `campaigns.acceptedQuoteId` (reverse link) where present (Open question d); leave the rest null
 - [ ] Unit test: `createQuote` **rejects** when `campaignId` is absent; persists it when present
 
