@@ -91,6 +91,16 @@ There is **no customer self-serve accept** — acceptance is **staff-recorded**.
 
 Design history: the standalone split is [`docs/chunks/closed/0082-quote-msa-decouple/`](../chunks/closed/0082-quote-msa-decouple/decision.md); the superseded bundle was [`0055-quote-msa-one-document`](../chunks/closed/0055-quote-msa-one-document/plan.md) + [`0061-move-msa-action-to-quote`](../chunks/closed/0061-move-msa-action-to-quote/plan.md).
 
+### Calendar surfaces commercial status — encourage upfront (0093)
+
+The workflow is **date-first**: a coach books an event (a `campaigns` row, via "+ Book Event"), then the Quote and MSA are follow-up tasks. Before 0093 booking dead-ended (saved the date, closed the dialog), leaving the event an **exposed date-hold** — no cancellation-fee protection, since §2.iii needs an *accepted Quote* + an *active MSA*. SME pushback (2026-06-24) reframed this: **encourage the commercial work upfront**.
+
+- **Quote ⇄ event link.** `quotes.campaign_id` (nullable FK → `campaigns.id`, `SET NULL`, **0093**) ties each Quote to its event. **App-required** for new quotes — `createQuote` rejects a missing `campaignId` and guards that the event belongs to the dealer. Existing **accepted** quotes were backfilled from `campaigns.accepted_quote_id` (migration `0047`). The column stays nullable so legacy draft/sent quotes tolerate it. Every quote-creation entry point now flows through a **required Event `<select>` in the composer** (decision C — `QuoteComposer` already picks the dealer inline, so the event belongs there too).
+- **Per-event commercial status.** `loadCommercialStatusByCampaign` (`src/features/schedule/commercial-status.ts`) resolves, per campaign: the latest linked quote's display status + the dealer's active-or-pending MSA, and **`exposed = !(quote accepted && MSA active)`**. Batched (2 queries, no N+1); the calendar page passes it to the view.
+- **Booking → "Create quote now?" hand-off.** On Book Event success the dialog shows a directive prompt (primary **Create quote now →** which navigates to the prefilled composer, **Send MSA for signature**, quiet **I'll do this later**). `createCampaign` returns the new `{ campaignId, dealerId }` to prefill. Skippable — not a hard block.
+- **Visibility as backstop.** The **event-detail card** shows Quote + MSA badges + a **"⚠ Commercially exposed" / "✓ Protected"** banner + the two CTAs; the **calendar ribbon** carries an **amber dot** on exposed events. MSA is per-client, so "Send MSA" only shows when the client has no active MSA.
+- **Cancellation-fee *math* stays out of scope** (0037) — 0093 encodes the *principle* (protect the commitment early) in the flow, not the fee calculation. See [`docs/chunks/0093-calendar-quote-msa-status/`](../chunks/0093-calendar-quote-msa-status/intent.md).
+
 ### Less-happy paths
 
 - **Cancellation within 21 days of Event start** — 50% × Quote total per §2.iii. Owned by `src/lib/quotes/cancellation.ts` eventually; invoiced as a separate Stripe line item. **Out of v1 scope** (see 0037 OQ #4).

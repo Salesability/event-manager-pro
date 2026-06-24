@@ -72,6 +72,7 @@ erDiagram
     audience_sources ||--o{ quotes : "audience_source_id"
     campaigns ||--o{ billing_adjustments : "campaign_id · CASCADE"
     quotes ||--o| campaigns : "accepted_quote_id"
+    campaigns ||--o{ quotes : "campaign_id · SET NULL (0093)"
 
     quotes ||--o{ quote_line_items : "quote_id · CASCADE"
     quotes ||--o{ quote_attachments : "quote_id · CASCADE"

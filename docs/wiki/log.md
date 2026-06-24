@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-06-24 — Calendar surfaces commercial status + encourages upfront quote/MSA (chunk 0093)
+
+- **New state:** every Quote scopes to an event — `quotes.campaign_id` (nullable FK → `campaigns.id`, migration `0046`; backfill of accepted quotes from `accepted_quote_id` in `0047`). `createQuote` **requires** it (rejects + dealer-match guard); the quote composer gained a required **Event** picker (decision C). The calendar now resolves per-event quote + per-client MSA status (`loadCommercialStatusByCampaign`) and flags **exposed** events (`!(accepted quote && active MSA)`): event-detail badges + "⚠ exposed / ✓ protected" banner + Create-Quote/Send-MSA CTAs, and an amber ribbon dot. Booking hands off into a **"Create quote now?"** prompt (navigates to the prefilled composer; skippable).
+- **Why:** SME pushback — a booked event with no accepted quote + active MSA has no cancellation-fee protection (§2.iii), so the system should drive the commercial work upfront rather than defer it.
+- **Built via `/build`** (Phases 1–4 shipped; Phase 5 = this ingest + fixture). Deviation: "Create quote now" **navigates** to the prefilled composer page rather than opening it as an in-calendar modal (the just-booked campaign isn't in the calendar's client-side prop until a refresh; navigating loads it fresh). In-modal composer = a later refinement.
+- Pages touched: [`commercial-spine.md`](commercial-spine.md) (new "Calendar surfaces commercial status" section) + [`data-model.md`](data-model.md) (`campaigns ||--o{ quotes : campaign_id`).
+
 ## 2026-06-23 — MSA now carries a pre-applied Salesability counter-signature
 
 - **New state:** the MSA renderer (`src/lib/pdf/render-msa.ts`) embeds `public/shannon-signature.png` in the left **"For Salesability"** column above the underline, with "Shannon Tilley, President" + email + a **"Signed: <issuedDate>"** line. The Client receives an **already-counter-signed** MSA; the BoldSign envelope stays **single-signer** (Client only) — no second signer, no `client.ts`/webhook/DB change.
