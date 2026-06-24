@@ -14,6 +14,8 @@ Looking at the calendar, a coach can tell **per booked event** whether:
 
 Events still missing a quote or an active MSA are visually flagged at a glance (without opening the card), and acting on the gap is one click away from the event (create the quote, send the MSA).
 
+**Every quote belongs to an event (invariant).** A quote does not exist on its own — it is *always* scoped to an event (campaign). So `quotes.campaignId` is **required for new quotes** (app-enforced), not an optional convenience link. The DB column stays nullable only to tolerate legacy rows; new quotes must carry an event. This has a direct consequence: every quote-creation entry point must supply an event. Today three of the four entry points do **not** (the bare "New Quote" on `/quotes`, and the dealer-scoped "Create Quote" on the dealer detail page + dealer-list row) — they create dealer-only quotes. Under this invariant those must change (route through event selection / creation, or be removed). See Open question (e).
+
 **Date is mutable, link is not.** The booked date is provisional — coaches routinely move the event date *while working the quote* (the quote process settles the real date). The quote ⇄ event link must therefore be by **stable campaign id** (`quotes.campaignId`), never by date, so a quote stays attached to its event across date changes. (Keeping date-sensitive *content inside* a sent quote PDF in sync when the date moves is the existing quote re-send flow — see Non-goals.)
 
 ## Non-goals
@@ -40,6 +42,7 @@ Events still missing a quote or an active MSA are visually flagged at a glance (
 - **(b) Ribbon marker treatment.** Dot vs. icon vs. ribbon color/desaturation for "needs attention"? Must stay legible alongside the existing per-coach ribbon color.
 - **(c) "Needs attention" definition.** Exactly what flags an event: no quote at all? quote not yet accepted? no active MSA? a date-proximity factor (e.g. only flag events within N days)? Likely: *(no linked quote OR linked quote not accepted) OR (client has no active MSA)* — confirm.
 - **(d) Quote backfill.** Existing quotes have no `campaignId`; pre-existing events won't show a linked quote until re-linked. Acceptable (forward-only), or do we attempt a best-effort backfill from `campaigns.acceptedQuoteId`? (An accepted quote already pointed-to by a campaign can be back-linked cheaply.)
+- **(e) Event-less quote entry points** *(opened by the "every quote belongs to an event" invariant).* The bare **"New Quote"** on `/quotes` and the **"Create Quote"** on the dealer detail page + dealer-list row currently start a quote with only a dealer (no event). Under the invariant they must change. Options: **(A)** remove them — quotes can only be started from an event on the calendar; **(B)** route them through an **event step** first (pick an existing event for the dealer, or create one), then proceed to the composer; **(C)** add an event picker inside the composer that's required before the quote can be saved. Recommendation: **B** (least surprising — keeps the dealer-first entry but inserts the event the quote will scope to). Whether to enforce `campaignId` NOT NULL at the DB (vs. app-only) depends on whether (d)'s backfill reaches 100%.
 
 ## Why now
 

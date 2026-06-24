@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Data — link quote → event (`quotes.campaignId`) | Pending | - |
+| 1: Data — require quote → event link (`quotes.campaignId`) | Pending | - |
 | 2: Queries — resolve per-event quote + per-client MSA status | Pending | - |
 | 3: Event-detail card — badges + CTAs | Pending | - |
 | 4: Calendar ribbon — needs-attention marker | Pending | - |
@@ -41,15 +41,18 @@ For each new file or method below, the builder reads the anchor first and matche
 - Each phase includes both implementation and tests.
 - Integration tests come last (Phase 5), after the feature phases pass — verifies real DB behavior (the `campaignId` persistence + resolver).
 - **Settle Open question (a) scope tier and (c) "needs attention" definition before starting Phase 3/4** — they shape the UI and the marker predicate.
+- **Settle Open question (e) before Phase 1** — "every quote belongs to an event" makes `campaignId` app-required, which *breaks the three event-less quote entry points* until they're reconciled (route through event select/create, or remove). That reconciliation is in-scope here, not a follow-up.
 
 ### Phase Checklist
 
-#### Phase 1: Data — link quote → event (`quotes.campaignId`)
-- [ ] Add nullable `campaignId` bigint FK on `quotes` → `campaigns.id` (`onDelete: 'set null'`) + `quotes_campaign_id_idx`
+#### Phase 1: Data — require quote → event link (`quotes.campaignId`)
+- [ ] Add `campaignId` bigint FK on `quotes` → `campaigns.id` (`onDelete: 'set null'`); **nullable column** (tolerates legacy rows) but **app-required for new quotes** (invariant). Add `quotes_campaign_id_idx`
 - [ ] Generate the migration via `db-conventions` (drizzle-kit), verify journal `when` ordering, apply to **sandbox** (session pooler 5432)
-- [ ] Persist `campaignId` in `createQuote` (Zod-parse the optional id; insert it)
-- [ ] Thread `initialCampaignId` from `/quotes/new` through to `createQuote` (the "Create Quote" CTA already passes `?campaignId=`)
-- [ ] Unit test: `createQuote` with a `campaignId` persists it; without → `null`
+- [ ] `createQuote`: make `campaignId` **required** (Zod, not optional) — reject a quote with no event; persist it on insert
+- [ ] Thread `campaignId` from `/quotes/new` → composer → `createQuote` (the event "Create Quote" CTA already passes `?campaignId=`)
+- [ ] **Reconcile the event-less entry points** (Open question e — settle before coding): the bare "New Quote" on `/quotes` (`quotes/page.tsx:23`), and "Create Quote" on the dealer page (`dealerships/[id]/page.tsx:238,253`) + dealer-list row (`dealers-columns.tsx:301`) must supply an event (route through event select/create, or remove). A required `campaignId` breaks these until reconciled — in-scope here.
+- [ ] Backfill existing accepted quotes from `campaigns.acceptedQuoteId` (reverse link) where present (Open question d); leave the rest null
+- [ ] Unit test: `createQuote` **rejects** when `campaignId` is absent; persists it when present
 
 #### Phase 2: Queries — resolve per-event quote + per-client MSA status
 - [ ] Resolver: given a campaign, return its linked quote (`quotes.campaignId = campaign.id`, latest) + `displayStatusKey`, and the dealer's MSA via `loadActiveOrPendingMsa(dealerId)`
