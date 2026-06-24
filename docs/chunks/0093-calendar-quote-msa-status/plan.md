@@ -40,8 +40,8 @@ For each new file or method below, the builder reads the anchor first and matche
 **Note:**
 - Each phase includes both implementation and tests.
 - Integration tests come last (Phase 5), after the feature phases pass — verifies real DB behavior (the `campaignId` persistence + resolver).
-- **Settle Open question (a) scope tier and (c) "needs attention" definition before starting Phase 3/4** — they shape the UI and the marker predicate.
-- **Settle Open question (e) before Phase 1** — "every quote belongs to an event" makes `campaignId` app-required, which *breaks the three event-less quote entry points* until they're reconciled (route through event select/create, or remove). That reconciliation is in-scope here, not a follow-up.
+- **Decisions settled** (see `intent.md` Open questions): **(a) Tier 1** — show status + link to existing tools, no inline create; **(c)** `needsAttention = !(quote?.status==='accepted' && msa?.status==='active')`; **(b)** amber needs-attention dot on the ribbon (finalize visually in Phase 4); **(d)** best-effort back-link accepted quotes, column stays nullable; **(e) B** — event-less entry points route through an event step.
+- **Phase 1 carries the invariant:** "every quote belongs to an event" makes `campaignId` app-required, which *breaks the three event-less quote entry points* until they're reconciled via decision B (route through event select/create). That reconciliation is in-scope here, not a follow-up.
 
 ### Phase Checklist
 
