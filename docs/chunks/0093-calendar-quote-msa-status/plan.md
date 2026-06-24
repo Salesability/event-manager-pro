@@ -10,7 +10,7 @@
 | 1: Data — require quote → event link + reconcile entry points | Done | - |
 | 2: Queries — quote + MSA status + protected/exposed | Done | - |
 | 3: Event-detail commercial surface — badges + exposed + CTAs | Done | - |
-| 4: Booking hand-off + ribbon exposure marker | Pending | - |
+| 4: Booking hand-off + ribbon exposure marker | Done | - |
 | 5: Tests + smoke verification | Pending | - |
 
 Booking is a dead-end today: it saves a date and closes, leaving the event an **exposed date-hold** with no Quote and maybe no MSA — i.e. no cancellation-fee protection (MSA §2iii needs an *accepted Quote* + a *signed MSA*). This chunk makes booking **lead into the commercial setup** as the encouraged default (create/send the Quote, sign the MSA if the client has none), reframes the calendar to flag **exposed** events (booked but not yet protected), and ties each Quote to its event so status is per-event. "Done" = after booking a coach lands on the event's commercial setup with one-click Create-Quote / Send-MSA, the calendar shows which events are still exposed, and quotes are required to scope to an event. We **encourage** (skippable default) and **hand off** to existing tools (no inline composer embed); cancellation-fee *math* stays out of scope (0037).
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `quotes` / `campaigns` / `master_service_agreements` columns + FK directions; update when `campaignId` lands.
 - `db-conventions` skill — additive nullable FK, migrate on the **session pooler (5432)**, Drizzle journal `when` gotcha, sandbox-before-prod.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests; integration tests come last (Phase 5).
@@ -66,11 +66,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] Visual smoke (manual): exposed card (no quote / no MSA) and protected card → deferred to the SME try-through / chunk-end smoke (Chrome driver not available in this session)
 
 #### Phase 4: Booking → "Create quote now?" hand-off + ribbon exposure marker
-- [ ] On **"Book Event" success**, replace `closeDialog` with a **directive next-step prompt**: "✓ Event booked — <dealer>, <dates>. Lock in the commercial side:" → **`[ Create quote now → ]`** (primary), **`[ Send MSA ]`** (only if the client has no active MSA → link to the dealer MSA panel), **`I'll do this later`** (quiet skip → close; event stays flagged exposed). Needs `createCampaign` to return the new campaign (or refetch by id) so the prompt knows the dealer/dates + can prefill the composer
-- [ ] **"Create quote now" → open the shared `QuoteComposer` as a MODAL over the calendar**, prefilled `initialDealerId` + `initialCampaignId` from the just-booked event. Reuse the same component `/quotes/new` renders (it's already props-driven); the work is making its **success/close behave in a modal** (currently page-oriented) — on save, close the modal back to the calendar
-- [ ] `drawRibbons`: overlay an **amber needs-attention dot** on `exposed` events (legible over the per-coach color); optional "needs attention" filter pill alongside the coach filter
-- [ ] Confirm no regression to the edit flow / availability dialog / gcal re-sync
-- [ ] Visual smoke (manual): book an event → "Create quote now?" prompt → composer modal prefilled with the event; skip → exposed event on the grid shows the marker → screenshot path
+- [x] On **"Book Event" success**, replaced `closeDialog` with a **directive prompt** (`booked-prompt` dialog state): "Event booked ✓ — lock in the commercial side" → **`[ Create quote now → ]`** (primary), **`[ Send MSA for signature ]`**, **`I'll do this later`** (quiet skip → close; event stays flagged exposed). `createCampaign` now returns `{ campaignId, dealerId }`; `BookingForm.onSuccess(booked?)` threads it back
+- [x] **"Create quote now" → navigates to the prefilled composer page** `/quotes/new?campaignId&dealerId` (NOT an in-calendar modal). **Deliberate deviation from the modal plan:** the just-booked campaign isn't in the calendar's client-side `campaigns` prop until a refresh, so the composer's Event picker wouldn't see it; navigating does a fresh server load where the event is present + prefills cleanly. Same "book → prompt → one-click prefilled composer" encouragement, far more robust. In-modal composer = a later refinement once the SME validates the flow
+- [x] `drawRibbons`: overlay an **amber exposed dot** at the ribbon's leading edge on `exposed` events (app mode; `commercialStatus` added to the redraw deps)
+- [x] Confirm no regression: `tsc` clean, 1210 unit tests pass; share-mode calendar unaffected (no `commercialStatus`, marker skipped)
+- [ ] Visual smoke (manual): book → "Create quote now?" prompt → prefilled composer; exposed ribbon dot → deferred to the SME try-through (Chrome driver not available in this session)
 
 #### Phase 5: Tests + smoke verification
 - [ ] Integration test: `createQuote` persists `campaignId` against the real DB; resolver returns correct per-event quote + per-client MSA + protected/exposed
