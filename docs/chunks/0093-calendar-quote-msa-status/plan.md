@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Data — require quote → event link + reconcile entry points | Pending | - |
+| 1: Data — require quote → event link + reconcile entry points | Done | - |
 | 2: Queries — quote + MSA status + protected/exposed | Pending | - |
 | 3: Event-detail commercial surface — badges + exposed + CTAs | Pending | - |
 | 4: Booking hand-off + ribbon exposure marker | Pending | - |
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `quotes` / `campaigns` / `master_service_agreements` columns + FK directions; update when `campaignId` lands.
 - `db-conventions` skill — additive nullable FK, migrate on the **session pooler (5432)**, Drizzle journal `when` gotcha, sandbox-before-prod.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests; integration tests come last (Phase 5).
@@ -46,12 +46,12 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Data — require quote → event link (`quotes.campaignId`)
-- [ ] Add `campaignId` bigint FK on `quotes` → `campaigns.id` (`onDelete: 'set null'`); **nullable column** (tolerates legacy) but **app-required for new quotes**. Add `quotes_campaign_id_idx`
-- [ ] Generate the migration via `db-conventions` (drizzle-kit), verify journal `when` ordering, apply to **sandbox** (session pooler 5432)
-- [ ] `createQuote`: make `campaignId` **required** (Zod) — reject a quote with no event; persist on insert
-- [ ] **Reconcile the event-less entry points via an event step (decision B):** "Create Quote" on the dealer page (`dealerships/[id]/page.tsx:238,253`) + dealer-list row (`dealers-columns.tsx:301`) → first pick an existing event for that dealer or **Book a new event** (reuse `BookingForm`), then continue to the composer with the chosen `campaignId`. The bare "New Quote" on `/quotes` (`quotes/page.tsx:23`) → dealer-select → event-select/create → composer
-- [ ] Backfill existing **accepted** quotes from `campaigns.acceptedQuoteId` (reverse link); leave the rest null
-- [ ] Unit test: `createQuote` **rejects** when `campaignId` is absent; persists it when present
+- [x] Add `campaignId` bigint FK on `quotes` → `campaigns.id` (`onDelete: 'set null'`); **nullable column** (tolerates legacy) but **app-required for new quotes**. Add `quotes_campaign_id_idx`
+- [x] Generate the migration via `db-conventions` (drizzle-kit), verify journal `when` ordering, apply to **sandbox** (session pooler 5432) — `0046_clean_yellowjacket.sql`, applied + verified (column/index/FK present)
+- [x] `createQuote`: make `campaignId` **required** — reject a quote with no event; persist on insert (+ event-belongs-to-dealer guard inside the tx)
+- [x] **Reconcile the event-less entry points via decision C (event-select in the composer)** — added a required Event `<select>` to `QuoteComposer` (create-mode), scoped to the chosen dealer (`campaigns` prop + `loadCampaigns()` in `/quotes/new`), replacing the old "campaign linkage lands later" placeholder. The dealer-page (`dealerships/[id]:238,253`) + dealer-list-row (`dealers-columns.tsx:301`) + bare "New Quote" (`quotes/page.tsx:23`) entries keep their links; the composer now demands the event. (Owner switched B→C 2026-06-24.) "+ Book a new event" inline option deferred — dealer must have an existing event for now.
+- [x] Backfill existing **accepted** quotes from `campaigns.acceptedQuoteId` (reverse link) — custom migration `0047_backfill_quote_campaign_id.sql` (idempotent UPDATE, fills NULLs only); applied to sandbox (0 rows — no accepted-spawned campaigns there; fills on prod)
+- [x] Unit test: `createQuote` **rejects** when `campaignId` is absent / event missing / event belongs to another client; **persists** + audits it when present (`actions.test.ts`)
 
 #### Phase 2: Queries — quote + MSA status + protected/exposed
 - [ ] Resolver: given a campaign, return its linked quote (`quotes.campaignId = campaign.id`, latest) + `displayStatusKey`, and the dealer's MSA via `loadActiveOrPendingMsa(dealerId)`
@@ -65,11 +65,12 @@ For each new file or method below, the builder reads the anchor first and matche
 - [ ] CTA **"Send MSA for signature"** when the client has no active MSA (link to the dealer MSA panel — the existing send surface; no inline send)
 - [ ] Visual smoke (manual): exposed card (no quote / no MSA) and protected card (accepted quote + active MSA) → screenshot path
 
-#### Phase 4: Booking hand-off + ribbon exposure marker
-- [ ] On **"Book Event" success**, open the new event's **detail card** (the Phase-3 commercial surface) instead of `closeDialog` — coach lands on the exposed state + CTAs (encourage upfront). Needs `createCampaign` to return enough to open the detail (return the row, or refetch by id); "finish later" = close the card (skippable)
+#### Phase 4: Booking → "Create quote now?" hand-off + ribbon exposure marker
+- [ ] On **"Book Event" success**, replace `closeDialog` with a **directive next-step prompt**: "✓ Event booked — <dealer>, <dates>. Lock in the commercial side:" → **`[ Create quote now → ]`** (primary), **`[ Send MSA ]`** (only if the client has no active MSA → link to the dealer MSA panel), **`I'll do this later`** (quiet skip → close; event stays flagged exposed). Needs `createCampaign` to return the new campaign (or refetch by id) so the prompt knows the dealer/dates + can prefill the composer
+- [ ] **"Create quote now" → open the shared `QuoteComposer` as a MODAL over the calendar**, prefilled `initialDealerId` + `initialCampaignId` from the just-booked event. Reuse the same component `/quotes/new` renders (it's already props-driven); the work is making its **success/close behave in a modal** (currently page-oriented) — on save, close the modal back to the calendar
 - [ ] `drawRibbons`: overlay an **amber needs-attention dot** on `exposed` events (legible over the per-coach color); optional "needs attention" filter pill alongside the coach filter
 - [ ] Confirm no regression to the edit flow / availability dialog / gcal re-sync
-- [ ] Visual smoke (manual): book an event → land on its (exposed) detail card; an exposed vs. protected event on the grid → screenshot path
+- [ ] Visual smoke (manual): book an event → "Create quote now?" prompt → composer modal prefilled with the event; skip → exposed event on the grid shows the marker → screenshot path
 
 #### Phase 5: Tests + smoke verification
 - [ ] Integration test: `createQuote` persists `campaignId` against the real DB; resolver returns correct per-event quote + per-client MSA + protected/exposed
