@@ -59,8 +59,11 @@ export function UserMenu({ email }: { email: string }) {
         <DropdownDivider />
         {/* Sign-out is a Server Action. Wrap the menu item in a `<form
             action={signOut}>` so the menu close + form submit don't race.
-            The DropdownItem renders as a submit button. */}
-        <form action={signOut}>
+            The DropdownItem renders as a submit button. `col-span-full` makes
+            the form span the menu's grid (the DropdownMenu is a grid); without
+            it the form collapses to the first `auto` column and the button —
+            and "Sign out" — wraps. */}
+        <form action={signOut} className="col-span-full">
           <DropdownItem type="submit">Sign out</DropdownItem>
         </form>
       </DropdownMenu>
