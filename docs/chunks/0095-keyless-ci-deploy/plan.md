@@ -15,8 +15,8 @@ project (IAM grant) + the GitHub connection + two triggers.
 |-------|--------|-------|
 | 1: Pipeline configs (prod + stage yaml + env-aware `submit-deploy.sh`) | Done | gate → build → **push** → deploy; two explicit configs; secrets stay in SM |
 | 2: **PROD local-first validation** (`submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
-| 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh`) | **Next — needs stage Compute-SA IAM grant** | proves the stage pipeline before wiring the `dev` trigger |
-| 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | Pending | connect repo (org admin) + two `triggers create`; removes local submit |
+| 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless stage build+deploy proven → rev `event-manager-pro-sandbox-00009-htc`, `APP_ENV=stage`, `/login`=200 |
+| 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | **Next — needs GitHub org admin** | connect repo (both projects) + two `triggers create`; removes local submit |
 | 5: First-push validation (push `dev`→stage, `main`→prod) | Pending | confirms both triggers end-to-end |
 
 ### Phase 3 — stage local-first (do next)
