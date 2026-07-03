@@ -55,9 +55,16 @@ SUBS+=",_GCS_BUCKET=${GCS_BUCKET}"
 SUBS+=",_GCS_PROJECT_ID=${GCS_PROJECT_ID:-}"
 SUBS+=",_RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}"
 
-echo "🏗️  Submitting build (gate → build → deploy)..."
+# Pin the build identity to the Compute SA (the one granted run.admin +
+# serviceAccountUser). The project also has the legacy @cloudbuild SA, so the
+# default is ambiguous — specifying it removes the guesswork and matches what the
+# future trigger will use. Requires CLOUD_LOGGING_ONLY (set in the config).
+BUILD_SA="${GCP_BUILD_SA:-projects/${PROJECT_ID}/serviceAccounts/1094204863648-compute@developer.gserviceaccount.com}"
+
+echo "🏗️  Submitting build (gate → build → deploy) as ${BUILD_SA##*/}..."
 exec gcloud builds submit \
   --config cloudbuild.deploy.yaml \
   --project="${PROJECT_ID}" \
+  --service-account="${BUILD_SA}" \
   --substitutions="${SUBS}" \
   .

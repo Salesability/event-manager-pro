@@ -74,7 +74,17 @@ steps:
       - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest
       - .
 
-  # 3) Deploy to Cloud Run as the trigger's service account (keyless). Mirrors
+  # 3) Push to the registry BEFORE deploy. (The `images:` block pushes only after
+  #    all steps finish — too late for an in-build deploy, which pulls from the
+  #    registry, not the build daemon.) `--all-tags` covers both tags built above.
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - gcr.io/$PROJECT_ID/${_SERVICE_NAME}
+
+  # 4) Deploy to Cloud Run as the trigger's service account (keyless). Mirrors
   #    the `gcloud run deploy` in deploy.sh: same env vars + secret mounts.
   #    BOLDSIGN_SENDER_EMAIL is intentionally omitted (onBehalfOf is inert; the
   #    Shannon-owned key handles sender attribution — chunk 0092).
@@ -94,9 +104,8 @@ steps:
       - --set-env-vars=^@@^NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}@@NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}@@SITE_URL=${_SITE_URL}@@APP_ENV=${_APP_ENV}@@MSA_TEMPLATE_VERSION=${_MSA_TEMPLATE_VERSION}@@GCS_BUCKET=${_GCS_BUCKET}@@GCS_PROJECT_ID=${_GCS_PROJECT_ID}@@RESEND_FROM_EMAIL=${_RESEND_FROM_EMAIL}@@BOLDSIGN_API_BASE_URL=${_BOLDSIGN_API_BASE_URL}@@QBO_ENV=production@@GOOGLE_CALENDAR_SA_EMAIL=${_GOOGLE_CALENDAR_SA_EMAIL}@@GOOGLE_CALENDAR_ID=${_GOOGLE_CALENDAR_ID}@@GOOGLE_CALENDAR_SUBJECT=${_GOOGLE_CALENDAR_SUBJECT}
       - --set-secrets=DATABASE_URL=database-url-production:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest,QBO_CLIENT_ID=quickbooks-client-id:latest,QBO_CLIENT_SECRET=quickbooks-client-secret:latest,QBO_TOKEN_ENC_KEY=quickbooks-token-enc-key:latest
 
-images:
-  - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_IMAGE_TAG}
-  - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest
+# No `images:` block — the push step above already uploads both tags before the
+# deploy. Listing them here would trigger a second, post-deploy push (wasteful).
 
 options:
   logging: CLOUD_LOGGING_ONLY
