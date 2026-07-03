@@ -15,7 +15,7 @@ project (IAM grant) + the GitHub connection + two triggers.
 |-------|--------|-------|
 | 1: Pipeline configs (prod + stage yaml + env-aware `submit-deploy.sh`) | Done | gate → build → **push** → deploy; two explicit configs; secrets stay in SM |
 | 2: **PROD local-first validation** (`submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
-| 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=sandbox ./scripts/submit-deploy.sh`) | **Next — needs stage Compute-SA IAM grant** | proves the stage pipeline before wiring the `dev` trigger |
+| 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh`) | **Next — needs stage Compute-SA IAM grant** | proves the stage pipeline before wiring the `dev` trigger |
 | 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | Pending | connect repo (org admin) + two `triggers create`; removes local submit |
 | 5: First-push validation (push `dev`→stage, `main`→prod) | Pending | confirms both triggers end-to-end |
 
@@ -36,7 +36,7 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member="serviceAccount:485010152235-compute@developer.gserviceaccount.com" \
   --role=roles/iam.serviceAccountUser
 ```
-Then: `DEPLOY_APP_ENV=sandbox ./scripts/submit-deploy.sh` → new
+Then: `DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh` → new
 `event-manager-pro-sandbox` revision; smoke its `.run.app/login`.
 
 **Phase 2 result (2026-07-03):** `DEPLOY_CONFIRM=production ./scripts/submit-deploy.sh`
@@ -84,8 +84,9 @@ config — nothing about the build/deploy changes.
 
 - `cloudbuild.deploy.yaml` — PROD build config (`main`→prod). Mirrors `deploy.sh`'s
   `gcloud run deploy` env-vars + `--set-secrets`.
-- `cloudbuild.deploy.stage.yaml` — STAGE build config (`dev`→stage): sandbox APP_ENV,
-  `database-url` secret, `EMAIL_DEV_TO`, no QBO/Calendar.
+- `cloudbuild.deploy.stage.yaml` — STAGE build config (`dev`→stage): `APP_ENV=stage`,
+  `database-url` secret, `EMAIL_DEV_TO`, no QBO/Calendar. (Service is named
+  `event-manager-pro-sandbox` — a legacy pin; the environment is "stage".)
 - `scripts/submit-deploy.sh` — env-aware local wrapper (`DEPLOY_APP_ENV` picks prod
   vs stage: project + config + dotfile + build SA).
 - `deploy.sh` — the local fallback; its deploy section is the source of truth for

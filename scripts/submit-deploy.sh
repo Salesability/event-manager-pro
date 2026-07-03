@@ -5,9 +5,10 @@
 # runs server-side as the target project's Compute SA; only the submit needs
 # local auth.
 #
-# One knob, DEPLOY_APP_ENV (mirrors deploy.sh):
+# One knob, DEPLOY_APP_ENV (any value other than 'production' routes to stage):
 #   production (default) → eventpro-498313 / event-manager-pro         / cloudbuild.deploy.yaml       / .env.production.local
-#   sandbox              → eventpro-stage  / event-manager-pro-sandbox / cloudbuild.deploy.stage.yaml / .env.local
+#   stage                → eventpro-stage  / event-manager-pro-sandbox / cloudbuild.deploy.stage.yaml / .env.local
+#                          (env is "stage"; the service is named …-sandbox for legacy continuity)
 #
 # Prereq (one time per project): `gcloud auth login`, and that project's Compute
 # SA must have roles/run.admin + roles/iam.serviceAccountUser (on itself) — see
@@ -15,7 +16,7 @@
 #
 # Usage:
 #   DEPLOY_CONFIRM=production ./scripts/submit-deploy.sh    # prod
-#   DEPLOY_APP_ENV=sandbox    ./scripts/submit-deploy.sh    # stage
+#   DEPLOY_APP_ENV=stage      ./scripts/submit-deploy.sh    # stage
 set -euo pipefail
 
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-production}"

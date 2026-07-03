@@ -14,9 +14,14 @@
 # --project, and the secret mounts all target stage automatically.
 
 substitutions:
+  # The environment is "stage". The service is (historically) named
+  # event-manager-pro-sandbox — a legacy pin, not worth a live-service migration.
   _SERVICE_NAME: event-manager-pro-sandbox
   _REGION: us-east4
-  _APP_ENV: sandbox
+  # Runtime APP_ENV. 'stage' is safe: the app only gates on APP_ENV==='production'
+  # (isProductionEnv), so any non-prod value behaves identically (BoldSign
+  # isSandbox=true, mail via EMAIL_DEV_TO). Was 'sandbox' pre-2026-07-03.
+  _APP_ENV: stage
   _IMAGE_TAG: latest
   _SITE_URL: https://event-manager-pro-sandbox-p5mcu2hrga-uk.a.run.app
   # Set on the trigger / local wrapper from .env.local (stage Supabase project).
@@ -68,8 +73,9 @@ steps:
       - --all-tags
       - gcr.io/$PROJECT_ID/${_SERVICE_NAME}
 
-  # 4) Deploy to Cloud Run. Sandbox: APP_ENV=sandbox (BoldSign isSandbox=true,
-  #    mail via EMAIL_DEV_TO), DB secret `database-url`, NO QBO / Calendar mounts.
+  # 4) Deploy to Cloud Run. Stage: APP_ENV=stage (non-prod → BoldSign
+  #    isSandbox=true, mail via EMAIL_DEV_TO), DB secret `database-url`, NO
+  #    QBO / Calendar mounts.
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
