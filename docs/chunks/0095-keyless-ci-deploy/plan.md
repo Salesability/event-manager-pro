@@ -12,10 +12,23 @@ owner's GitHub-org-admin + a single interactive gcloud auth.
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1: Pipeline config (`cloudbuild.deploy.yaml` + `scripts/submit-deploy.sh`) | Done | gate → build → deploy; submit-safe `_IMAGE_TAG`; secrets stay in SM |
-| 2: **Local-first validation** (`submit-deploy.sh` via `gcloud builds submit`) | **Next — needs 1× `gcloud auth login` + CI-SA IAM grant** | proves the exact pipeline server-side; ships the sign-out fix; no GitHub yet |
+| 1: Pipeline config (`cloudbuild.deploy.yaml` + `scripts/submit-deploy.sh`) | Done | gate → build → **push** → deploy; submit-safe `_IMAGE_TAG`; secrets stay in SM |
+| 2: **Local-first validation** (`submit-deploy.sh` via `gcloud builds submit`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
 | 3: GitHub trigger bootstrap (connect repo + `triggers create`) | Pending | removes the local submit/auth entirely (push = deploy) |
 | 4: First-push validation (push → build → deploy → smoke) | Pending | confirms the auto-trigger end-to-end |
+
+**Phase 2 result (2026-07-03):** `DEPLOY_CONFIRM=production ./scripts/submit-deploy.sh`
+built + deployed prod **keyless** (build ran as the Compute SA
+`1094204863648-compute@…`, no interactive gcloud in the pipeline). Two fixes found
+en route: (a) **submit-safe `_IMAGE_TAG`** (built-in `$SHORT_SHA` is empty for a
+manual submit); (b) **explicit `push` step before `deploy`** — the `images:` block
+pushes only *after* all steps, so the first run's deploy hit *"Image … not found."*
+Removed `images:`. **IAM granted to the Compute SA** (owner ran, 2026-07-03):
+`roles/run.admin` (project) + `roles/iam.serviceAccountUser` (on itself; it's also
+the runtime SA). Per-secret `secretAccessor` from `deploy.sh` already covered
+`--set-secrets`; `--allow-unauthenticated` set the public-invoker IAM with no
+org-policy block. Result rev `-00040-gp7` (image `:20260703-172414`); smoke
+`/login`=200; BoldSign still `:latest`=v4, `BOLDSIGN_SENDER_EMAIL` absent.
 
 ### Phase 2 — local-first (do this first)
 
