@@ -23,6 +23,11 @@ substitutions:
   _SERVICE_NAME: event-manager-pro
   _REGION: us-east4
   _APP_ENV: production
+  # Image tag. Defaults to 'latest' so a manual `gcloud builds submit` (where the
+  # built-in $SHORT_SHA is empty) still produces a valid tag; the local wrapper
+  # (scripts/submit-deploy.sh) overrides it with a timestamp, and a future GitHub
+  # trigger can set it to $SHORT_SHA for commit-level traceability.
+  _IMAGE_TAG: latest
   # Set on the trigger from .env.production.local (see 0095 runbook).
   _NEXT_PUBLIC_SUPABASE_URL: ''
   _NEXT_PUBLIC_SUPABASE_ANON_KEY: ''
@@ -64,7 +69,7 @@ steps:
       - --build-arg
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}
       - -t
-      - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA
+      - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_IMAGE_TAG}
       - -t
       - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest
       - .
@@ -80,7 +85,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE_NAME}
-      - --image=gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA
+      - --image=gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_IMAGE_TAG}
       - --project=$PROJECT_ID
       - --region=${_REGION}
       - --platform=managed
@@ -90,7 +95,7 @@ steps:
       - --set-secrets=DATABASE_URL=database-url-production:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest,QBO_CLIENT_ID=quickbooks-client-id:latest,QBO_CLIENT_SECRET=quickbooks-client-secret:latest,QBO_TOKEN_ENC_KEY=quickbooks-token-enc-key:latest
 
 images:
-  - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA
+  - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${_IMAGE_TAG}
   - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest
 
 options:

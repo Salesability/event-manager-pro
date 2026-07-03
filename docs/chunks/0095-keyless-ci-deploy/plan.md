@@ -12,9 +12,38 @@ owner's GitHub-org-admin + a single interactive gcloud auth.
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1: Pipeline config (`cloudbuild.deploy.yaml`) | Done | gate → build → deploy; parametrized; secrets stay in SM |
-| 2: One-time bootstrap (auth + GitHub connect + IAM + trigger) | **Blocked on owner** | needs `gcloud auth login` + GitHub org admin |
-| 3: First-run validation (push → build → deploy → smoke) | Pending | first push to `main` is the real test (deploys prod) |
+| 1: Pipeline config (`cloudbuild.deploy.yaml` + `scripts/submit-deploy.sh`) | Done | gate → build → deploy; submit-safe `_IMAGE_TAG`; secrets stay in SM |
+| 2: **Local-first validation** (`submit-deploy.sh` via `gcloud builds submit`) | **Next — needs 1× `gcloud auth login` + CI-SA IAM grant** | proves the exact pipeline server-side; ships the sign-out fix; no GitHub yet |
+| 3: GitHub trigger bootstrap (connect repo + `triggers create`) | Pending | removes the local submit/auth entirely (push = deploy) |
+| 4: First-push validation (push → build → deploy → smoke) | Pending | confirms the auto-trigger end-to-end |
+
+### Phase 2 — local-first (do this first)
+
+Runs the SAME `cloudbuild.deploy.yaml` the trigger will use, but kicked off by
+`gcloud builds submit` instead of a git push. The build (incl. the Cloud Run
+deploy step) runs server-side as the **Cloud Build service account** — only the
+submit needs local auth. Proves the pipeline before we touch GitHub, and ships
+the pending sign-out fix (`84a8bb6`).
+
+1. `gcloud auth login` (one interactive login).
+2. **Confirm which SA `builds submit` runs as** and grant it deploy perms (the
+   Compute SA already has `secretAccessor` on the prod secrets as the runtime SA):
+   ```
+   CB_SA=1094204863648-compute@developer.gserviceaccount.com   # confirm after auth
+   gcloud iam service-accounts add-iam-policy-binding \
+     1094204863648-compute@developer.gserviceaccount.com \
+     --project=eventpro-498313 --member="serviceAccount:${CB_SA}" \
+     --role=roles/iam.serviceAccountUser
+   for R in roles/run.admin roles/secretmanager.secretAccessor; do
+     gcloud projects add-iam-policy-binding eventpro-498313 \
+       --member="serviceAccount:${CB_SA}" --role="$R" --condition=None --quiet
+   done
+   ```
+3. `DEPLOY_CONFIRM=production ./scripts/submit-deploy.sh` → watch gate → build →
+   deploy → new revision. Smoke `https://eventpro.salesability.ca/login` = 200.
+
+Once Phase 2 is green, Phase 3 just swaps the trigger *in front of* the same
+config — nothing about the build/deploy changes.
 
 ## Code Anchors
 
