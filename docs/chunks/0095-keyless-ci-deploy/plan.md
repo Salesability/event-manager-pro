@@ -3,19 +3,41 @@
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-07-03
 
-Move prod deploys off the laptop into a Cloud Build **GitHub trigger** so no
-`gcloud auth login` / SA key is ever needed. Pipeline config authored
-(`cloudbuild.deploy.yaml`); the rest is a **one-time bootstrap** that needs the
-owner's GitHub-org-admin + a single interactive gcloud auth.
+Move deploys off the laptop into Cloud Build **GitHub triggers** (keyless) with a
+**`dev` → STAGE / `main` → PROD** branch split. Two pipeline configs authored
+(`cloudbuild.deploy.yaml` prod + `cloudbuild.deploy.stage.yaml` stage) + an
+env-aware `scripts/submit-deploy.sh`; the rest is a **one-time bootstrap** per
+project (IAM grant) + the GitHub connection + two triggers.
 
 ## Progress Tracker
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 1: Pipeline config (`cloudbuild.deploy.yaml` + `scripts/submit-deploy.sh`) | Done | gate → build → **push** → deploy; submit-safe `_IMAGE_TAG`; secrets stay in SM |
-| 2: **Local-first validation** (`submit-deploy.sh` via `gcloud builds submit`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
-| 3: GitHub trigger bootstrap (connect repo + `triggers create`) | Pending | removes the local submit/auth entirely (push = deploy) |
-| 4: First-push validation (push → build → deploy → smoke) | Pending | confirms the auto-trigger end-to-end |
+| 1: Pipeline configs (prod + stage yaml + env-aware `submit-deploy.sh`) | Done | gate → build → **push** → deploy; two explicit configs; secrets stay in SM |
+| 2: **PROD local-first validation** (`submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
+| 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=sandbox ./scripts/submit-deploy.sh`) | **Next — needs stage Compute-SA IAM grant** | proves the stage pipeline before wiring the `dev` trigger |
+| 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | Pending | connect repo (org admin) + two `triggers create`; removes local submit |
+| 5: First-push validation (push `dev`→stage, `main`→prod) | Pending | confirms both triggers end-to-end |
+
+### Phase 3 — stage local-first (do next)
+
+Same as Phase 2 but for stage. Stage lives in **`eventpro-stage`** (project number
+`485010152235`), so its Compute SA needs the same two grants (a separate project =
+a separate bootstrap). Per-secret `secretAccessor` from a prior `deploy.sh` stage
+run already covers `--set-secrets`.
+
+```
+# owner runs (same shape as the prod grant):
+gcloud projects add-iam-policy-binding eventpro-stage \
+  --member="serviceAccount:485010152235-compute@developer.gserviceaccount.com" \
+  --role=roles/run.admin --condition=None
+gcloud iam service-accounts add-iam-policy-binding \
+  485010152235-compute@developer.gserviceaccount.com --project=eventpro-stage \
+  --member="serviceAccount:485010152235-compute@developer.gserviceaccount.com" \
+  --role=roles/iam.serviceAccountUser
+```
+Then: `DEPLOY_APP_ENV=sandbox ./scripts/submit-deploy.sh` → new
+`event-manager-pro-sandbox` revision; smoke its `.run.app/login`.
 
 **Phase 2 result (2026-07-03):** `DEPLOY_CONFIRM=production ./scripts/submit-deploy.sh`
 built + deployed prod **keyless** (build ran as the Compute SA
@@ -60,71 +82,63 @@ config — nothing about the build/deploy changes.
 
 ## Code Anchors
 
-- `cloudbuild.deploy.yaml` — the trigger's build config (this chunk). Mirrors
-  `deploy.sh`'s `gcloud run deploy` env-vars + `--set-secrets`.
+- `cloudbuild.deploy.yaml` — PROD build config (`main`→prod). Mirrors `deploy.sh`'s
+  `gcloud run deploy` env-vars + `--set-secrets`.
+- `cloudbuild.deploy.stage.yaml` — STAGE build config (`dev`→stage): sandbox APP_ENV,
+  `database-url` secret, `EMAIL_DEV_TO`, no QBO/Calendar.
+- `scripts/submit-deploy.sh` — env-aware local wrapper (`DEPLOY_APP_ENV` picks prod
+  vs stage: project + config + dotfile + build SA).
 - `deploy.sh` — the local fallback; its deploy section is the source of truth for
-  the env-var / secret set the pipeline must match.
+  the env-var / secret set each pipeline must match.
 - `cloudbuild.yaml` — build-only; still used by `deploy.sh`. **Left untouched.**
 - `Dockerfile` — `node:22-alpine`; `pnpm build` (next build) gates tsc + eslint.
 
-## One-time bootstrap runbook
+## Phase 4 — GitHub trigger bootstrap (two triggers)
 
-Run once, in order. After this, deploys are just `git push origin main`.
+Run once. After this, deploys are just `git push origin dev` (→ stage) and
+`git push origin main` (→ prod). IAM for both Compute SAs is done in Phases 2/3.
 
-**0. Re-auth once** (only needed for the bootstrap gcloud calls below; the trigger
-itself is keyless afterward):
-```
-gcloud auth login
-```
-
-**1. Sync GitHub** — local `main` is ~244 commits ahead of `origin/main` (we've been
-deploying from the working tree, not GitHub). The trigger deploys what's on GitHub,
-so push first:
+**1. Sync GitHub** — local `main` is ~244 commits ahead of `origin/main` (we deploy
+from the working tree, not GitHub). Push both branches (`dev` branched off `main`
+2026-07-03):
 ```
 git push origin main
+git push origin dev
 ```
 
-**2. Connect the repo to Cloud Build (2nd-gen)** — Console → Cloud Build →
-Repositories → **Connect repository** → **GitHub (Cloud Build GitHub App)** →
-install the app on the **EventPro2026** org (needs GitHub org admin) → select
-**event-manager-pro**. Region **us-east4**. (CLI equivalent:
-`gcloud builds connections create github …` + `gcloud builds repositories create …`.)
+**2. Connect the repo to Cloud Build (2nd-gen), one connection per project** —
+Console → Cloud Build → Repositories → **Connect repository** → **GitHub App** →
+install on the **EventPro2026** org (needs GitHub org admin) → select
+`event-manager-pro`. Do this in **both** `eventpro-498313` and `eventpro-stage`
+(each project needs its own connection). Region **us-east4**.
 
-**3. Grant the trigger's service account deploy perms** — decide the SA at trigger
-creation (a dedicated `ci-deployer@eventpro-498313…` is cleaner than the default
-Compute SA). Minimal roles:
+**3. Create the two triggers** (values from the matching dotfile):
 ```
-# act-as the Cloud Run runtime SA
-gcloud iam service-accounts add-iam-policy-binding \
-  1094204863648-compute@developer.gserviceaccount.com \
-  --project=eventpro-498313 \
-  --member="serviceAccount:<CI_SA>" \
-  --role=roles/iam.serviceAccountUser
-# deploy Cloud Run + read secrets for --set-secrets validation + write build logs
-for R in roles/run.admin roles/secretmanager.secretAccessor roles/logging.logWriter roles/artifactregistry.writer; do
-  gcloud projects add-iam-policy-binding eventpro-498313 \
-    --member="serviceAccount:<CI_SA>" --role="$R" --condition=None --quiet
-done
-```
-
-**4. Create the push-to-main trigger** — substitution values come from
-`.env.production.local` (public/non-secret). One way to build the flags:
-```
+# PROD — main → eventpro-498313
 set -a; . ./.env.production.local; set +a
-gcloud builds triggers create github \
-  --name=deploy-prod-on-main \
+gcloud builds triggers create github --name=deploy-prod-on-main \
   --region=us-east4 --project=eventpro-498313 \
   --repository="projects/eventpro-498313/locations/us-east4/connections/<CONN>/repositories/event-manager-pro" \
-  --branch-pattern='^main$' \
-  --build-config=cloudbuild.deploy.yaml \
-  --service-account="projects/eventpro-498313/serviceAccounts/<CI_SA>" \
+  --branch-pattern='^main$' --build-config=cloudbuild.deploy.yaml \
+  --service-account="projects/eventpro-498313/serviceAccounts/1094204863648-compute@developer.gserviceaccount.com" \
   --substitutions="_NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL},_NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY},_MSA_TEMPLATE_VERSION=${MSA_TEMPLATE_VERSION},_GCS_BUCKET=${GCS_BUCKET},_GCS_PROJECT_ID=${GCS_PROJECT_ID},_RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}"
+
+# STAGE — dev → eventpro-stage
+set -a; . ./.env.local; set +a
+gcloud builds triggers create github --name=deploy-stage-on-dev \
+  --region=us-east4 --project=eventpro-stage \
+  --repository="projects/eventpro-stage/locations/us-east4/connections/<CONN>/repositories/event-manager-pro" \
+  --branch-pattern='^dev$' --build-config=cloudbuild.deploy.stage.yaml \
+  --service-account="projects/eventpro-stage/serviceAccounts/485010152235-compute@developer.gserviceaccount.com" \
+  --substitutions="_NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL},_NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY},_MSA_TEMPLATE_VERSION=${MSA_TEMPLATE_VERSION},_GCS_BUCKET=${GCS_BUCKET},_GCS_PROJECT_ID=${GCS_PROJECT_ID},_RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL},_EMAIL_DEV_TO=${EMAIL_DEV_TO}"
 ```
 
-**5. Validate (Phase 3)** — push a trivial commit to `main`, watch the build in
-Cloud Build, confirm: gate passes → image built → `gcloud run deploy` → new
-revision serving → `curl https://eventpro.salesability.ca/login` = 200. The
-already-committed **sign-out wrap fix** (`84a8bb6`) rides out on this first push.
+**4. Validate (Phase 5)** — push a trivial commit to `dev` → stage build+deploy →
+smoke the sandbox URL; then merge `dev`→`main` → prod build+deploy → smoke
+`eventpro.salesability.ca/login`.
+
+**Promotion flow (steady state):** feature branch → merge to `dev` (auto stage) →
+validate → merge `dev`→`main` (auto prod).
 
 ## Gotchas / notes
 

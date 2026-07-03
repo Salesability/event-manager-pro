@@ -19,24 +19,33 @@ work; `git push` becomes the deploy action.
 
 ## Decisions (settled)
 
-- **Trigger = push to `main` → PROD** (owner chose max convenience over the
-  deliberate-prod discipline, 2026-07-03). Every merge to `main` deploys prod.
-- **Compensating gate:** because this drops deploy.sh's typed
-  `DEPLOY_CONFIRM=production`, the pipeline runs the **unit suite before deploy**
-  (`cloudbuild.deploy.yaml` → `test-gate`). A red commit fails the build and never
-  ships. The image build (`next build`) already gates tsc + eslint.
+- **Branch-per-env split (updated 2026-07-03):** **`dev` → STAGE**
+  (`event-manager-pro-sandbox` / `eventpro-stage`), **`main` → PROD**
+  (`event-manager-pro` / `eventpro-498313`). Two triggers, one per branch. Gives a
+  staging buffer — `main` only gets what's been proven on `dev` — and maps onto the
+  existing `DEPLOY_APP_ENV` sandbox/prod split. (Supersedes the earlier
+  push-to-main-only design.)
+- **Compensating gate:** each pipeline runs the **unit suite before deploy**
+  (`test-gate` step). A red commit fails the build and never ships. The image build
+  (`next build`) already gates tsc + eslint.
 - **Integration tests excluded from the gate** — they hit the sandbox pooler and
   trip the `EMAXCONNSESSION` flake ([[feedback-integration-test-pooler-flake]]).
 - **Secrets stay in Secret Manager** (mounted `:latest`); only NON-secret config
   (public Supabase URL/anon key, GCS bucket, Resend from-address, MSA template
-  version) moves to **trigger substitutions**.
+  version, stage's `EMAIL_DEV_TO`) moves to **trigger substitutions**.
+- **Two explicit configs, not one parametrized** — stage/prod diverge heavily
+  (project, service, DB secret, Supabase creds baked at build time, mail redirect,
+  sandbox BoldSign, no QBO/Calendar on stage), so `cloudbuild.deploy.yaml` (prod) +
+  `cloudbuild.deploy.stage.yaml` (stage) are clearer than hidden conditionals.
+- **Per-env images** — `NEXT_PUBLIC_SUPABASE_*` are baked into the client bundle at
+  build time and differ per env, so each branch builds its own image (no promotion).
 - **deploy.sh stays** as a manual fallback (hotfix when GitHub/Cloud Build is down).
 
 ## Non-goals
 
-- A separate **stage** trigger (main→stage). Deferred; the owner picked prod-only.
 - Retiring `deploy.sh` / the build-only `cloudbuild.yaml`.
 - Changing the runtime SA, secrets, or the Cloud Run service shape.
+- Image promotion (dev→prod reuse) — precluded by build-time-baked Supabase creds.
 
 ## Success criteria
 
