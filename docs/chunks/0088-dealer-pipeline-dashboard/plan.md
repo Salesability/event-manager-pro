@@ -61,7 +61,7 @@ Kanban board (all later).
 
 #### Phase 3: Dashboard UI
 - [x] Dashboard page + view: funnel stat cards, by-owner table (+ stage breakdown), activity table (rep × this-week/last-30 + kind breakdown), blocker columns (stalled/stale/overdue, top-5 + "+N more"). New route `src/app/(app)/dealerships/pipeline/page.tsx` + server view `src/features/dealers/pipeline-dashboard.tsx`.
-- [x] Drill-through: funnel → `?status=prospect&stage=`, stale → `&idle=1`, overdue → `&due=overdue`, blocker rows → `/dealerships/[id]`; per the decision.md drill-through contract. Added a "Pipeline dashboard →" entry point in the `/dealerships` header.
+- [x] Drill-through: funnel → `?status=prospect&stage=`, overdue → `&due=overdue`, stalled/stale → `?status=prospect` (the queue has no stage-age/touch filter — `idle=1` means no-commitment, a different set), blocker rows → `/dealerships/[id]`; per the decision.md drill-through contract. Added a "Pipeline dashboard →" entry point in the `/dealerships` header.
 - [x] `assertCan('admin:access')` server-component gate (D2); reads `loadDealerPipelineDashboard()`. No client JS (all links) — no new gated action → no gate-matrix row.
 
 #### Phase 4: Tests + smoke

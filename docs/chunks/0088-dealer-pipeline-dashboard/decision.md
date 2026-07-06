@@ -48,9 +48,14 @@ Defined as module constants (config UI is a later chunk):
 
 - Non-archived, `status='prospect'` dealers only (active dealers have converted → not a
   pipeline blocker). Matches the queue's scope.
-- "Today" is computed in the viewer's local time, mirroring `localTodayIso()` in
-  [dealers-admin.tsx](../../../src/features/dealers/dealers-admin.tsx) — so overdue math
-  agrees with the queue's due-bucket math.
+- **"Today" is the server-timezone (UTC) date** at request time — the dashboard is a
+  server component with no viewer timezone available (the queue computes viewer-local
+  `localTodayIso()` *client-side*, which a server render can't replicate). During Atlantic
+  business hours the UTC date equals the local date; only in the late evening (after the UTC
+  midnight rollover) can the dashboard's overdue *count* run one day ahead of a viewer's local
+  reckoning. That's acceptable because the **queue stays the authoritative per-viewer view**;
+  the dashboard is a management overview. (Reconciled after Codex 0088 Medium flagged the
+  earlier "agrees with the queue" claim as contradicting the UTC implementation.)
 
 ## D4 — Facet depth (v1)
 
@@ -78,8 +83,8 @@ Every count links to the pre-filtered `/dealerships` queue via its existing URL 
 | A stage's funnel count | `/dealerships?status=prospect&stage=<stage>` |
 | An owner's workload | `/dealerships?status=prospect&mine=1` (own) — cross-owner deep-links need a per-owner param 0087 doesn't expose yet; v1 links owner rows to the unfiltered prospect queue |
 | Overdue blocker | `/dealerships?status=prospect&due=overdue` |
-| Stale blocker | `/dealerships?status=prospect&idle=1` (idle = no commitment/touch) |
-| Stalled blocker | no dedicated queue param today → link to `?status=prospect&stage=<stage>` |
+| Stale blocker | `/dealerships?status=prospect` — the queue has **no touch-based (stale) filter**; its `idle=1` means *no commitment* (`isIdle(nextAction)`), a **different set**, so linking there would mislead (Codex 0088 Medium). Card header → unfiltered prospect queue; blocker rows deep-link the exact dealer. |
+| Stalled blocker | no dedicated queue param today → card header links to `?status=prospect` |
 
 > **Open note for Phase 2/3:** the queue has no *by-specific-owner* param (only `mine=1`
 > = current user) and no *stalled* param. Where an exact pre-filter doesn't exist, link to
