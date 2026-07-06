@@ -2,11 +2,8 @@
 
 import { Megaphone } from 'lucide-react';
 import type { ColumnDef, FilterFn } from '@tanstack/react-table';
-import { Badge } from '@/components/catalyst/badge';
-import { CampaignStatusBadge } from '@/components/app/status-badge';
 import { RowIdentityCell } from '@/components/app/row-identity-cell';
 import type { Campaign } from '@/features/schedule/queries';
-import { type ProductionRange, isProductionRange, rangeWindowEndIso } from './filter';
 
 function fmtDate(iso: string): string {
   const d = new Date(`${iso}T12:00:00`);
@@ -23,45 +20,18 @@ export type CampaignColumnActions = {
   onEdit: (campaign: Campaign) => void;
 };
 
-/** Time-derived pill key, mirroring the legacy `CampaignStatusBadge`
- *  inputs (live/past/upcoming). `cancelled` is a separate row-state
- *  surfaced as a fourth pill so the filter pill can distinguish it. */
-export type CampaignTimeStatus = 'live' | 'past' | 'upcoming' | 'cancelled';
-
-export function campaignTimeStatus(c: Campaign, todayIso: string): CampaignTimeStatus {
-  if (c.status === 'cancelled') return 'cancelled';
-  if (c.endDate < todayIso) return 'past';
-  if (c.startDate <= todayIso && c.endDate >= todayIso) return 'live';
-  return 'upcoming';
-}
-
 export function buildProductionColumns(
   actions: CampaignColumnActions,
-  todayIso: string,
 ): ColumnDef<Campaign>[] {
-  // Filter closes over `todayIso` so it stays in lockstep with cell
-  // rendering. Recomputing the date inside the filterFn would let the
-  // UI pill drift from the badge / CSV near midnight or when the
-  // browser timezone differs from the deploy server's (Codex Medium
-  // surfaced this — Toronto-server vs. ET-client at 23:55).
-  // The forward-window ends are likewise precomputed off the same
-  // `todayIso` so the `1m`/`2m`/`3m` ranges can't drift per row.
-  const rangeWindowEnds: Record<ProductionRange, string> = {
-    '1m': rangeWindowEndIso(todayIso, '1m'),
-    '2m': rangeWindowEndIso(todayIso, '2m'),
-    '3m': rangeWindowEndIso(todayIso, '3m'),
-  };
-  const filterTimeStatus: FilterFn<Campaign> = (row, _columnId, filterValue: unknown) => {
+  // "Show cancelled" is the only remaining production-list filter (0096
+  // replaced the derived Status column with a sortable Date column and
+  // retired the time-window dropdown a date sort supersedes). It's re-homed
+  // onto the Date column below: hide `status === 'cancelled'` rows unless the
+  // toolbar checkbox is on. No `todayIso` needed anymore.
+  const filterShowCancelled: FilterFn<Campaign> = (row, _columnId, filterValue: unknown) => {
     if (!filterValue || typeof filterValue !== 'object') return true;
-    const { time, showCancelled } = filterValue as ProductionStatusFilter;
+    const { showCancelled } = filterValue as ProductionStatusFilter;
     if (!showCancelled && row.original.status === 'cancelled') return false;
-    if (time === 'upcoming') return row.original.endDate >= todayIso;
-    if (time === 'past') return row.original.endDate < todayIso;
-    // Forward window: live/upcoming campaigns (endDate >= today) that begin
-    // on or before the window closes.
-    if (isProductionRange(time)) {
-      return row.original.endDate >= todayIso && row.original.startDate <= rangeWindowEnds[time];
-    }
     return true;
   };
 
@@ -86,19 +56,18 @@ export function buildProductionColumns(
       enableSorting: true,
     },
     {
-      id: 'status',
-      accessorFn: (c) => campaignTimeStatus(c, todayIso),
-      header: 'Status',
-      filterFn: filterTimeStatus,
-      cell: ({ row }) => {
-        const c = row.original;
-        if (c.status === 'cancelled') {
-          return <Badge color="red">Cancelled</Badge>;
-        }
-        const past = c.endDate < todayIso;
-        const live = c.startDate <= todayIso && c.endDate >= todayIso;
-        return <CampaignStatusBadge live={live} past={past} />;
-      },
+      id: 'date',
+      accessorKey: 'startDate',
+      header: 'Date',
+      // Hosts the re-homed "Show cancelled" filter (0096); the filter value
+      // only carries `showCancelled`, and `filterShowCancelled` ignores this
+      // column's own value. ISO `YYYY-MM-DD` sorts lexically = chronologically.
+      filterFn: filterShowCancelled,
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs tabular-nums text-zinc-900">
+          {fmtDate(row.original.startDate)}
+        </span>
+      ),
       enableSorting: true,
     },
     {
@@ -213,13 +182,8 @@ export function buildProductionColumns(
 }
 
 export type ProductionStatusFilter = {
-  /** Time-window pill: `''` matches every non-cancelled row, `upcoming`
-   *  is `endDate >= today`, `past` is `endDate < today`. `1m`/`2m`/`3m`
-   *  are forward windows — campaigns running within the next N months
-   *  (see `rangeWindowEndIso` in `./filter`). */
-  time: '' | 'upcoming' | 'past' | ProductionRange;
-  /** When `false` (default), `status === 'cancelled'` rows are hidden
-   *  regardless of the time window — matches the legacy show-cancelled
-   *  checkbox behavior. */
+  /** When `false` (default), `status === 'cancelled'` rows are hidden —
+   *  matches the toolbar's "Show cancelled" checkbox. Re-homed onto the Date
+   *  column in 0096 (the derived Status column it used to ride on was removed). */
   showCancelled: boolean;
 };

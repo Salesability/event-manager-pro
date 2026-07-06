@@ -9,7 +9,6 @@ import {
 } from '@/features/schedule/queries';
 import { ProductionAdmin } from './production-admin';
 import { ProductionPageActions } from './production-page-actions';
-import { todayIso } from './filter';
 
 export default async function ProductionPage() {
   await assertCan('admin:access'); // expected: server-only
@@ -35,7 +34,6 @@ export default async function ProductionPage() {
         coaches={coaches}
         styles={styles}
         sources={sources}
-        todayIso={todayIso()}
       />
     </div>
   );

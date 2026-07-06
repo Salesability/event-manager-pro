@@ -26,7 +26,6 @@ type Props = {
   coaches: Coach[];
   styles: LookupOption[];
   sources: LookupOption[];
-  todayIso: string;
 };
 
 const campaignsGlobalFilterFn = makeNeedleFilter<Campaign>((c) => [
@@ -49,7 +48,6 @@ export function ProductionAdmin({
   coaches,
   styles,
   sources,
-  todayIso,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -102,15 +100,12 @@ export function ProductionAdmin({
 
   const [editing, setEditing] = useState<Campaign | null>(null);
 
-  const columns = useMemo(
-    () => buildProductionColumns({ onEdit: setEditing }, todayIso),
-    [todayIso],
-  );
+  const columns = useMemo(() => buildProductionColumns({ onEdit: setEditing }), []);
 
   const columnFilters: ColumnFiltersState = useMemo(() => {
-    const value: ProductionStatusFilter = { time, showCancelled };
-    return [{ id: 'status', value }];
-  }, [time, showCancelled]);
+    const value: ProductionStatusFilter = { showCancelled };
+    return [{ id: 'date', value }];
+  }, [showCancelled]);
 
   return (
     <>
@@ -159,7 +154,7 @@ export function ProductionAdmin({
           <DataTable
             columns={columns}
             data={campaigns}
-            initialSorting={[{ id: 'identity', desc: false }]}
+            initialSorting={[{ id: 'date', desc: false }]}
             globalFilter={globalFilter}
             onGlobalFilterChange={setGlobalFilter}
             globalFilterFn={campaignsGlobalFilterFn}
