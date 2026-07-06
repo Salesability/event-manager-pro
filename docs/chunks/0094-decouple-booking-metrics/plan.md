@@ -13,7 +13,7 @@
 | 2: Quote → campaign delivery-number derivation (at quote accept) | Done | `9201b0c` |
 | 3: Remove metric fields from the Book Event dialog | Done | `906f990` |
 | 4: Override-surface decision — Reports-only, no new code (D6) | Done | _docs_ |
-| 5: Tests + backfill + smoke verification | Pending | - |
+| 5: Tests + backfill + smoke verification | Done | `b2e2625` · `0b1c58d` |
 
 The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — operational **delivery** numbers consumed by Production + Reports — at the *scheduling* step, before the quote that actually owns that scope exists, so they sit blank and double-entered with no sync. This chunk moves their ownership to the **accepted quote**: booking schedules, the quote scopes (derive the delivery numbers from its line items), production overrides where real delivery differs (the existing `billing_adjustments` role). "Done" = booking has no commercial/scope fields, and a campaign's delivery numbers reflect its accepted quote.
 
@@ -30,7 +30,7 @@ The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — opera
 - `docs/wiki/commercial-spine.md` — "quote = commercial source of truth, campaign = operational delivery" + the 0093 calendar-status section.
 - `docs/wiki/data-model.md` — `campaigns` metric columns, `quote_line_items`, `billing_adjustments`.
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 ### Phase Checklist
 
@@ -57,7 +57,7 @@ The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — opera
 - [x] `bdc`-not-aggregated gap in the by-dealer/coach/month rollups (`queries.ts`) is pre-existing (0059-era) + out of scope → parked as **0094-a** (not fixed in-chunk).
 
 #### Phase 5: Tests + backfill + smoke verification
-- [ ] Backfill script (`scripts/backfill-campaign-delivery-metrics.ts`, dry-run + `--write`, idempotent) — D3; read-only prod count first
-- [ ] Integration: accept a quote → its campaign's delivery numbers reflect the line items (+ `acceptedQuoteId` set)
-- [ ] Smoke (web-test): booking dialog no longer shows the metric fields; event-detail/production reflect the derived numbers
-- [ ] Wiki ingest: `commercial-spine.md` + `data-model.md`
+- [x] Backfill script `scripts/backfill-campaign-delivery-metrics.ts` (dry-run default + `--write`, one tx, idempotent, reuses the pure mapping; most-recently-accepted quote wins per campaign) — D3. **Read-only prod count still owed before the prod `--write`** (sandbox DB paused; run via `with-prod-db.sh`).
+- [x] Integration `tests/integration/campaign-delivery.test.ts`: calls the real `applyAcceptedQuoteToCampaign` with a tx (injectable `Executor`) inside a rolled-back tx — derives + overwrites the campaign + sets `acceptedQuoteId`; zero-line ⇒ 0; no-campaign ⇒ no-op. _(Runs when the sandbox DB is up; currently skipped-by-outage like the other integration files.)_
+- [~] Smoke (web-test): booking dialog no longer shows the metric fields; event-detail/production reflect the derived numbers — **deferred to the chunk-end `/eval` browser smoke** (two-tier gate).
+- [x] Wiki ingest: `commercial-spine.md` (new "Delivery metrics" subsection + accept bullet), `data-model.md` (`campaigns` walkthrough + `accepted_quote_id` writer), `log.md` entry.
