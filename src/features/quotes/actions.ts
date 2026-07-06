@@ -1347,14 +1347,15 @@ export const acceptQuote = capabilityClient('quote:edit')
           payload: { from: 'prospect', via: 'quote.accepted' },
         });
       }
-    }
 
-    // 0094: snapshot the accepted quote's derived delivery metrics onto its
-    // campaign (+ record `campaigns.acceptedQuoteId`). Run on every confirmed-
-    // accepted call, not only the sent→accepted transition, so it's idempotent
-    // and self-heals a snapshot that failed on an earlier accept. Skips cleanly
-    // when the quote has no campaign link (legacy pre-0093 rows).
-    await applyAcceptedQuoteToCampaign(quoteId, userId);
+      // 0094: snapshot this quote's derived delivery metrics onto its campaign
+      // (+ record `campaigns.acceptedQuoteId`). Inside the `transitioned` guard
+      // so ONLY the real sent→accepted transition writes — re-accepting an older
+      // accepted quote (idempotent, transitioned=false) can't regress a campaign
+      // off its latest quote. Skips cleanly when the quote has no campaign link
+      // (legacy pre-0093) or the link is cross-dealer (guarded in the writer).
+      await applyAcceptedQuoteToCampaign(quoteId, userId);
+    }
 
     revalidateQuoteViews();
     return { ok: true };

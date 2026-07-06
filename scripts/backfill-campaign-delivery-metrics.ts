@@ -75,7 +75,11 @@ async function findCandidates(): Promise<Candidate[]> {
       c.accepted_quote_id::int  AS old_accepted_quote_id
     FROM public.quotes q
     JOIN public.campaigns c ON c.id = q.campaign_id
-    WHERE q.status = 'accepted' AND q.campaign_id IS NOT NULL
+    -- Only snapshot onto a campaign that belongs to the quote's dealer. A draft
+    -- dealer-swap (setQuoteDealer) can leave a stale cross-dealer campaign_id;
+    -- matching dealers here mirrors the live writer's cross-dealer guard so the
+    -- backfill can't overwrite another dealer's campaign either.
+    WHERE q.status = 'accepted' AND q.campaign_id IS NOT NULL AND c.dealer_id = q.dealer_id
     ORDER BY q.campaign_id, q.accepted_at DESC NULLS LAST, q.id DESC
   `);
   return rows.map((r) => ({

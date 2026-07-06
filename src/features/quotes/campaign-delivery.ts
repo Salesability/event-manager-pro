@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { campaigns, quoteLineItems, quotes } from '@/lib/db/schema';
 import { deriveDeliveryMetrics } from '@/lib/quotes/delivery-metrics';
@@ -24,20 +24,24 @@ type Executor = Database | Transaction;
 //
 // Not a Server Action (no `'use server'`): it's a server-only mutation called
 // downstream of the `acceptQuote` capability gate, same rationale as the
-// transition helpers in ./lifecycle.ts.
+// transition helpers in ./lifecycle.ts. The caller runs it **only on the real
+// sent→accepted transition** (inside `acceptQuote`'s `result.transitioned`
+// block, alongside the audit + prospect-promotion side effects) so re-accepting
+// an *older* accepted quote can't regress a campaign back off its latest quote.
 //
-// **Idempotent + self-healing.** `deriveDeliveryMetrics` is pure, so the same
-// accepted quote always writes the same four numbers. The caller runs this on
-// every confirmed-accepted `acceptQuote` (not only the sent→accepted
-// transition), so a snapshot that failed on the first accept is repaired by any
-// later re-accept — and the Phase-5 backfill can re-drive it too.
+// **Cross-dealer guard.** `setQuoteDealer` can swap a draft quote's `dealerId`
+// without reconciling its `campaignId`, so a quote's `campaignId` may point at a
+// *different* dealer's campaign. The UPDATE is therefore scoped to
+// `campaigns.dealerId = quote.dealerId` — a stale cross-dealer link matches 0
+// rows (no snapshot) rather than overwriting another dealer's campaign. The root
+// (reconcile `campaignId` on dealer-swap) is parked as a 0093/0094 follow-up.
 export async function applyAcceptedQuoteToCampaign(
   quoteId: number,
   updatedById: string | null = null,
   exec: Executor = db,
 ): Promise<void> {
   const [quote] = await exec
-    .select({ campaignId: quotes.campaignId })
+    .select({ campaignId: quotes.campaignId, dealerId: quotes.dealerId })
     .from(quotes)
     .where(eq(quotes.id, quoteId))
     .limit(1);
@@ -61,5 +65,5 @@ export async function applyAcceptedQuoteToCampaign(
       acceptedQuoteId: quoteId,
       ...(updatedById ? { updatedById } : {}),
     })
-    .where(eq(campaigns.id, quote.campaignId));
+    .where(and(eq(campaigns.id, quote.campaignId), eq(campaigns.dealerId, quote.dealerId)));
 }

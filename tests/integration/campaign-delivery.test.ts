@@ -168,6 +168,46 @@ describe.skipIf(!dbUrl)('applyAcceptedQuoteToCampaign — accept-time delivery s
     expect(row).toEqual({ qtyRecords: 0, bdc: 0 });
   });
 
+  it('does NOT write across dealers: a stale cross-dealer campaign_id leaves the campaign untouched', async () => {
+    let row: { qtyRecords: number | null; acceptedQuoteId: number | null } | undefined;
+
+    try {
+      await db.transaction(async (tx) => {
+        // Dealer A owns the campaign; its metrics must survive untouched.
+        const [dealerA] = await tx
+          .insert(dealers)
+          .values({ publicId: publicId(), name: 'Dealer A (campaign owner)' })
+          .returning({ id: dealers.id });
+        const campaignId = await seedCampaign(tx, dealerA.id, { qtyRecords: 111, bdc: 444 });
+        // A quote for Dealer B, but pointing at Dealer A's campaign (as a draft
+        // dealer-swap could leave it). The writer must refuse to snapshot.
+        const [dealerB] = await tx
+          .insert(dealers)
+          .values({ publicId: publicId(), name: 'Dealer B (quote owner)' })
+          .returning({ id: dealers.id });
+        const [quote] = await tx
+          .insert(quotes)
+          .values({ dealerId: dealerB.id, inputs: {}, status: 'accepted', campaignId })
+          .returning({ id: quotes.id });
+        await addLine(tx, quote.id, 'bdc-call', 99, 0);
+
+        await applyAcceptedQuoteToCampaign(quote.id, null, tx);
+
+        [row] = await tx
+          .select({ qtyRecords: campaigns.qtyRecords, acceptedQuoteId: campaigns.acceptedQuoteId })
+          .from(campaigns)
+          .where(eq(campaigns.id, campaignId));
+
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) throw err;
+    }
+
+    // Untouched: still Dealer A's hand-entered numbers, no accepted_quote_id.
+    expect(row).toEqual({ qtyRecords: 111, acceptedQuoteId: null });
+  });
+
   it('is a no-op for a quote with no campaign link (legacy pre-0093 row)', async () => {
     let threw = false;
     try {
