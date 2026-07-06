@@ -3,7 +3,7 @@ import { type NextRequest } from 'next/server';
 import { assertCan } from '@/lib/auth/assert-can';
 import { loadCampaigns, type Campaign } from '@/features/schedule/queries';
 import { buildCsv, csvResponse } from '@/lib/csv';
-import { todayIso, isProductionRange, rangeWindowEndIso } from '../filter';
+import { todayIso } from '../filter';
 
 const HEADERS = [
   'Date Range',
@@ -29,27 +29,19 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams;
   const q = sp.get('q') ?? '';
-  const status = sp.get('status') ?? '';
   const showCancelled = sp.get('cancelled') === '1';
 
   const today = todayIso();
   const all = await loadCampaigns();
-  // Inline the same predicate the client-side `<ProductionAdmin>`
-  // applies (search needle across dealer/coach/style/notes/contact +
-  // upcoming/past/range time-window + show-cancelled toggle). Server-side
-  // copy is intentional — the previous shared helper crossed the
-  // client/server boundary, and the new TanStack pipeline doesn't
-  // export a server-runnable function. Only the date-window math is
-  // shared (`rangeWindowEndIso`), so the range can't drift from the table.
+  // Inline the same predicate the client-side `<ProductionAdmin>` applies
+  // (search needle across dealer/coach/style/notes/contact + show-cancelled
+  // toggle). Server-side copy is intentional — the client TanStack pipeline
+  // doesn't export a server-runnable function. The time-window dropdown was
+  // retired in 0096 (a sortable Date column supersedes it), so only search +
+  // show-cancelled remain here.
   const needle = q.trim().toLowerCase();
-  const rangeWindowEnd = isProductionRange(status) ? rangeWindowEndIso(today, status) : null;
   const rows = all.filter((c) => {
     if (!showCancelled && c.status === 'cancelled') return false;
-    if (status === 'upcoming' && !(c.endDate >= today)) return false;
-    if (status === 'past' && !(c.endDate < today)) return false;
-    if (rangeWindowEnd !== null && !(c.endDate >= today && c.startDate <= rangeWindowEnd)) {
-      return false;
-    }
     if (needle) {
       const hit =
         c.dealerName.toLowerCase().includes(needle) ||

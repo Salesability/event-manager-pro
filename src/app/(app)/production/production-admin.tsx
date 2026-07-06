@@ -18,7 +18,6 @@ import {
   buildProductionColumns,
   type ProductionStatusFilter,
 } from './production-columns';
-import { type ProductionRange, isProductionRange } from './filter';
 
 type Props = {
   campaigns: Campaign[];
@@ -36,12 +35,6 @@ const campaignsGlobalFilterFn = makeNeedleFilter<Campaign>((c) => [
   c.contact,
 ]);
 
-type TimeWindow = '' | 'upcoming' | 'past' | ProductionRange;
-
-function isTime(v: string): v is TimeWindow {
-  return v === '' || v === 'upcoming' || v === 'past' || isProductionRange(v);
-}
-
 export function ProductionAdmin({
   campaigns,
   dealers,
@@ -54,8 +47,6 @@ export function ProductionAdmin({
   const params = useSearchParams();
 
   const qFromUrl = params.get('q') ?? '';
-  const statusParam = params.get('status') ?? '';
-  const time: TimeWindow = isTime(statusParam) ? statusParam : '';
   const showCancelled = params.get('cancelled') === '1';
 
   const [globalFilter, setGlobalFilter] = useState(qFromUrl);
@@ -68,19 +59,11 @@ export function ProductionAdmin({
   const [, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function pushParams(next: {
-    q?: string;
-    status?: TimeWindow;
-    cancelled?: boolean;
-  }) {
+  function pushParams(next: { q?: string; cancelled?: boolean }) {
     const sp = new URLSearchParams(params.toString());
     if (next.q !== undefined) {
       if (next.q) sp.set('q', next.q);
       else sp.delete('q');
-    }
-    if (next.status !== undefined) {
-      if (next.status) sp.set('status', next.status);
-      else sp.delete('status');
     }
     if (next.cancelled !== undefined) {
       if (next.cancelled) sp.set('cancelled', '1');
@@ -122,32 +105,15 @@ export function ProductionAdmin({
             />
           }
           filters={
-            <>
-              <select
-                value={time}
-                onChange={(e) =>
-                  pushParams({ status: (e.target.value as TimeWindow) || '' })
-                }
-                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition focus:border-brand-500"
-                aria-label="Time window"
-              >
-                <option value="">All campaigns</option>
-                <option value="upcoming">Upcoming</option>
-                <option value="past">Past</option>
-                <option value="1m">Next 1 month</option>
-                <option value="2m">Next 2 months</option>
-                <option value="3m">Next 3 months</option>
-              </select>
-              <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-500">
-                <input
-                  type="checkbox"
-                  checked={showCancelled}
-                  onChange={(e) => pushParams({ cancelled: e.target.checked })}
-                  className="h-3.5 w-3.5 accent-brand-600"
-                />
-                Show cancelled
-              </label>
-            </>
+            <label className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-500">
+              <input
+                type="checkbox"
+                checked={showCancelled}
+                onChange={(e) => pushParams({ cancelled: e.target.checked })}
+                className="h-3.5 w-3.5 accent-brand-600"
+              />
+              Show cancelled
+            </label>
           }
         />
         <div className="mt-3">
@@ -159,7 +125,7 @@ export function ProductionAdmin({
             onGlobalFilterChange={setGlobalFilter}
             globalFilterFn={campaignsGlobalFilterFn}
             columnFilters={columnFilters}
-            emptyState="No campaigns match. Adjust the search or status filter to see more."
+            emptyState="No campaigns match. Adjust the search or the Show cancelled toggle to see more."
           />
         </div>
       </section>
