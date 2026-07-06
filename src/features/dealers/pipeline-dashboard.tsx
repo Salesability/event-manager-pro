@@ -255,15 +255,19 @@ export function PipelineDashboardView({ data }: { data: PipelineDashboard }) {
         <div className="grid gap-4 lg:grid-cols-3">
           <BlockerColumn
             title="Stalled"
-            hint="21+ days in the same stage"
+            hint="Over 21 days in the same stage"
             href={queueHref({ status: 'prospect' })}
             dealers={blockers.stalled}
             metric={(d) => (d.stageChangedAt ? `since ${fmtDate(d.stageChangedAt)}` : null)}
           />
+          {/* The queue has no touch-based (stale) filter — its `idle=1` means "no
+              commitment" (isIdle(nextAction)), a different set — so the card links
+              to the unfiltered prospect queue; the per-row links deep-link the
+              exact stale dealer. (Codex 0088 Medium.) */}
           <BlockerColumn
             title="Stale"
-            hint="14+ days without a touch"
-            href={queueHref({ status: 'prospect', idle: '1' })}
+            hint="Over 14 days without a touch"
+            href={queueHref({ status: 'prospect' })}
             dealers={blockers.stale}
             metric={(d) => (d.lastContactedAt ? `last ${fmtDate(d.lastContactedAt)}` : 'never contacted')}
           />
