@@ -3,7 +3,7 @@
 **Intent:** [`intent.md`](intent.md) · **Decisions:** [`decision.md`](decision.md)
 **Started:** 2026-07-06 (un-parked; 0093 shipped + closed)
 
-> **Un-parked 2026-07-06.** Follow-up to [`0093-calendar-quote-msa-status`](../closed/0093-calendar-quote-msa-status/plan.md). Phase 1 decisions locked with the owner — see [`decision.md`](decision.md). Phases 2–5 below re-derived from those decisions.
+> **Un-parked 2026-07-06.** Follow-up to [`0093-calendar-quote-msa-status`](../0093-calendar-quote-msa-status/plan.md). Phase 1 decisions locked with the owner — see [`decision.md`](decision.md). Phases 2–5 below re-derived from those decisions.
 
 ## Progress Tracker
 

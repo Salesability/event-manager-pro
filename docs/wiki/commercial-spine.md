@@ -110,7 +110,7 @@ The four **delivery metric** columns on `campaigns` — `qty_records` / `sms_ema
 - **SKU → metric mapping** (catalogue codes from `drizzle/0013_seed_service_items.sql`): `bdc` ← Σ`bdc-call`.qty · `letters` ← Σ`letter-postage`.qty · `sms_email` ← Σ`digital-record`.qty · `qty_records` ← `500 × Σ base-event.qty` (the base package "includes 500 records") + Σ`additional-contact`.qty. `additional-day` / `record-retrieval` / `travel` carry no delivery metric.
 - **Override for true production differences** stays a **billing/invoice concern** on `/reports` — `billing_adjustments` (0059) still layers `override ?? campaign.value` there, where `campaign.value` is now quote-derived. The `/production` page shows the raw quote-derived numbers (no overlay) — the override is *not* reflected back onto Production (owner decision, 0094 D6).
 - **One-time backfill.** `scripts/backfill-campaign-delivery-metrics.ts` (dry-run default, `--write` to commit) rewrites every campaign that has an accepted quote from that quote (D3 backfill-all), reusing the same pure mapping. Idempotent. Does not touch `billing_adjustments`.
-- Design history: [`docs/chunks/0094-decouple-booking-metrics/`](../chunks/0094-decouple-booking-metrics/decision.md).
+- Design history: [`docs/chunks/0094-decouple-booking-metrics/`](../chunks/closed/0094-decouple-booking-metrics/decision.md).
 
 ### Less-happy paths
 
