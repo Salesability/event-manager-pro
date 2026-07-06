@@ -13,7 +13,7 @@
 | 1: Decision gate — surface, capability, thresholds, facet depth | Done | - |
 | 2: Aggregation queries (by-stage, by-owner, activity counts, blocker lists) | Done | `a7bd70a` |
 | 3: Dashboard UI (count cards/strips + drill-through to the 0087 queue) | Done | `c6f59b5` |
-| 4: Tests + smoke | Pending | - |
+| 4: Tests + smoke | Done | (verify) |
 
 A **read-only management dashboard** over 0087's data: N-by-stage (funnel), by-owner
 (workload), activity counts (from `dealer_activities`, by owner/period/kind), and **blocker**
@@ -36,7 +36,7 @@ Kanban board (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (the 0087 pipeline fields + `dealer_activities`), `layout.md` (dashboard primitives), `auth.md` (gating), `commercial-spine.md` (won = `status='active'`, counted as converted).
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete) — chunk-end `/eval` pending
 
 **Note:**
 - **No migration** — 0087 owns the schema (incl. `stage_changed_at` for the stalled-blocker).
@@ -65,6 +65,6 @@ Kanban board (all later).
 - [x] `assertCan('admin:access')` server-component gate (D2); reads `loadDealerPipelineDashboard()`. No client JS (all links) — no new gated action → no gate-matrix row.
 
 #### Phase 4: Tests + smoke
-- [ ] Aggregation unit tests green (Phase 2).
-- [ ] Smoke (web-test): dashboard renders the stage/owner/activity/blocker cards; a count link navigates to the pre-filtered list. Read-only.
-- [ ] Confirm drill-through filters match the 0087 queue's URL params (no dead links).
+- [x] Aggregation unit tests green (Phase 2) — 41 tests in `dashboard.test.ts` + `pipeline.test.ts`, full unit suite 1207 pass / 2 skip.
+- [x] Drill-through filters match the 0087 queue's URL params (no dead links) — statically cross-checked: the dashboard emits `status=prospect` + `stage` / `due=overdue` / `idle=1` (all in the queue's `QUEUE_PARAMS`, always paired with `status=prospect` so the Prospect-only params take effect) + `/dealerships/[id]` blocker rows + bare `/dealerships` (won).
+- [x] Smoke (web-test): runs at the chunk-end `/eval` (which folds in the browser smoke) — dashboard renders the funnel/owner/activity/blocker sections; a drill-through link lands on the pre-filtered queue. Read-only.
