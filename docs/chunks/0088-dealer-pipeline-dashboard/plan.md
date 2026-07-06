@@ -11,7 +11,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Decision gate — surface, capability, thresholds, facet depth | Done | - |
-| 2: Aggregation queries (by-stage, by-owner, activity counts, blocker lists) | Pending | - |
+| 2: Aggregation queries (by-stage, by-owner, activity counts, blocker lists) | Done | `a7bd70a` |
 | 3: Dashboard UI (count cards/strips + drill-through to the 0087 queue) | Pending | - |
 | 4: Tests + smoke | Pending | - |
 
@@ -26,7 +26,9 @@ Kanban board (all later).
 
 | New code | Anchor (`path:line`) | Why this anchor |
 |----------|---------------------|-----------------|
-| Aggregation queries (group-by counts; blocker lists) | `src/features/schedule/queries.ts` (existing `db.select(...).groupBy(...)` projections; 0087's pipeline projections) | Same query module + Drizzle aggregate/groupBy style; read 0087's fields |
+| Pure aggregators (funnel / by-owner / activity / blockers) | **`src/features/dealers/dashboard.ts`** (new) + `dashboard.test.ts` | Counting lives in a **pure, fixture-testable module** (no DB); the loader below feeds it. Chose this over raw SQL groupBy so Phase-2 tests are plain unit tests, not DB-gated (prospect set is small — ~333 rows) |
+| Dashboard loader (thin I/O) | **`src/features/schedule/queries.ts`** → `loadDealerPipelineDashboard()` (new) | Composes `loadDealers()` (non-archived, carries pipeline fields + resolved owner names) + a 30-day `dealer_activities` window, then delegates to `dashboard.ts` |
+| Threshold predicates + constants | **`src/features/dealers/pipeline.ts`** → `isStalled`/`isStale` + `STALLED_DAYS`(21)/`STALE_DAYS`(14) | Next to the existing client-safe `isOverdue`/`isIdle` queue helpers; keeps the decision.md D3 cutoffs in one place |
 | Dashboard page route | an existing page under `src/app/(app)/admin/` (e.g. `admin/quickbooks/page.tsx`) — server component composing sections | Match the admin server-page shape (+ capability gate in the segment) |
 | Count cards / strips + bars | `docs/wiki/layout.md` (`<Section>`/`<KeyValueStrip>`/`<ListToolbar>`) + `src/components/app/status-badge.tsx` (stage badge from 0087) | Compose count cards from the layout primitives; reuse `PipelineStageBadge` |
 | Drill-through links → 0087 queue | `src/features/dealers/dealers-admin.tsx` (the URL-driven filter params 0087 Phase 5 defines) | Build hrefs to the pre-filtered list (owner / due-bucket / stage) |
@@ -34,7 +36,7 @@ Kanban board (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (the 0087 pipeline fields + `dealer_activities`), `layout.md` (dashboard primitives), `auth.md` (gating), `commercial-spine.md` (won = `status='active'`, counted as converted).
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - **No migration** — 0087 owns the schema (incl. `stage_changed_at` for the stalled-blocker).
@@ -50,11 +52,12 @@ Kanban board (all later).
 - [x] **Facet depth** — stage / owner / activity / blockers in v1; province/manufacturer/charts/export/date-ranges/Kanban deferred (D4).
 
 #### Phase 2: Aggregation queries
-- [ ] `pipelineByStage()` — count non-archived dealers grouped by `pipeline_stage` (+ a converted/`won` count from `status='active'`).
-- [ ] `pipelineByOwner()` — stage × owner counts + unassigned; workload per owner.
-- [ ] `activityCounts({window})` — `dealer_activities` grouped by `created_by_id` + `kind` over this-week / last-30-days.
-- [ ] `blockers()` — stalled (`stage_changed_at` < now - stalledDays), stale (`last_contacted_at` < now - staleDays or null), overdue (`next_action_at` < today), each as a count + a small list.
-- [ ] Unit tests on each aggregation (fixture rows → expected counts/buckets).
+> **Design:** the counting is **pure functions** in [`dashboard.ts`](../../../src/features/dealers/dashboard.ts) (fixture-testable, no DB), with a thin `loadDealerPipelineDashboard()` loader in `schedule/queries.ts` that fetches `loadDealers()` + a 30-day activity window and delegates. Threshold predicates (`isStalled`/`isStale` + `STALLED_DAYS`/`STALE_DAYS`) live in the client-safe `pipeline.ts` next to `isOverdue`/`isIdle`.
+- [x] `pipelineByStage()` — non-archived prospects grouped by `pipeline_stage` (all 9 stages, zeros incl.) + `totalProspects` + a `won` count from `status='active'`.
+- [x] `pipelineByOwner()` — per-owner stage breakdown + total, null owner → 'Unassigned'; sorted total-desc.
+- [x] `activityCounts()` — `dealer_activities` grouped by actor + kind over rolling last-7 / last-30-day windows.
+- [x] `blockers()` — stalled (`stage_changed_at` > 21d), stale (`last_contacted_at` > 14d **or null**), overdue (`next_action_at` < today), each a worst-first list.
+- [x] Unit tests on each aggregation + the threshold predicates (fixture rows → expected counts/buckets) — `dashboard.test.ts` + `pipeline.test.ts` (41 tests).
 
 #### Phase 3: Dashboard UI
 - [ ] Dashboard page/section: stage funnel cards, by-owner table, activity-count strip (by owner/kind/period), blocker cards (stalled/stale/overdue).
