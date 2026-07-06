@@ -5,6 +5,13 @@ import { db } from '@/lib/db';
 import { campaigns, quoteLineItems, quotes } from '@/lib/db/schema';
 import { deriveDeliveryMetrics } from '@/lib/quotes/delivery-metrics';
 
+// Accept either the app pool or a transaction so the integration test can drive
+// the snapshot inside a rolled-back tx (cf. calendar-sync.ts / dedup.ts). The
+// `acceptQuote` action calls with the default (the app pool).
+type Database = typeof db;
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type Executor = Database | Transaction;
+
 // 0094: snapshot an accepted quote's derived delivery metrics onto its campaign.
 //
 // The quote is the commercial source of truth for scope; the campaign holds the
@@ -27,8 +34,9 @@ import { deriveDeliveryMetrics } from '@/lib/quotes/delivery-metrics';
 export async function applyAcceptedQuoteToCampaign(
   quoteId: number,
   updatedById: string | null = null,
+  exec: Executor = db,
 ): Promise<void> {
-  const [quote] = await db
+  const [quote] = await exec
     .select({ campaignId: quotes.campaignId })
     .from(quotes)
     .where(eq(quotes.id, quoteId))
@@ -36,14 +44,14 @@ export async function applyAcceptedQuoteToCampaign(
   // Legacy pre-0093 quote with no event link — nothing to snapshot onto.
   if (!quote?.campaignId) return;
 
-  const lines = await db
+  const lines = await exec
     .select({ code: quoteLineItems.code, qty: quoteLineItems.qty })
     .from(quoteLineItems)
     .where(eq(quoteLineItems.quoteId, quoteId));
 
   const metrics = deriveDeliveryMetrics(lines);
 
-  await db
+  await exec
     .update(campaigns)
     .set({
       qtyRecords: metrics.qtyRecords,
