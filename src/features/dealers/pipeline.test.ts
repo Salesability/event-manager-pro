@@ -12,9 +12,13 @@ import {
   DEALER_PRIORITY_LABELS,
   isIdle,
   isOverdue,
+  isStale,
+  isStalled,
   matchesDueBucket,
   PIPELINE_STAGE_LABELS,
   PIPELINE_STAGES,
+  STALE_DAYS,
+  STALLED_DAYS,
 } from './pipeline';
 
 // Drift guard (0087): the client-side value arrays in `pipeline.ts` must stay in
@@ -98,5 +102,39 @@ describe('isIdle', () => {
   });
   it('is not idle with a real next action', () => {
     expect(isIdle('Call Tuesday')).toBe(false);
+  });
+});
+
+// ---- Dashboard blocker thresholds (0088) ------------------------------------
+const NOW = new Date('2026-07-06T12:00:00Z');
+const daysAgo = (n: number): Date => new Date(NOW.getTime() - n * 86_400_000);
+
+describe('isStalled', () => {
+  it('is stalled when in-stage longer than the threshold', () => {
+    expect(isStalled(daysAgo(STALLED_DAYS + 1), NOW)).toBe(true);
+  });
+  it('is not stalled exactly at the threshold (strictly greater)', () => {
+    expect(isStalled(daysAgo(STALLED_DAYS), NOW)).toBe(false);
+  });
+  it('is not stalled well within the threshold', () => {
+    expect(isStalled(daysAgo(3), NOW)).toBe(false);
+  });
+  it('is not stalled when the stage-change stamp is null (age unknown)', () => {
+    expect(isStalled(null, NOW)).toBe(false);
+  });
+});
+
+describe('isStale', () => {
+  it('is stale when the last touch is older than the threshold', () => {
+    expect(isStale(daysAgo(STALE_DAYS + 1), NOW)).toBe(true);
+  });
+  it('is not stale exactly at the threshold (strictly greater)', () => {
+    expect(isStale(daysAgo(STALE_DAYS), NOW)).toBe(false);
+  });
+  it('is not stale with a recent touch', () => {
+    expect(isStale(daysAgo(2), NOW)).toBe(false);
+  });
+  it('is stale when never contacted (null last-contacted)', () => {
+    expect(isStale(null, NOW)).toBe(true);
   });
 });

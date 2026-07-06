@@ -5,6 +5,11 @@ import { formatYearMonth } from '@/lib/dates';
 import type { CaProvinceCode } from '@/lib/ca-provinces';
 import type { ActivityKind, DealerPriority, PipelineStage } from '@/features/dealers/pipeline';
 import {
+  buildPipelineDashboard,
+  type DashboardActivity,
+  type PipelineDashboard,
+} from '@/features/dealers/dashboard';
+import {
   availabilityBlocks,
   billingAdjustments,
   campaigns,
@@ -427,6 +432,42 @@ export async function loadDealerActivities(
     createdById: r.createdById,
     actorName: r.createdById ? (actorNames.get(r.createdById) ?? null) : null,
   }));
+}
+
+// 0088 — the dealer-pipeline management dashboard view model. Composes the
+// existing non-archived dealer list (which already carries the pipeline fields +
+// resolved owner names) with a 30-day window of activity rows, then delegates
+// all counting to the pure aggregators in `dealers/dashboard.ts`. "Today" for
+// the overdue blocker is the server-side UTC date at request time — a management
+// overview; the per-viewer /dealerships queue stays the authoritative
+// local-time view.
+export async function loadDealerPipelineDashboard(): Promise<PipelineDashboard> {
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const since = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [dealerRows, activityRows] = await Promise.all([
+    loadDealers(),
+    db
+      .select({
+        kind: dealerActivities.kind,
+        occurredAt: dealerActivities.occurredAt,
+        createdById: dealerActivities.createdById,
+      })
+      .from(dealerActivities)
+      .where(gte(dealerActivities.occurredAt, since))
+      .orderBy(desc(dealerActivities.occurredAt)),
+  ]);
+
+  const actorNames = await fetchOwnerNames(activityRows.map((r) => r.createdById));
+  const activities: DashboardActivity[] = activityRows.map((r) => ({
+    kind: r.kind,
+    occurredAt: r.occurredAt,
+    createdById: r.createdById,
+    actorName: r.createdById ? (actorNames.get(r.createdById) ?? null) : null,
+  }));
+
+  return buildPipelineDashboard(dealerRows, activities, now, todayIso);
 }
 
 export async function loadCoaches(): Promise<Coach[]> {

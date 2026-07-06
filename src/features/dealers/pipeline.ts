@@ -101,3 +101,38 @@ export function matchesDueBucket(
 export function isIdle(nextAction: string | null): boolean {
   return nextAction == null || nextAction.trim() === '';
 }
+
+// ---- Dashboard blocker thresholds (0088) ------------------------------------
+// The management dashboard's "why isn't this moving" cutoffs (decision.md D3).
+// Constants in v1 — a config UI is a later chunk. These operate on the
+// timestamptz columns (`stage_changed_at`, `last_contacted_at`) as `Date`
+// objects, unlike the queue's date-string bucketing above.
+
+const DAY_MS = 86_400_000;
+
+/** Days sitting in one pipeline stage before a prospect is "stalled". */
+export const STALLED_DAYS = 21;
+/** Days since the last logged touch before a prospect is "stale". */
+export const STALE_DAYS = 14;
+
+/** True when `at` is strictly more than `days` before `now`. A null stamp is
+ *  NOT old (we can't prove age) — callers decide what null means per blocker. */
+function isOlderThanDays(at: Date | null, now: Date, days: number): boolean {
+  if (at == null) return false;
+  return now.getTime() - at.getTime() > days * DAY_MS;
+}
+
+/** Stalled = sat in the same pipeline stage longer than `days` (read from
+ *  `stage_changed_at`). A null stamp (never staged) is NOT stalled — stay
+ *  conservative rather than false-flag a dealer whose age we can't establish. */
+export function isStalled(stageChangedAt: Date | null, now: Date, days = STALLED_DAYS): boolean {
+  return isOlderThanDays(stageChangedAt, now, days);
+}
+
+/** Stale = no touch in `days`, OR never contacted at all (null
+ *  `last_contacted_at`) — a never-touched prospect is the loudest stale case
+ *  (decision.md D3). */
+export function isStale(lastContactedAt: Date | null, now: Date, days = STALE_DAYS): boolean {
+  if (lastContactedAt == null) return true;
+  return isOlderThanDays(lastContactedAt, now, days);
+}
