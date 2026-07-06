@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Swap Status → sortable Date column + re-home "Show cancelled" filter | Done | `97beb06` |
-| 2: Retire the time-window dropdown + trim dead code | Pending | - |
+| 2: Retire the time-window dropdown + trim dead code | Done | `5871f48` |
 | 3: Tests + smoke verification | Pending | - |
 
 Replace the Production List's derived **Status** column with a sortable **Date**
@@ -36,7 +36,7 @@ For each new/changed piece below, read the anchor first and match its shape.
 - `src/components/ui/data-table.tsx` — TanStack `getSortedRowModel` + per-column `enableSorting`; ISO `YYYY-MM-DD` strings sort lexically = chronologically, so `accessorKey: 'startDate'` needs no custom sort fn.
 - `docs/wiki/data-model.md` — `campaigns.start_date`/`end_date` are `date` columns; `Campaign` rows project both.
 
-**Overall Progress:** 33% (1/3 phases complete)
+**Overall Progress:** 67% (2/3 phases complete)
 
 ### Phase Checklist
 
@@ -51,10 +51,11 @@ For each new/changed piece below, read the anchor first and match its shape.
 - [x] App still compiles and the list still hides cancelled by default. *(verified by the fast gate)*
 
 #### Phase 2: Retire the time-window dropdown + trim dead code
-- [ ] `production-admin.tsx`: remove the time-window `<select>` (All/Upcoming/Past/Next 1–3 months) from the `filters` block; keep the "Show cancelled" checkbox. Remove the `status` URL param plumbing (`time`/`TimeWindow`/`isTime`), keep `q` + `cancelled`.
-- [ ] `export/route.ts`: drop the `status`/time-window predicate (upcoming/past/range) and the `rangeWindowEndIso`/`isProductionRange` imports; keep the search-needle + show-cancelled filter. Leave the output's `Date Range` + `Status` columns as-is (report fields).
-- [ ] `filter.ts`: delete the now-unused `ProductionRange`, `PRODUCTION_RANGE_MONTHS`, `isProductionRange`, `rangeWindowEndIso`; keep `todayIso`.
-- [ ] Grep for any remaining `?status=` / `TimeWindow` / `ProductionRange` references and clean up.
+- [x] `production-admin.tsx`: removed the time-window `<select>` (All/Upcoming/Past/Next 1–3 months) from the `filters` block; kept the "Show cancelled" checkbox. Removed the `status` URL-param plumbing (`time`/`TimeWindow`/`isTime`/`statusParam` + the `pushParams` `status` branch), kept `q` + `cancelled`. Freshened the empty-state copy (no more "status filter").
+- [x] `export/route.ts`: dropped the `status`/time-window predicate (upcoming/past/range) and the `rangeWindowEndIso`/`isProductionRange` imports; kept the search-needle + show-cancelled filter. Output's `Date Range` + `Status` columns left as-is (report fields).
+- [x] `filter.ts`: deleted the now-unused `ProductionRange`, `PRODUCTION_RANGE_MONTHS`, `isProductionRange`, `rangeWindowEndIso`; kept `todayIso` (export route still uses it).
+- [x] Deleted `filter.test.ts` (it only exercised the removed forward-window helpers) — had to land here, not Phase 3, so the fast gate stays green once the exports are gone.
+- [x] Grepped for remaining `?status=` / `TimeWindow` / `ProductionRange` / `campaignTimeStatus` references — none dangling (only legit `c.status` reads remain).
 
 #### Phase 3: Tests + smoke verification
 - [ ] Update/remove unit tests referencing the Status column or the time-window filter (search `production-columns`, `filter`, `filterTimeStatus`, `rangeWindowEnd` under `tests/` and `src/**/*.test.ts*`).
