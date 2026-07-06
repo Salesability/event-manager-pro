@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { assertCan } from '@/lib/auth/assert-can';
 import { PageHeader } from '@/components/app/page-header';
 import { loadDealerPipelineDashboard } from '@/features/schedule/queries';
@@ -16,12 +15,6 @@ export default async function PipelineDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Link
-        href="/dealerships"
-        className="text-xs font-medium text-zinc-500 transition hover:text-zinc-900"
-      >
-        ← Dealers
-      </Link>
       <PageHeader
         title="Pipeline dashboard"
         description="Prospecting funnel, workload, activity, and blockers across every dealer prospect."
