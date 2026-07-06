@@ -397,45 +397,6 @@ export function BookingForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        <Field label="Qty Records" htmlFor="bk-qty">
-          <Input
-            id="bk-qty"
-            name="qtyRecords"
-            type="number"
-            min={0}
-            defaultValue={campaign?.qtyRecords ?? ''}
-          />
-        </Field>
-        <Field label="SMS/Email" htmlFor="bk-sms">
-          <Input
-            id="bk-sms"
-            name="smsEmail"
-            type="number"
-            min={0}
-            defaultValue={campaign?.smsEmail ?? ''}
-          />
-        </Field>
-        <Field label="Letters" htmlFor="bk-letters">
-          <Input
-            id="bk-letters"
-            name="letters"
-            type="number"
-            min={0}
-            defaultValue={campaign?.letters ?? ''}
-          />
-        </Field>
-        <Field label="BDC" htmlFor="bk-bdc">
-          <Input
-            id="bk-bdc"
-            name="bdc"
-            type="number"
-            min={0}
-            defaultValue={campaign?.bdc ?? ''}
-          />
-        </Field>
-      </div>
-
       <Field
         label="Sales Coach"
         htmlFor="bk-coach"

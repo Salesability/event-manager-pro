@@ -42,10 +42,6 @@ export type CampaignInput = {
   coachId: number | null;
   styleId: number | null;
   audienceSourceId: number | null;
-  qtyRecords: number | null;
-  smsEmail: number | null;
-  letters: number | null;
-  bdc: number | null;
   contact: string | null;
   phone: string | null;
   email: string | null;
@@ -80,10 +76,6 @@ export function parseCampaignInput(formData: FormData): CampaignInput | { error:
     coachId: toNum(v.coachId),
     styleId: toNum(v.styleId),
     audienceSourceId: toNum(v.audienceSourceId),
-    qtyRecords: toNum(v.qtyRecords),
-    smsEmail: toNum(v.smsEmail),
-    letters: toNum(v.letters),
-    bdc: toNum(v.bdc),
     contact: (v.contact || '') || null,
     phone: (v.phone || '') || null,
     email: email || null,

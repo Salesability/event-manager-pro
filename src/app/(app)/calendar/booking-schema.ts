@@ -15,9 +15,6 @@ import { z } from 'zod';
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Postgres `integer` (signed 32-bit) upper bound. Volume fields are gated
-// here so a future numeric(10,2) caller doesn't accidentally widen the rule.
-const MAX_PG_INT = 2_147_483_647;
 
 const optPositiveId = z
   .string()
@@ -25,16 +22,6 @@ const optPositiveId = z
     (v) => v === '' || (/^\d+$/.test(v) && Number(v) > 0),
     'Must be a positive integer.',
   )
-  .optional();
-
-const optNonNegVolume = z
-  .string()
-  .refine((v) => {
-    if (v === '' || v == null) return true;
-    if (!/^-?\d+$/.test(v)) return false;
-    const n = Number(v);
-    return Number.isInteger(n) && n >= 0 && n <= MAX_PG_INT;
-  }, 'Volume fields must be non-negative whole numbers.')
   .optional();
 
 export const bookingFormSchema = z.object({
@@ -59,10 +46,6 @@ export const bookingFormSchema = z.object({
   coachId: optPositiveId,
   styleId: optPositiveId,
   audienceSourceId: optPositiveId,
-  qtyRecords: optNonNegVolume,
-  smsEmail: optNonNegVolume,
-  letters: optNonNegVolume,
-  bdc: optNonNegVolume,
   contact: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   email: z

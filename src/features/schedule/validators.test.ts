@@ -120,10 +120,6 @@ describe('parseCampaignInput', () => {
       coachId: null,
       styleId: null,
       audienceSourceId: null,
-      qtyRecords: null,
-      smsEmail: null,
-      letters: null,
-      bdc: null,
       contact: null,
       phone: null,
       email: null,
@@ -131,16 +127,12 @@ describe('parseCampaignInput', () => {
     });
   });
 
-  it('parses optional FK and integer fields when present', () => {
+  it('parses optional FK fields when present', () => {
     const result = parseCampaignInput(
       makeForm({
         coachId: '12',
         styleId: '3',
         audienceSourceId: '5',
-        qtyRecords: '500',
-        smsEmail: '0',
-        letters: '120',
-        bdc: '15',
         contact: 'Jane Smith',
         phone: '555-0100',
         email: 'JANE@example.com',
@@ -151,15 +143,20 @@ describe('parseCampaignInput', () => {
       coachId: 12,
       styleId: 3,
       audienceSourceId: 5,
-      qtyRecords: 500,
-      smsEmail: 0,
-      letters: 120,
-      bdc: 15,
       contact: 'Jane Smith',
       phone: '555-0100',
       email: 'jane@example.com',
       notes: 'priority',
     });
+  });
+
+  // 0094: the volume fields (qtyRecords/smsEmail/letters/bdc) left the booking
+  // form — they're now derived from the accepted quote. Any stray volume key in
+  // the FormData is silently stripped by the zod object schema, not parsed.
+  it('ignores stray volume fields left in the FormData (no longer part of the schema)', () => {
+    const result = parseCampaignInput(makeForm({ qtyRecords: '500', bdc: '15' }));
+    expect(result).not.toHaveProperty('qtyRecords');
+    expect(result).not.toHaveProperty('bdc');
   });
 
   it('rejects missing or malformed dates', () => {
@@ -197,18 +194,6 @@ describe('parseCampaignInput', () => {
   it('rejects an invalid email', () => {
     expect(parseCampaignInput(makeForm({ email: 'not-an-email' }))).toEqual({
       error: 'Contact email looks invalid.',
-    });
-  });
-
-  it('rejects negative volume fields', () => {
-    expect(parseCampaignInput(makeForm({ qtyRecords: '-1' }))).toEqual({
-      error: 'Volume fields must be non-negative whole numbers.',
-    });
-  });
-
-  it('rejects volume fields above the 32-bit signed-int ceiling', () => {
-    expect(parseCampaignInput(makeForm({ smsEmail: '2147483648' }))).toEqual({
-      error: 'Volume fields must be non-negative whole numbers.',
     });
   });
 });
