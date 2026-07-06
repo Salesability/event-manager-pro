@@ -9,10 +9,10 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision — SKU→field mapping + snapshot-at-accept + backfill-all | Done | _pending_ |
-| 2: Quote → campaign delivery-number derivation (at quote accept) | Pending | - |
-| 3: Remove metric fields from the Book Event dialog | Pending | - |
-| 4: Production-setup override surface (reuse `billing_adjustments`) | Pending | - |
+| 1: Decision — SKU→field mapping + snapshot-at-accept + backfill-all | Done | `7ed18ea` |
+| 2: Quote → campaign delivery-number derivation (at quote accept) | Done | `9201b0c` |
+| 3: Remove metric fields from the Book Event dialog | Done | `906f990` |
+| 4: Override-surface decision — Reports-only, no new code (D6) | Done | _docs_ |
 | 5: Tests + backfill + smoke verification | Pending | - |
 
 The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — operational **delivery** numbers consumed by Production + Reports — at the *scheduling* step, before the quote that actually owns that scope exists, so they sit blank and double-entered with no sync. This chunk moves their ownership to the **accepted quote**: booking schedules, the quote scopes (derive the delivery numbers from its line items), production overrides where real delivery differs (the existing `billing_adjustments` role). "Done" = booking has no commercial/scope fields, and a campaign's delivery numbers reflect its accepted quote.
@@ -30,7 +30,7 @@ The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — opera
 - `docs/wiki/commercial-spine.md` — "quote = commercial source of truth, campaign = operational delivery" + the 0093 calendar-status section.
 - `docs/wiki/data-model.md` — `campaigns` metric columns, `quote_line_items`, `billing_adjustments`.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 ### Phase Checklist
 
@@ -42,17 +42,19 @@ The Book Event dialog captures `qtyRecords / smsEmail / letters / bdc` — opera
 - [x] Escape hatch — **D5**: fully defer; no volume fields on booking. (See [`decision.md`](decision.md).)
 
 #### Phase 2: Quote → campaign derivation
-- [ ] New pure module `src/lib/quotes/delivery-metrics.ts` — `deriveDeliveryMetrics(lines: {code, qty}[]) → {qtyRecords, smsEmail, letters, bdc}` per D1 (Σ over lines; unconditional all-four)
-- [ ] Impure accept-time writer: on the `acceptQuote` `result.transitioned` path, load the accepted quote's `quote_line_items`, derive, and `UPDATE campaigns` (4 columns + `acceptedQuoteId`) for `quotes.campaignId`
-- [ ] Unit tests for the mapping (dup-code sum, base-500, no-line ⇒ 0, non-mapping SKUs ignored)
+- [x] New pure module `src/lib/quotes/delivery-metrics.ts` — `deriveDeliveryMetrics(lines: {code, qty}[]) → {qtyRecords, smsEmail, letters, bdc}` per D1 (Σ over lines; unconditional all-four)
+- [x] Impure accept-time writer `src/features/quotes/campaign-delivery.ts` (`applyAcceptedQuoteToCampaign`): loads the accepted quote's `quote_line_items`, derives, `UPDATE campaigns` (4 columns + `acceptedQuoteId`) for `quotes.campaignId`. Wired into `acceptQuote` **outside** the `transitioned` guard → idempotent + self-healing (re-drivable by re-accept or the Phase-5 backfill).
+- [x] Unit tests for the mapping (`delivery-metrics.test.ts`: dup-code sum, base-500, base×qty, no-line ⇒ 0, non-mapping/unknown SKUs ignored, NaN-qty coercion)
 
 #### Phase 3: Strip metric fields from booking
-- [ ] Remove Qty/SMS/Letters/BDC `<Field>`s from `booking-form.tsx` (lines 401–436) — **keep** Event Format + Data Source
-- [ ] Drop `qtyRecords/smsEmail/letters/bdc` from `booking-schema.ts` + `validators.ts` parse + the `createCampaign`/`updateCampaign` insert/update spread
-- [ ] Confirm Production / Reports / event-detail / emails still read the campaign columns (now quote-sourced / blank-until-accept)
+- [x] Removed the Qty/SMS/Letters/BDC `<Field>` grid from `booking-form.tsx` — **kept** Event Format + Data Source
+- [x] Dropped `qtyRecords/smsEmail/letters/bdc` from `booking-schema.ts` (+ dead `optNonNegVolume`/`MAX_PG_INT`) and the `CampaignInput` type + `parseCampaignInput` in `validators.ts`; the `createCampaign`/`updateCampaign` `...input` spread now omits them (insert ⇒ NULL, update ⇒ untouched → the derived numbers survive an edit). Updated `validators.test.ts`.
+- [x] Confirmed Production / Reports / event-detail / emails still read the raw `campaigns` columns (unchanged; tsc green) — now quote-sourced / blank-until-accept
 
-#### Phase 4: Production-setup override
-- [ ] Surface the delivery numbers (quote-derived) with a `billing_adjustments`-backed override on the production side (note the `bdc`-not-aggregated gap in `queries.ts` rollups — decide whether to close it)
+#### Phase 4: Override-surface decision — Reports-only (D6), no new code
+- [x] Owner picked **Option 1**: override stays a billing/invoice concern on `/reports`; Production keeps showing the raw (quote-derived) numbers. No new override surface built.
+- [x] Confirmed the existing `billing_adjustments` + `BillingCell` overlay composes with quote-derived defaults with zero change (`reports-columns.tsx:129-131`: `override ?? campaign[field]`, and `campaign[field]` is now quote-sourced).
+- [x] `bdc`-not-aggregated gap in the by-dealer/coach/month rollups (`queries.ts`) is pre-existing (0059-era) + out of scope → parked as **0094-a** (not fixed in-chunk).
 
 #### Phase 5: Tests + backfill + smoke verification
 - [ ] Backfill script (`scripts/backfill-campaign-delivery-metrics.ts`, dry-run + `--write`, idempotent) — D3; read-only prod count first

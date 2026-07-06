@@ -53,9 +53,18 @@ No volume fields on booking at all. A campaign shows blank `qtyRecords/smsEmail/
 - Production / event-detail render blank until accept; real production differences are handled by the Phase 4 override surface (`billing_adjustments`).
 - Rejected keeping a collapsed "rough numbers" box on booking — it re-introduces exactly the double-entry 0094 removes.
 
+## D6 — Phase 4 override surface: Reports-only (Option 1)
+
+The delivery-vs-quote override stays a **billing/invoice concern on `/reports`**; the `/production` page keeps showing the raw (now quote-derived) campaign numbers. **No new override surface is built** on Production.
+
+- The override mechanism already exists in full: `billing_adjustments` (0059) + the inline-editable `BillingCell` on the Reports → Full Production Report tab (`reports:edit-billing`). It reads `override ?? campaign[field]`, and `campaign[field]` is now the quote-derived value (D2) — so the override composes with the new defaults with **zero code change** (verified at `reports-columns.tsx:129-131`).
+- Owner decision (2026-07-06): the override is a billing truing-up, not a production-team edit — "since billing for the delivery, no need to reflect those changes back to the production page." So Production = "what the accepted quote scoped," Reports = "what we bill (quote value, or an admin correction)."
+- Rejected: applying the overlay to the Production read path (Option 2) or adding a second edit surface on Production (Option 3) — both expand an outward-facing surface the owner doesn't want.
+- **Phase 4 therefore ships no code** — it records this decision and confirms the composition. The recon-surfaced `bdc`-not-aggregated gap in the by-dealer/coach/month rollups (`queries.ts` builds `adj_records/adj_sms/adj_letters` but no `adj_bdc`) is **pre-existing (0059-era), out of 0094's scope, and left as a parked follow-up (0094-a)** rather than fixed in-chunk.
+
 ## Consequences for later phases
 
 - **Phase 2** — new pure module `src/lib/quotes/delivery-metrics.ts` (`deriveDeliveryMetrics(lines)`); impure accept-time writer hooked into `acceptQuote` (writes the 4 columns + `acceptedQuoteId`); unit tests for the mapping.
 - **Phase 3** — strip Qty/SMS/Letters/BDC from `booking-form.tsx` + `booking-schema.ts` + `validators.ts` + `createCampaign`/`updateCampaign` parse; **keep** Event Format + Data Source.
-- **Phase 4** — production-side override surface reusing `billing_adjustments` (note the existing `bdc`-not-aggregated gap in the by-dealer/coach/month rollups; row-level Full Production Report already overrides all four).
+- **Phase 4** — no code (D6): override stays Reports-only; confirm the existing `billing_adjustments`/`BillingCell` overlay composes with quote-derived defaults; park the `bdc`-aggregation gap as 0094-a.
 - **Phase 5** — backfill script (D3, dry-run + `--write`), integration test (accept → campaign reflects line items), web-test smoke (booking has no volume fields), wiki ingest (`commercial-spine.md`, `data-model.md`).
