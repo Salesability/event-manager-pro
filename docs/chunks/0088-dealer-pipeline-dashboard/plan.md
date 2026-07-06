@@ -12,7 +12,7 @@
 |-------|--------|--------|
 | 1: Decision gate — surface, capability, thresholds, facet depth | Done | - |
 | 2: Aggregation queries (by-stage, by-owner, activity counts, blocker lists) | Done | `a7bd70a` |
-| 3: Dashboard UI (count cards/strips + drill-through to the 0087 queue) | Pending | - |
+| 3: Dashboard UI (count cards/strips + drill-through to the 0087 queue) | Done | `c6f59b5` |
 | 4: Tests + smoke | Pending | - |
 
 A **read-only management dashboard** over 0087's data: N-by-stage (funnel), by-owner
@@ -36,7 +36,7 @@ Kanban board (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (the 0087 pipeline fields + `dealer_activities`), `layout.md` (dashboard primitives), `auth.md` (gating), `commercial-spine.md` (won = `status='active'`, counted as converted).
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - **No migration** — 0087 owns the schema (incl. `stage_changed_at` for the stalled-blocker).
@@ -60,9 +60,9 @@ Kanban board (all later).
 - [x] Unit tests on each aggregation + the threshold predicates (fixture rows → expected counts/buckets) — `dashboard.test.ts` + `pipeline.test.ts` (41 tests).
 
 #### Phase 3: Dashboard UI
-- [ ] Dashboard page/section: stage funnel cards, by-owner table, activity-count strip (by owner/kind/period), blocker cards (stalled/stale/overdue).
-- [ ] Each count is a link to the 0087 `/dealerships` queue, pre-filtered (owner / due-bucket / stage) via its URL params.
-- [ ] Capability-gated per Phase 1; server component reading the Phase-2 queries.
+- [x] Dashboard page + view: funnel stat cards, by-owner table (+ stage breakdown), activity table (rep × this-week/last-30 + kind breakdown), blocker columns (stalled/stale/overdue, top-5 + "+N more"). New route `src/app/(app)/dealerships/pipeline/page.tsx` + server view `src/features/dealers/pipeline-dashboard.tsx`.
+- [x] Drill-through: funnel → `?status=prospect&stage=`, stale → `&idle=1`, overdue → `&due=overdue`, blocker rows → `/dealerships/[id]`; per the decision.md drill-through contract. Added a "Pipeline dashboard →" entry point in the `/dealerships` header.
+- [x] `assertCan('admin:access')` server-component gate (D2); reads `loadDealerPipelineDashboard()`. No client JS (all links) — no new gated action → no gate-matrix row.
 
 #### Phase 4: Tests + smoke
 - [ ] Aggregation unit tests green (Phase 2).
