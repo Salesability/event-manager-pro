@@ -26,7 +26,7 @@
 //   set -a && source .env.local && set +a && pnpm dlx tsx scripts/backfill-campaign-delivery-metrics.ts --write
 //   ./scripts/with-prod-db.sh pnpm dlx tsx scripts/backfill-campaign-delivery-metrics.ts --write
 
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/lib/db/schema';
@@ -47,6 +47,7 @@ const db = drizzle(pg, { schema });
 type Candidate = {
   campaignId: number;
   quoteId: number;
+  dealerId: number;
   publicId: string;
   old: { qtyRecords: number | null; smsEmail: number | null; letters: number | null; bdc: number | null; acceptedQuoteId: number | null };
 };
@@ -57,6 +58,7 @@ async function findCandidates(): Promise<Candidate[]> {
   const rows = await db.execute<{
     campaign_id: number;
     quote_id: number;
+    dealer_id: number;
     public_id: string;
     old_qty: number | null;
     old_sms: number | null;
@@ -67,6 +69,7 @@ async function findCandidates(): Promise<Candidate[]> {
     SELECT DISTINCT ON (q.campaign_id)
       q.campaign_id::int        AS campaign_id,
       q.id::int                 AS quote_id,
+      q.dealer_id::int          AS dealer_id,
       c.public_id               AS public_id,
       c.qty_records             AS old_qty,
       c.sms_email               AS old_sms,
@@ -85,6 +88,7 @@ async function findCandidates(): Promise<Candidate[]> {
   return rows.map((r) => ({
     campaignId: r.campaign_id,
     quoteId: r.quote_id,
+    dealerId: r.dealer_id,
     publicId: r.public_id,
     old: {
       qtyRecords: r.old_qty,
@@ -118,6 +122,7 @@ async function main() {
     const plan: Array<{
       campaignId: number;
       quoteId: number;
+      dealerId: number;
       metrics: { qtyRecords: number; smsEmail: number; letters: number; bdc: number };
     }> = [];
     let willChange = 0;
@@ -130,7 +135,7 @@ async function main() {
       const m = deriveDeliveryMetrics(lines);
       const diff = changed(c.old, m, c.quoteId);
       if (diff) willChange += 1;
-      plan.push({ campaignId: c.campaignId, quoteId: c.quoteId, metrics: m });
+      plan.push({ campaignId: c.campaignId, quoteId: c.quoteId, dealerId: c.dealerId, metrics: m });
       const fmt = (n: number | null) => (n == null ? '·' : String(n));
       console.log(
         `  campaign ${String(c.campaignId).padStart(5)} (${c.publicId}) ← quote ${c.quoteId}  ` +
@@ -166,7 +171,10 @@ async function main() {
             bdc: item.metrics.bdc,
             acceptedQuoteId: item.quoteId,
           })
-          .where(eq(campaigns.id, item.campaignId));
+          // Re-assert the dealer match at write time too (not just candidate
+          // selection): if a campaign were repointed to another dealer between
+          // findCandidates() and here, this keeps the write from crossing dealers.
+          .where(and(eq(campaigns.id, item.campaignId), eq(campaigns.dealerId, item.dealerId)));
       }
     });
 
