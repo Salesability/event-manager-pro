@@ -208,6 +208,66 @@ describe.skipIf(!dbUrl)('applyAcceptedQuoteToCampaign — accept-time delivery s
     expect(row).toEqual({ qtyRecords: 111, acceptedQuoteId: null });
   });
 
+  it('latest-accepted-wins: an older accepted quote cannot overwrite the campaign when a newer accepted quote exists', async () => {
+    let afterOlder: { qtyRecords: number | null; bdc: number | null; acceptedQuoteId: number | null } | undefined;
+    let afterNewer: { bdc: number | null; acceptedQuoteId: number | null } | undefined;
+    let newerId = -1;
+
+    try {
+      await db.transaction(async (tx) => {
+        const [dealer] = await tx
+          .insert(dealers)
+          .values({ publicId: publicId(), name: 'Two Accepted Quotes Dealer' })
+          .returning({ id: dealers.id });
+        const campaignId = await seedCampaign(tx, dealer.id, { qtyRecords: 111, bdc: 444 });
+
+        // Older accepted quote A (10:00) — bdc 5.
+        const [quoteA] = await tx
+          .insert(quotes)
+          .values({
+            dealerId: dealer.id, inputs: {}, status: 'accepted', campaignId,
+            acceptedAt: new Date('2026-05-01T10:00:00.000Z'),
+          })
+          .returning({ id: quotes.id });
+        await addLine(tx, quoteA.id, 'bdc-call', 5, 0);
+
+        // Newer accepted quote B (11:00) — bdc 9.
+        const [quoteB] = await tx
+          .insert(quotes)
+          .values({
+            dealerId: dealer.id, inputs: {}, status: 'accepted', campaignId,
+            acceptedAt: new Date('2026-05-01T11:00:00.000Z'),
+          })
+          .returning({ id: quotes.id });
+        newerId = quoteB.id;
+        await addLine(tx, quoteB.id, 'bdc-call', 9, 0);
+
+        // Applying the OLDER quote must be a no-op — B is newer.
+        await applyAcceptedQuoteToCampaign(quoteA.id, null, tx);
+        [afterOlder] = await tx
+          .select({ qtyRecords: campaigns.qtyRecords, bdc: campaigns.bdc, acceptedQuoteId: campaigns.acceptedQuoteId })
+          .from(campaigns)
+          .where(eq(campaigns.id, campaignId));
+
+        // Applying the NEWER quote writes (it's the latest).
+        await applyAcceptedQuoteToCampaign(quoteB.id, null, tx);
+        [afterNewer] = await tx
+          .select({ bdc: campaigns.bdc, acceptedQuoteId: campaigns.acceptedQuoteId })
+          .from(campaigns)
+          .where(eq(campaigns.id, campaignId));
+
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) throw err;
+    }
+
+    // Older quote left the campaign untouched (still its seeded values).
+    expect(afterOlder).toEqual({ qtyRecords: 111, bdc: 444, acceptedQuoteId: null });
+    // Newer quote wins.
+    expect(afterNewer).toEqual({ bdc: 9, acceptedQuoteId: newerId });
+  });
+
   it('is a no-op for a quote with no campaign link (legacy pre-0093 row)', async () => {
     let threw = false;
     try {
