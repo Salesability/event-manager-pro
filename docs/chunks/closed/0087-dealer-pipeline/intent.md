@@ -1,6 +1,6 @@
 # Dealer pipeline — rep commitments + activity log — Intent
 
-**Created:** 2026-06-19 · **Reframed (2026-06-19):** stage funnel → commitment tracker → two-lens pipeline → **split**. This chunk (0087) is the **rep operational layer + the shared data model**; the **management progress/blocker dashboard is split to [`0088-dealer-pipeline-dashboard`](../../0088-dealer-pipeline-dashboard/plan.md)** (a read-only fast-follow over this chunk's data). Folder slug kept; serial = identity.
+**Created:** 2026-06-19 · **Reframed (2026-06-19):** stage funnel → commitment tracker → two-lens pipeline → **split**. This chunk (0087) is the **rep operational layer + the shared data model**; the **management progress/blocker dashboard is split to [`0088-dealer-pipeline-dashboard`](../0088-dealer-pipeline-dashboard/plan.md)** (a read-only fast-follow over this chunk's data). Folder slug kept; serial = identity.
 
 ## Problem
 
@@ -16,7 +16,7 @@ single dropped callback quietly kills the deal. Dealer status is a binary `prosp
 
 > **Why this is its own chunk:** the full pipeline (rep tools **+** a management dashboard
 > over the same data) is sizeable. Shipping the **operational layer first** gets reps working
-> the 188 prospects immediately; the **management dashboard ([0088](../../0088-dealer-pipeline-dashboard/plan.md))**
+> the 188 prospects immediately; the **management dashboard ([0088](../0088-dealer-pipeline-dashboard/plan.md))**
 > follows once a week or two of activity has accrued to show. This chunk **owns the schema**
 > (stages, commitment fields, the activity log) so 0088 is pure read/UI with no migration.
 
@@ -48,7 +48,7 @@ and nothing they committed to disappears.
 
 ## Non-goals (v1 scope guard)
 
-- **No management dashboard here** — that's [0088](../../0088-dealer-pipeline-dashboard/plan.md)
+- **No management dashboard here** — that's [0088](../0088-dealer-pipeline-dashboard/plan.md)
   (N-by-stage / by-owner / activity counts / blocker views). This chunk only adds the data +
   rep tools the dashboard will read.
 - **No rich timeline UI / Kanban.** v1 logs activities + shows a recent list; a board + full
@@ -83,5 +83,5 @@ and nothing they committed to disappears.
 ## Why now
 
 0086 put 188 cold prospects in the app; reps need to work them without dropping promises.
-Ship the operational layer now; the management dashboard ([0088](../../0088-dealer-pipeline-dashboard/plan.md))
+Ship the operational layer now; the management dashboard ([0088](../0088-dealer-pipeline-dashboard/plan.md))
 fast-follows once there's activity to report on.

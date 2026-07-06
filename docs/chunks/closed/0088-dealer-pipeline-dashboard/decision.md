@@ -2,7 +2,7 @@
 
 **Phase 1 decision gate.** Owner calls made 2026-07-06 (via `/build`). All four landed
 on the plan's leans; one clarification recorded (D2). No schema — reads
-[0087](../closed/0087-dealer-pipeline/plan.md)'s `dealers` pipeline fields + `dealer_activities`.
+[0087](../0087-dealer-pipeline/plan.md)'s `dealers` pipeline fields + `dealer_activities`.
 
 ## D1 — Surface: dedicated page at `/dealerships/pipeline`
 
@@ -17,7 +17,7 @@ rep-facing queue focused on *working* prospects; management gets its own overvie
   the dashboard (never `[id]` with `id="pipeline"`). Dealer ids are never the literal string
   `pipeline` regardless.
 - **Edge gate inherited.** `ADMIN_PATHS` includes `/dealerships` (prefix match — see
-  [auth.md](../../wiki/auth.md) §Route gating), so `/dealerships/pipeline` inherits the edge
+  [auth.md](../../../wiki/auth.md) §Route gating), so `/dealerships/pipeline` inherits the edge
   admin gate automatically — same as the queue.
 
 ## D2 — Capability: `admin:access` (reuse the dealer-list gate, no new matrix row)
@@ -28,7 +28,7 @@ at the top of the page. **No new capability, no new gate-matrix row.**
 > **Clarification vs the Phase-1 question wording.** The option was framed as "coaches see
 > it too, narrowed to *mine*." That framing was inaccurate for this repo: `admin:access` is
 > **admin-only** (`can(coachProfile, 'admin:access') === false` —
-> [capabilities.test.ts](../../../src/lib/auth/capabilities.test.ts)), and the whole
+> [capabilities.test.ts](../../../../src/lib/auth/capabilities.test.ts)), and the whole
 > `/dealerships` surface is already admin-gated. So the dashboard is **admin-only**, exactly
 > like the queue it summarizes — which is the substance of the choice ("same as the dealer
 > list"). The **by-owner** facet still breaks workload down per rep *for the admin viewer*;
@@ -75,7 +75,7 @@ CSV/PDF export, custom date ranges, and a Kanban board.
 ## Drill-through contract (Phase 3 will build hrefs to these)
 
 Every count links to the pre-filtered `/dealerships` queue via its existing URL params
-(confirmed in [dealers-admin.tsx](../../../src/features/dealers/dealers-admin.tsx) —
+(confirmed in [dealers-admin.tsx](../../../../src/features/dealers/dealers-admin.tsx) —
 `QUEUE_PARAMS = ['due','mine','idle','stage','priority']`, all Prospect-view-only):
 
 | Dashboard count | Href |

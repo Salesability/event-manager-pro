@@ -1,7 +1,7 @@
 # Dealer pipeline — management dashboard — Plan
 
 **Intent:** [`intent.md`](intent.md)
-**Started:** _scaffolded 2026-06-19 as the fast-follow to [`0087-dealer-pipeline`](../closed/0087-dealer-pipeline/plan.md). **Blocked on 0087** (reads its schema). No migration of its own._
+**Started:** _scaffolded 2026-06-19 as the fast-follow to [`0087-dealer-pipeline`](../0087-dealer-pipeline/plan.md). **Blocked on 0087** (reads its schema). No migration of its own._
 
 > **Status note:** **not active** + **depends on 0087** — don't build until 0087 has shipped
 > the `dealers` pipeline fields + the `dealer_activities` table. Read-only/UI-only chunk.
@@ -52,7 +52,7 @@ Kanban board (all later).
 - [x] **Facet depth** — stage / owner / activity / blockers in v1; province/manufacturer/charts/export/date-ranges/Kanban deferred (D4).
 
 #### Phase 2: Aggregation queries
-> **Design:** the counting is **pure functions** in [`dashboard.ts`](../../../src/features/dealers/dashboard.ts) (fixture-testable, no DB), with a thin `loadDealerPipelineDashboard()` loader in `schedule/queries.ts` that fetches `loadDealers()` + a 30-day activity window and delegates. Threshold predicates (`isStalled`/`isStale` + `STALLED_DAYS`/`STALE_DAYS`) live in the client-safe `pipeline.ts` next to `isOverdue`/`isIdle`.
+> **Design:** the counting is **pure functions** in [`dashboard.ts`](../../../../src/features/dealers/dashboard.ts) (fixture-testable, no DB), with a thin `loadDealerPipelineDashboard()` loader in `schedule/queries.ts` that fetches `loadDealers()` + a 30-day activity window and delegates. Threshold predicates (`isStalled`/`isStale` + `STALLED_DAYS`/`STALE_DAYS`) live in the client-safe `pipeline.ts` next to `isOverdue`/`isIdle`.
 - [x] `pipelineByStage()` — non-archived prospects grouped by `pipeline_stage` (all 9 stages, zeros incl.) + `totalProspects` + a `won` count from `status='active'`.
 - [x] `pipelineByOwner()` — per-owner stage breakdown + total, null owner → 'Unassigned'; sorted total-desc.
 - [x] `activityCounts()` — `dealer_activities` grouped by actor + kind over rolling last-7 / last-30-day windows.

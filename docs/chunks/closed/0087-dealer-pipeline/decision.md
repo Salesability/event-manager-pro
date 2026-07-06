@@ -2,7 +2,7 @@
 
 **Resolved 2026-06-22** (owner answered via `/build` decision-gate prompt). These calls close
 the [intent](intent.md) "Open questions" and fix the data model the rest of the chunk (and the
-[0088 dashboard](../../0088-dealer-pipeline-dashboard/plan.md)) builds on.
+[0088 dashboard](../0088-dealer-pipeline-dashboard/plan.md)) builds on.
 
 ## D1 — `pipeline_stage` enum → **full 9-stage list**
 
