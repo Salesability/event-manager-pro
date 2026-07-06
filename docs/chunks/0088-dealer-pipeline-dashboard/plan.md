@@ -10,7 +10,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Decision gate — surface, capability, thresholds, facet depth | Pending | - |
+| 1: Decision gate — surface, capability, thresholds, facet depth | Done | - |
 | 2: Aggregation queries (by-stage, by-owner, activity counts, blocker lists) | Pending | - |
 | 3: Dashboard UI (count cards/strips + drill-through to the 0087 queue) | Pending | - |
 | 4: Tests + smoke | Pending | - |
@@ -34,7 +34,7 @@ Kanban board (all later).
 
 **Conventions referenced:** `docs/wiki/data-model.md` (the 0087 pipeline fields + `dealer_activities`), `layout.md` (dashboard primitives), `auth.md` (gating), `commercial-spine.md` (won = `status='active'`, counted as converted).
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
 - **No migration** — 0087 owns the schema (incl. `stage_changed_at` for the stalled-blocker).
@@ -43,11 +43,11 @@ Kanban board (all later).
 
 ### Phase Checklist
 
-#### Phase 1: Decision gate
-- [ ] **Surface** — dedicated page (`/dealerships/pipeline` or `/admin/pipeline`) vs `/dealerships` section. Lean: dedicated page. Write `decision.md`.
-- [ ] **Capability** — reuse the dealer-list read gate vs manager-only. Lean: same as the dealer list (coaches' "mine" narrows it).
-- [ ] **Thresholds** — stale = N days (lean 14); stalled = N days in stage (lean 21). Confirm; constants vs config.
-- [ ] **Facet depth** — stage/owner/activity/blockers in v1; province/manufacturer later? Confirm.
+#### Phase 1: Decision gate — see [`decision.md`](decision.md)
+- [x] **Surface** — dedicated page **`/dealerships/pipeline`** (D1; static segment beats sibling `[id]`, inherits the `/dealerships` edge admin gate).
+- [x] **Capability** — reuse the dealer-list gate = **`admin:access`** (D2; admin-only, no new matrix row — the "coaches see mine" wording was inaccurate, clarified in decision.md).
+- [x] **Thresholds** — stalled **21d** (`stage_changed_at`) · stale **14d or null** (`last_contacted_at`) · overdue = `next_action_at < today`; constants in v1 (D3).
+- [x] **Facet depth** — stage / owner / activity / blockers in v1; province/manufacturer/charts/export/date-ranges/Kanban deferred (D4).
 
 #### Phase 2: Aggregation queries
 - [ ] `pipelineByStage()` — count non-archived dealers grouped by `pipeline_stage` (+ a converted/`won` count from `status='active'`).
