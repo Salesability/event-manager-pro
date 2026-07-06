@@ -1,0 +1,64 @@
+# Production List: Date column (replace Status) — Plan
+
+**Intent:** [`intent.md`](intent.md)
+**Started:** 2026-07-06
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: Swap Status → sortable Date column + re-home "Show cancelled" filter | Done | `97beb06` |
+| 2: Retire the time-window dropdown + trim dead code | Pending | - |
+| 3: Tests + smoke verification | Pending | - |
+
+Replace the Production List's derived **Status** column with a sortable **Date**
+(start date) column, default the list to date-ascending, and keep the "Show
+cancelled" default-hide while dropping the now-redundant time-window dropdown.
+"Done" = `/production` sorts by date, cancelled rows stay hidden by default, the
+time-window `<select>` is gone, and no dead time-window code remains in `filter.ts`
+or the CSV export route. **Code-only, no migration** (`Campaign` already carries
+`startDate`/`endDate`).
+
+## Code Anchors
+
+For each new/changed piece below, read the anchor first and match its shape.
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| Date column def in `production-columns.tsx` | `src/app/(app)/production/production-columns.tsx:68` (the `identity` column — already formats `startDate`/`endDate` via `fmtDate`, `enableSorting: true`) | Same file, sibling column; reuse `fmtDate` + the sorting convention |
+| Removing the Status column + its `filterFn` | `src/app/(app)/production/production-columns.tsx:88` (`id:'status'`, `filterFn: filterTimeStatus`, lines 54–66) | This is the column/filter being removed and re-homed |
+| Re-homed "Show cancelled" filter binding | `src/app/(app)/production/production-admin.tsx:110` (`columnFilters` → `{ id: 'status', value }`) | The `columnFilters` id must match a live column, else the filter silently no-ops |
+| Toolbar without the time-window `<select>` | `src/app/(app)/production/production-admin.tsx:129` (the `filters` block: `<select>` + "Show cancelled" `<label>`) | Keep the checkbox, drop the select |
+| Trimmed CSV export predicate | `src/app/(app)/production/export/route.ts:44` (inlined search + time-window + show-cancelled predicate) | Server-side copy of the same filter; drop the time-window half, keep show-cancelled + search |
+| Slimmed `filter.ts` | `src/app/(app)/production/filter.ts:22` (`ProductionRange`, `PRODUCTION_RANGE_MONTHS`, `isProductionRange`, `rangeWindowEndIso`) | These exports become unused once the time-window is gone; keep `todayIso` |
+
+**Conventions referenced:**
+- `src/components/ui/data-table.tsx` — TanStack `getSortedRowModel` + per-column `enableSorting`; ISO `YYYY-MM-DD` strings sort lexically = chronologically, so `accessorKey: 'startDate'` needs no custom sort fn.
+- `docs/wiki/data-model.md` — `campaigns.start_date`/`end_date` are `date` columns; `Campaign` rows project both.
+
+**Overall Progress:** 33% (1/3 phases complete)
+
+### Phase Checklist
+
+#### Phase 1: Swap Status → sortable Date column + re-home "Show cancelled" filter
+- [x] `production-columns.tsx`: remove the `id:'status'` column (the derived-status badge + its `filterFn: filterTimeStatus`).
+- [x] Add a `id:'date'` column: `accessorKey: 'startDate'`, `header: 'Date'`, cell renders `fmtDate(startDate)`, `enableSorting: true`.
+- [x] Re-home the filter: `filterShowCancelled` (show-cancelled only) attached to the new `date` column; time-window branches dropped.
+- [x] `production-admin.tsx`: point `columnFilters` at `{ id: 'date', value }` and narrow `ProductionStatusFilter` to `{ showCancelled }`.
+- [x] Set `initialSorting={[{ id: 'date', desc: false }]}` (was `identity`).
+- [x] Remove now-unused imports (`campaignTimeStatus`/`CampaignTimeStatus` deleted, `CampaignStatusBadge` + `Badge` + time-window helper imports removed) from `production-columns.tsx`.
+- [x] Unwound the now-dead `todayIso` threading (existed only for the derived status): dropped the `buildProductionColumns` param, the `ProductionAdmin` prop, and the `page.tsx` import + pass. `filter.ts` keeps `todayIso` (the CSV export still uses it).
+- [x] App still compiles and the list still hides cancelled by default. *(verified by the fast gate)*
+
+#### Phase 2: Retire the time-window dropdown + trim dead code
+- [ ] `production-admin.tsx`: remove the time-window `<select>` (All/Upcoming/Past/Next 1–3 months) from the `filters` block; keep the "Show cancelled" checkbox. Remove the `status` URL param plumbing (`time`/`TimeWindow`/`isTime`), keep `q` + `cancelled`.
+- [ ] `export/route.ts`: drop the `status`/time-window predicate (upcoming/past/range) and the `rangeWindowEndIso`/`isProductionRange` imports; keep the search-needle + show-cancelled filter. Leave the output's `Date Range` + `Status` columns as-is (report fields).
+- [ ] `filter.ts`: delete the now-unused `ProductionRange`, `PRODUCTION_RANGE_MONTHS`, `isProductionRange`, `rangeWindowEndIso`; keep `todayIso`.
+- [ ] Grep for any remaining `?status=` / `TimeWindow` / `ProductionRange` references and clean up.
+
+#### Phase 3: Tests + smoke verification
+- [ ] Update/remove unit tests referencing the Status column or the time-window filter (search `production-columns`, `filter`, `filterTimeStatus`, `rangeWindowEnd` under `tests/` and `src/**/*.test.ts*`).
+- [ ] Add/keep a unit test: the re-homed filter hides `status:'cancelled'` rows when `showCancelled` is false and shows them when true.
+- [ ] `tsc` clean; no new lint on chunk files.
+- [ ] Smoke (web-test): `goto /production`; expect heading "Production List", a **Date** column header (no **Status** column), a search box + "Show cancelled" checkbox, and **no** time-window dropdown.
+- [ ] Smoke (web-test): click the **Date** column header; rows re-order by date (sort toggles asc/desc).
