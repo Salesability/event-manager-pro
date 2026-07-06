@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-06 — Campaign delivery metrics sourced from the accepted quote (chunk 0094)
+
+- **New state:** the four campaign delivery-metric columns (`qty_records` / `sms_email` / `letters` / `bdc`) left the Book Event dialog. They're now derived from the **accepted quote's** `quote_line_items` at accept time and snapshotted onto the campaign (+ `accepted_quote_id`, which no code wrote before). Booking still owns `style_id` (Event Format) + `audience_source_id` (Data Source). A freshly-booked campaign shows blank metrics until its quote is accepted (owner decision D5).
+- **Mapping** (pure, `src/lib/quotes/delivery-metrics.ts`): `bdc`←Σ`bdc-call` · `letters`←Σ`letter-postage` · `sms_email`←Σ`digital-record` · `qty_records`←`500×Σbase-event.qty`+Σ`additional-contact`. Writer `applyAcceptedQuoteToCampaign` runs on every confirmed-accepted `acceptQuote` (idempotent + self-healing).
+- **Override unchanged:** `billing_adjustments` stays a `/reports` invoice override (D6 — not reflected onto `/production`). Backfill: `scripts/backfill-campaign-delivery-metrics.ts` (backfill-all).
+- **Pages touched:** [`commercial-spine.md`](commercial-spine.md) (new "Delivery metrics" subsection + accept-flow bullet), [`data-model.md`](data-model.md) (`campaigns` walkthrough + `accepted_quote_id` ER note). Design history: [`0094-decouple-booking-metrics`](../chunks/0094-decouple-booking-metrics/decision.md).
+
 ## 2026-06-24 — Shannon-owned BoldSign Live key created (chunk 0092 Phase 4)
 
 - **New state:** Shannon (`shannon@salesability.ca`) was promoted to BoldSign Admin and generated a **Live** API key under her own user — the prerequisite for sending MSA envelopes *as Shannon* without the `onBehalfOf` webhook-403 (Phases 1–3 dead end).
