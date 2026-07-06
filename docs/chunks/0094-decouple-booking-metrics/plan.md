@@ -3,7 +3,7 @@
 **Intent:** [`intent.md`](intent.md)
 **Started:** _deferred — parked follow-up to 0093_
 
-> **Parked 2026-06-24.** Follow-up to [`0093-calendar-quote-msa-status`](../0093-calendar-quote-msa-status/plan.md). Not started. **Un-defer trigger:** owner picks it up after 0093 is validated/shipped. Phases below are a first sketch — re-derive from `intent.md` (esp. the Open questions) when activated.
+> **Parked 2026-06-24.** Follow-up to [`0093-calendar-quote-msa-status`](../closed/0093-calendar-quote-msa-status/plan.md). Not started. **Un-defer trigger:** owner picks it up after 0093 is validated/shipped. Phases below are a first sketch — re-derive from `intent.md` (esp. the Open questions) when activated.
 
 ## Progress Tracker
 

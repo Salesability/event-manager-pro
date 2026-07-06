@@ -99,7 +99,7 @@ The workflow is **date-first**: a coach books an event (a `campaigns` row, via "
 - **Per-event commercial status.** `loadCommercialStatusByCampaign` (`src/features/schedule/commercial-status.ts`) resolves, per campaign: the latest linked quote's display status + the dealer's active-or-pending MSA, and **`exposed = !(quote accepted && MSA active)`**. Batched (2 queries, no N+1); the calendar page passes it to the view.
 - **Booking → "Create quote now?" hand-off.** On Book Event success the dialog shows a directive prompt (primary **Create quote now →** which navigates to the prefilled composer, **Send MSA for signature**, quiet **I'll do this later**). `createCampaign` returns the new `{ campaignId, dealerId }` to prefill. Skippable — not a hard block.
 - **Visibility as backstop.** The **event-detail card** shows Quote + MSA badges + a **"⚠ Commercially exposed" / "✓ Protected"** banner + the two CTAs; the **calendar ribbon** carries an **amber dot** on exposed events. MSA is per-client, so "Send MSA" only shows when the client has no active MSA.
-- **Cancellation-fee *math* stays out of scope** (0037) — 0093 encodes the *principle* (protect the commitment early) in the flow, not the fee calculation. See [`docs/chunks/0093-calendar-quote-msa-status/`](../chunks/0093-calendar-quote-msa-status/intent.md).
+- **Cancellation-fee *math* stays out of scope** (0037) — 0093 encodes the *principle* (protect the commitment early) in the flow, not the fee calculation. See [`docs/chunks/closed/0093-calendar-quote-msa-status/`](../chunks/closed/0093-calendar-quote-msa-status/intent.md).
 
 ### Less-happy paths
 
