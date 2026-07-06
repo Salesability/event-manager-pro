@@ -35,6 +35,7 @@ import {
 import { sendEmail, type SendAttachment } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
+import { applyAcceptedQuoteToCampaign } from './campaign-delivery';
 import { MAX_ADDRESS_LINES } from './constants';
 import { resolveQuoteRecipient } from './recipient';
 import { quoteDownloadFilename } from './display-name';
@@ -1347,6 +1348,13 @@ export const acceptQuote = capabilityClient('quote:edit')
         });
       }
     }
+
+    // 0094: snapshot the accepted quote's derived delivery metrics onto its
+    // campaign (+ record `campaigns.acceptedQuoteId`). Run on every confirmed-
+    // accepted call, not only the sent→accepted transition, so it's idempotent
+    // and self-heals a snapshot that failed on an earlier accept. Skips cleanly
+    // when the quote has no campaign link (legacy pre-0093 rows).
+    await applyAcceptedQuoteToCampaign(quoteId, userId);
 
     revalidateQuoteViews();
     return { ok: true };

@@ -1,0 +1,57 @@
+import 'server-only';
+
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { campaigns, quoteLineItems, quotes } from '@/lib/db/schema';
+import { deriveDeliveryMetrics } from '@/lib/quotes/delivery-metrics';
+
+// 0094: snapshot an accepted quote's derived delivery metrics onto its campaign.
+//
+// The quote is the commercial source of truth for scope; the campaign holds the
+// operational delivery numbers (`docs/wiki/commercial-spine.md`). On accept we
+// derive `qtyRecords/smsEmail/letters/bdc` from the quote's line items (D1) and
+// write them onto the campaign, plus record the campaign→accepted-quote link
+// (`campaigns.acceptedQuoteId`, declared since 0093 but written by nothing until
+// now). Consumers (Production, event-detail, emails) keep reading the raw
+// `campaigns` columns; Reports keeps layering `billing_adjustments` on top.
+//
+// Not a Server Action (no `'use server'`): it's a server-only mutation called
+// downstream of the `acceptQuote` capability gate, same rationale as the
+// transition helpers in ./lifecycle.ts.
+//
+// **Idempotent + self-healing.** `deriveDeliveryMetrics` is pure, so the same
+// accepted quote always writes the same four numbers. The caller runs this on
+// every confirmed-accepted `acceptQuote` (not only the sent→accepted
+// transition), so a snapshot that failed on the first accept is repaired by any
+// later re-accept — and the Phase-5 backfill can re-drive it too.
+export async function applyAcceptedQuoteToCampaign(
+  quoteId: number,
+  updatedById: string | null = null,
+): Promise<void> {
+  const [quote] = await db
+    .select({ campaignId: quotes.campaignId })
+    .from(quotes)
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  // Legacy pre-0093 quote with no event link — nothing to snapshot onto.
+  if (!quote?.campaignId) return;
+
+  const lines = await db
+    .select({ code: quoteLineItems.code, qty: quoteLineItems.qty })
+    .from(quoteLineItems)
+    .where(eq(quoteLineItems.quoteId, quoteId));
+
+  const metrics = deriveDeliveryMetrics(lines);
+
+  await db
+    .update(campaigns)
+    .set({
+      qtyRecords: metrics.qtyRecords,
+      smsEmail: metrics.smsEmail,
+      letters: metrics.letters,
+      bdc: metrics.bdc,
+      acceptedQuoteId: quoteId,
+      ...(updatedById ? { updatedById } : {}),
+    })
+    .where(eq(campaigns.id, quote.campaignId));
+}
