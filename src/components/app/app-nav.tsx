@@ -14,9 +14,9 @@ import type { Capability } from '@/lib/auth/capabilities';
 
 type Tab = { href: string; label: string; requiresAdmin?: true; capability?: Capability };
 
-// `requiresAdmin` hides the tab from coaches in the bar. Production + Dealers
-// are operationally-shaped (daily back-office views) but admin-audience —
-// they stay top-level (not in the Admin dropdown, which is settings-shaped)
+// `requiresAdmin` hides the tab from coaches in the bar. Production, Dealers, +
+// Pipeline are operationally-shaped (daily back-office views) but admin-audience
+// — they stay top-level (not in the Admin dropdown, which is settings-shaped)
 // so admins can reach them without a menu click. Coaches don't see them at
 // all. Route-level enforcement is in `src/lib/supabase/middleware.ts`
 // (`ADMIN_PATHS`) + `assertCan('admin:access')` on each page (0028 → 0036).
@@ -24,6 +24,10 @@ const OPERATIONAL_TABS: readonly Tab[] = [
   { href: '/calendar', label: 'Calendar' },
   { href: '/production', label: 'Production List', requiresAdmin: true },
   { href: '/dealerships', label: 'Dealers', requiresAdmin: true },
+  // Management dashboard over the dealer pipeline (0088). A nested route under
+  // /dealerships with its own tab — `activeHref` picks the most-specific match
+  // so this highlights alone (not also Dealers) when active.
+  { href: '/dealerships/pipeline', label: 'Pipeline', requiresAdmin: true },
   { href: '/quotes', label: 'Quotes', capability: 'quote:edit' },
   { href: '/reports', label: 'Reports' },
 ];
@@ -46,6 +50,19 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// The active tab is the most-specific (longest-href) match, so a nested route
+// with its own tab (e.g. `/dealerships/pipeline`) highlights only that tab, not
+// also its parent (`/dealerships`). Returns null when nothing matches.
+function activeHref(pathname: string, tabs: readonly Tab[]): string | null {
+  let best: string | null = null;
+  for (const t of tabs) {
+    if (isActive(pathname, t.href) && (best === null || t.href.length > best.length)) {
+      best = t.href;
+    }
+  }
+  return best;
+}
+
 export function AppNav({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
   // Pull the bound `can` predicate from context once at the top level so
@@ -56,12 +73,13 @@ export function AppNav({ isAdmin }: { isAdmin: boolean }) {
   const operationalTabs = OPERATIONAL_TABS.filter(
     (t) => (!t.requiresAdmin || isAdmin) && (!t.capability || can(t.capability)),
   );
+  const activeOpHref = activeHref(pathname, operationalTabs);
   const adminActive = ADMIN_TABS.some((t) => isActive(pathname, t.href));
 
   return (
     <nav className="flex items-center gap-1">
       {operationalTabs.map((tab) => {
-        const active = isActive(pathname, tab.href);
+        const active = tab.href === activeOpHref;
         return (
           <Link
             key={tab.href}
