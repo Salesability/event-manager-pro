@@ -61,6 +61,9 @@ export function ProductionAdmin({
 
   function pushParams(next: { q?: string; cancelled?: boolean }) {
     const sp = new URLSearchParams(params.toString());
+    // Strip the retired time-window param (0096) so a stale bookmarked
+    // `?status=…` can't linger in the URL after any navigation.
+    sp.delete('status');
     if (next.q !== undefined) {
       if (next.q) sp.set('q', next.q);
       else sp.delete('q');

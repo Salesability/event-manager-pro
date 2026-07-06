@@ -9,7 +9,12 @@ import { useSearchParams } from 'next/navigation';
 // export link inherits whatever's active.
 export function ProductionPageActions() {
   const params = useSearchParams();
-  const qs = params.toString();
+  // Drop the retired time-window param (0096): the export route ignores
+  // `status`, so a stale bookmarked `?status=…` shouldn't ride along on the
+  // export link either. `q` + `cancelled` still flow through.
+  const sp = new URLSearchParams(params.toString());
+  sp.delete('status');
+  const qs = sp.toString();
   const exportHref = qs ? `/production/export?${qs}` : '/production/export';
 
   return (
