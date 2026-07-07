@@ -119,11 +119,7 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           }
         >
           <span aria-hidden>{commercial.exposed ? '⚠' : '✓'}</span>
-          <span>
-            {commercial.exposed
-              ? 'Commercially exposed — no accepted quote and/or active MSA, so the cancellation fee (MSA §2.iii) is not yet in force. Lock it in below.'
-              : 'Protected — accepted quote + active MSA.'}
-          </span>
+          <span>{commercialBannerText(commercial)}</span>
         </div>
       )}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -184,7 +180,10 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           <Row
             label="MSA"
             value={
-              commercial.msaStatus ? (
+              commercial.msaWaived ? (
+                // 0100: waived — calm neutral pill, not an unfinished step.
+                <Badge color="zinc">Not required</Badge>
+              ) : commercial.msaStatus ? (
                 <MsaStatusBadge status={commercial.msaStatus} />
               ) : (
                 <span className="text-zinc-500">No active MSA</span>
@@ -229,10 +228,13 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
             </Button>
           </Can>
         )}
-        {campaign.status !== 'cancelled' && commercial && commercial.msaStatus !== 'active' && (
+        {campaign.status !== 'cancelled' &&
+          commercial &&
+          commercial.msaStatus !== 'active' &&
+          !commercial.msaWaived && (
           // The MSA is per-client and sent from the dealer page (admin-only).
-          // Surfaced here only when the client has no active MSA — the other
-          // half of "protect the commitment".
+          // Surfaced here only when the client has no active MSA AND the event
+          // isn't waived (0100) — the other half of "protect the commitment".
           <Can capability="admin:access">
             <Button outline compact href={`/dealerships/${campaign.dealerId}`}>
               Send MSA
@@ -322,6 +324,20 @@ function formatDate(iso: string) {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+// 0100: the commercial banner copy is waiver-aware. A waived event never blames
+// the MSA — when exposed it's only the missing quote; when protected it says the
+// MSA isn't required for this event (there's no active MSA to credit).
+function commercialBannerText(commercial: CommercialStatus): string {
+  if (commercial.exposed) {
+    return commercial.msaWaived
+      ? 'Commercially exposed — no accepted quote yet, so the cancellation fee (MSA §2.iii) is not yet in force. Lock in the quote below. (MSA not required for this event.)'
+      : 'Commercially exposed — no accepted quote and/or active MSA, so the cancellation fee (MSA §2.iii) is not yet in force. Lock it in below.';
+  }
+  return commercial.msaWaived
+    ? 'Protected — accepted quote. MSA not required for this event.'
+    : 'Protected — accepted quote + active MSA.';
 }
 
 function gcalBadge(status: Campaign['gcalSyncStatus']): {
