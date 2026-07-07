@@ -255,6 +255,8 @@ export const sendMsaEnvelope = capabilityClient('admin:access')
       signer: { emailAddress: recipient.email, name: signerFullName },
       files: [{ filename: `agreement-${msaId}.pdf`, body: msaPdf.body }],
       signatureAnchor: msaPdf.signatureAnchor,
+      printedNameAnchor: msaPdf.printedNameAnchor,
+      titleAnchor: msaPdf.titleAnchor,
       metadata: { msaId: String(msaId) },
     });
     if ('error' in sendResult) {
@@ -351,6 +353,8 @@ export const sendTestMsa = capabilityClient('admin:access')
       signer: { emailAddress: to, name: signerName },
       files: [{ filename: 'test-msa.pdf', body: msaPdf.body }],
       signatureAnchor: msaPdf.signatureAnchor,
+      printedNameAnchor: msaPdf.printedNameAnchor,
+      titleAnchor: msaPdf.titleAnchor,
       metadata: { test: 'true' },
     });
     if ('error' in sendResult) {

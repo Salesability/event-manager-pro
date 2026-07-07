@@ -62,6 +62,14 @@ export type SendSignatureRequestInput = {
    *  Quote section of the combined document. Each becomes a required Initial
    *  form field at its anchor; empty/omitted means signature-only. */
   initialsAnchors?: FieldAnchor[];
+  /** Optional signer-filled TextBox for the signer's printed full name, below
+   *  the Client signature (chunk 0099 — legal review). Produced by
+   *  `renderMsaPdf()` → `result.printedNameAnchor`. Required field when
+   *  supplied. */
+  printedNameAnchor?: FieldAnchor;
+  /** Optional signer-filled TextBox for the signer's title (chunk 0099).
+   *  Produced by `renderMsaPdf()` → `result.titleAnchor`. */
+  titleAnchor?: FieldAnchor;
   /** Optional BoldSign metadata pinned onto the document so the webhook
    *  can correlate back to the row without a separate lookup table. */
   metadata?: Record<string, string>;
@@ -196,7 +204,25 @@ export async function sendSignatureRequest(
     FormField.FieldTypeEnum.Signature,
     input.signatureAnchor,
   );
-  signer.formFields = [...initialFields, sigField];
+  // Signer-filled printed-name + title TextBox fields below the signature
+  // (chunk 0099 — legal review). Present only when the renderer emitted their
+  // anchors (the MSA does; other envelopes may not).
+  const textFields: FormField[] = [];
+  if (input.printedNameAnchor) {
+    textFields.push(
+      buildFormField(
+        'ClientPrintedName',
+        FormField.FieldTypeEnum.TextBox,
+        input.printedNameAnchor,
+      ),
+    );
+  }
+  if (input.titleAnchor) {
+    textFields.push(
+      buildFormField('ClientTitle', FormField.FieldTypeEnum.TextBox, input.titleAnchor),
+    );
+  }
+  signer.formFields = [...initialFields, sigField, ...textFields];
 
   sendForSign.signers = [signer];
 
