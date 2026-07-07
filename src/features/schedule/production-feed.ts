@@ -20,8 +20,10 @@
 import type { Campaign } from './queries';
 
 /** Column order of the feed CSV. The Google Sheet keys off these headers, so the
- *  set + order is a contract — additive changes only, and never add a PII/notes
- *  column here (see the redaction rationale above). */
+ *  set + order is a contract — additive changes only (append, never reorder).
+ *  The dealer PRIMARY contact + `Notes` are surfaced here deliberately (0098);
+ *  do NOT add the campaign's OWN booking contact or the audience source (see the
+ *  redaction rationale above). */
 export const FEED_HEADERS = [
   'Start Date',
   'End Date',
