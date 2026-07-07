@@ -17,7 +17,16 @@ project (IAM grant) + the GitHub connection + two triggers.
 | 2: **PROD local-first validation** (`submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
 | 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless stage build+deploy proven → rev `event-manager-pro-sandbox-00009-htc`, `APP_ENV=stage`, `/login`=200 |
 | 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | **✅ Done 2026-07-07** | repo moved to `Salesability` org; connections + repo links + both triggers created |
-| 5: First-push validation (push `dev`→stage, `main`→prod) | **In progress 2026-07-07** | `git push origin dev` auto-fired `deploy-stage-on-dev` (build queued keyless); prod push pending |
+| 5: First-push validation (push `dev`→stage, `main`→prod) | **✅ Done 2026-07-07** | both proven end-to-end, keyless. `dev`→ rev `-sandbox-00010-bl9`; `main`→ rev `-00045-9lf` (env/secrets verified: APP_ENV=production, boldsign `:latest`, prod DB, SENDER absent, QBO). CHUNK COMPLETE. |
+
+**Chunk complete (2026-07-07).** Keyless `git push` deploys live for both envs — no
+gcloud auth. `git push origin dev` → stage, `git push origin main` → prod, each gated
+by the unit suite. Repo owned by the `Salesability` org.
+
+⚠️ **Workflow note:** every push to `main` now triggers a full prod rebuild+deploy —
+including **docs-only** commits. Keep plan/wiki commits on `dev` (or local) and let
+them reach `main` with real code, or add a Cloud Build **included/ignored file
+filter** to the `deploy-prod-on-main` trigger later if doc-churn deploys get noisy.
 
 ### Phase 4 result (2026-07-07) — repo re-homed + triggers live
 
