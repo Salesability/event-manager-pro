@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Pure feed model (select + redacted row mapper) + unit tests | Done | `527c293` |
-| 2: Public token-gated feed route (`/api/production-feed`) | Pending | - |
+| 2: Public token-gated feed route (`/api/production-feed`) | Done | `331e480` |
 | 3: Secret + deploy wiring + P0 owner-setup doc | Pending | - |
 | 4: Admin discoverability panel (optional — IMPORTDATA formula) | Pending | - |
 | 5: Verification (route test + public-feed smoke) | Pending | - |
@@ -37,7 +37,7 @@ API, no DWD scope, no migration.**
 - `docs/wiki/data-model.md` — `Campaign` fields (`src/features/schedule/queries.ts:90-117`); ops/PII fields to withhold: `qtyRecords`(kept here), `notes`, `phone`, `email`, `audienceSourceLabel`.
 - `docs/wiki/go-live-accounts.md` — deploy secret-mount runbook; add a `production-feed-token` row.
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 ### Phase Checklist
 
@@ -46,10 +46,10 @@ API, no DWD scope, no migration.**
 - [x] Unit tests (`production-feed.test.ts`, 7/7): filter includes booked-future + completed-today, excludes draft / cancelled / fully-past; mapper emits exactly `FEED_HEADERS.length` cells in order, nulls → blank; **redaction test** asserts sentinel `notes`/`contact`/`phone`/`email`/source never surface.
 
 #### Phase 2: Public token-gated feed route
-- [ ] `src/app/api/production-feed/route.ts` (`GET`): read `process.env.PRODUCTION_FEED_TOKEN`; if unset → 503/500 (misconfig, fail-closed). Read `?token=`; constant-time compare (helper à la `webhook-verify`). Mismatch/absent → 401 (no body leak).
-- [ ] On valid token: `loadCampaigns()` → `selectFeedCampaigns(all, todayIso())` → `buildCsv(FEED_HEADERS, rows.map(mapCampaignToFeedRow))` → return `text/csv` (plain, no attachment disposition so `IMPORTDATA` parses cleanly). Short `Cache-Control` (e.g. `s-maxage=300`) optional.
-- [ ] Confirm the route is publicly reachable (outside `(app)`; like `/api/boldsign/webhook`). If the session middleware's `isPublicPath` gates `/api`, add `/api/production-feed` to `PUBLIC_PATHS`.
-- [ ] Route test: no token → 401; wrong token → 401; valid token → 200 + CSV whose first line is the FEED_HEADERS.
+- [x] `src/app/api/production-feed/route.ts` (`GET`, `dynamic='force-dynamic'`): reads `PRODUCTION_FEED_TOKEN` — unset/empty → 500 (fail-closed). Reads `?token=`; constant-time compare (`timingSafeEqual` + length guard, à la `webhook-verify`). Mismatch/absent → 401 (bare body, no DB read).
+- [x] On valid token: `loadCampaigns()` → `selectFeedCampaigns(all, todayIso())` → CSV via `csvCell` (imported from `@/lib/csv` for the formula-injection escaping) joined inline **without** `buildCsv`'s UTF-8 BOM (a BOM would land as a stray char in the Sheet's A1 under `IMPORTDATA`). Returns `text/csv; charset=utf-8`, `Cache-Control: no-store`, no attachment disposition.
+- [x] Added `/api/production-feed` to `PUBLIC_PATHS` (`src/lib/supabase/middleware.ts`) — the `src/proxy.ts` middleware matcher covers `/api/*`, so without it the feed would 307→/login. (Not an `ADMIN_PATHS` prefix, so no admin gate either.)
+- [x] Route test (`route.test.ts`, 4/4, `loadCampaigns` mocked): no token → 401 (DB untouched); wrong token → 401; unset env → 500; valid token → 200 `text/csv`, header line + exactly the booked+upcoming rows, and no notes/contact/phone/email/source leak.
 
 #### Phase 3: Secret + deploy wiring + P0 owner-setup doc
 - [ ] Add `PRODUCTION_FEED_TOKEN` to `.env.local` (dev) with a dev value so the feed is testable locally; document it (not `NEXT_PUBLIC_`).
