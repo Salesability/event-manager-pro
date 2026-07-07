@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Full signer name + template version | Done | b762349 |
-| 2: Client-column rebuild (address + name/title fields + authority line) | Pending | - |
+| 2: Client-column rebuild (address + name/title fields + authority line) | Done | 33890ec |
 | 3: Test tool, wiki, reply to Christine | Pending | - |
 | 4: Tests + visual smoke | Pending | - |
 
@@ -30,7 +30,7 @@ Close Christine's legal notes on the MSA signature block: move the Client addres
 - `docs/wiki/commercial-spine.md` — "The MSA envelope (standalone, 0082)" §72-81 is the authoritative description of the single Client signature field, the pre-applied Shannon counter-signature, and the 96/72 BoldSign coordinate scaling. Must be re-ingested in Phase 3.
 - Template-version doctrine (`commercial-spine.md` §140-142): any prose/layout change bumps `MSA_TEMPLATE_VERSION` so signed rows record which wording they agreed to.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Layout is a PDF, not a web page — Phase 4's smoke is a rendered-sample **visual** check + unit assertions on emitted anchors, not a `web-test` route walk.
@@ -46,13 +46,13 @@ Close Christine's legal notes on the MSA signature block: move the Client addres
 - [ ] Unit: existing `render-msa.test.ts` + `actions.test.ts` + `client.test.ts` stay green (none assert signer name or forbid the new optional anchors); the resolver's new field is covered by the Phase 4 test pass.
 
 #### Phase 2: Signer-filled name/title fields + authority line
-- [ ] `render-msa.ts`: in the Client column, after the signature underline, lay out: **"Name (print):"** label + a captured `printedNameAnchor` box; **"Title:"** label + a captured `titleAnchor` box; the moved **address**; the static line **"I confirm I have the authority to bind the Client to this Agreement."** (wrapped, 9pt). Decide (OQ) whether the fillable printed-name field replaces the pre-printed `data.signerName` on `440` — lean replace-name / keep-email.
-- [ ] Extend `RenderResult` (`render-msa.ts:56-58`) to return `printedNameAnchor` + `titleAnchor` (same `FieldAnchor` shape, same bottom-left→top-left translation as the signature anchor at `422-431`).
-- [ ] Raise the signature-block pagination guard (`render-msa.ts:375`, `y < margin + 120`) to reserve room for the taller Client block so it never clips the bottom margin.
-- [ ] `SendSignatureRequestInput` (`src/lib/boldsign/client.ts`): add optional `printedNameAnchor` / `titleAnchor`.
-- [ ] `sendSignatureRequest` (`boldsign/client.ts:191-199`): build required `FormField.FieldTypeEnum.TextBox` fields (`ClientPrintedName`, `ClientTitle`) via `buildFormField` and append to `signer.formFields` alongside the signature field.
-- [ ] `sendMsaEnvelope` (`actions.ts`): pass the render result's new anchors into `sendSignatureRequest`.
-- [ ] Unit: `renderMsaPdf` returns non-null `printedNameAnchor` + `titleAnchor` on the signature page; the built envelope carries two TextBox fields, both `isRequired`, scaled by 96/72.
+- [x] `render-msa.ts`: Client column now lays out (below the signature underline): a **"Client signature"** caption, a **"Name:"** label + captured `printedNameAnchor` rule, a **"Title:"** label + captured `titleAnchor` rule, the client **email**, the moved **address**, then the wrapped static line **"I confirm I have the authority to bind the Client to this Agreement."** OQ resolved: the fillable **Name** field **replaces** the pre-printed `data.signerName` (kept the pre-printed email). The two columns now track independent cursors (`leftY`/`rightY`) from a shared `underlineY`.
+- [x] Extended `RenderResult` to return `printedNameAnchor` + `titleAnchor` (same `FieldAnchor` shape + bottom-left→top-left translation as the signature anchor; all three share the resolved `pageNumber`). Guard fails loud if any is uncaptured.
+- [x] Raised the pagination guard `y < margin + 120` → `y < margin + 250` (the taller Client block; verified it never clips — smoke render bottoms out well above the margin).
+- [x] `SendSignatureRequestInput`: added optional `printedNameAnchor` / `titleAnchor`.
+- [x] `sendSignatureRequest`: builds required `FormField.FieldTypeEnum.TextBox` fields (`ClientPrintedName`, `ClientTitle`) via `buildFormField`, appended after the signature field (present only when the anchors are supplied).
+- [x] `sendMsaEnvelope` **and** `sendTestMsa`: pass the render result's new anchors into `sendSignatureRequest`.
+- [x] Smoke-verified via a throwaway render (`scratchpad/msa-0099-sample.pdf`): 3 anchors on one page, ordered top-to-bottom, name field right of the label; page 1 carries no address; the Client block reads signature → Name → Title → email → address → authority line. **Permanent unit assertions land in Phase 4.**
 
 #### Phase 3: Test tool, wiki, reply to Christine
 - [ ] Verify the admin **Send Test MSA** path (`sendTestMsa` `actions.ts:304`, form `send-test-msa-form.tsx`, schema `test-msa-schema.ts`) exercises the new fields for free (it shares `renderMsaPdf` + `sendSignatureRequest`). No new title input needed — title is signer-filled. Adjust only if the test render errors.
