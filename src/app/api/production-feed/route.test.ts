@@ -5,8 +5,10 @@ import type { Campaign } from '@/features/schedule/queries';
 // Mock the DB loader so the route test never touches Postgres. (`mock`-prefixed so
 // vitest allows referencing it inside the hoisted factory.)
 const mockLoadCampaigns = vi.fn();
+const mockLoadDealerPrimaryContacts = vi.fn();
 vi.mock('@/features/schedule/queries', () => ({
   loadCampaigns: () => mockLoadCampaigns(),
+  loadDealerPrimaryContacts: (ids: number[]) => mockLoadDealerPrimaryContacts(ids),
 }));
 
 import { GET } from './route';
@@ -49,6 +51,8 @@ function req(qs: string) {
 
 beforeEach(() => {
   mockLoadCampaigns.mockReset();
+  mockLoadDealerPrimaryContacts.mockReset();
+  mockLoadDealerPrimaryContacts.mockResolvedValue(new Map());
   process.env.PRODUCTION_FEED_TOKEN = TOKEN;
 });
 
@@ -76,7 +80,7 @@ describe('GET /api/production-feed (0097)', () => {
     expect(mockLoadCampaigns).not.toHaveBeenCalled();
   });
 
-  it('200s with a valid token: CSV of only booked+upcoming rows, no PII', async () => {
+  it('200s with a valid token: CSV of only booked+upcoming rows, with dealer contact + notes, no booking PII', async () => {
     mockLoadCampaigns.mockResolvedValue([
       mk({ dealerName: 'Booked Future', status: 'booked', endDate: '2099-12-31' }),
       mk({ dealerName: 'Completed Future', status: 'completed', endDate: '2099-12-31' }),
@@ -84,6 +88,10 @@ describe('GET /api/production-feed (0097)', () => {
       mk({ dealerName: 'Cancelled Future', status: 'cancelled', endDate: '2099-12-31' }),
       mk({ dealerName: 'Booked Past', status: 'booked', startDate: '2000-01-01', endDate: '2000-01-02' }),
     ]);
+    // Dealer primary contact (0098) for the fixture's dealerId 10.
+    mockLoadDealerPrimaryContacts.mockResolvedValue(
+      new Map([[10, { name: 'DEALER_NAME', phone: 'DEALER_PHONE', email: 'DEALER_EMAIL' }]]),
+    );
 
     const res = await GET(req(`?token=${TOKEN}`));
     expect(res.status).toBe(200);
@@ -94,6 +102,8 @@ describe('GET /api/production-feed (0097)', () => {
     // Header + exactly the two included rows.
     expect(lines[0]).toContain('Start Date');
     expect(lines[0]).toContain('BDC');
+    expect(lines[0]).toContain('Contact');
+    expect(lines[0]).toContain('Notes');
     expect(lines).toHaveLength(3);
     expect(body).toContain('Booked Future');
     expect(body).toContain('Completed Future');
@@ -101,8 +111,13 @@ describe('GET /api/production-feed (0097)', () => {
     expect(body).not.toContain('Cancelled Future');
     expect(body).not.toContain('Booked Past');
 
-    // Redaction: no notes / contact / phone / email / audience source leak.
-    for (const s of ['SENTINEL_NOTES', 'SENTINEL_CONTACT', 'SENTINEL_PHONE', 'SENTINEL_EMAIL', 'SENTINEL_SOURCE']) {
+    // Surfaced (0098): the dealer primary contact + the campaign notes.
+    expect(body).toContain('DEALER_NAME');
+    expect(body).toContain('DEALER_PHONE');
+    expect(body).toContain('DEALER_EMAIL');
+    expect(body).toContain('SENTINEL_NOTES');
+    // Still redacted: the campaign's OWN booking contact + the audience source.
+    for (const s of ['SENTINEL_CONTACT', 'SENTINEL_PHONE', 'SENTINEL_EMAIL', 'SENTINEL_SOURCE']) {
       expect(body).not.toContain(s);
     }
   });

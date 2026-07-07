@@ -13,6 +13,21 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-07 — MSA signature block: legal-review fixes (0099)
+
+- **New state:** the MSA "For the Client" block now carries two signer-filled BoldSign **TextBox** fields — `ClientPrintedName` (full legal name) and `ClientTitle` — below the signature, plus the **client address** (moved off page 1) and the static attestation **"I confirm I have the authority to bind the Client to this Agreement."** (legal review by Christine).
+- **Full name:** `resolveQuoteRecipient` now returns `lastName`; `sendMsaEnvelope` composes the full name and passes it as BoldSign's `signer.name`, so the adopted-signature default is first + last (a first name alone isn't binding).
+- **Template version** bumped → `2026-07-07` (env `MSA_TEMPLATE_VERSION`; **prod deploy must set `_MSA_TEMPLATE_VERSION=2026-07-07`** on the `deploy-prod-on-main` trigger).
+- **Declined:** per-page initials on pages 1–3 — BoldSign tamper-seals the whole document, so one signature authenticates all pages.
+- Touched [`commercial-spine.md`](commercial-spine.md) ("The MSA envelope (standalone)" → Signing field).
+
+## 2026-07-07 — Production feed (0097) activated in prod
+
+- **New state:** the `/api/production-feed` route is now **live** (was shipped-but-dormant). Created `production-feed-token` secret (v1) in `eventpro-498313`, granted the compute runtime SA `secretmanager.secretAccessor`, uncommented the `PRODUCTION_FEED_TOKEN` mount in `cloudbuild.deploy.yaml` (`b4f7f01`), and deployed via the keyless main→prod trigger (revision `event-manager-pro-00046-mrm`).
+- **Verified live:** no-token → 401 (was 500 "not configured"), valid-token → 200 CSV (header + rows, no PII).
+- **Owner-side remaining:** create the Google Sheet with `=IMPORTDATA(<url>)` in A1 + share with implementers (the only un-done step 4).
+- Touched [`go-live-accounts.md`](go-live-accounts.md) §4b.
+
 ## 2026-07-06 — Campaign delivery metrics sourced from the accepted quote (chunk 0094)
 
 - **New state:** the four campaign delivery-metric columns (`qty_records` / `sms_email` / `letters` / `bdc`) left the Book Event dialog. They're now derived from the **accepted quote's** `quote_line_items` at accept time and snapshotted onto the campaign (+ `accepted_quote_id`, which no code wrote before). Booking still owns `style_id` (Event Format) + `audience_source_id` (Data Source). A freshly-booked campaign shows blank metrics until its quote is accepted (owner decision D5).

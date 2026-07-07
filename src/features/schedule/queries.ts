@@ -235,6 +235,33 @@ async function fetchPrimaryIdentifiers(contactIds: number[]) {
   return map;
 }
 
+// A dealer's primary contact resolved to display shape (0098): composes the
+// `is_primary`-then-lowest-id link (`fetchPrimaryDealerContacts`) with that
+// contact's primary email/phone (`fetchPrimaryIdentifiers`). Keyed by dealerId;
+// dealers with no non-archived contact are simply absent from the map. Used by
+// the production feed to surface who to call at each rooftop.
+export async function loadDealerPrimaryContacts(
+  dealerIds: number[]
+): Promise<Map<number, { name: string; phone: string | null; email: string | null }>> {
+  const byDealer = new Map<number, { name: string; phone: string | null; email: string | null }>();
+  if (!dealerIds.length) return byDealer;
+
+  const primary = await fetchPrimaryDealerContacts(dealerIds);
+  const idents = await fetchPrimaryIdentifiers(
+    Array.from(primary.values(), (v) => v.contactId)
+  );
+
+  for (const [dealerId, link] of primary) {
+    const ident = idents.get(link.contactId);
+    byDealer.set(dealerId, {
+      name: `${link.firstName} ${link.lastName}`.trim(),
+      phone: ident?.phone ?? null,
+      email: ident?.email ?? null,
+    });
+  }
+  return byDealer;
+}
+
 // Resolve a set of `dealers.owner_id` auth uuids → coach display names by
 // joining `contacts` on `user_id` (0087). Returns a map keyed by uuid; missing
 // keys (owner with no contacts row / archived) resolve to a null ownerName.

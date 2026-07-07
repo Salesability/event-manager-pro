@@ -16,8 +16,44 @@ project (IAM grant) + the GitHub connection + two triggers.
 | 1: Pipeline configs (prod + stage yaml + env-aware `submit-deploy.sh`) | Done | gate → build → **push** → deploy; two explicit configs; secrets stay in SM |
 | 2: **PROD local-first validation** (`submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless build+deploy proven → rev `event-manager-pro-00040-gp7`; sign-out fix shipped |
 | 3: **STAGE local-first validation** (`DEPLOY_APP_ENV=stage ./scripts/submit-deploy.sh`) | **✅ Done 2026-07-03** | keyless stage build+deploy proven → rev `event-manager-pro-sandbox-00009-htc`, `APP_ENV=stage`, `/login`=200 |
-| 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | **Next — needs GitHub org admin** | connect repo (both projects) + two `triggers create`; removes local submit |
-| 5: First-push validation (push `dev`→stage, `main`→prod) | Pending | confirms both triggers end-to-end |
+| 4: GitHub trigger bootstrap — `dev`→stage + `main`→prod | **✅ Done 2026-07-07** | repo moved to `Salesability` org; connections + repo links + both triggers created |
+| 5: First-push validation (push `dev`→stage, `main`→prod) | **✅ Done 2026-07-07** | both proven end-to-end, keyless. `dev`→ rev `-sandbox-00010-bl9`; `main`→ rev `-00045-9lf` (env/secrets verified: APP_ENV=production, boldsign `:latest`, prod DB, SENDER absent, QBO). CHUNK COMPLETE. |
+
+**Chunk complete (2026-07-07).** Keyless `git push` deploys live for both envs — no
+gcloud auth. `git push origin dev` → stage, `git push origin main` → prod, each gated
+by the unit suite. Repo owned by the `Salesability` org.
+
+⚠️ **Workflow note:** every push to `main` now triggers a full prod rebuild+deploy —
+including **docs-only** commits. Keep plan/wiki commits on `dev` (or local) and let
+them reach `main` with real code, or add a Cloud Build **included/ignored file
+filter** to the `deploy-prod-on-main` trigger later if doc-churn deploys get noisy.
+
+### Phase 4 result (2026-07-07) — repo re-homed + triggers live
+
+**Repo ownership migrated.** `event-manager-pro` moved from Shannon's personal
+`EventPro2026` account → a new **`Salesability` GitHub Organization** (business owns
+the asset; `dwhogan` is org owner/operator; Shannon to be added as owner). The
+Cloud Build GitHub App is installed on the org (installation id `144818186`).
+
+**Wiring (all via gcloud, non-interactive):**
+- New host connection **`github-salesability`** in *both* projects, bound to installation
+  `144818186`, reusing dwhogan's existing OAuth token secret
+  (`github-eventpro-github-oauthtoken-7fb708` in eventpro-498313). The old
+  `github-eventpro` connection (installation `52644501`, dwhogan personal) is stale —
+  can't see the org repo; leave or delete.
+- **Cross-project grant:** stage's Cloud Build service agent
+  (`service-485010152235@gcp-sa-cloudbuild…`) granted `secretAccessor` on that token
+  secret in eventpro-498313 (so the stage connection can read it).
+- Repo linked under the connection in both projects.
+- Triggers: **`deploy-prod-on-main`** (eventpro-498313, `^main$`, `cloudbuild.deploy.yaml`,
+  Compute SA) + **`deploy-stage-on-dev`** (eventpro-stage, `^dev$`,
+  `cloudbuild.deploy.stage.yaml`, stage Compute SA). Substitutions from the matching
+  dotfile.
+- `origin` repointed to `https://github.com/Salesability/event-manager-pro.git`;
+  `main` + `dev` pushed (synced the long-stale GitHub history).
+
+**Steady state:** feature branch → merge `dev` (auto stage) → validate → merge `main`
+(auto prod). No gcloud auth to deploy — `git push` is the trigger.
 
 ### Phase 3 — stage local-first (do next)
 

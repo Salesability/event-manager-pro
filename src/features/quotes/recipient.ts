@@ -32,6 +32,10 @@ import { contactIdentifiers, contacts, dealerContacts } from '@/lib/db/schema';
 export type QuoteRecipient = {
   email: string;
   firstName: string;
+  /** Present so the MSA signature block can print the signer's full legal
+   *  name (first name alone is not legally binding — chunk 0099). `contacts
+   *  .last_name` is `notNull`, so this is always a string. */
+  lastName: string;
 };
 
 export type ResolveRecipientResult =
@@ -44,6 +48,7 @@ export async function resolveQuoteRecipient(
   const [row] = await db
     .select({
       firstName: contacts.firstName,
+      lastName: contacts.lastName,
       email: contactIdentifiers.value,
     })
     .from(dealerContacts)
@@ -89,6 +94,7 @@ export async function resolveQuoteRecipient(
     recipient: {
       email: row.email,
       firstName: row.firstName,
+      lastName: row.lastName,
     },
   };
 }

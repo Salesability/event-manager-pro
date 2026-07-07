@@ -54,7 +54,17 @@ export type MsaPdfData = {
 export type SignatureAnchor = FieldAnchor;
 
 export type RenderResult =
-  | { ok: true; body: Buffer; signatureAnchor: SignatureAnchor }
+  | {
+      ok: true;
+      body: Buffer;
+      signatureAnchor: SignatureAnchor;
+      /** Signer-filled printed-name field, below the Client signature — the
+       *  full legal name of the person signing (0099, legal review: a first
+       *  name in the signature graphic alone is not binding). */
+      printedNameAnchor: FieldAnchor;
+      /** Signer-filled title field, below the printed name (0099). */
+      titleAnchor: FieldAnchor;
+    }
   | { error: string };
 
 // Sender block, sourced from salesability.ca/terms-conditions (mirrors
@@ -240,6 +250,17 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     let sigBoxWidth: number | null = null;
     const SIG_BOX_HEIGHT = 22;
 
+    // Signer-filled text fields below the Client signature (0099). Captured at
+    // the signature-block draw site; they share the signature's page, so the
+    // resolved `pageNumber` is applied to all three anchors post-save.
+    let nameBoxX: number | null = null;
+    let nameBoxY: number | null = null;
+    let nameBoxWidth: number | null = null;
+    let titleBoxX: number | null = null;
+    let titleBoxY: number | null = null;
+    let titleBoxWidth: number | null = null;
+    const TEXT_FIELD_HEIGHT = 16;
+
     // Header band on the first page only — mirrors render-quote.ts's layout
     // for visual consistency across the bundled envelope (MSA + Quote).
     const logoBytes = await readFile(
@@ -327,14 +348,8 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       page.drawText(line, { x: margin, y, size: 9, font, color: black });
       y -= 12;
     }
-    // Client address (optional) printed beneath the recitals for identification.
-    if (data.clientAddress) {
-      y -= 4;
-      for (const line of data.clientAddress) {
-        page.drawText(sanitize(line), { x: margin, y, size: 9, font, color: grey });
-        y -= 12;
-      }
-    }
+    // Client address is NOT printed here anymore — legal review (0099) moved it
+    // to directly below the Client signature, in the "For the Client" block.
     y -= 16;
 
     // Body: each Section block. Add a new page when y would drop below the
@@ -370,9 +385,12 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       y -= 8;
     }
 
-    // Signature block — needs at least ~120pt at the bottom of a page,
-    // otherwise paginate to a fresh page for it.
-    if (y < margin + 120) {
+    // Signature block — the "For the Client" column now carries the signer's
+    // printed-name + title fields, the moved client address, and the
+    // authority-to-bind attestation (legal review 0099), so it reserves more
+    // vertical room than the old signature-only block. Paginate to a fresh
+    // page if the whole block wouldn't fit above the bottom margin.
+    if (y < margin + 250) {
       page = doc.addPage([pageWidth, pageHeight]);
       y = pageHeight - margin;
     }
@@ -392,15 +410,19 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     page.drawText('For Salesability:', { x: leftColX, y, size: 10, font: bold, color: black });
     page.drawText('For the Client:', { x: rightColX, y, size: 10, font: bold, color: black });
     y -= 36;
+    // The two columns share this baseline for their signature underlines, then
+    // grow independently below it (the Client column is much taller now), so
+    // each tracks its own cursor from here rather than a shared `y`.
+    const underlineY = y;
     page.drawLine({
-      start: { x: leftColX, y },
-      end: { x: leftColX + colWidth, y },
+      start: { x: leftColX, y: underlineY },
+      end: { x: leftColX + colWidth, y: underlineY },
       thickness: 0.5,
       color: black,
     });
     page.drawLine({
-      start: { x: rightColX, y },
-      end: { x: rightColX + colWidth, y },
+      start: { x: rightColX, y: underlineY },
+      end: { x: rightColX + colWidth, y: underlineY },
       thickness: 0.5,
       color: black,
     });
@@ -415,7 +437,7 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     );
     page.drawImage(senderSig, {
       x: leftColX,
-      y: y + 2,
+      y: underlineY + 2,
       width: senderSig.width * senderSigScale,
       height: senderSig.height * senderSigScale,
     });
@@ -423,35 +445,108 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     // at pdf-lib y (bottom-left origin); BoldSign uses a TOP-left origin
     // (confirmed by the 0055 live smoke — a field sent at the underline's
     // pdf-lib y rendered far below the line). The box sits above the line in
-    // pdf-lib coords (y .. y + SIG_BOX_HEIGHT), so in BoldSign's top-left
-    // coords its top edge is `pageHeight - (y + SIG_BOX_HEIGHT)`.
+    // pdf-lib coords (underlineY .. underlineY + SIG_BOX_HEIGHT), so in
+    // BoldSign's top-left coords its top edge is
+    // `pageHeight - (underlineY + SIG_BOX_HEIGHT)`.
     sigPage = page;
     sigBoxX = rightColX;
-    sigBoxY = pageHeight - (y + SIG_BOX_HEIGHT);
+    sigBoxY = pageHeight - (underlineY + SIG_BOX_HEIGHT);
     sigBoxWidth = colWidth;
-    y -= 12;
+
+    // --- Left column: Salesability's pre-applied execution block ---
+    let leftY = underlineY - 12;
     page.drawText(sanitize('Shannon Tilley, President'), {
-      x: leftColX,
-      y,
-      size: 9,
-      font,
-      color: grey,
+      x: leftColX, y: leftY, size: 9, font, color: grey,
     });
-    page.drawText(sanitize(data.signerName), { x: rightColX, y, size: 9, font, color: grey });
-    y -= 11;
-    page.drawText('shannon@salesability.ca', { x: leftColX, y, size: 9, font, color: grey });
-    page.drawText(sanitize(data.signerEmail), { x: rightColX, y, size: 9, font, color: grey });
+    leftY -= 11;
+    page.drawText('shannon@salesability.ca', {
+      x: leftColX, y: leftY, size: 9, font, color: grey,
+    });
     // Salesability execution date (left column only). The Client's own date is
     // stamped by BoldSign at sign time; §2.i ties the term start to the
     // Client's signature, so this date records when Salesability executed.
-    y -= 11;
+    leftY -= 11;
     page.drawText(`Signed: ${longDate(data.issuedDate)}`, {
-      x: leftColX,
-      y,
-      size: 9,
-      font,
-      color: grey,
+      x: leftColX, y: leftY, size: 9, font, color: grey,
     });
+
+    // --- Right column: the Client's signature + signer-filled fields ---
+    // A caption under the signature line, then the printed-name and title
+    // fields the signer completes at sign time, then the client email +
+    // address, then the authority-to-bind attestation (legal review 0099:
+    // the signer's full name, title, and an authority statement must appear
+    // below the Client signature). Each fillable field draws a label + a short
+    // rule; a BoldSign TextBox is anchored over the rule at send time.
+    page.drawText('Client signature', {
+      x: rightColX, y: underlineY - 10, size: 7, font, color: grey,
+    });
+    let rightY = underlineY - 28;
+    const drawFillableField = (
+      label: string,
+    ): { x: number; y: number; width: number } => {
+      const size = 9;
+      page.drawText(label, { x: rightColX, y: rightY, size, font, color: grey });
+      const labelW = font.widthOfTextAtSize(`${label} `, size);
+      const fieldX = rightColX + labelW;
+      const fieldRight = rightColX + colWidth;
+      const fieldWidth = Math.max(40, fieldRight - fieldX);
+      page.drawLine({
+        start: { x: fieldX, y: rightY - 3 },
+        end: { x: fieldRight, y: rightY - 3 },
+        thickness: 0.5,
+        color: grey,
+      });
+      // Box spans (rightY - 3) .. (rightY - 3 + TEXT_FIELD_HEIGHT) in pdf-lib
+      // bottom-left coords → BoldSign top-left y = pageHeight - the top edge.
+      return {
+        x: fieldX,
+        y: pageHeight - (rightY - 3 + TEXT_FIELD_HEIGHT),
+        width: fieldWidth,
+      };
+    };
+
+    const nameField = drawFillableField('Name:');
+    nameBoxX = nameField.x;
+    nameBoxY = nameField.y;
+    nameBoxWidth = nameField.width;
+
+    rightY -= 24;
+    const titleField = drawFillableField('Title:');
+    titleBoxX = titleField.x;
+    titleBoxY = titleField.y;
+    titleBoxWidth = titleField.width;
+
+    // Client email (from our records) + the address moved off page 1. The
+    // address now lives in the half-width Client column, so each source line is
+    // wrapped to the column width (not just char-capped as `splitClientAddress`
+    // does) and the whole block is bounded to 4 visual lines — a long legal
+    // address can't run past the right edge or push the block off the page.
+    rightY -= 22;
+    page.drawText(sanitize(data.signerEmail), {
+      x: rightColX, y: rightY, size: 9, font, color: grey,
+    });
+    if (data.clientAddress) {
+      const addressLines = data.clientAddress
+        .flatMap((line) => wrap(sanitize(line), 44))
+        .slice(0, 4);
+      for (const line of addressLines) {
+        rightY -= 12;
+        page.drawText(line, {
+          x: rightColX, y: rightY, size: 9, font, color: grey,
+        });
+      }
+    }
+
+    // Authority-to-bind attestation (legal review 0099). Static prose in the
+    // Client column; the act of signing affirms it.
+    rightY -= 18;
+    for (const line of wrap(
+      'I confirm I have the authority to bind the Client to this Agreement.',
+      44,
+    )) {
+      page.drawText(line, { x: rightColX, y: rightY, size: 8, font, color: black });
+      rightY -= 11;
+    }
 
     // Footer: template version on the last page only. Helps support requests
     // by making "what prose did they sign?" visible without consulting the DB.
@@ -463,27 +558,61 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       color: grey,
     });
 
-    if (sigPage == null || sigBoxX == null || sigBoxY == null || sigBoxWidth == null) {
-      // Should be unreachable — the signature block is unconditional in the
-      // render flow. Fail loud if a future refactor accidentally skips it,
-      // rather than ship a fieldless envelope that BoldSign would reject
-      // with the exact 400 this anchor was added to prevent.
-      return { error: 'renderMsaPdf failed: signature anchor was not captured.' };
+    if (
+      sigPage == null ||
+      sigBoxX == null ||
+      sigBoxY == null ||
+      sigBoxWidth == null ||
+      nameBoxX == null ||
+      nameBoxY == null ||
+      nameBoxWidth == null ||
+      titleBoxX == null ||
+      titleBoxY == null ||
+      titleBoxWidth == null
+    ) {
+      // Should be unreachable — the signature block (with its printed-name and
+      // title fields) is unconditional in the render flow. Fail loud if a
+      // future refactor accidentally skips it, rather than ship a fieldless or
+      // partially-fielded envelope that BoldSign would reject with the exact
+      // 400 this anchor was added to prevent.
+      return { error: 'renderMsaPdf failed: signature anchors were not captured.' };
     }
     const pageIndex = doc.getPages().indexOf(sigPage);
     if (pageIndex < 0) {
       return { error: 'renderMsaPdf failed: signature page is not in the document.' };
     }
+    // All three anchors share the signature page (drawn together in the block).
+    const pageNumber = pageIndex + 1;
     const signatureAnchor: SignatureAnchor = {
-      pageNumber: pageIndex + 1,
+      pageNumber,
       x: sigBoxX,
       y: sigBoxY,
       width: sigBoxWidth,
       height: SIG_BOX_HEIGHT,
     };
+    const printedNameAnchor: FieldAnchor = {
+      pageNumber,
+      x: nameBoxX,
+      y: nameBoxY,
+      width: nameBoxWidth,
+      height: TEXT_FIELD_HEIGHT,
+    };
+    const titleAnchor: FieldAnchor = {
+      pageNumber,
+      x: titleBoxX,
+      y: titleBoxY,
+      width: titleBoxWidth,
+      height: TEXT_FIELD_HEIGHT,
+    };
 
     const bytes = await doc.save();
-    return { ok: true, body: Buffer.from(bytes), signatureAnchor };
+    return {
+      ok: true,
+      body: Buffer.from(bytes),
+      signatureAnchor,
+      printedNameAnchor,
+      titleAnchor,
+    };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : 'renderMsaPdf failed.',

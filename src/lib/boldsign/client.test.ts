@@ -18,7 +18,11 @@ vi.mock('boldsign', () => {
     static SignerTypeEnum = { Signer: 'Signer' } as const;
   }
   class MockFormField {
-    static FieldTypeEnum = { Signature: 'Signature', Initial: 'Initial' } as const;
+    static FieldTypeEnum = {
+      Signature: 'Signature',
+      Initial: 'Initial',
+      TextBox: 'TextBox',
+    } as const;
   }
   return {
     DocumentApi: class MockDocumentApi {
@@ -245,6 +249,42 @@ describe('sendSignatureRequest', () => {
     expect(fields[1].fieldType).toBe('Signature');
     expect(fields[1].id).toBe('ClientSignature');
     expect(fields[1].pageNumber).toBe(2);
+  });
+
+  it('appends ClientPrintedName + ClientTitle TextBox fields after the Signature when their anchors are supplied (0099)', async () => {
+    process.env.BOLDSIGN_API_KEY = 'bs_test_abc';
+    process.env.EMAIL_DEV_TO = 'dev@example.test';
+    await sendSignatureRequest({
+      ...sample,
+      printedNameAnchor: { pageNumber: 2, x: 360, y: 620, width: 200, height: 16 },
+      titleAnchor: { pageNumber: 2, x: 355, y: 644, width: 205, height: 16 },
+    });
+    const sent = mocks.sendDocumentCalls[0] as {
+      signers?: Array<{
+        formFields?: Array<{
+          id?: string;
+          fieldType?: string;
+          pageNumber?: number;
+          isRequired?: boolean;
+          bounds?: { x?: number; width?: number };
+        }>;
+      }>;
+    };
+    const fields = sent.signers?.[0]?.formFields ?? [];
+    // Order: signature first (no initials here), then the two TextBoxes.
+    expect(fields).toHaveLength(3);
+    expect(fields[0].fieldType).toBe('Signature');
+    expect(fields[1].id).toBe('ClientPrintedName');
+    expect(fields[1].fieldType).toBe('TextBox');
+    expect(fields[1].isRequired).toBe(true);
+    expect(fields[1].pageNumber).toBe(2);
+    expect(fields[2].id).toBe('ClientTitle');
+    expect(fields[2].fieldType).toBe('TextBox');
+    expect(fields[2].isRequired).toBe(true);
+    // Bounds scaled from points → 96-DPI px, same as every other field.
+    const k = 96 / 72;
+    expect(fields[1].bounds?.x).toBeCloseTo(360 * k, 5);
+    expect(fields[1].bounds?.width).toBeCloseTo(200 * k, 5);
   });
 
   it('sends a single Signature field when no initialsAnchors are supplied', async () => {
