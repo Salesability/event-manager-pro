@@ -80,10 +80,10 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 6: Tests + smoke verification
 - [x] Service-level integration test for the accept-gate waiver against a real DB (waived → accepts; non-waived → blocked) — `tests/integration/msa-waiver.test.ts`, **6/6 pass** on the sandbox pooler: waived→satisfied w/o MSA, non-waived+no-MSA→blocked, non-waived+active-MSA→satisfied, expired-MSA→blocked, null-campaign→normal gate, + the `msa_waived` guarded-UPDATE flip/no-op (Phase 3's deferred DB test)
-- [x] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts insert` — script written (waived event = `msa_waived` + accepted quote + no MSA; control = non-waived, no MSA, no quote). Run in the chunk-end `/eval` browser-smoke window
-- [ ] Smoke (web-test): `goto /calendar`; open the waived event's detail → MSA row reads **"Not required"** (neutral), **no** "⚠ Commercially exposed" banner, **no** "Send MSA" button — runs in the chunk-end `/eval`
-- [ ] Smoke (web-test): the non-waived control event still shows the amber "No active MSA" row + "Send MSA" CTA (regression) — runs in the chunk-end `/eval`
-- [ ] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts cleanup` — after the smoke
+- [x] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts insert` — inserted (waived #1002 + control #1003) for the chunk-end `/eval` browser smoke
+- [x] Smoke (web-test): waived-event render — **partially verified**: the calendar shows the waived event with **NO amber exposed dot** (visual PASS, screenshot in the eval report). The event-detail dialog contents (MSA "Not required" pill / banner / hidden Send-MSA / toggle) are **not smoke-exercisable** — the imperative-DOM ribbons aren't clickable via the read-only a11y-tree smoke (parked **0093-a** limitation); covered by unit tests + the visible dot behaviour
+- [x] Smoke (web-test): the non-waived control event shows the **amber exposed dot** (regression PASS, visual) — matching the other real exposed events; the "No active MSA" row + Send-MSA CTA are dialog-internal (see above caveat)
+- [x] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts cleanup` — done (removed 2 fixture dealers + their events/quotes)
 - [x] Ingest to wiki: `commercial-spine.md` (new "Per-event MSA opt-out (0100)" section + accept-gate/exposed-flag bullets) + `data-model.md` (`campaigns.msa_waived` in the ER block + tables-at-a-glance) + a `log.md` entry
 
 **Read-only smoke discipline:** the waive toggle is a mutation — the web-test verifies *render states* via the fixture script (insert a pre-waived campaign), not by clicking the toggle on a real coach's event.

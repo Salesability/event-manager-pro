@@ -109,7 +109,7 @@ Not every event wants an MSA — an existing long-term client, a one-off. Before
 - **Toggle.** `setMsaWaived(campaignId, waived)` Server Action (`src/features/schedule/actions.ts`, `campaign:edit` → admin-only, like the sibling campaign edits — booking is back-office). Surfaced two ways: a **"MSA not required" / "Require MSA"** toggle on the event-detail card, and an **"MSA not needed for this event"** option in the post-booking prompt.
 - **Status/visuals.** `CommercialStatus` carries `msaWaived`; a waived event reads as a calm neutral **"MSA — Not required"** pill (not amber/pending), contributes nothing to the exposed flag from the MSA side (so **no amber calendar dot** and **no "Send MSA" CTA**), and the event-detail banner copy drops the MSA from its exposure reasons. A pure `msaDisplayState()` helper maps `{msaStatus, msaWaived}` → `'waived' | MsaStatus | null` for the display layer. The **quote dimension is untouched** — a waived event with no accepted quote is still exposed on the quote side.
 - **Accept gate.** `isAcceptMsaSatisfied` returns `true` for a waived event's quote **without** an active MSA — a full opt-out, not cosmetic. A quote with no `campaignId` has no event-level waiver to inherit → the normal active-MSA requirement stands. The staff `QuoteStatusActions` mirror treats waived as satisfied (`hasActiveMsa || msaWaived`, fed by `loadQuoteEventMsaWaived`) so **Mark accepted** is enabled with the nag suppressed.
-- See [`docs/chunks/0100-msa-optional-per-event/`](../chunks/0100-msa-optional-per-event/intent.md).
+- See [`docs/chunks/closed/0100-msa-optional-per-event/`](../chunks/closed/0100-msa-optional-per-event/intent.md).
 
 ### Delivery metrics: sourced from the accepted quote (0094)
 
