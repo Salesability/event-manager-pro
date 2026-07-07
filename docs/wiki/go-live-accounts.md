@@ -239,8 +239,14 @@ third-party implementers. One-way, no Google API, no DWD scope. Route: `GET /api
 **Secret:** `production-feed-token` (a long random bearer token). The route reads it from
 `PRODUCTION_FEED_TOKEN`; when unset the route fails closed (500 "not configured").
 
+**Status (2026-07-07): ACTIVE in prod.** Steps 1–2 below are done — `production-feed-token` secret
+created (v1) in `eventpro-498313`, compute SA granted `secretAccessor`, mount uncommented in
+`cloudbuild.deploy.yaml` (`b4f7f01`), deployed on revision `event-manager-pro-00046-mrm`. Verified live:
+no-token → 401, valid-token → 200 CSV (header + rows, PII-clean). Only **step 4 (create + share the Sheet)**
+remains, owner-side.
+
 **Owner steps to go live (prod):**
-1. **Create the secret** in the prod project:
+1. ~~**Create the secret** in the prod project:~~ **DONE 2026-07-07.**
    ```
    printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create production-feed-token \
      --project=eventpro-498313 --replication-policy=automatic --data-file=-
@@ -248,10 +254,9 @@ third-party implementers. One-way, no Google API, no DWD scope. Route: `GET /api
      --member=serviceAccount:1094204863648-compute@developer.gserviceaccount.com \
      --role=roles/secretmanager.secretAccessor
    ```
-2. **Wire the mount.** `deploy.sh` auto-mounts it once the secret exists (mount-if-present). For the
-   keyless `submit-deploy.sh` path, append `,PRODUCTION_FEED_TOKEN=production-feed-token:latest` to the
-   `--set-secrets` line in `cloudbuild.deploy.yaml` (the inline comment there shows exactly where), then
-   deploy.
+2. ~~**Wire the mount.**~~ **DONE 2026-07-07** — mount appended to the `--set-secrets` line in
+   `cloudbuild.deploy.yaml`; the keyless main→prod trigger carries it. (`deploy.sh` also auto-mounts it via
+   its mount-if-present block.)
 3. **Build the URL.** `https://eventpro.salesability.ca/api/production-feed?token=<the secret value>`
    (read it back with `gcloud secrets versions access latest --secret=production-feed-token
    --project=eventpro-498313`, or copy it from the admin panel on `/production`).
