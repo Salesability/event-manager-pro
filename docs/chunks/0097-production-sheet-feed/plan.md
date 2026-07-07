@@ -1,0 +1,70 @@
+# Production List → shareable Google worksheet feed — Plan
+
+**Intent:** [`intent.md`](intent.md)
+**Started:** 2026-07-06
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: Pure feed model (select + redacted row mapper) + unit tests | Pending | - |
+| 2: Public token-gated feed route (`/api/production-feed`) | Pending | - |
+| 3: Secret + deploy wiring + P0 owner-setup doc | Pending | - |
+| 4: Admin discoverability panel (optional — IMPORTDATA formula) | Pending | - |
+| 5: Verification (route test + public-feed smoke) | Pending | - |
+
+Serve the Production List as a **public, token-gated, read-only CSV feed** of
+booked+upcoming campaigns with delivery-focused columns only, so a Google Sheet can
+pull it via `=IMPORTDATA()` and the owner can share that Sheet with implementers.
+"Done" = `GET /api/production-feed?token=<valid>` returns the redacted CSV, a
+missing/wrong token is rejected, the feed leaks no PII/notes, and the token is
+sourced from the `production-feed-token` secret + wired into deploy. **No Google
+API, no DWD scope, no migration.**
+
+## Code Anchors
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| `src/features/schedule/production-feed.ts` — `selectFeedCampaigns` + `FEED_HEADERS` + `mapCampaignToFeedRow` | `src/lib/google/calendar-event.ts:62` (`mapCampaignToGcalEvent` — the customer-safe field-selection/redaction precedent) + `src/lib/quotes/delivery-metrics.ts` (pure, testable mapping module shape) | Pure mapper that deliberately withholds ops/PII fields; same "explicit safe subset" discipline |
+| `src/app/api/production-feed/route.ts` — public feed route | `src/app/api/boldsign/webhook/route.ts` (public, external-caller route that verifies a shared secret before doing work) + `src/app/(app)/production/export/route.ts` (the `loadCampaigns → buildCsv → csvResponse` shape) | Same public-route + secret-gate shape; same CSV-of-production-list shape (minus the gate swap: `assertCan` → token) |
+| Constant-time token compare helper | `src/lib/boldsign/webhook-verify.ts` (`timingSafeEqual`/secret compare) | Reuse the existing constant-time secret-compare idiom; don't hand-roll `===` |
+| `PUBLIC_PATHS` entry (if the session middleware gates it) | `src/lib/supabase/middleware.ts:11` (`/share/coach`) | Mirror the existing public-path allowlist; `isPublicPath` is prefix-matched (`:16`) |
+| Secret wiring in deploy | `deploy.sh:333` (`--set-secrets=…BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest`) + `cloudbuild.deploy.yaml` `--set-secrets` (`:104`-ish) + `cloudbuild.deploy.stage.yaml` | Add `PRODUCTION_FEED_TOKEN=production-feed-token:latest` the same way an existing app secret is mounted |
+| Admin IMPORTDATA-formula panel (Phase 4, optional) | `src/app/(app)/production/production-page-actions.tsx` (client action bar on `/production`) | Same page, same "surface a copyable action" shape; gated admin-only |
+
+**Conventions referenced:**
+- `CLAUDE.md` → "Mutations go through Server Actions, not route handlers. Route handlers are for external callers only — webhooks, public APIs." The feed is consumed by Google's `IMPORTDATA` fetcher (external) → a **route handler** is correct.
+- `docs/wiki/data-model.md` — `Campaign` fields (`src/features/schedule/queries.ts:90-117`); ops/PII fields to withhold: `qtyRecords`(kept here), `notes`, `phone`, `email`, `audienceSourceLabel`.
+- `docs/wiki/go-live-accounts.md` — deploy secret-mount runbook; add a `production-feed-token` row.
+
+**Overall Progress:** 0% (0/5 phases complete)
+
+### Phase Checklist
+
+#### Phase 1: Pure feed model + unit tests
+- [ ] `src/features/schedule/production-feed.ts`:
+  - `FEED_HEADERS = ['Start Date','End Date','Dealer','Location','Format','Coach','Records','SMS-Email','Letters','BDC']`.
+  - `selectFeedCampaigns(campaigns, todayIso)` → keep `status ∈ {booked, completed} && endDate >= todayIso`; drop draft/cancelled/fully-past.
+  - `mapCampaignToFeedRow(c)` → string[] in FEED_HEADERS order; blanks for null; **no `notes`, no `phone`/`email`, no audience source**.
+- [ ] Unit tests: filter includes a booked-future row, excludes draft / cancelled / fully-past; row mapper emits exactly FEED_HEADERS-length cells; **redaction test** asserts a campaign whose `notes`/`phone`/`email` contain a sentinel never surfaces it.
+
+#### Phase 2: Public token-gated feed route
+- [ ] `src/app/api/production-feed/route.ts` (`GET`): read `process.env.PRODUCTION_FEED_TOKEN`; if unset → 503/500 (misconfig, fail-closed). Read `?token=`; constant-time compare (helper à la `webhook-verify`). Mismatch/absent → 401 (no body leak).
+- [ ] On valid token: `loadCampaigns()` → `selectFeedCampaigns(all, todayIso())` → `buildCsv(FEED_HEADERS, rows.map(mapCampaignToFeedRow))` → return `text/csv` (plain, no attachment disposition so `IMPORTDATA` parses cleanly). Short `Cache-Control` (e.g. `s-maxage=300`) optional.
+- [ ] Confirm the route is publicly reachable (outside `(app)`; like `/api/boldsign/webhook`). If the session middleware's `isPublicPath` gates `/api`, add `/api/production-feed` to `PUBLIC_PATHS`.
+- [ ] Route test: no token → 401; wrong token → 401; valid token → 200 + CSV whose first line is the FEED_HEADERS.
+
+#### Phase 3: Secret + deploy wiring + P0 owner-setup doc
+- [ ] Add `PRODUCTION_FEED_TOKEN` to `.env.local` (dev) with a dev value so the feed is testable locally; document it (not `NEXT_PUBLIC_`).
+- [ ] Wire the secret mount: `deploy.sh` `--set-secrets` + `cloudbuild.deploy.yaml` + `cloudbuild.deploy.stage.yaml` → `PRODUCTION_FEED_TOKEN=production-feed-token:latest`. (Runtime SA already has `secretmanager.secretAccessor`; confirm.)
+- [ ] **P0 owner steps (non-code, documented in this plan + go-live wiki):** (1) `gcloud secrets create production-feed-token` with a long random value (prod project); (2) create the Google Sheet, put `=IMPORTDATA("https://eventpro.salesability.ca/api/production-feed?token=<token>")` in A1; (3) share the Sheet with the implementer emails.
+- [ ] Wiki: add a `production-feed-token` row + the IMPORTDATA setup to `docs/wiki/go-live-accounts.md`.
+
+#### Phase 4: Admin discoverability panel (optional)
+- [ ] Gated admin-only helper (on `/production` or `/admin`) that renders the ready-to-paste `=IMPORTDATA("<SITE_URL>/api/production-feed?token=<token>")` formula + a one-line "share this Sheet with vendors" note. Reads token from server env (admin-trusted surface). Cut this phase if we prefer to keep the token out of the browser entirely.
+
+#### Phase 5: Verification (route test + public-feed smoke)
+- [ ] Unit + route tests green (Phases 1–2).
+- [ ] Smoke (public — no auth injection needed): `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/production-feed` → 401; `curl ".../api/production-feed?token=<dev-token>"` → 200 with a CSV whose header row is `Start Date,End Date,Dealer,…,BDC`.
+- [ ] Smoke: confirm the CSV body contains only booked+upcoming rows and **no** notes/phone/email substrings.
+- [ ] (If Phase 4) Smoke (web-test): `goto /production` authed; the admin panel shows the IMPORTDATA formula. *(auth-injection may be blocked while the sandbox DB is paused — defer to owner-verify if so.)*
