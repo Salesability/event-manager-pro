@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-07 — Per-event MSA opt-out (0100)
+
+- **New state:** `campaigns.msa_waived boolean NOT NULL DEFAULT false` (migration `0048`) — a coach can waive the MSA on a specific calendar event. A waived event reads as a neutral **"MSA — Not required"** pill (no amber, no "⚠ Commercially exposed" from the MSA side, no calendar dot, no "Send MSA" CTA) **and** its quote accepts with no active MSA. Per-event only — the MSA stays a per-client 12-month master agreement; reversible; no backfill.
+- **Exposed flag:** `isExposed` now `!(quote accepted && (MSA active || MSA waived))`; the quote dimension is untouched. New pure `msaDisplayState()` helper maps `{msaStatus, msaWaived}` → `'waived'` for the display layer.
+- **Accept gate:** factored into `isAcceptMsaSatisfied(dealerId, campaignId, exec)` (`src/features/quotes/accept-gate.ts`, executor-injectable + integration-tested on real Postgres) — a waived event's quote skips the active-MSA requirement; a null-`campaignId` quote falls back to the normal gate. Staff `QuoteStatusActions` mirrors it (`hasActiveMsa || msaWaived`).
+- **Action:** `setMsaWaived` (`campaign:edit` → admin-only), surfaced as an event-detail toggle + a "MSA not needed for this event" option in the post-booking prompt.
+- Touched [`commercial-spine.md`](commercial-spine.md) (new "Per-event MSA opt-out (0100)" section + accept-gate/exposed-flag bullets) and [`data-model.md`](data-model.md) (`campaigns.msa_waived`).
+
 ## 2026-07-07 — MSA signature block: legal-review fixes (0099)
 
 - **New state:** the MSA "For the Client" block now carries two signer-filled BoldSign **TextBox** fields — `ClientPrintedName` (full legal name) and `ClientTitle` — below the signature, plus the **client address** (moved off page 1) and the static attestation **"I confirm I have the authority to bind the Client to this Agreement."** (legal review by Christine).

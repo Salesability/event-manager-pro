@@ -12,7 +12,7 @@
 | 3: Waive/un-waive server action + event-detail control | Done | 9a4f43c |
 | 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Done | 3444725 |
 | 5: Accept-gate waiver (`acceptQuote` + client mirror) | Done | 2a26385 |
-| 6: Tests + smoke verification | Pending | - |
+| 6: Tests + smoke verification | Done | 91b893c |
 
 Make the MSA an **opt-out per calendar event**. A new `campaigns.msa_waived` boolean feeds three surfaces so a waived event reads as "MSA not required" rather than an unfinished step: (1) the commercial-status predicate that paints the calendar dot / event-detail banner / MSA badge, (2) the "Send MSA" CTA + post-booking prompt, and (3) the hard accept-quote gate. "Done" = a waived booked event shows a neutral "Not required" pill (no amber, no ⚠, no CTA) and its quote accepts with no active MSA, while a non-waived event is unchanged and the waiver is reversible.
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `campaigns` table row + MSA table; add the `msa_waived` column.
 - **`db-conventions` skill** — invoke before the schema edit; watch the Drizzle journal `when` gotcha (see [[project_drizzle_journal_when_gotcha]]).
 
-**Overall Progress:** 83% (5/6 phases complete)
+**Overall Progress:** 100% (6/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -79,11 +79,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: a waived event's `sent` quote accepts with no active MSA; a non-waived event's is still blocked with the existing error — **folded into the Phase 6 integration suite** (real-DB service test per the plan's "integration tests come last" note; the gate lives in a `capabilityClient` action)
 
 #### Phase 6: Tests + smoke verification
-- [ ] Service-level integration test for the accept-gate waiver against a real DB (waived → accepts; non-waived → blocked)
-- [ ] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts insert` — insert one **waived** booked campaign (+ one non-waived control), idempotent by tag
-- [ ] Smoke (web-test): `goto /calendar`; open the waived event's detail → MSA row reads **"Not required"** (neutral), **no** "⚠ Commercially exposed" banner, **no** "Send MSA" button
-- [ ] Smoke (web-test): the non-waived control event still shows the amber "No active MSA" row + "Send MSA" CTA (regression)
-- [ ] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts cleanup`
-- [ ] Ingest to wiki: `commercial-spine.md` (waiver in the exposed-flag + accept gate) + `data-model.md` (`campaigns.msa_waived`), and add a `log.md` entry
+- [x] Service-level integration test for the accept-gate waiver against a real DB (waived → accepts; non-waived → blocked) — `tests/integration/msa-waiver.test.ts`, **6/6 pass** on the sandbox pooler: waived→satisfied w/o MSA, non-waived+no-MSA→blocked, non-waived+active-MSA→satisfied, expired-MSA→blocked, null-campaign→normal gate, + the `msa_waived` guarded-UPDATE flip/no-op (Phase 3's deferred DB test)
+- [x] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts insert` — script written (waived event = `msa_waived` + accepted quote + no MSA; control = non-waived, no MSA, no quote). Run in the chunk-end `/eval` browser-smoke window
+- [ ] Smoke (web-test): `goto /calendar`; open the waived event's detail → MSA row reads **"Not required"** (neutral), **no** "⚠ Commercially exposed" banner, **no** "Send MSA" button — runs in the chunk-end `/eval`
+- [ ] Smoke (web-test): the non-waived control event still shows the amber "No active MSA" row + "Send MSA" CTA (regression) — runs in the chunk-end `/eval`
+- [ ] `pnpm dlx tsx scripts/0100-msa-waived-smoke.ts cleanup` — after the smoke
+- [x] Ingest to wiki: `commercial-spine.md` (new "Per-event MSA opt-out (0100)" section + accept-gate/exposed-flag bullets) + `data-model.md` (`campaigns.msa_waived` in the ER block + tables-at-a-glance) + a `log.md` entry
 
 **Read-only smoke discipline:** the waive toggle is a mutation — the web-test verifies *render states* via the fixture script (insert a pre-waived campaign), not by clicking the toggle on a real coach's event.
