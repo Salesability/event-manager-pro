@@ -1,15 +1,17 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-// `/api/boldsign/webhook` is an external caller (BoldSign POSTs here with no
-// session cookie); it has its own HMAC gate inside the handler, so it must
-// bypass the session-auth redirect or every webhook 307s to /login.
+// `/api/boldsign/webhook` (BoldSign POSTs, no session) and `/api/production-feed`
+// (Google's IMPORTDATA fetch, no session — 0097) are external callers with their
+// own in-handler gates (HMAC / bearer token), so they must bypass the session-auth
+// redirect or every request 307s to /login.
 const PUBLIC_PATHS = [
   '/login',
   '/auth/callback',
   '/auth/auth-error',
   '/share/coach',
   '/api/boldsign/webhook',
+  '/api/production-feed',
 ];
 const ADMIN_PATHS = ['/admin', '/production', '/dealerships'];
 
