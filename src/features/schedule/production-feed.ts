@@ -1,0 +1,62 @@
+// Pure model for the third-party "production feed" (0097) — the read-only view of
+// the Production List that an external implementer's Google Sheet pulls via
+// `=IMPORTDATA()`. Stateless: no DB, no Date (the caller passes `todayIso`), so the
+// same campaigns + day produce the same rows. The route handler
+// (`src/app/api/production-feed/route.ts`) composes these with `buildCsv`.
+//
+// Two deliberate narrowings vs. the internal `/production` list + CSV export:
+//  1. ROWS — only booked/upcoming work: `status ∈ {booked, completed}` AND the run
+//     hasn't fully passed (`endDate >= today`). Draft, cancelled, and fully-past
+//     campaigns never reach an outside vendor.
+//  2. COLUMNS — delivery-focused only. The vendor sees dates, dealer + location,
+//     format, coach, and the four delivery volumes (their workload). It does NOT
+//     see internal `notes`, raw contact `phone`/`email`, audience/data source, or
+//     status/ops internals. Mirrors the calendar projection's "customer-safe
+//     subset" discipline (`src/lib/google/calendar-event.ts`), except the volumes
+//     ARE included here because they're the implementer's actual work.
+
+import type { Campaign } from './queries';
+
+/** Column order of the feed CSV. The Google Sheet keys off these headers, so the
+ *  set + order is a contract — additive changes only, and never add a PII/notes
+ *  column here (see the redaction rationale above). */
+export const FEED_HEADERS = [
+  'Start Date',
+  'End Date',
+  'Dealer',
+  'Location',
+  'Format',
+  'Coach',
+  'Records',
+  'SMS-Email',
+  'Letters',
+  'BDC',
+] as const;
+
+/** Booked + upcoming only. `booked`/`completed` are the "real work" statuses
+ *  (draft = not committed, cancelled = called off); `endDate >= todayIso` drops
+ *  fully-past runs. ISO `YYYY-MM-DD` strings compare lexically = chronologically. */
+export function selectFeedCampaigns(campaigns: Campaign[], todayIso: string): Campaign[] {
+  return campaigns.filter(
+    (c) => (c.status === 'booked' || c.status === 'completed') && c.endDate >= todayIso,
+  );
+}
+
+/** One CSV row in `FEED_HEADERS` order. Null → empty cell. Only the safe subset
+ *  is read off the campaign — `notes`, `contact`, `phone`, `email`, and the
+ *  audience/data source are intentionally never touched here. */
+export function mapCampaignToFeedRow(c: Campaign): string[] {
+  const num = (n: number | null) => (n == null ? '' : String(n));
+  return [
+    c.startDate,
+    c.endDate,
+    c.dealerName,
+    c.dealerAddress ?? '',
+    c.styleLabel ?? '',
+    c.coachName ?? '',
+    num(c.qtyRecords),
+    num(c.smsEmail),
+    num(c.letters),
+    num(c.bdc),
+  ];
+}
