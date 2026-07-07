@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — `campaigns.msa_waived` + migration | Done | 167843b |
-| 2: Waiver-aware commercial status (logic + unit tests) | Pending | - |
+| 2: Waiver-aware commercial status (logic + unit tests) | Done | f3b4914 |
 | 3: Waive/un-waive server action + event-detail control | Pending | - |
 | 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Pending | - |
 | 5: Accept-gate waiver (`acceptQuote` + client mirror) | Pending | - |
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `campaigns` table row + MSA table; add the `msa_waived` column.
 - **`db-conventions` skill** — invoke before the schema edit; watch the Drizzle journal `when` gotcha (see [[project_drizzle_journal_when_gotcha]]).
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -50,12 +50,12 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Resolve the Phase-1 open question: capability that gates the waive action → **`campaign:edit`** (coach-scoped, the capability `updateCampaign`/`resyncCampaign` use — the waiver is a per-event campaign property; not `dealer:edit`, not `admin:access` — 0082's `admin:access` was for *sending* an envelope, a heavier action than an opt-out toggle)
 
 #### Phase 2: Waiver-aware commercial status
-- [ ] Extend `CommercialStatus` with `msaWaived: boolean` (and/or a `'waived'` effective-MSA state)
-- [ ] Update `isExposed` so a waived MSA doesn't count toward exposure — `!(quoteAccepted && (msaActive || msaWaived))`; the quote dimension is untouched
-- [ ] Thread `msaWaived` into `loadCommercialStatusByCampaign` (read `campaigns.msa_waived` alongside the existing per-campaign batch load)
-- [ ] Test: waived event → **not** exposed on the MSA dimension, but still exposed when its quote isn't accepted
-- [ ] Test: waived flips the effective MSA status to "not required" / `waived`
-- [ ] Test: non-waived event's exposure is unchanged (regression)
+- [x] Extend `CommercialStatus` with `msaWaived: boolean` (and/or a `'waived'` effective-MSA state) — added `msaWaived` field + a pure `msaDisplayState()` helper returning `'waived'` for the display layer
+- [x] Update `isExposed` so a waived MSA doesn't count toward exposure — `!(quoteAccepted && (msaActive || msaWaived))`; the quote dimension is untouched (3rd param `msaWaived = false`)
+- [x] Thread `msaWaived` into `loadCommercialStatusByCampaign` (read `campaigns.msa_waived` alongside the existing per-campaign batch load) — read straight off the `Campaign` input (already carries `msaWaived` from Phase 1's `loadCampaigns`), no extra query
+- [x] Test: waived event → **not** exposed on the MSA dimension, but still exposed when its quote isn't accepted
+- [x] Test: waived flips the effective MSA status to "not required" / `waived` (`msaDisplayState` tests)
+- [x] Test: non-waived event's exposure is unchanged (regression)
 
 #### Phase 3: Waive/un-waive server action + event-detail control
 - [ ] `setMsaWaived(campaignId, waived)` server action — guarded UPDATE, capability per Phase 1
