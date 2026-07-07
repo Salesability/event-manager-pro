@@ -246,6 +246,20 @@ else
     echo "ℹ️  QuickBooks secrets not found in ${PROJECT_ID} — /admin/quickbooks ships dormant."
 fi
 
+# Production feed token (chunk 0097) — bearer secret gating the public
+# /api/production-feed CSV that a third-party Google Sheet pulls via IMPORTDATA.
+# Mounted only where the secret exists (typically prod); absent → the feed route
+# returns 500 "not configured" (fail-closed) and nothing else breaks. Same
+# mount-if-present shape as QBO above, so a deploy never fails on a missing secret.
+FEED_SECRET_MOUNT=""
+if gcloud secrets describe production-feed-token --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    echo "🔐 production-feed-token present in ${PROJECT_ID} — wiring PRODUCTION_FEED_TOKEN."
+    grant_secret_access "production-feed-token"
+    FEED_SECRET_MOUNT=",PRODUCTION_FEED_TOKEN=production-feed-token:latest"
+else
+    echo "ℹ️  production-feed-token not found in ${PROJECT_ID} — /api/production-feed ships dormant (500 until the secret exists)."
+fi
+
 echo "🏗️  Building image ${IMAGE} via Cloud Build..."
 gcloud builds submit \
     --config cloudbuild.yaml \
@@ -330,7 +344,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --allow-unauthenticated \
     --port=3000 \
     --set-env-vars="${ENV_VARS}" \
-    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest${QBO_SECRET_MOUNTS}"
+    --set-secrets="DATABASE_URL=${DB_SECRET_NAME}:latest,SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_SECRET_NAME}:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest${QBO_SECRET_MOUNTS}${FEED_SECRET_MOUNT}"
 
 echo "✅ Deployment complete."
 echo "🌐 Service URL:"

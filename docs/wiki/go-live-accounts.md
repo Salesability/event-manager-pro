@@ -228,6 +228,40 @@ The dealer-visible **display name is "EventPro"** — the owner's chosen organiz
 overlay it; (2) set the three env vars on the deploy (prod-only, already wired in `deploy.sh`). Verify with the live round-trip:
 `NODE_OPTIONS='--conditions=react-server' pnpm dlx tsx scripts/0077-calendar-smoke.ts`.
 
+### 4b. Production feed → Google Sheet (chunk 0097)
+
+**What it's for.** A read-only, token-gated CSV of **booked + upcoming** campaigns (delivery-focused
+columns only — Start/End Date, Dealer, Location, Format, Coach, Records, SMS-Email, Letters, BDC; **no
+notes, no contact PII**) that an owner-owned **Google Sheet** pulls via `=IMPORTDATA()` and shares with
+third-party implementers. One-way, no Google API, no DWD scope. Route: `GET /api/production-feed?token=…`
+(public path; the gate is the bearer token, constant-time compared).
+
+**Secret:** `production-feed-token` (a long random bearer token). The route reads it from
+`PRODUCTION_FEED_TOKEN`; when unset the route fails closed (500 "not configured").
+
+**Owner steps to go live (prod):**
+1. **Create the secret** in the prod project:
+   ```
+   printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create production-feed-token \
+     --project=eventpro-498313 --replication-policy=automatic --data-file=-
+   gcloud secrets add-iam-policy-binding production-feed-token --project=eventpro-498313 \
+     --member=serviceAccount:1094204863648-compute@developer.gserviceaccount.com \
+     --role=roles/secretmanager.secretAccessor
+   ```
+2. **Wire the mount.** `deploy.sh` auto-mounts it once the secret exists (mount-if-present). For the
+   keyless `submit-deploy.sh` path, append `,PRODUCTION_FEED_TOKEN=production-feed-token:latest` to the
+   `--set-secrets` line in `cloudbuild.deploy.yaml` (the inline comment there shows exactly where), then
+   deploy.
+3. **Build the URL.** `https://eventpro.salesability.ca/api/production-feed?token=<the secret value>`
+   (read it back with `gcloud secrets versions access latest --secret=production-feed-token
+   --project=eventpro-498313`, or copy it from the admin panel on `/production`).
+4. **Create the Google Sheet**, put `=IMPORTDATA("<that URL>")` in cell A1, and **share the Sheet** with
+   the implementer emails. Google refreshes it ~hourly.
+
+**Rotate** by adding a new secret version + updating the Sheet's formula (or the admin-panel URL). The token
+is a bearer credential visible in the Sheet formula + logs — acceptable because the feed is low-sensitivity
+(redacted) and rotatable. For local dev, set `PRODUCTION_FEED_TOKEN` in `.env.local`.
+
 ---
 
 ## 5. Domain & DNS — the app's address

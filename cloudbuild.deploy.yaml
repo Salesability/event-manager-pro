@@ -102,6 +102,17 @@ steps:
       - --allow-unauthenticated
       - --port=3000
       - --set-env-vars=^@@^NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}@@NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}@@SITE_URL=${_SITE_URL}@@APP_ENV=${_APP_ENV}@@MSA_TEMPLATE_VERSION=${_MSA_TEMPLATE_VERSION}@@GCS_BUCKET=${_GCS_BUCKET}@@GCS_PROJECT_ID=${_GCS_PROJECT_ID}@@RESEND_FROM_EMAIL=${_RESEND_FROM_EMAIL}@@BOLDSIGN_API_BASE_URL=${_BOLDSIGN_API_BASE_URL}@@QBO_ENV=production@@GOOGLE_CALENDAR_SA_EMAIL=${_GOOGLE_CALENDAR_SA_EMAIL}@@GOOGLE_CALENDAR_ID=${_GOOGLE_CALENDAR_ID}@@GOOGLE_CALENDAR_SUBJECT=${_GOOGLE_CALENDAR_SUBJECT}
+      # 0097 production feed (Google Sheet IMPORTDATA): to activate the prod feed,
+      # first create the secret —
+      #   printf '%s' "$(openssl rand -hex 32)" | gcloud secrets create production-feed-token \
+      #     --project=eventpro-498313 --replication-policy=automatic --data-file=-
+      #   gcloud secrets add-iam-policy-binding production-feed-token --project=eventpro-498313 \
+      #     --member=serviceAccount:1094204863648-compute@developer.gserviceaccount.com \
+      #     --role=roles/secretmanager.secretAccessor
+      # — then append to the --set-secrets line below:
+      #   ,PRODUCTION_FEED_TOKEN=production-feed-token:latest
+      # (Kept out of the live list so a deploy never fails on a not-yet-created secret;
+      #  the route fails closed with 500 "not configured" until it's wired.)
       - --set-secrets=DATABASE_URL=database-url-production:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest,QBO_CLIENT_ID=quickbooks-client-id:latest,QBO_CLIENT_SECRET=quickbooks-client-secret:latest,QBO_TOKEN_ENC_KEY=quickbooks-token-enc-key:latest
 
 # No `images:` block — the push step above already uploads both tags before the
