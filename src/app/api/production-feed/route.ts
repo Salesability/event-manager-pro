@@ -1,6 +1,6 @@
 import { type NextRequest } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
-import { loadCampaigns } from '@/features/schedule/queries';
+import { loadCampaigns, loadDealerPrimaryContacts } from '@/features/schedule/queries';
 import {
   FEED_HEADERS,
   selectFeedCampaigns,
@@ -51,10 +51,12 @@ export async function GET(request: NextRequest) {
 
   const all = await loadCampaigns();
   const rows = selectFeedCampaigns(all, todayIso());
+  // Dealer primary contact (0098) for just the surviving rows' dealers.
+  const contacts = await loadDealerPrimaryContacts(rows.map((c) => c.dealerId));
 
   const lines = [FEED_HEADERS.map(csvCell).join(',')];
   for (const c of rows) {
-    lines.push(mapCampaignToFeedRow(c).map(csvCell).join(','));
+    lines.push(mapCampaignToFeedRow(c, contacts.get(c.dealerId)).map(csvCell).join(','));
   }
   const body = lines.join('\r\n');
 

@@ -1,8 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import type { Campaign } from './queries';
-import { FEED_HEADERS, selectFeedCampaigns, mapCampaignToFeedRow } from './production-feed';
+import {
+  FEED_HEADERS,
+  selectFeedCampaigns,
+  mapCampaignToFeedRow,
+  type FeedDealerContact,
+} from './production-feed';
 
 const TODAY = '2026-07-06';
+
+const DEALER_CONTACT: FeedDealerContact = {
+  name: 'Dana Dealer',
+  phone: '902-555-0199',
+  email: 'dana@rooftop.example',
+};
 
 function mk(overrides: Partial<Campaign> = {}): Campaign {
   return {
@@ -62,9 +73,9 @@ describe('selectFeedCampaigns (0097)', () => {
   });
 });
 
-describe('mapCampaignToFeedRow (0097)', () => {
+describe('mapCampaignToFeedRow (0097 + 0098 contact/notes)', () => {
   it('emits exactly FEED_HEADERS-length cells in order', () => {
-    const row = mapCampaignToFeedRow(mk());
+    const row = mapCampaignToFeedRow(mk(), DEALER_CONTACT);
     expect(row).toHaveLength(FEED_HEADERS.length);
     expect(row).toEqual([
       '2026-07-10',
@@ -77,20 +88,26 @@ describe('mapCampaignToFeedRow (0097)', () => {
       '200',
       '100',
       '50',
+      'Dana Dealer',
+      '902-555-0199',
+      'dana@rooftop.example',
+      'internal-only note',
     ]);
   });
 
-  it('renders null volumes / location / coach as empty cells', () => {
+  it('renders null volumes / location / coach, an absent dealer contact, and null notes as empty cells', () => {
     const row = mapCampaignToFeedRow(
-      mk({ dealerAddress: null, coachName: null, qtyRecords: null, smsEmail: null, letters: null, bdc: null }),
+      mk({ dealerAddress: null, coachName: null, qtyRecords: null, smsEmail: null, letters: null, bdc: null, notes: null }),
+      undefined,
     );
-    // Location, Coach, and the 4 volume columns
+    // Location, Coach
     expect(row[3]).toBe('');
     expect(row[5]).toBe('');
-    expect(row.slice(6)).toEqual(['', '', '', '']);
+    // 4 volumes + 3 contact cells + notes — all blank
+    expect(row.slice(6)).toEqual(['', '', '', '', '', '', '', '']);
   });
 
-  it('never leaks notes, contact, phone, email, or audience source', () => {
+  it('surfaces the dealer primary contact + notes, but never the campaign booking contact or audience source', () => {
     const row = mapCampaignToFeedRow(
       mk({
         notes: 'SENTINEL_NOTES',
@@ -99,9 +116,16 @@ describe('mapCampaignToFeedRow (0097)', () => {
         email: 'SENTINEL_EMAIL',
         audienceSourceLabel: 'SENTINEL_SOURCE',
       }),
+      { name: 'DEALER_NAME', phone: 'DEALER_PHONE', email: 'DEALER_EMAIL' },
     );
-    const joined = row.join('');
-    for (const s of ['SENTINEL_NOTES', 'SENTINEL_CONTACT', 'SENTINEL_PHONE', 'SENTINEL_EMAIL', 'SENTINEL_SOURCE']) {
+    const joined = row.join('');
+    // Surfaced (0098): dealer primary contact + the campaign notes.
+    expect(joined).toContain('DEALER_NAME');
+    expect(joined).toContain('DEALER_PHONE');
+    expect(joined).toContain('DEALER_EMAIL');
+    expect(joined).toContain('SENTINEL_NOTES');
+    // Still redacted: the campaign's OWN booking contact + the audience source.
+    for (const s of ['SENTINEL_CONTACT', 'SENTINEL_PHONE', 'SENTINEL_EMAIL', 'SENTINEL_SOURCE']) {
       expect(joined).not.toContain(s);
     }
   });
