@@ -10,7 +10,7 @@
 | 1: Schema — `campaigns.msa_waived` + migration | Done | 167843b |
 | 2: Waiver-aware commercial status (logic + unit tests) | Done | f3b4914 |
 | 3: Waive/un-waive server action + event-detail control | Done | 9a4f43c |
-| 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Pending | - |
+| 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Done | 3444725 |
 | 5: Accept-gate waiver (`acceptQuote` + client mirror) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `campaigns` table row + MSA table; add the `msa_waived` column.
 - **`db-conventions` skill** — invoke before the schema edit; watch the Drizzle journal `when` gotcha (see [[project_drizzle_journal_when_gotcha]]).
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -65,12 +65,12 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: `setMsaWaived` flips the flag; guarded update is a no-op on a bad/foreign campaign id — **auth** covered now by the gate-matrix row (runs in `pnpm test`); the **DB flip + no-op-on-bad-id** round-trip is folded into the Phase 6 integration suite per the plan's "integration tests come last" note (the `capabilityClient`-wrapped action can't run in the tx-rollback harness; the repo has no mocked-db unit-test precedent for these thin actions)
 
 #### Phase 4: Visual treatment
-- [ ] Event-detail MSA row: neutral **"Not required"** pill when `msaWaived` (no amber, no pending `MsaStatusBadge`)
-- [ ] Event-detail banner: a waived event shows no "⚠ Commercially exposed" contribution from the MSA side
-- [ ] Hide the "Send MSA" CTA when waived
-- [ ] Calendar amber dot: not painted when the only exposure was a waived MSA (`calendar-view.tsx:369`)
-- [ ] Booked-prompt (`calendar-view.tsx:654`): add "MSA not needed for this event" that calls `setMsaWaived` (per the intent open question)
-- [ ] (If needed) a `waived` / `not-required` variant in `MsaStatusBadge` / `MSA_COLOR` (`status-badge.tsx:66`)
+- [x] Event-detail MSA row: neutral **"Not required"** pill when `msaWaived` (no amber, no pending `MsaStatusBadge`) — inline `<Badge color="zinc">Not required</Badge>`
+- [x] Event-detail banner: a waived event shows no "⚠ Commercially exposed" contribution from the MSA side — `commercialBannerText()` helper: waived+exposed blames only the missing quote (+"(MSA not required for this event.)"); waived+protected reads "Protected — accepted quote. MSA not required for this event."
+- [x] Hide the "Send MSA" CTA when waived — added `&& !commercial.msaWaived` to the CTA condition
+- [x] Calendar amber dot: not painted when the only exposure was a waived MSA (`calendar-view.tsx`) — **no change needed**: the dot reads `commercialStatus[…].exposed`, which Phase 2 already made waiver-aware (waived+accepted ⇒ not exposed ⇒ no dot; waived+no-quote still dots for the quote gap, correctly)
+- [x] Booked-prompt: add "MSA not needed for this event" that calls `setMsaWaived` — `plain` Button gated `campaign:edit`, waives + closes via `waiveMsaFromPrompt`
+- [x] ~~(If needed) a `waived` / `not-required` variant in `MsaStatusBadge` / `MSA_COLOR`~~ — **not needed**: rendered an inline neutral `Badge` instead of widening the `Msa['status']` domain type with a display-only value
 
 #### Phase 5: Accept-gate waiver (`acceptQuote` + client mirror)
 - [ ] `acceptQuote`: also select the quote's `campaignId`; when its campaign is `msa_waived`, **skip** the active-MSA requirement (`quotes/actions.ts:1287-1310`)
