@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema — `campaigns.msa_waived` + migration | Done | 167843b |
 | 2: Waiver-aware commercial status (logic + unit tests) | Done | f3b4914 |
-| 3: Waive/un-waive server action + event-detail control | Pending | - |
+| 3: Waive/un-waive server action + event-detail control | Done | 9a4f43c |
 | 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Pending | - |
 | 5: Accept-gate waiver (`acceptQuote` + client mirror) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `campaigns` table row + MSA table; add the `msa_waived` column.
 - **`db-conventions` skill** — invoke before the schema edit; watch the Drizzle journal `when` gotcha (see [[project_drizzle_journal_when_gotcha]]).
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -47,7 +47,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Generate the migration; **verify the journal `when` is greater than the previous entry** ([[project_drizzle_journal_when_gotcha]]) so it actually applies — `0048_tiresome_virginia_dare.sql` (`ALTER TABLE campaigns ADD COLUMN msa_waived boolean DEFAULT false NOT NULL`); journal idx 48 `when` 1783461732034 > 47's 1782305717918 ✓
 - [x] Apply to the sandbox DB on the **session pooler (5432)**, not the 6543 transaction pooler — applied; verified `msa_waived boolean NOT NULL DEFAULT false` present in `information_schema`
 - [x] Thread `msaWaived` onto the `Campaign` projection/type wherever campaigns are loaded (`loadCampaigns`), so downstream reads can see it — `Campaign` type + `loadCampaigns`/`loadCampaign` selects & maps; `mk()` fixtures in `production-feed.test.ts` + `route.test.ts` updated
-- [x] Resolve the Phase-1 open question: capability that gates the waive action → **`campaign:edit`** (coach-scoped, the capability `updateCampaign`/`resyncCampaign` use — the waiver is a per-event campaign property; not `dealer:edit`, not `admin:access` — 0082's `admin:access` was for *sending* an envelope, a heavier action than an opt-out toggle)
+- [x] Resolve the Phase-1 open question: capability that gates the waive action → **`campaign:edit`** (the capability `updateCampaign`/`resyncCampaign` use — the waiver is a per-event campaign property). **Correction to the intent's "coach-scoped" lean:** in this app `campaign:edit` resolves to **admin-only** ("booking is back-office" — every campaign-mutating action is admin-only per the gate matrix), so the waiver is admin-gated, consistent with the adjacent Edit / Re-sync / Send-MSA (`admin:access`) controls. Not `dealer:edit` (that's the dealer entity), not a bespoke `admin:access` (campaign:edit already lands admin-only and is the semantically correct capability).
 
 #### Phase 2: Waiver-aware commercial status
 - [x] Extend `CommercialStatus` with `msaWaived: boolean` (and/or a `'waived'` effective-MSA state) — added `msaWaived` field + a pure `msaDisplayState()` helper returning `'waived'` for the display layer
@@ -58,11 +58,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: non-waived event's exposure is unchanged (regression)
 
 #### Phase 3: Waive/un-waive server action + event-detail control
-- [ ] `setMsaWaived(campaignId, waived)` server action — guarded UPDATE, capability per Phase 1
-- [ ] Add a gate-matrix row if a new gated action is introduced (`src/features/__tests__/action-gate-matrix.ts`)
-- [ ] Waive / un-waive toggle on the event-detail card (near the MSA row)
-- [ ] Pass `msaWaived` through `calendar/page.tsx` → `calendar-view.tsx` → `event-detail.tsx` props
-- [ ] Test: `setMsaWaived` flips the flag; guarded update is a no-op on a bad/foreign campaign id
+- [x] `setMsaWaived(campaignId, waived)` server action — guarded UPDATE (`campaign:edit`, `id`+`waived` from form, `.returning()` → no-op error on bad id, `revalidateCampaignViews`). **No audit-log row** — `audit_log.action` is a pgEnum (a new value would need an `ALTER TYPE` migration), and the sibling `updateCampaign`/`resyncCampaign` edits don't audit either; `updated_by_id` captures the actor
+- [x] Add a gate-matrix row if a new gated action is introduced (`src/features/__tests__/action-gate-matrix.ts`) — `setMsaWaived` row (ADMIN_ONLY); the harness greps `actions.ts` for gated entries and fails without it, so this runs now
+- [x] Waive / un-waive toggle on the event-detail card (near the MSA row) — action-bar button next to "Send MSA"; label flips "MSA not required" ↔ "Require MSA"; closes the panel on success (the commercial surface is recomputed server-side; `dialog.campaign` is a snapshot)
+- [x] ~~Pass `msaWaived` through `calendar/page.tsx` → `calendar-view.tsx` → `event-detail.tsx` props~~ — **not needed**: `EventDetail` already receives the full `Campaign` (now carrying `msaWaived`) *and* `commercial` (carries `msaWaived` from Phase 2), so the flag is already in hand
+- [x] Test: `setMsaWaived` flips the flag; guarded update is a no-op on a bad/foreign campaign id — **auth** covered now by the gate-matrix row (runs in `pnpm test`); the **DB flip + no-op-on-bad-id** round-trip is folded into the Phase 6 integration suite per the plan's "integration tests come last" note (the `capabilityClient`-wrapped action can't run in the tx-rollback harness; the repo has no mocked-db unit-test precedent for these thin actions)
 
 #### Phase 4: Visual treatment
 - [ ] Event-detail MSA row: neutral **"Not required"** pill when `msaWaived` (no amber, no pending `MsaStatusBadge`)
