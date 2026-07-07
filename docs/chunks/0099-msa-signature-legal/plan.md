@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Full signer name + template version | Done | b762349 |
 | 2: Client-column rebuild (address + name/title fields + authority line) | Done | 33890ec |
-| 3: Test tool, wiki, reply to Christine | Pending | - |
+| 3: Test tool, wiki, reply to Christine | Done | (docs) |
 | 4: Tests + visual smoke | Pending | - |
 
 Close Christine's legal notes on the MSA signature block: move the Client address below the signature, capture the signer's full name, add signer-filled printed-name + title fields plus the authority-to-bind attestation, and bump the template version. Initials (#4) and Quote T&Cs (#5) are explicitly out (see intent Non-goals). "Done" = a rendered MSA whose Client block carries full name / printed-name field / title field / address / authority line, with page 1 clean, and a reply drafted for Christine.
@@ -30,7 +30,7 @@ Close Christine's legal notes on the MSA signature block: move the Client addres
 - `docs/wiki/commercial-spine.md` — "The MSA envelope (standalone, 0082)" §72-81 is the authoritative description of the single Client signature field, the pre-applied Shannon counter-signature, and the 96/72 BoldSign coordinate scaling. Must be re-ingested in Phase 3.
 - Template-version doctrine (`commercial-spine.md` §140-142): any prose/layout change bumps `MSA_TEMPLATE_VERSION` so signed rows record which wording they agreed to.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - Layout is a PDF, not a web page — Phase 4's smoke is a rendered-sample **visual** check + unit assertions on emitted anchors, not a `web-test` route walk.
@@ -55,9 +55,9 @@ Close Christine's legal notes on the MSA signature block: move the Client addres
 - [x] Smoke-verified via a throwaway render (`scratchpad/msa-0099-sample.pdf`): 3 anchors on one page, ordered top-to-bottom, name field right of the label; page 1 carries no address; the Client block reads signature → Name → Title → email → address → authority line. **Permanent unit assertions land in Phase 4.**
 
 #### Phase 3: Test tool, wiki, reply to Christine
-- [ ] Verify the admin **Send Test MSA** path (`sendTestMsa` `actions.ts:304`, form `send-test-msa-form.tsx`, schema `test-msa-schema.ts`) exercises the new fields for free (it shares `renderMsaPdf` + `sendSignatureRequest`). No new title input needed — title is signer-filled. Adjust only if the test render errors.
-- [ ] Ingest into `docs/wiki/commercial-spine.md` — update the "Signing field" bullet (§78) to describe the signature **plus** the printed-name + title TextBox fields and the authority-to-bind line + relocated address. Add a `log.md` entry.
-- [ ] Write `docs/chunks/0099-msa-signature-legal/reply-to-christine.md`: point-by-point (1–3 done; 4 = BoldSign tamper-seals all pages so one signature is legally sufficient — initials declined as unnecessary; 5 = full T&Cs live in the signed MSA, the Quote incorporates them by reference and is intentionally one page).
+- [x] Verified the admin **Send Test MSA** path exercises the new fields for free — Phase 2 wired `printedNameAnchor`/`titleAnchor` into `sendTestMsa` too, and it shares `renderMsaPdf` + `sendSignatureRequest`. No new title input needed (title is signer-filled); the free-text `signerName` stays. No code change required.
+- [x] Ingested into `docs/wiki/commercial-spine.md` (rewrote the "Signing field" bullet: signature + printed-name/title TextBox fields + authority line + relocated address + full-name sourcing + initials-declined) and added a `log.md` entry.
+- [x] Wrote `reply-to-christine.md` — point-by-point (1–3 done; 4 = BoldSign tamper-seals all pages → one signature is legally sufficient, initials declined; 5 = full T&Cs live in the signed MSA, the Quote incorporates them by reference).
 
 #### Phase 4: Tests + visual smoke
 - [ ] Unit: rendered MSA asserts — no page-1 address; printed-name + title + authority text present in the sig section; full `signerName` printed; anchors returned.
