@@ -35,6 +35,8 @@ function tokenMatches(provided: string, expected: string): boolean {
   return timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(expected, 'utf8'));
 }
 
+// authz: public — Google's IMPORTDATA fetch has no auth.users session; the gate
+// is the bearer token constant-time-compared below, before any DB read.
 export async function GET(request: NextRequest) {
   const expected = process.env.PRODUCTION_FEED_TOKEN;
   if (!expected) {
