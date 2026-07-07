@@ -1,0 +1,1 @@
+ALTER TABLE "campaigns" ADD COLUMN "msa_waived" boolean DEFAULT false NOT NULL;

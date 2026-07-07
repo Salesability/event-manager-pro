@@ -39,6 +39,7 @@ function mk(overrides: Partial<Campaign> = {}): Campaign {
     phone: '902-555-0100',
     email: 'bob@dealer.example',
     notes: 'internal-only note',
+    msaWaived: false,
     gcalSyncStatus: 'synced',
     gcalEventId: 'evt_1',
     ...overrides,
