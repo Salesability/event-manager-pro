@@ -149,6 +149,9 @@ const DEALER_ROW = {
 // 0082: the MSA renders on its own; its signature anchor is forwarded straight
 // to BoldSign (no merge step shifting page coordinates).
 const MSA_SIG_ANCHOR = { pageNumber: 1, x: 321, y: 600, width: 241, height: 22 };
+// 0099: signer-filled printed-name + title fields, forwarded the same way.
+const MSA_NAME_ANCHOR = { pageNumber: 1, x: 360, y: 628, width: 202, height: 16 };
+const MSA_TITLE_ANCHOR = { pageNumber: 1, x: 355, y: 652, width: 207, height: 16 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -167,11 +170,13 @@ beforeEach(() => {
     ok: true,
     body: Buffer.from('%PDF-msa-stub'),
     signatureAnchor: MSA_SIG_ANCHOR,
+    printedNameAnchor: MSA_NAME_ANCHOR,
+    titleAnchor: MSA_TITLE_ANCHOR,
   });
   mocks.putObject.mockResolvedValue({ ok: true, key: 'msa/1/draft.pdf' });
   mocks.resolveQuoteRecipient.mockResolvedValue({
     ok: true,
-    recipient: { email: 'buyer@dealer.test', firstName: 'Pat' },
+    recipient: { email: 'buyer@dealer.test', firstName: 'Pat', lastName: 'Buyer' },
   });
   mocks.sendSignatureRequest.mockResolvedValue({
     ok: true,
@@ -252,6 +257,8 @@ describe('sendMsaEnvelope (0082 — MSA-only)', () => {
     expect(msaData.msaNumber).toBe('1');
     expect(msaData.clientName).toBe('Acme Auto Group');
     expect(msaData.signerEmail).toBe('buyer@dealer.test');
+    // 0099: the printed signer name is the full first + last name.
+    expect(msaData.signerName).toBe('Pat Buyer');
     expect(msaData.terminationNoticeDays).toBe(30);
     expect(msaData.templateVersion).toBe('2026-05-12');
 
@@ -272,10 +279,15 @@ describe('sendMsaEnvelope (0082 — MSA-only)', () => {
     // forwarded as-is (no merge step shifting the page number).
     expect(envelopeArg.initialsAnchors).toBeUndefined();
     expect(envelopeArg.signatureAnchor).toEqual(MSA_SIG_ANCHOR);
+    // 0099: the printed-name + title anchors are forwarded to BoldSign.
+    expect(envelopeArg.printedNameAnchor).toEqual(MSA_NAME_ANCHOR);
+    expect(envelopeArg.titleAnchor).toEqual(MSA_TITLE_ANCHOR);
     expect(envelopeArg.metadata).toEqual({ msaId: '1' });
     expect((envelopeArg.signer as { emailAddress: string }).emailAddress).toBe(
       'buyer@dealer.test',
     );
+    // BoldSign signer.name is the full name so the adopted signature defaults to it.
+    expect((envelopeArg.signer as { name: string }).name).toBe('Pat Buyer');
 
     // Exactly ONE update: the MSA providerDocumentId. No quote→MSA link.
     expect(mocks.updates).toHaveLength(1);
@@ -343,14 +355,18 @@ describe('sendMsaEnvelope (0082 — MSA-only)', () => {
 // prose and posts a real envelope, surfacing the documentId.
 describe('sendTestMsa', () => {
   const SIG_ANCHOR = { pageNumber: 3, x: 321, y: 600, width: 241, height: 22 };
+  const NAME_ANCHOR = { pageNumber: 3, x: 360, y: 628, width: 202, height: 16 };
+  const TITLE_ANCHOR = { pageNumber: 3, x: 355, y: 652, width: 207, height: 16 };
 
   beforeEach(() => {
-    // Default render mock omits signatureAnchor; the test tool passes it
-    // through to BoldSign, so give it one for the happy-path assertions.
+    // Default render mock omits anchors; the test tool passes them through to
+    // BoldSign, so give it all three for the happy-path assertions.
     mocks.renderMsaPdf.mockResolvedValue({
       ok: true,
       body: Buffer.from('%PDF-test-msa'),
       signatureAnchor: SIG_ANCHOR,
+      printedNameAnchor: NAME_ANCHOR,
+      titleAnchor: TITLE_ANCHOR,
     });
   });
 
@@ -371,11 +387,16 @@ describe('sendTestMsa', () => {
       signer: { emailAddress: string; name: string };
       metadata: Record<string, string>;
       signatureAnchor: unknown;
+      printedNameAnchor: unknown;
+      titleAnchor: unknown;
       message: string;
     };
     expect(sendArg.signer).toEqual({ emailAddress: 'me@admin.test', name: 'Pat Admin' });
     expect(sendArg.metadata).toEqual({ test: 'true' });
     expect(sendArg.signatureAnchor).toEqual(SIG_ANCHOR);
+    // 0099: the test tool exercises the new signer-filled fields too.
+    expect(sendArg.printedNameAnchor).toEqual(NAME_ANCHOR);
+    expect(sendArg.titleAnchor).toEqual(TITLE_ANCHOR);
     expect(sendArg.message).toBe('pls sign');
   });
 

@@ -93,6 +93,42 @@ describe('renderMsaPdf', () => {
     expect(result.signatureAnchor.pageNumber).toBeGreaterThanOrEqual(1);
   });
 
+  it('returns printed-name + title anchors below the signature, on the same page, ordered top-to-bottom (0099)', async () => {
+    const result = await renderMsaPdf(fixture);
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    const { signatureAnchor: sig, printedNameAnchor: name, titleAnchor: title } = result;
+    // All three land on the same page (drawn together in the signature block).
+    expect(name.pageNumber).toBe(sig.pageNumber);
+    expect(title.pageNumber).toBe(sig.pageNumber);
+    // Every anchor is on the page.
+    for (const a of [sig, name, title]) {
+      expect(a.x).toBeGreaterThan(0);
+      expect(a.x).toBeLessThan(612);
+      expect(a.y).toBeGreaterThan(0);
+      expect(a.y + a.height).toBeLessThan(792);
+    }
+    // BoldSign top-left origin: a LARGER y is LOWER on the page. Signature sits
+    // above the printed-name field, which sits above the title field.
+    expect(sig.y).toBeLessThan(name.y);
+    expect(name.y).toBeLessThan(title.y);
+    // The fillable name/title boxes sit to the RIGHT of their label, so their
+    // left edge is inset from the signature box's left edge (the column start).
+    expect(name.x).toBeGreaterThan(sig.x);
+    expect(title.x).toBeGreaterThan(sig.x);
+    // Text-field height is the fixed 16pt box (distinct from the 22pt signature).
+    expect(name.height).toBe(16);
+    expect(title.height).toBe(16);
+  });
+
+  it('still succeeds (with anchors) when clientAddress is omitted — the address is optional in the Client block', async () => {
+    const result = await renderMsaPdf({ ...fixture, clientAddress: undefined });
+    expect('ok' in result && result.ok).toBe(true);
+    if (!('ok' in result) || !result.ok) return;
+    expect(result.printedNameAnchor.height).toBe(16);
+    expect(result.titleAnchor.height).toBe(16);
+  });
+
   // Opt-in visual smoke: WRITE_SMOKE_PDF=1 pnpm vitest run src/lib/pdf
   // writes /tmp/msa-smoke.pdf so the layout can be eyeballed. Skipped in CI.
   it.skipIf(!process.env.WRITE_SMOKE_PDF)('writes /tmp/msa-smoke.pdf', async () => {
