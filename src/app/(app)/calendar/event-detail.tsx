@@ -7,7 +7,7 @@ import { Button } from '@/components/catalyst/button';
 import { MsaStatusBadge, QuoteStatusBadge } from '@/components/app/status-badge';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { cancelCampaign, resyncCampaign } from '@/features/schedule/actions';
+import { cancelCampaign, resyncCampaign, setMsaWaived } from '@/features/schedule/actions';
 import {
   sendClientCampaignConfirmation,
   sendCoachCampaignConfirmation,
@@ -50,6 +50,25 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
       const result = toLegacyResult(await resyncCampaign(fd));
       if ('ok' in result) toast.success('Calendar synced');
       else toast.error(result.error);
+    });
+  }
+
+  // 0100: toggle the per-event MSA waiver. Closes the panel on success — the
+  // whole commercial surface (banner, MSA row, dot) is recomputed server-side,
+  // and `dialog.campaign` here is a snapshot, so re-opening shows fresh state.
+  function onToggleMsaWaived() {
+    const next = !campaign.msaWaived;
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('id', String(campaign.id));
+      fd.set('waived', String(next));
+      const result = toLegacyResult(await setMsaWaived(fd));
+      if ('ok' in result) {
+        toast.success(next ? 'MSA marked not required for this event' : 'MSA requirement restored');
+        onClose();
+      } else {
+        toast.error(result.error);
+      }
     });
   }
 
@@ -217,6 +236,26 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           <Can capability="admin:access">
             <Button outline compact href={`/dealerships/${campaign.dealerId}`}>
               Send MSA
+            </Button>
+          </Can>
+        )}
+        {campaign.status !== 'cancelled' && (
+          // 0100: per-event MSA opt-out toggle. Reversible; admin-gated like the
+          // other campaign-edit controls (booking is back-office).
+          <Can capability="campaign:edit">
+            <Button
+              outline
+              compact
+              type="button"
+              onClick={onToggleMsaWaived}
+              disabled={pending}
+              title={
+                campaign.msaWaived
+                  ? 'Restore the MSA requirement for this event'
+                  : 'Mark this event as not needing an MSA — its quote can then be accepted without one'
+              }
+            >
+              {campaign.msaWaived ? 'Require MSA' : 'MSA not required'}
             </Button>
           </Can>
         )}

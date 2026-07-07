@@ -179,6 +179,12 @@ export const ACTION_MATRIX: ActionMatrixRow[] = [
     expectedByRole: ADMIN_ONLY,
     note: 'campaign:cancel — admin-only',
   },
+  {
+    label: 'setMsaWaived',
+    invoke: () => scheduleActions.setMsaWaived(fd()),
+    expectedByRole: ADMIN_ONLY,
+    note: 'campaign:edit — admin-only (0100 per-event MSA opt-out)',
+  },
 
   // ---- Lookup admin (6) — admin-only ------------------------------------
   {
