@@ -5,7 +5,12 @@ import { Button } from '@/components/catalyst/button';
 import { RelativeTime } from '@/components/app/relative-time';
 import { Section } from '@/components/app/section';
 import { QuoteStatusBadge } from '@/components/app/status-badge';
-import { loadQuote, loadQuoteAttachments, loadQuoteSendHistory } from '@/features/quotes/queries';
+import {
+  loadQuote,
+  loadQuoteAttachments,
+  loadQuoteEventMsaWaived,
+  loadQuoteSendHistory,
+} from '@/features/quotes/queries';
 import { loadActiveOrPendingMsa } from '@/features/msa/queries';
 import { deriveQuoteMsaState } from '@/features/msa/send-state';
 import { displayStatusKey } from '@/features/quotes/status-display';
@@ -94,8 +99,17 @@ export default async function QuoteEditPage({
           ? { kind: 'error' as const, msg: sp.qberror }
           : null;
 
-  const [dealers, catalog, taxRates, recipientResult, sendHistory, msa, qbConnection, attachments] =
-    await Promise.all([
+  const [
+    dealers,
+    catalog,
+    taxRates,
+    recipientResult,
+    sendHistory,
+    msa,
+    qbConnection,
+    attachments,
+    eventMsaWaived,
+  ] = await Promise.all([
       loadDealers(),
       loadServiceItems(),
       loadTaxRates(),
@@ -109,6 +123,8 @@ export default async function QuoteEditPage({
       getConnection(),
       // 0078: uploaded attachments seed the send dialog's Documents list.
       loadQuoteAttachments(quote.id),
+      // 0100: does the quote's event opt out of the MSA? Mirrors the accept gate.
+      loadQuoteEventMsaWaived(quote.id),
     ]);
   // 0082: the MSA send action moved to the dealer page; the composer keeps only
   // an informational MSA-active indicator, and the accept gate (D3) reads the
@@ -219,6 +235,7 @@ export default async function QuoteEditPage({
             quoteId={quote.id}
             status={quote.status}
             hasActiveMsa={sendState.active}
+            msaWaived={eventMsaWaived}
             isExpired={quote.isExpired}
           />
         </Section>

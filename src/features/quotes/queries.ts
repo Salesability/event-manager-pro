@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import {
   audienceSources,
   auditLog,
+  campaigns,
   dealers,
   quoteAttachments,
   quoteLineItems,
@@ -227,6 +228,21 @@ export async function loadQuote(id: number): Promise<Quote | null> {
   const quote = mapRow(row);
   const pickedLines = await loadPickedLines(id);
   return { ...quote, pickedLines };
+}
+
+// 0100: whether the quote's linked event opts out of the MSA
+// (`campaigns.msa_waived`). Mirrors the `acceptQuote` gate for the staff
+// "Mark accepted" control. An `innerJoin` means a quote with no campaign link
+// (null `campaignId`) yields no row → `false`: no event, no waiver to inherit,
+// so the normal active-MSA requirement stands.
+export async function loadQuoteEventMsaWaived(quoteId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ msaWaived: campaigns.msaWaived })
+    .from(quotes)
+    .innerJoin(campaigns, eq(campaigns.id, quotes.campaignId))
+    .where(eq(quotes.id, quoteId))
+    .limit(1);
+  return row?.msaWaived ?? false;
 }
 
 // Assembled data for the QBO Estimate push (0073): the quote's push-relevant
