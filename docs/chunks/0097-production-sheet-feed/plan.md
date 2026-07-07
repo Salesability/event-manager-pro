@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Pure feed model (select + redacted row mapper) + unit tests | Pending | - |
+| 1: Pure feed model (select + redacted row mapper) + unit tests | Done | `527c293` |
 | 2: Public token-gated feed route (`/api/production-feed`) | Pending | - |
 | 3: Secret + deploy wiring + P0 owner-setup doc | Pending | - |
 | 4: Admin discoverability panel (optional — IMPORTDATA formula) | Pending | - |
@@ -37,16 +37,13 @@ API, no DWD scope, no migration.**
 - `docs/wiki/data-model.md` — `Campaign` fields (`src/features/schedule/queries.ts:90-117`); ops/PII fields to withhold: `qtyRecords`(kept here), `notes`, `phone`, `email`, `audienceSourceLabel`.
 - `docs/wiki/go-live-accounts.md` — deploy secret-mount runbook; add a `production-feed-token` row.
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 ### Phase Checklist
 
 #### Phase 1: Pure feed model + unit tests
-- [ ] `src/features/schedule/production-feed.ts`:
-  - `FEED_HEADERS = ['Start Date','End Date','Dealer','Location','Format','Coach','Records','SMS-Email','Letters','BDC']`.
-  - `selectFeedCampaigns(campaigns, todayIso)` → keep `status ∈ {booked, completed} && endDate >= todayIso`; drop draft/cancelled/fully-past.
-  - `mapCampaignToFeedRow(c)` → string[] in FEED_HEADERS order; blanks for null; **no `notes`, no `phone`/`email`, no audience source**.
-- [ ] Unit tests: filter includes a booked-future row, excludes draft / cancelled / fully-past; row mapper emits exactly FEED_HEADERS-length cells; **redaction test** asserts a campaign whose `notes`/`phone`/`email` contain a sentinel never surfaces it.
+- [x] `src/features/schedule/production-feed.ts`: `FEED_HEADERS` (Start Date, End Date, Dealer, Location, Format, Coach, Records, SMS-Email, Letters, BDC); `selectFeedCampaigns(campaigns, todayIso)` keeps `status ∈ {booked, completed} && endDate >= todayIso`; `mapCampaignToFeedRow(c)` emits the safe subset (blanks for null; **never** touches `notes`/`contact`/`phone`/`email`/audience source).
+- [x] Unit tests (`production-feed.test.ts`, 7/7): filter includes booked-future + completed-today, excludes draft / cancelled / fully-past; mapper emits exactly `FEED_HEADERS.length` cells in order, nulls → blank; **redaction test** asserts sentinel `notes`/`contact`/`phone`/`email`/source never surface.
 
 #### Phase 2: Public token-gated feed route
 - [ ] `src/app/api/production-feed/route.ts` (`GET`): read `process.env.PRODUCTION_FEED_TOKEN`; if unset → 503/500 (misconfig, fail-closed). Read `?token=`; constant-time compare (helper à la `webhook-verify`). Mismatch/absent → 401 (no body leak).
