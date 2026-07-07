@@ -516,15 +516,22 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     titleBoxY = titleField.y;
     titleBoxWidth = titleField.width;
 
-    // Client email (from our records) + the address moved off page 1.
+    // Client email (from our records) + the address moved off page 1. The
+    // address now lives in the half-width Client column, so each source line is
+    // wrapped to the column width (not just char-capped as `splitClientAddress`
+    // does) and the whole block is bounded to 4 visual lines — a long legal
+    // address can't run past the right edge or push the block off the page.
     rightY -= 22;
     page.drawText(sanitize(data.signerEmail), {
       x: rightColX, y: rightY, size: 9, font, color: grey,
     });
     if (data.clientAddress) {
-      for (const line of data.clientAddress) {
+      const addressLines = data.clientAddress
+        .flatMap((line) => wrap(sanitize(line), 44))
+        .slice(0, 4);
+      for (const line of addressLines) {
         rightY -= 12;
-        page.drawText(sanitize(line), {
+        page.drawText(line, {
           x: rightColX, y: rightY, size: 9, font, color: grey,
         });
       }
