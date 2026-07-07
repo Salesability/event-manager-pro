@@ -132,6 +132,22 @@ describe.skipIf(!dbUrl)('MSA waiver — accept gate + campaign flag (0100)', () 
       expect(result).toBe(false);
     });
 
+    it('does NOT honour a cross-dealer waiver: a waived campaign owned by another dealer is ignored', async () => {
+      // Eval High (Codex): a stale cross-dealer `campaignId` (parked 0094-c —
+      // `setQuoteDealer` swaps `dealerId` without reconciling `campaignId`) must
+      // not let a no-MSA dealer inherit another dealer's waiver and bypass the
+      // gate. The lookup is dealer-scoped, so dealer B's check ignores dealer A's
+      // waived campaign and falls through to B's own (absent) MSA → blocked.
+      const result = await inTx(async (tx) => {
+        const dealerA = await seedDealer(tx, 'Dealer A (owns the waived event)');
+        const waivedCampaignA = await seedCampaign(tx, dealerA, true);
+        const dealerB = await seedDealer(tx, 'Dealer B (no MSA, stale link)');
+        // Quote for B, but pointing at A's waived campaign.
+        return isAcceptMsaSatisfied(dealerB, waivedCampaignA, tx);
+      });
+      expect(result).toBe(false);
+    });
+
     it('a quote with NO campaign link falls through to the normal active-MSA gate', async () => {
       const { withoutMsa, withMsa } = await inTx(async (tx) => {
         const dealerId = await seedDealer(tx, 'No-Campaign Dealer');

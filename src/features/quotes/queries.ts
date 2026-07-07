@@ -231,15 +231,21 @@ export async function loadQuote(id: number): Promise<Quote | null> {
 }
 
 // 0100: whether the quote's linked event opts out of the MSA
-// (`campaigns.msa_waived`). Mirrors the `acceptQuote` gate for the staff
-// "Mark accepted" control. An `innerJoin` means a quote with no campaign link
-// (null `campaignId`) yields no row → `false`: no event, no waiver to inherit,
-// so the normal active-MSA requirement stands.
+// (`campaigns.msa_waived`). Mirrors the `acceptQuote` gate (`isAcceptMsaSatisfied`)
+// for the staff "Mark accepted" control — including the **dealer-scoped join**:
+// the campaign must belong to the quote's dealer, so a stale cross-dealer
+// `campaignId` (parked 0094-c) can't inherit another dealer's waiver and light
+// up Accept when the server would still block. A quote with no campaign link
+// (null `campaignId`) yields no row → `false`, so the normal MSA requirement
+// stands.
 export async function loadQuoteEventMsaWaived(quoteId: number): Promise<boolean> {
   const [row] = await db
     .select({ msaWaived: campaigns.msaWaived })
     .from(quotes)
-    .innerJoin(campaigns, eq(campaigns.id, quotes.campaignId))
+    .innerJoin(
+      campaigns,
+      and(eq(campaigns.id, quotes.campaignId), eq(campaigns.dealerId, quotes.dealerId)),
+    )
     .where(eq(quotes.id, quoteId))
     .limit(1);
   return row?.msaWaived ?? false;

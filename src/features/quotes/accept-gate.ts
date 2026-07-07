@@ -32,10 +32,18 @@ export async function isAcceptMsaSatisfied(
   exec: Executor = db,
 ): Promise<boolean> {
   if (campaignId != null) {
+    // **Dealer-scope the waiver** (mirrors 0094's cross-dealer write guard).
+    // `setQuoteDealer` can swap a draft quote's `dealerId` without reconciling
+    // its `campaignId` (parked 0094-c), so `campaignId` may point at a DIFFERENT
+    // dealer's campaign. Requiring `campaigns.dealer_id = dealerId` means a stale
+    // cross-dealer link matches 0 rows → the waiver is NOT honoured → we fall
+    // through to this dealer's own active-MSA check. Without the scope, a quote
+    // swapped onto a no-MSA dealer could inherit another dealer's waiver and
+    // bypass the accept gate entirely.
     const [campaign] = await exec
       .select({ msaWaived: campaigns.msaWaived })
       .from(campaigns)
-      .where(eq(campaigns.id, campaignId))
+      .where(and(eq(campaigns.id, campaignId), eq(campaigns.dealerId, dealerId)))
       .limit(1);
     if (campaign?.msaWaived) return true;
   }
