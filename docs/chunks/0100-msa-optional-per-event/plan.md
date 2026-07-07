@@ -11,7 +11,7 @@
 | 2: Waiver-aware commercial status (logic + unit tests) | Done | f3b4914 |
 | 3: Waive/un-waive server action + event-detail control | Done | 9a4f43c |
 | 4: Visual treatment (pill · banner · dot · CTA · booked-prompt) | Done | 3444725 |
-| 5: Accept-gate waiver (`acceptQuote` + client mirror) | Pending | - |
+| 5: Accept-gate waiver (`acceptQuote` + client mirror) | Done | 2a26385 |
 | 6: Tests + smoke verification | Pending | - |
 
 Make the MSA an **opt-out per calendar event**. A new `campaigns.msa_waived` boolean feeds three surfaces so a waived event reads as "MSA not required" rather than an unfinished step: (1) the commercial-status predicate that paints the calendar dot / event-detail banner / MSA badge, (2) the "Send MSA" CTA + post-booking prompt, and (3) the hard accept-quote gate. "Done" = a waived booked event shows a neutral "Not required" pill (no amber, no ⚠, no CTA) and its quote accepts with no active MSA, while a non-waived event is unchanged and the waiver is reversible.
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` — `campaigns` table row + MSA table; add the `msa_waived` column.
 - **`db-conventions` skill** — invoke before the schema edit; watch the Drizzle journal `when` gotcha (see [[project_drizzle_journal_when_gotcha]]).
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests.
@@ -73,10 +73,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] ~~(If needed) a `waived` / `not-required` variant in `MsaStatusBadge` / `MSA_COLOR`~~ — **not needed**: rendered an inline neutral `Badge` instead of widening the `Msa['status']` domain type with a display-only value
 
 #### Phase 5: Accept-gate waiver (`acceptQuote` + client mirror)
-- [ ] `acceptQuote`: also select the quote's `campaignId`; when its campaign is `msa_waived`, **skip** the active-MSA requirement (`quotes/actions.ts:1287-1310`)
-- [ ] Handle a null-`campaignId` quote (no event → no waiver → normal gate; matches the existing "skips cleanly when the quote has no campaign link")
-- [ ] Client mirror: `quotes/[id]/page.tsx` computes the event's waived state; `quote-status-actions.tsx` treats waived as satisfied (`hasActiveMsa || msaWaived`) so "Mark accepted" is enabled with the right copy
-- [ ] Test: a waived event's `sent` quote accepts with no active MSA; a non-waived event's is still blocked with the existing error
+- [x] `acceptQuote`: also select the quote's `campaignId`; when its campaign is `msa_waived`, **skip** the active-MSA requirement (`quotes/actions.ts`) — looks up `campaigns.msaWaived` for the linked campaign; `!msaWaived` → the existing active-MSA gate runs unchanged
+- [x] Handle a null-`campaignId` quote (no event → no waiver → normal gate) — `campaignId == null` short-circuits `msaWaived=false`, so the gate runs; the client loader uses an `innerJoin` so a null link yields `false` too
+- [x] Client mirror: `quotes/[id]/page.tsx` computes the event's waived state (`loadQuoteEventMsaWaived`); `quote-status-actions.tsx` treats waived as satisfied (`msaSatisfied = hasActiveMsa || msaWaived`) — Accept enabled + the "sign the MSA first" copy suppressed when waived
+- [x] Test: a waived event's `sent` quote accepts with no active MSA; a non-waived event's is still blocked with the existing error — **folded into the Phase 6 integration suite** (real-DB service test per the plan's "integration tests come last" note; the gate lives in a `capabilityClient` action)
 
 #### Phase 6: Tests + smoke verification
 - [ ] Service-level integration test for the accept-gate waiver against a real DB (waived → accepts; non-waived → blocked)
