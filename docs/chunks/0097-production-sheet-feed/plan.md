@@ -10,7 +10,7 @@
 | 1: Pure feed model (select + redacted row mapper) + unit tests | Done | `527c293` |
 | 2: Public token-gated feed route (`/api/production-feed`) | Done | `331e480` |
 | 3: Secret + deploy wiring + P0 owner-setup doc | Done | `38ca8e4` |
-| 4: Admin discoverability panel (optional — IMPORTDATA formula) | Pending | - |
+| 4: Admin discoverability panel (optional — IMPORTDATA formula) | Done | `b9e0f71` |
 | 5: Verification (route test + public-feed smoke) | Pending | - |
 
 Serve the Production List as a **public, token-gated, read-only CSV feed** of
@@ -37,7 +37,7 @@ API, no DWD scope, no migration.**
 - `docs/wiki/data-model.md` — `Campaign` fields (`src/features/schedule/queries.ts:90-117`); ops/PII fields to withhold: `qtyRecords`(kept here), `notes`, `phone`, `email`, `audienceSourceLabel`.
 - `docs/wiki/go-live-accounts.md` — deploy secret-mount runbook; add a `production-feed-token` row.
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 ### Phase Checklist
 
@@ -58,8 +58,9 @@ API, no DWD scope, no migration.**
 - [~] `.env.local` dev value — left to the user (gitignored secret file; the Phase-5 local smoke passes `PRODUCTION_FEED_TOKEN` inline to `pnpm dev` instead). Documented in §4b.
 - [ ] **P0 OWNER steps (non-code — the classifier correctly blocked me from writing a prod secret):** (1) create `production-feed-token` (prod project) + grant the runtime SA accessor (commands in `cloudbuild.deploy.yaml` comment + wiki §4b); (2) append the one `--set-secrets` line + deploy; (3) create the Google Sheet with `=IMPORTDATA(<url>)` and share it with the implementers. **Until (1)+(2), the prod feed route returns 500 "not configured" (fail-closed).**
 
-#### Phase 4: Admin discoverability panel (optional)
-- [ ] Gated admin-only helper (on `/production` or `/admin`) that renders the ready-to-paste `=IMPORTDATA("<SITE_URL>/api/production-feed?token=<token>")` formula + a one-line "share this Sheet with vendors" note. Reads token from server env (admin-trusted surface). Cut this phase if we prefer to keep the token out of the browser entirely.
+#### Phase 4: Admin discoverability panel (kept — owner asked to keep it)
+- [x] `production-feed-share.tsx` (client): a collapsed `<details>` "Share with implementers (Google Sheet)" on `/production` that shows the ready-to-paste `=IMPORTDATA("<origin>/api/production-feed?token=<token>")` formula + a Copy button + a one-line instruction; shows a "not configured" note when the token is unset. Collapsed by default so the token isn't shown until expanded.
+- [x] `page.tsx` (server, admin-gated): computes the formula from `PRODUCTION_FEED_TOKEN` + `SITE_URL` (origin falls back to localhost in dev) and passes it to the panel. Token only reaches this `admin:access`-gated page.
 
 #### Phase 5: Verification (route test + public-feed smoke)
 - [ ] Unit + route tests green (Phases 1–2).
