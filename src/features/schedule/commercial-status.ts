@@ -19,16 +19,37 @@ export type CommercialStatus = {
   quoteStatus: DisplayStatusKey | null;
   /** The client's MSA standing (active preferred, else pending); null = none. */
   msaStatus: MsaStatus | null;
-  /** Booked but not yet protected — NOT (accepted quote AND active MSA). */
+  /** 0100: this event opts out of the MSA (`campaigns.msa_waived`). When true the
+   *  MSA dimension can't leave the event exposed and the surfaces read
+   *  "MSA — Not required" instead of the amber nag. Per-event; the quote
+   *  dimension is untouched. */
+  msaWaived: boolean;
+  /** Booked but not yet protected — NOT (accepted quote AND (active MSA OR waived)). */
   exposed: boolean;
 };
 
-/** The exposure predicate, pure so callers + tests reason about it DB-free. */
+/** The exposure predicate, pure so callers + tests reason about it DB-free.
+ *  A waived event (0100) satisfies the MSA dimension without an active MSA; the
+ *  quote dimension is unchanged (an unaccepted quote still exposes). */
 export function isExposed(
   quoteStatus: DisplayStatusKey | null,
   msaStatus: MsaStatus | null,
+  msaWaived = false,
 ): boolean {
-  return !(quoteStatus === 'accepted' && msaStatus === 'active');
+  return !(quoteStatus === 'accepted' && (msaStatus === 'active' || msaWaived));
+}
+
+/** What the calendar / event-detail should show for the MSA dimension of an
+ *  event. A waived event (0100) reads as `'waived'` ("MSA — Not required")
+ *  regardless of the dealer's actual MSA standing; otherwise it's the dealer's
+ *  effective MSA status (active / pending / expired / none). The display layer
+ *  (0100 Phase 4) keys the neutral "Not required" pill off `'waived'`. */
+export type MsaDisplayState = MsaStatus | 'waived' | null;
+export function msaDisplayState(status: {
+  msaStatus: MsaStatus | null;
+  msaWaived: boolean;
+}): MsaDisplayState {
+  return status.msaWaived ? 'waived' : status.msaStatus;
 }
 
 /** The MSA standing the calendar should show for a dealer — mirrors the accept
@@ -79,7 +100,7 @@ export function quoteDisplayStatus(q: {
  * dealer's active-or-pending standing.
  */
 export async function loadCommercialStatusByCampaign(
-  campaigns: { id: number; dealerId: number }[],
+  campaigns: { id: number; dealerId: number; msaWaived: boolean }[],
 ): Promise<Map<number, CommercialStatus>> {
   const out = new Map<number, CommercialStatus>();
   if (campaigns.length === 0) return out;
@@ -138,7 +159,12 @@ export async function loadCommercialStatusByCampaign(
     const q = latestByCampaign.get(c.id);
     const quoteStatus = q ? quoteDisplayStatus(q) : null;
     const msaStatus = msaByDealer.get(c.dealerId) ?? null;
-    out.set(c.id, { quoteStatus, msaStatus, exposed: isExposed(quoteStatus, msaStatus) });
+    out.set(c.id, {
+      quoteStatus,
+      msaStatus,
+      msaWaived: c.msaWaived,
+      exposed: isExposed(quoteStatus, msaStatus, c.msaWaived),
+    });
   }
   return out;
 }
