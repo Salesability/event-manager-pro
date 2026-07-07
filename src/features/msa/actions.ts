@@ -199,6 +199,16 @@ export const sendMsaEnvelope = capabilityClient('admin:access')
     if ('error' in recipientResult) return recipientResult;
     const recipient = recipientResult.recipient;
 
+    // Full legal name (first + last) — a first name alone is not legally
+    // binding (0099, legal review). Feeds both the printed signature block and
+    // the BoldSign `signer.name`, so BoldSign's adopted-signature default is the
+    // full name. Falls back to the first name if the last name is blank.
+    const signerFullName =
+      [recipient.firstName, recipient.lastName]
+        .map((s) => s?.trim())
+        .filter(Boolean)
+        .join(' ') || recipient.firstName;
+
     // Render the MSA PDF.
     const issuedDate = todayIsoDate();
     const msaData: MsaPdfData = {
@@ -206,7 +216,7 @@ export const sendMsaEnvelope = capabilityClient('admin:access')
       issuedDate,
       clientName: dealer.name,
       clientAddress: splitClientAddress(dealer.address),
-      signerName: recipient.firstName,
+      signerName: signerFullName,
       signerEmail: recipient.email,
       termStart: issuedDate,
       termEnd: plus12Months(issuedDate),
@@ -242,7 +252,7 @@ export const sendMsaEnvelope = capabilityClient('admin:access')
       message:
         customMessage ||
         `Please review and sign your Salesability Master Service Agreement (#${msaId}). Sign at the end.`,
-      signer: { emailAddress: recipient.email, name: recipient.firstName },
+      signer: { emailAddress: recipient.email, name: signerFullName },
       files: [{ filename: `agreement-${msaId}.pdf`, body: msaPdf.body }],
       signatureAnchor: msaPdf.signatureAnchor,
       metadata: { msaId: String(msaId) },
