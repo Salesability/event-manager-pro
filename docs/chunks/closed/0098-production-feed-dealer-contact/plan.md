@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: `loadDealerPrimaryContacts` loader + Contact columns in the pure model | Done | `2eb8759` |
 | 2: Compose in the feed route | Done | `2eb8759` |
-| 3: Tests (redaction rewrite + positive dealer-contact assertions) + smoke | In Progress (tests done; smoke+deploy pending) | `2eb8759` |
+| 3: Tests (redaction rewrite + positive dealer-contact assertions) + smoke | Done | `2eb8759` / `41f03fb` |
 
 Add `Contact` / `Contact Phone` / `Contact Email` / `Notes` to the production feed CSV — the first three sourced from the dealer's **`is_primary`** contact (chunk 0089, not the campaign booking contact), `Notes` from `campaigns.notes` (owner-requested; previously redacted as "internal-only", now deliberately surfaced). "Done" = the feed returns the four appended columns, the campaign's own contact/phone/email + audience source stay redacted (notes no longer redacted), the header contract stays additive, and tests are green. No new secret, no migration; ships on the next `main` push.
 
@@ -26,7 +26,7 @@ Add `Contact` / `Contact Phone` / `Contact Email` / `Notes` to the production fe
 - `docs/wiki/data-model.md` — `dealer_contacts.is_primary` (0089) is the dealer's designated primary contact; `contact_identifiers` holds the primary email/phone.
 - 0097 redaction discipline (`production-feed.ts` header comment) — the pure model never touches `notes`/booking-contact/audience source; the *dealer* primary contact is a new, deliberate exception.
 
-**Overall Progress:** 67% (2/3 phases complete; Phase 3 tests done, smoke+deploy pending)
+**Overall Progress:** 100% (3/3 phases complete)
 
 ### Phase Checklist
 
@@ -43,5 +43,5 @@ Add `Contact` / `Contact Phone` / `Contact Email` / `Notes` to the production fe
 #### Phase 3: Tests + smoke verification
 - [x] `production-feed.test.ts`: rewrite the redaction test — the campaign's own `SENTINEL_CONTACT/PHONE/EMAIL` + audience source still **never** appear; dealer-primary-contact fixture asserts name/phone/email **do** appear; `SENTINEL_NOTES` **does** appear in the `Notes` cell.
 - [x] `route.test.ts`: mock `loadDealerPrimaryContacts` alongside `loadCampaigns`; 200-CSV has the 4 new headers + a row's dealer contact + notes, no booking-contact/audience-source leak. (route.test.ts 4/4.)
-- [ ] Smoke (owner-verify on prod, sandbox DB paused): after deploy, `GET /api/production-feed?token=<valid>` → 200 CSV with `Contact,Contact Phone,Contact Email,Notes` populated for a dealer with a primary contact; widen the shared Sheet's `IMPORTRANGE` to `A:N`.
-- [ ] Deploy: ships on the next `main` push (keyless prod trigger); no new secret.
+- [x] Smoke (live prod, 2026-07-07): `GET /api/production-feed?token=<valid>` → **200**, header carries all 14 cols incl. `Contact,Contact Phone,Contact Email,Notes`; 17 rows, 9 with a populated contact email (real prod data); no-token → 401. Owner still to widen the shared Sheet's `IMPORTRANGE` to `A:N`.
+- [x] Deploy: shipped on the `f50b17f` `main` push → keyless prod build `6e7ba7fa` SUCCESS → rev `event-manager-pro-00047-nkd`. No new secret.
