@@ -4,7 +4,7 @@
 
 ## Problem
 
-On the rendered MSA PDF (`renderMsaPdf`, `src/lib/pdf/render-msa.ts`), the SaleDay Events logo (top-right) doesn't visually align with the **"MASTER SERVICES AGREEMENT"** title (top-left). Both are nominally anchored to the same top `y` — the logo is drawn top-edge at `y` with a fixed `logoH = 50` ([`render-msa.ts:293`](../../../src/lib/pdf/render-msa.ts)), and the 22pt title's cap-top is also computed to sit at `y` ([`render-msa.ts:300`](../../../src/lib/pdf/render-msa.ts)) — but the logo JPG's internal top/bottom padding plus its 50pt height make it read as sitting lower and unbalanced next to the much shorter title. Shannon flagged it on a real signed MSA (screenshot 2026-07-07). The same header layout is duplicated in the quote PDF (`render-quote.ts:183`).
+On the rendered MSA PDF (`renderMsaPdf`, `src/lib/pdf/render-msa.ts`), the SaleDay Events logo (top-right) doesn't visually align with the **"MASTER SERVICES AGREEMENT"** title (top-left). Both are nominally anchored to the same top `y` — the logo is drawn top-edge at `y` with a fixed `logoH = 50` ([`render-msa.ts:293`](../../../../src/lib/pdf/render-msa.ts)), and the 22pt title's cap-top is also computed to sit at `y` ([`render-msa.ts:300`](../../../../src/lib/pdf/render-msa.ts)) — but the logo JPG's internal top/bottom padding plus its 50pt height make it read as sitting lower and unbalanced next to the much shorter title. Shannon flagged it on a real signed MSA (screenshot 2026-07-07). The same header layout is duplicated in the quote PDF (`render-quote.ts:183`).
 
 ## Desired outcome
 

@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Align the logo to the title in the MSA header | Done | `efae4e5` |
-| 2: Consistency + tests + visual verify | Done | _(next commit)_ |
+| 2: Consistency + tests + visual verify | Done | `7709c56` |
 
 Nudge the MSA PDF header so the SaleDay Events logo reads as balanced against the "MASTER SERVICES AGREEMENT" title instead of hanging below it — a pure-layout change in `render-msa.ts`, verified by eyeballing a rendered sample. "Done" = the logo aligns with the title in `scratchpad/msa-0101-sample.pdf`, the address block below the logo is untouched, and page-1 body doesn't shift.
 
