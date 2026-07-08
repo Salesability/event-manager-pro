@@ -17,6 +17,10 @@ const MS_PER_DAY = 86_400_000;
 export type CommercialStatus = {
   /** Display status of the event's latest linked quote; null = no quote yet. */
   quoteStatus: DisplayStatusKey | null;
+  /** Id of that same latest linked quote, so the event surface can link to it
+   *  ("Edit Quote" / "View Quote") instead of only offering "Create Quote";
+   *  null = no quote yet. Derived from the same row as `quoteStatus`. */
+  quoteId: number | null;
   /** The client's MSA standing (active preferred, else pending); null = none. */
   msaStatus: MsaStatus | null;
   /** 0100: this event opts out of the MSA (`campaigns.msa_waived`). When true the
@@ -161,6 +165,7 @@ export async function loadCommercialStatusByCampaign(
     const msaStatus = msaByDealer.get(c.dealerId) ?? null;
     out.set(c.id, {
       quoteStatus,
+      quoteId: q?.id ?? null,
       msaStatus,
       msaWaived: c.msaWaived,
       exposed: isExposed(quoteStatus, msaStatus, c.msaWaived),

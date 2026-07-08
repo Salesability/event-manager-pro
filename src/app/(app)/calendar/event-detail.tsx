@@ -219,13 +219,22 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
         <span className="flex-1" />
         {campaign.status !== 'cancelled' && (
           <Can capability="quote:edit">
-            <Button
-              outline
-              compact
-              href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
-            >
-              Create Quote
-            </Button>
+            {commercial?.quoteId ? (
+              // A quote already exists for this event — link to it instead of
+              // offering to start a second one. A draft is still editable
+              // ("Edit Quote"); once sent/accepted it reads "View Quote".
+              <Button outline compact href={`/quotes/${commercial.quoteId}`}>
+                {commercial.quoteStatus === 'draft' ? 'Edit Quote' : 'View Quote'}
+              </Button>
+            ) : (
+              <Button
+                outline
+                compact
+                href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
+              >
+                Create Quote
+              </Button>
+            )}
           </Can>
         )}
         {campaign.status !== 'cancelled' &&
@@ -241,9 +250,15 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
             </Button>
           </Can>
         )}
-        {campaign.status !== 'cancelled' && (
+        {campaign.status !== 'cancelled' &&
+          (commercial?.msaStatus !== 'active' || campaign.msaWaived) && (
           // 0100: per-event MSA opt-out toggle. Reversible; admin-gated like the
-          // other campaign-edit controls (booking is back-office).
+          // other campaign-edit controls (booking is back-office). Hidden when an
+          // MSA is already active AND the event isn't waived — waiving is a no-op
+          // there (the active MSA already satisfies exposure + the accept gate),
+          // so offering "MSA not required" would just be noise (mirrors the
+          // "Send MSA" button, which is likewise hidden on an active MSA). Still
+          // shown as "Require MSA" on an already-waived event so it can be undone.
           <Can capability="campaign:edit">
             <Button
               outline
