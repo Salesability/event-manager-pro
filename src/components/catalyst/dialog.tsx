@@ -1,5 +1,6 @@
 import * as Headless from '@headlessui/react'
 import clsx from 'clsx'
+import { X } from 'lucide-react'
 import type React from 'react'
 import { Text } from './text'
 
@@ -19,13 +20,14 @@ export function Dialog({
   size = 'lg',
   className,
   children,
+  onClose,
   ...props
 }: { size?: keyof typeof sizes; className?: string; children: React.ReactNode } & Omit<
   Headless.DialogProps,
   'as' | 'className'
 >) {
   return (
-    <Headless.Dialog {...props}>
+    <Headless.Dialog onClose={onClose} {...props}>
       <Headless.DialogBackdrop
         transition
         className="fixed inset-0 z-40 flex w-screen justify-center overflow-y-auto bg-zinc-950/25 px-2 py-2 transition duration-100 focus:outline-0 data-closed:opacity-0 data-enter:ease-out data-leave:ease-in sm:px-6 sm:py-8 lg:px-8 lg:py-16 dark:bg-zinc-950/50"
@@ -38,10 +40,22 @@ export function Dialog({
             className={clsx(
               className,
               sizes[size],
-              'row-start-2 w-full min-w-0 rounded-t-3xl bg-white p-(--gutter) shadow-lg ring-1 ring-zinc-950/10 [--gutter:--spacing(8)] sm:mb-auto sm:rounded-2xl dark:bg-zinc-900 dark:ring-white/10 forced-colors:outline',
+              'relative row-start-2 w-full min-w-0 rounded-t-3xl bg-white p-(--gutter) shadow-lg ring-1 ring-zinc-950/10 [--gutter:--spacing(8)] sm:mb-auto sm:rounded-2xl dark:bg-zinc-900 dark:ring-white/10 forced-colors:outline',
               'transition duration-100 will-change-transform data-closed:translate-y-12 data-closed:opacity-0 data-enter:ease-out data-leave:ease-in sm:data-closed:translate-y-0 sm:data-closed:data-enter:scale-95'
             )}
           >
+            {/* Discoverable close affordance — every dialog gets a top-right ✕.
+                Escape + backdrop-click already fire onClose (Headless UI); the
+                button just makes closing visible, since the dialogs render no
+                close control of their own. */}
+            <button
+              type="button"
+              onClick={() => onClose(false)}
+              aria-label="Close"
+              className="absolute right-4 top-4 z-10 rounded-lg p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+            >
+              <X className="size-5" aria-hidden />
+            </button>
             {children}
           </Headless.DialogPanel>
         </div>
