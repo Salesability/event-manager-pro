@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { campaigns, dealers, masterServiceAgreements, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
+import { campaigns, dealers, quoteAttachments, quoteLineItems, quotes, serviceItems } from '@/lib/db/schema';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { dealerTaxRatePct } from '@/features/tax-rates/queries';
 import { recordAudit } from '@/features/audit/actions';
@@ -36,6 +36,7 @@ import { sendEmail, type SendAttachment } from '@/lib/email/send';
 import { quoteEmail } from '@/lib/email/templates/quote';
 import { markQuoteAccepted, markQuoteDeclined } from './lifecycle';
 import { applyAcceptedQuoteToCampaign } from './campaign-delivery';
+import { isAcceptMsaSatisfied } from './accept-gate';
 import { MAX_ADDRESS_LINES } from './constants';
 import { resolveQuoteRecipient } from './recipient';
 import { quoteDownloadFilename } from './display-name';
@@ -1280,29 +1281,19 @@ export const acceptQuote = capabilityClient('quote:edit')
     // and `markQuoteAccepted` returns the precise status error. A future public
     // accept route must apply the same check.
     const [row] = await db
-      .select({ dealerId: quotes.dealerId, status: quotes.status })
+      .select({ dealerId: quotes.dealerId, status: quotes.status, campaignId: quotes.campaignId })
       .from(quotes)
       .where(eq(quotes.id, quoteId))
       .limit(1);
     if (!row) return { error: 'Quote not found.' };
     if (row.status === 'sent') {
-      // Require a LIVE active MSA: `status='active'` AND not past its 12-month
-      // term. The daily expiry sweep that flips `active → expired` isn't built
-      // yet, so an expired MSA can still read `active` — the `expires_at >= now()`
-      // predicate (Postgres-time, like the quote expiry guard) closes that hole.
-      // A null `expires_at` (malformed active row) fails the comparison → blocked.
-      const [activeMsa] = await db
-        .select({ id: masterServiceAgreements.id })
-        .from(masterServiceAgreements)
-        .where(
-          and(
-            eq(masterServiceAgreements.dealerId, row.dealerId),
-            eq(masterServiceAgreements.status, 'active'),
-            sql`${masterServiceAgreements.expiresAt} >= now()`,
-          ),
-        )
-        .limit(1);
-      if (!activeMsa) {
+      // 0082 D3 + 0100: require a live active MSA — unless the quote's event opts
+      // out (`campaigns.msa_waived`), in which case the requirement is skipped.
+      // A quote with no campaign link has no waiver to inherit → normal gate.
+      // The check lives in `accept-gate.ts` (executor-injectable, integration-
+      // tested on real Postgres) so this action stays a thin orchestrator.
+      const msaSatisfied = await isAcceptMsaSatisfied(row.dealerId, row.campaignId);
+      if (!msaSatisfied) {
         return {
           error:
             'Sign or renew the master agreement first — a quote can only be accepted while the dealer has a current (unexpired) active MSA.',

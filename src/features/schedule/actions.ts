@@ -1008,6 +1008,40 @@ export const resyncCampaign = capabilityClient('campaign:edit')
     return { ok: true };
   });
 
+// 0100: per-event MSA opt-out. Flips `campaigns.msa_waived` so the event reads
+// as "MSA — Not required" (no exposed flag / "Send MSA" CTA from the MSA side)
+// and its quote can be accepted with no active MSA. Reversible — un-waiving
+// restores the normal "No active MSA" nag + re-arms the accept gate. Gated on
+// `campaign:edit` (admin-only in this app — booking is back-office, matching the
+// adjacent Edit / Re-sync / Send-MSA controls); the MSA stays a per-client
+// 12-month master agreement — this only opts one event out. Guarded UPDATE on
+// the campaign id so a bad/foreign id is a no-op error, not a crash. No calendar
+// re-projection (date/coach/dealer unchanged), and — like the sibling
+// `updateCampaign`/`resyncCampaign` edits — no audit-log row (`updated_by_id`
+// captures the actor; auditing would need a new audit-enum value + migration).
+// validation: skip — id + boolean flag only; `parseId` covers the id and the
+// flag is a strict 'true' check.
+export const setMsaWaived = capabilityClient('campaign:edit')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const userId = ctx.user.id;
+
+    const id = parseId(formData);
+    if (id == null) return { error: 'Invalid campaign id.' };
+
+    const waived = formData.get('waived') === 'true';
+
+    const result = await db
+      .update(campaigns)
+      .set({ msaWaived: waived, updatedById: userId })
+      .where(eq(campaigns.id, id))
+      .returning({ id: campaigns.id });
+    if (!result.length) return { error: 'Campaign not found.' };
+
+    revalidateCampaignViews();
+    return { ok: true };
+  });
+
 // ---------- Lookups (5.3) ----------
 
 function parseLookupLabel(formData: FormData): string | ActionResult {

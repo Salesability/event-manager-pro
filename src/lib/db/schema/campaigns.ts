@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   date,
   index,
@@ -66,6 +67,12 @@ export const campaigns = pgTable(
       () => quotes.id,
       { onDelete: 'restrict' }
     ),
+    // 0100: per-event MSA opt-out. When true the event reads as "MSA — Not
+    // required" (no exposed flag from the MSA side, no "Send MSA" CTA) and its
+    // quote accepts with no active MSA. Per-event only — the MSA stays a
+    // per-client 12-month master agreement. Defaults false so existing events
+    // keep today's behaviour; reversible.
+    msaWaived: boolean('msa_waived').notNull().default(false),
     status: campaignStatus('status').notNull().default('draft'),
     // Google Calendar projection (0077). `gcalEventId` is the durable link to
     // the projected event (nullable: unset until the first successful push, like

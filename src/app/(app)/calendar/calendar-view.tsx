@@ -7,8 +7,12 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
 } from 'react';
 import { Can } from '@/components/auth/can';
+import { toast } from '@/components/ui/toaster';
+import { toLegacyResult } from '@/lib/actions/legacy-result';
+import { setMsaWaived } from '@/features/schedule/actions';
 import { PageHeader } from '@/components/app/page-header';
 import {
   Dialog,
@@ -107,6 +111,27 @@ export function CalendarView({
 }: Props) {
   const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
   const closeDialog = useCallback(() => setDialog({ kind: 'closed' }), []);
+
+  // 0100: from the post-booking prompt, mark the just-booked event as not needing
+  // an MSA (the coach's "this event is fine without one" call). Waives + closes.
+  const [waiving, startWaive] = useTransition();
+  const waiveMsaFromPrompt = useCallback(
+    (campaignId: number) => {
+      startWaive(async () => {
+        const fd = new FormData();
+        fd.set('id', String(campaignId));
+        fd.set('waived', 'true');
+        const result = toLegacyResult(await setMsaWaived(fd));
+        if ('ok' in result) {
+          toast.success('MSA marked not required for this event');
+          closeDialog();
+        } else {
+          toast.error(result.error);
+        }
+      });
+    },
+    [closeDialog],
+  );
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -671,6 +696,19 @@ export function CalendarView({
                 <Can capability="admin:access">
                   <Button outline href={`/dealerships/${dialog.dealerId}`}>
                     Send MSA for signature
+                  </Button>
+                </Can>
+                {/* 0100: opt this event out of the MSA — for an existing
+                    long-term client or a one-off where an MSA isn't wanted.
+                    Gated on `campaign:edit` (the capability setMsaWaived needs).
+                    Captured in a const so the closure sees a narrowed id. */}
+                <Can capability="campaign:edit">
+                  <Button
+                    plain
+                    disabled={waiving}
+                    onClick={() => waiveMsaFromPrompt(dialog.campaignId)}
+                  >
+                    MSA not needed for this event
                   </Button>
                 </Can>
                 <button

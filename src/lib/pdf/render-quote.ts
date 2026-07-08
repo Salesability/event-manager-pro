@@ -177,30 +177,44 @@ export async function renderQuotePdf(
     const grey = rgb(0.4, 0.4, 0.4);
     const yTop = 792 - margin;
 
-    // --- Header band. Logo + QUOTE title both have their VISUAL TOPS aligned
-    // to the top margin (yTop). pdf-lib draws text by baseline, so we offset
-    // the title baseline down by its cap-height. Logo (image) is positioned
-    // by its bottom-left corner so we set y = yTop - logoH.
-    // The "Issued" + sender stack is the RIGHT column under the logo; the
-    // quote display name is the LEFT column under the title. Columns are
+    // --- Header band. The QUOTE title's cap-top is aligned to the top margin
+    // (yTop); the logo is vertically CENTERED on the title's cap band so the
+    // two read as one balanced masthead row. pdf-lib draws text by baseline, so
+    // we offset the title baseline down by its cap-height, and the logo (image,
+    // positioned by its bottom-left corner) by its half-height below the title
+    // mid-line. The "Issued" + sender stack is the RIGHT column under the logo;
+    // the quote display name is the LEFT column under the title. Columns are
     // independent until the Bill To row, where they merge.
     const logoBytes = await readFile(
       path.join(process.cwd(), 'public', 'saledayevents-logo.jpg'),
     );
     const logo = await doc.embedJpg(logoBytes);
+
+    // Title metrics first — the logo centers on the title's cap band (chunk
+    // 0101; mirrors render-msa.ts, kept in lock-step so the bundled MSA+Quote
+    // envelope has a consistent masthead).
+    const titleSize = 24;
+    const titleAscent = bold.heightAtSize(titleSize, { descender: false });
+    const titleBaseline = yTop - titleAscent;
+    const titleMidY = titleBaseline + titleAscent / 2; // optical center of the caps
+
+    // Logo, top-right, centered on the title's cap band — not top-anchored to
+    // yTop, which left it hanging ~17pt below the title's optical center. It
+    // now extends a little into the top-margin whitespace above and an equal
+    // amount below. The right column + body stay anchored to the ORIGINAL band
+    // bottom (`logoBandBottom = yTop - logoH`) so nothing below the masthead
+    // moves — the Bill To merge point is unchanged.
     const logoH = 50;
     const logoW = (logo.width / logo.height) * logoH;
+    const logoBandBottom = yTop - logoH;
     page.drawImage(logo, {
       x: rightEdge - logoW,
-      y: yTop - logoH,
+      y: titleMidY - logoH / 2,
       width: logoW,
       height: logoH,
     });
 
     // Left column. Baseline lowered so QUOTE's cap top sits at yTop.
-    const titleSize = 24;
-    const titleAscent = bold.heightAtSize(titleSize, { descender: false });
-    const titleBaseline = yTop - titleAscent;
     page.drawText('QUOTE', {
       x: margin,
       y: titleBaseline,
@@ -217,8 +231,9 @@ export async function renderQuotePdf(
       color: grey,
     });
 
-    // Right column — starts below the logo's bottom edge.
-    let yRight = yTop - logoH - 14;
+    // Right column — starts below the original header-band bottom (the logo's
+    // pre-0101 bottom edge), kept fixed so the merge point + body don't move.
+    let yRight = logoBandBottom - 14;
     drawRight(
       { page, font, size: 11, color: grey },
       `Issued: ${quote.issuedDate}`,

@@ -110,6 +110,10 @@ export type Campaign = {
   phone: string | null;
   email: string | null;
   notes: string | null;
+  // 0100: per-event MSA opt-out. When true the event reads as "MSA — Not
+  // required" (no exposed flag / CTA from the MSA side) and its quote accepts
+  // with no active MSA. Defaults false; reversible.
+  msaWaived: boolean;
   // Google Calendar projection state (0077). `gcalSyncStatus` drives the
   // event-detail "Calendar" badge + the manual re-sync affordance.
   gcalSyncStatus: 'pending' | 'synced' | 'failed';
@@ -629,6 +633,7 @@ export async function loadCampaigns(): Promise<Campaign[]> {
       phone: campaigns.phone,
       email: campaigns.email,
       notes: campaigns.notes,
+      msaWaived: campaigns.msaWaived,
       gcalSyncStatus: campaigns.gcalSyncStatus,
       gcalEventId: campaigns.gcalEventId,
     })
@@ -665,6 +670,7 @@ export async function loadCampaigns(): Promise<Campaign[]> {
     phone: r.phone,
     email: r.email,
     notes: r.notes,
+    msaWaived: r.msaWaived,
     gcalSyncStatus: r.gcalSyncStatus,
     gcalEventId: r.gcalEventId,
   }));
@@ -696,6 +702,7 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
       phone: campaigns.phone,
       email: campaigns.email,
       notes: campaigns.notes,
+      msaWaived: campaigns.msaWaived,
       gcalSyncStatus: campaigns.gcalSyncStatus,
       gcalEventId: campaigns.gcalEventId,
     })
@@ -733,6 +740,7 @@ export async function loadCampaign(id: number): Promise<Campaign | null> {
     phone: row.phone,
     email: row.email,
     notes: row.notes,
+    msaWaived: row.msaWaived,
     gcalSyncStatus: row.gcalSyncStatus,
     gcalEventId: row.gcalEventId,
   };

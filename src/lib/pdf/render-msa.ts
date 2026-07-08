@@ -288,18 +288,32 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
     }
     const senderSig = await doc.embedPng(senderSigBytes);
 
+    // Title metrics first — the logo is vertically centered on the title's cap
+    // band so the two read as one balanced masthead row (chunk 0101).
+    const titleSize = 22;
+    const titleAscent = bold.heightAtSize(titleSize, { descender: false });
+    const titleBaseline = y - titleAscent;
+    const titleMidY = titleBaseline + titleAscent / 2; // optical center of the caps
+
+    // Logo, top-right. Its box is taller than the title, so top-anchoring it to
+    // `y` (as the title is) left its optical center hanging ~17pt below the
+    // title's — the owner flagged it on a real signed MSA (chunk 0101). Center
+    // the logo box on the title's cap band instead: it now extends a little
+    // into the top-margin whitespace above and an equal amount below, reading
+    // as balanced against the title. The right-column address block + the body
+    // start stay anchored to the ORIGINAL band bottom (`y - logoH`) so nothing
+    // below the masthead shifts — pagination and the signature anchor are
+    // unaffected by this purely-visual raise.
     const logoH = 50;
     const logoW = (logo.width / logo.height) * logoH;
+    const logoBandBottom = y - logoH;
     page.drawImage(logo, {
       x: rightEdge - logoW,
-      y: y - logoH,
+      y: titleMidY - logoH / 2,
       width: logoW,
       height: logoH,
     });
 
-    const titleSize = 22;
-    const titleAscent = bold.heightAtSize(titleSize, { descender: false });
-    const titleBaseline = y - titleAscent;
     page.drawText('MASTER SERVICES AGREEMENT', {
       x: margin,
       y: titleBaseline,
@@ -324,7 +338,7 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
       color: grey,
     });
 
-    let yRight = y - logoH - 14;
+    let yRight = logoBandBottom - 14;
     drawRight({ page, font: bold, size: 9, color: grey }, SENDER.name, rightEdge, yRight);
     yRight -= 11;
     for (const line of SENDER.address) {
