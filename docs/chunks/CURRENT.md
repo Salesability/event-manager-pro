@@ -8,7 +8,7 @@
 
 Move from main-trunk (commit to `main`, backport to `dev` for stage) to the conventional **dev-trunk / promote-to-prod** flow: feature branch → **PR into `dev`** (merge → stage build) → verify → **PR `dev`→`main`** (merge → prod build). The two Cloud Build triggers already map correctly (`dev`→stage, `main`→prod) and a PR-merge *is* a push — so this is **guardrails + process, not a trigger rebuild**: branch protection on `main` (+ `dev`), a required PR-time test gate (blocks a red *merge*, not just the deploy), a promotion runbook with the **prod-migration gate** (CI never runs migrations — the sharpest risk) + a hotfix path, and a one-time reconcile of `origin/main` (+28) / `origin/dev` to a known baseline. **No app code / migration / secret.** 5 phases; heavily **owner-driven** (GitHub branch protection + GCP trigger settings live in consoles). Non-goal: changing the trigger→branch mapping itself.
 
-**Deployed:** prod = `event-manager-pro-00048-wdp` (2026-07-08 — through 0099 / 0100 / 0101 + calendar UI fixes; migration `0048` applied to the prod DB + trigger `_MSA_TEMPLATE_VERSION=2026-07-07`). stage = latest `dev` push.
+**Deployed:** prod = `event-manager-pro-00049-dbj` (2026-07-08 — 0099 / 0100 / 0101 + calendar UI fixes incl. Re-sync button removal; migration `0048` applied to the prod DB + trigger `_MSA_TEMPLATE_VERSION=2026-07-07`). stage = latest `dev` push.
 
 ---
 
