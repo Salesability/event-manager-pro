@@ -219,13 +219,22 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
         <span className="flex-1" />
         {campaign.status !== 'cancelled' && (
           <Can capability="quote:edit">
-            <Button
-              outline
-              compact
-              href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
-            >
-              Create Quote
-            </Button>
+            {commercial?.quoteId ? (
+              // A quote already exists for this event — link to it instead of
+              // offering to start a second one. A draft is still editable
+              // ("Edit Quote"); once sent/accepted it reads "View Quote".
+              <Button outline compact href={`/quotes/${commercial.quoteId}`}>
+                {commercial.quoteStatus === 'draft' ? 'Edit Quote' : 'View Quote'}
+              </Button>
+            ) : (
+              <Button
+                outline
+                compact
+                href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
+              >
+                Create Quote
+              </Button>
+            )}
           </Can>
         )}
         {campaign.status !== 'cancelled' &&
