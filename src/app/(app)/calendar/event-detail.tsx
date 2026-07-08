@@ -345,10 +345,21 @@ function formatDate(iso: string) {
 // the MSA — when exposed it's only the missing quote; when protected it says the
 // MSA isn't required for this event (there's no active MSA to credit).
 function commercialBannerText(commercial: CommercialStatus): string {
+  // The cancellation fee (MSA §2.iii) needs BOTH an accepted quote AND an active
+  // (or waived) MSA. When exposed, name exactly which dimension is still open so
+  // the required action is unambiguous — don't say "quote and/or MSA" when only
+  // one is actually missing (mirrors the `isExposed` predicate).
+  const quoteOk = commercial.quoteStatus === 'accepted';
+  const msaOk = commercial.msaStatus === 'active' || commercial.msaWaived;
+
   if (commercial.exposed) {
-    return commercial.msaWaived
-      ? 'Commercially exposed — no accepted quote yet, so the cancellation fee (MSA §2.iii) is not yet in force. Lock in the quote below. (MSA not required for this event.)'
-      : 'Commercially exposed — no accepted quote and/or active MSA, so the cancellation fee (MSA §2.iii) is not yet in force. Lock it in below.';
+    const gap = !quoteOk && !msaOk
+      ? 'no accepted quote and no active MSA yet'
+      : !quoteOk
+        ? 'no accepted quote yet'
+        : 'no active MSA yet'; // quote accepted, MSA missing
+    const waivedNote = commercial.msaWaived ? ' (MSA not required for this event.)' : '';
+    return `Commercially exposed — ${gap}, so the cancellation fee (MSA §2.iii) is not yet in force. Lock it in below.${waivedNote}`;
   }
   return commercial.msaWaived
     ? 'Protected — accepted quote. MSA not required for this event.'
