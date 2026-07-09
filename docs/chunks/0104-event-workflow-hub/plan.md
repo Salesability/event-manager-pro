@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: URL-addressable event detail (`?event=<id>`) | Done | `20bae53` |
-| 2: Quote step round-trips to the event | Pending | - |
+| 2: Quote step round-trips to the event | Done | `d14d333` |
 | 3: MSA step round-trips to the event | Pending | - |
 | 4: Next-step emphasis + tests + browser verify | Pending | - |
 
@@ -23,6 +23,7 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 | `searchParams` → read `?event=` in the page | [`src/app/(app)/calendar/page.tsx:15`](../../../src/app/(app)/calendar/page.tsx) (`CalendarPage`, currently no props) | Add the standard App-Router async `searchParams` prop; pass `initialEventId` down to `CalendarView` alongside the existing props (`:43`) |
 | Open-event-on-load + strip-param-on-close | [`calendar-view.tsx:423`](../../../src/app/(app)/calendar/calendar-view.tsx) (`setDialog({kind:'detail', campaign: ev})`) + the existing `useEffect` (`:436`) + `closeDialog` (`:113`) | Mirror the existing detail-open; add a `useEffect` that opens the dialog for `initialEventId` from the loaded `campaigns`, and `router.replace('/calendar')` in `closeDialog` to clear the param |
 | Quote composer post-save return + "← event" link | [`quote-composer.tsx:442`](../../../src/features/quotes/quote-composer.tsx) (`router.push('/quotes/<id>')`) + the dealer-events memo (`:337`) | Redirect campaign-scoped `createQuote` to `/calendar?event=<campaignId>`; render a back-link header from the selected campaign's label (composer already has `useRouter` + `campaigns` + `campaignId`) |
+| `Quote.campaignId` on the read-model (edit-mode back-link) | [`queries.ts:27`](../../../src/features/quotes/queries.ts) (`Quote` type + `projection` + `QuoteRow` + `mapRow`) | Add `campaignId: number \| null` to all four so the edit page can resolve the linked event; edit page loads it via `loadCampaign(quote.campaignId)` and passes `campaigns={[campaign]}` (label-only — no picker in edit-mode) |
 | MSA-send return target (`?returnEvent=<id>`) | [`event-detail.tsx`](../../../src/app/(app)/calendar/event-detail.tsx) "Send MSA" (`href={/dealerships/${dealerId}}`) + the dealer-page MSA send-button/dialog | Thread a `returnEvent` query param through the per-dealer MSA send so it returns to `/calendar?event=<id>` |
 | Next-step emphasis in the event dialog | [`event-detail.tsx`](../../../src/app/(app)/calendar/event-detail.tsx) (the recently-fixed CTAs: Edit/View Quote, Send MSA, waiver, banner) | Highlight the single next action; reuse existing badges/`commercial` status — no new status logic |
 
@@ -31,7 +32,7 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - `quotes.campaignId` (0093) is the event↔quote link; `commercial-status.ts` already computes the per-event quote/MSA status the dialog renders.
 - Event-detail CTAs + banner were refined this session (Edit/View Quote, waiver-toggle-hide, precise banner) — build on them, don't re-litigate.
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - **No DB, no migration, no new secret** — pure navigation/context wiring over existing data.
@@ -47,10 +48,10 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - [ ] Verify: `goto /calendar?event=<real id>` opens that event's detail dialog; closing returns the URL to `/calendar`. _(Covered by the Phase 4 chunk-end browser smoke.)_
 
 #### Phase 2: Quote step round-trips to the event
-- [ ] In `quote-composer.tsx`, change the post-`createQuote` redirect (`:442`) so that when `values.campaignId` is set it does `router.push('/calendar?event=' + campaignId)` instead of `/quotes/<id>`; keep `/quotes/<id>` for a dealer-only (no-campaign) quote.
-- [ ] Add a persistent **"← [event label]"** link at the top of the composer when `campaignId` is set, pointing at `/calendar?event=<campaignId>` (label from the selected campaign in the `campaigns` memo).
-- [ ] Decide edit-mode (`setQuoteInputs`) behavior per intent open question — at minimum show the same "← event" link on `/quotes/[id]` when the quote has a `campaignId`.
-- [ ] Verify: booking → Create Quote → Save Draft lands back on the event dialog with the quote status now shown; the "← event" link works from the composer.
+- [x] In `quote-composer.tsx`, change the post-`createQuote` redirect (`:442`) so that when `values.campaignId` is set it does `router.push('/calendar?event=' + campaignId)` instead of `/quotes/<id>`; keep `/quotes/<id>` for a dealer-only (no-campaign) quote.
+- [x] Add a persistent **"← [event label]"** link at the top of the composer when `campaignId` is set, pointing at `/calendar?event=<campaignId>` (label from the selected campaign in the `campaigns` memo). _(Create-mode tracks the live picker selection; edit-mode uses the row's fixed `campaignId`.)_
+- [x] Decide edit-mode (`setQuoteInputs`) behavior per intent open question — at minimum show the same "← event" link on `/quotes/[id]` when the quote has a `campaignId`. _(Resolved: edit-mode **stays put** on save (`setQuoteInputs` keeps its `reset()`+`router.refresh()`); the "← event" link is added so the coach can choose to return. Threaded `Quote.campaignId` through the read-model + `loadCampaign` in the edit page for the label.)_
+- [ ] Verify: booking → Create Quote → Save Draft lands back on the event dialog with the quote status now shown; the "← event" link works from the composer. _(Covered by the Phase 4 chunk-end browser smoke — navigation/presence only; create-quote is a mutation.)_
 
 #### Phase 3: MSA step round-trips to the event
 - [ ] Add a `returnEvent` query param path: event-detail "Send MSA" links to `/dealerships/${dealerId}?returnEvent=${campaignId}`; the dealer-page MSA send-dialog, on success, routes back to `/calendar?event=<returnEvent>` when the param is present (else its current behaviour).
