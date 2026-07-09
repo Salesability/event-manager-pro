@@ -7,7 +7,7 @@ import { Button } from '@/components/catalyst/button';
 import { MsaStatusBadge, QuoteStatusBadge } from '@/components/app/status-badge';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { cancelCampaign, resyncCampaign, setMsaWaived } from '@/features/schedule/actions';
+import { cancelCampaign, setMsaWaived } from '@/features/schedule/actions';
 import {
   sendClientCampaignConfirmation,
   sendCoachCampaignConfirmation,
@@ -40,16 +40,6 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
       } else {
         toast.error(result.error);
       }
-    });
-  }
-
-  function onResync() {
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set('id', String(campaign.id));
-      const result = toLegacyResult(await resyncCampaign(fd));
-      if ('ok' in result) toast.success('Calendar synced');
-      else toast.error(result.error);
     });
   }
 
@@ -286,20 +276,6 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
               disabled={pending}
             >
               Cancel Campaign
-            </Button>
-          </Can>
-        )}
-        {(campaign.status === 'booked' || campaign.status === 'completed') && (
-          <Can capability="campaign:edit">
-            <Button
-              outline
-              compact
-              type="button"
-              onClick={onResync}
-              disabled={pending}
-              title="Re-push this event to Google Calendar (coach + dealer invites)"
-            >
-              Re-sync
             </Button>
           </Can>
         )}
