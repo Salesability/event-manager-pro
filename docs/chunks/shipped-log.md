@@ -8,6 +8,10 @@ Append-only historical record for `docs/chunks/`. This file exists so `CURRENT.m
 
 ## Shipped (newest first)
 
+- 2026-07-09 — **closed 0104-event-workflow-hub** (all 4 phases Done; eval **PASS-with-warnings**, `closed/0104-event-workflow-hub/eval-2026-07-09-1145.md`). Event-detail dialog is now the commercial-workflow hub: `/calendar?event=<id>` deep-links + strips on close, campaign-scoped quote save round-trips back to the event (+ persistent "← [event]" composer link, create + edit mode), MSA send round-trips via `?returnEvent=`, and the dialog emphasizes the single next funnel step (`nextCommercialStep`, pure/tested; Edit demotes to outline). Navigation-only — no migration/secret; `Quote.campaignId` added to the read-model. In-cycle fixes: dealer-scoped `?returnEvent=` (`8f31f2d`, Codex Medium — no wrong-event redirect) + deep-link open moved off `useEffect` to render-time reconciliation (`5e38ff9`, lint). Parked follow-ups: **0104-a** (`effectiveMsaStatus` null-`expires_at` vs accept-gate, pre-existing) + **0104-b** (stale dialog on cleared `?event=`, Low). Plan pointer → `_None_`; 0103/0102 stay parked (owner-gated). Code-complete on `main`, not yet deployed.
+- 2026-07-09 — switched away from 0103-sms-service (status: scaffolded, not started → moved to Parked) → activated 0104-event-workflow-hub (event-detail dialog as commercial-funnel hub; URL-addressable `?event=` + quote/MSA round-trip back to the event).
+- 2026-07-09 — switched away from 0102-pr-based-deploy-workflow (status: scaffolded, not started → moved to Parked) → activated 0103-sms-service (Twilio + campaign-driven SMS).
+
 _(new chunk-close entries go here)_
 
 ---

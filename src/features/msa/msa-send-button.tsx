@@ -12,6 +12,9 @@ export type MsaSendForSignatureButtonProps = {
   disabled?: boolean;
   /** Tooltip explaining the disabled state. */
   title?: string;
+  /** 0104: originating event (from `?returnEvent=`) — a successful send returns
+   *  to that event's dialog rather than refreshing the dealer page. */
+  returnEventId?: number | null;
 };
 
 // "Send MSA for signature" CTA on the per-dealer MSA panel (`/dealerships/[id]`,
@@ -39,6 +42,7 @@ export function MsaSendForSignatureButton(props: MsaSendForSignatureButtonProps)
         dealerId={props.dealerId}
         dealerName={props.dealerName}
         recipient={props.recipient}
+        returnEventId={props.returnEventId}
       />
     </>
   );

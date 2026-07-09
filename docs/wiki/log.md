@@ -13,6 +13,12 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-09 — Event dialog is the commercial-workflow hub (0104)
+
+- **Ingest:** added the "Event dialog is the workflow hub — deep-linkable + round-trips (0104)" subsection to [commercial-spine.md](commercial-spine.md), right after the 0093 calendar-status section. Captures the four moves: `/calendar?event=<id>` deep-link (opens/strips the event-detail dialog), campaign-scoped quote save round-tripping back to the event (+ persistent "← [event]" composer link, create + edit mode), MSA send round-tripping via `?returnEvent=`, and the single next-step brand-emphasis (`nextCommercialStep`, pure/tested — Edit demotes to `outline` so one primary shows).
+- **No schema/migration/secret** — pure navigation/context wiring over the existing `quotes.campaign_id` link; `Quote.campaignId` was threaded onto the read-model for the edit-mode back-link.
+- Touched: [commercial-spine.md](commercial-spine.md). Chunk [`docs/chunks/0104-event-workflow-hub/`](../chunks/closed/0104-event-workflow-hub/intent.md).
+
 ## 2026-07-07 — MSA + Quote header logo aligned to the title (0101)
 
 - **Layout-only:** the SaleDay Events logo in both PDF mastheads (`render-msa.ts`, `render-quote.ts`) was top-anchored to the same `y` as the title, so its 50pt box hung ~17pt below the ~16–17pt title's optical center. Now the logo box is centered on the title's cap band (`y = titleMidY - logoH/2`) so the two read as one balanced row. Owner flagged it on a real signed MSA.

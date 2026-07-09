@@ -9,6 +9,7 @@ function makeQuote(overrides: Partial<Quote>): Quote {
     dealerId: 1,
     dealerName: 'Test Dealer',
     dealerArchivedAt: null,
+    campaignId: null,
     status: 'draft',
     subtotal: '0.00',
     tax: '0.00',

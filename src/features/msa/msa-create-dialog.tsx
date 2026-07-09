@@ -21,6 +21,10 @@ export type MsaCreateDialogProps = {
    *  instead of the action surface — the MSA envelope has no sensible fallback
    *  without a customer-contact primary email. */
   recipient: { email: string; firstName: string } | { error: string };
+  /** 0104: when the admin arrived from an event's "Send MSA" (`?returnEvent=`),
+   *  a successful send routes back to that event's dialog (`/calendar?event=<id>`)
+   *  instead of just refreshing the dealer page. */
+  returnEventId?: number | null;
 };
 
 // Single-click "create MSA + send envelope" flow (0082: MSA-only — the quote is
@@ -68,7 +72,13 @@ export function MsaCreateDialog(props: MsaCreateDialogProps) {
 
       toast.success('MSA sent for signature');
       props.onClose(false);
-      router.refresh();
+      // 0104: round-trip back to the originating event dialog when we came from
+      // one; otherwise stay on the dealer page and refresh the MSA panel.
+      if (props.returnEventId != null) {
+        router.push(`/calendar?event=${props.returnEventId}`);
+      } else {
+        router.refresh();
+      }
     });
   }
 

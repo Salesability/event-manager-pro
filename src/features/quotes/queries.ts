@@ -29,6 +29,9 @@ export type Quote = {
   dealerId: number;
   dealerName: string;
   dealerArchivedAt: Date | null;
+  /** 0093: the event this quote scopes to (null on legacy dealer-only rows).
+   *  0104 uses it to render the composer's "← back to event" link. */
+  campaignId: number | null;
   status: QuoteStatus;
   subtotal: string;
   tax: string;
@@ -73,6 +76,7 @@ const projection = {
   dealerId: quotes.dealerId,
   dealerName: dealers.name,
   dealerArchivedAt: dealers.archivedAt,
+  campaignId: quotes.campaignId,
   status: quotes.status,
   subtotal: quotes.subtotal,
   tax: quotes.tax,
@@ -100,6 +104,7 @@ type QuoteRow = {
   dealerId: number;
   dealerName: string;
   dealerArchivedAt: Date | null;
+  campaignId: number | null;
   status: QuoteStatus;
   subtotal: string;
   tax: string;
@@ -134,6 +139,7 @@ function mapRow(row: QuoteRow): Quote {
     dealerId: row.dealerId,
     dealerName: row.dealerName,
     dealerArchivedAt: row.dealerArchivedAt,
+    campaignId: row.campaignId,
     status: row.status,
     subtotal: row.subtotal,
     tax: row.tax,
