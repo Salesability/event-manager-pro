@@ -33,7 +33,7 @@ substitutions:
   _RESEND_FROM_EMAIL: ''
   # Stage-only: redirect ALL outbound mail here (else sendEmail + BoldSign refuse
   # to send on a non-production deploy).
-  _EMAIL_DEV_TO: ''
+  _EMAIL_DEV_TO: 'davidwhogan@networknode.ca'
   _BOLDSIGN_API_BASE_URL: https://api-ca.boldsign.com
 
 steps:
