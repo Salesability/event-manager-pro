@@ -9,6 +9,7 @@ import {
   useState,
   useTransition,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
@@ -48,6 +49,9 @@ type Props = {
    *  campaign id (string). Drives the event-detail badges + the ribbon marker.
    *  App mode only; absent in share mode. */
   commercialStatus?: Record<string, CommercialStatus>;
+  /** 0104: deep-link target from `?event=<id>`. When set, the matching event's
+   *  detail dialog opens on load; closing it strips the param. App mode only. */
+  initialEventId?: number | null;
 };
 
 type DialogState =
@@ -108,9 +112,35 @@ export function CalendarView({
   styles = [],
   sources = [],
   commercialStatus = {},
+  initialEventId = null,
 }: Props) {
+  const router = useRouter();
   const [dialog, setDialog] = useState<DialogState>({ kind: 'closed' });
-  const closeDialog = useCallback(() => setDialog({ kind: 'closed' }), []);
+  const closeDialog = useCallback(() => {
+    setDialog({ kind: 'closed' });
+    // 0104: if we arrived via a deep link (`?event=<id>`), strip the param so
+    // the URL reflects the closed state and a back-nav doesn't re-open it.
+    // `router.replace` (not push) keeps the close out of history.
+    if (initialEventId != null) router.replace('/calendar');
+  }, [router, initialEventId]);
+
+  // 0104: open the deep-linked event's detail dialog once, when `?event=<id>`
+  // first resolves to a loaded campaign. The ref latches per id so an unrelated
+  // re-render (e.g. `router.refresh`) can't yank the user back to detail from an
+  // edit/other dialog while the param is still present.
+  const openedEventRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (initialEventId == null) {
+      openedEventRef.current = null;
+      return;
+    }
+    if (openedEventRef.current === initialEventId) return;
+    const campaign = campaigns.find((c) => c.id === initialEventId);
+    if (campaign) {
+      openedEventRef.current = initialEventId;
+      setDialog({ kind: 'detail', campaign });
+    }
+  }, [initialEventId, campaigns]);
 
   // 0100: from the post-booking prompt, mark the just-booked event as not needing
   // an MSA (the coach's "this event is fine without one" call). Waives + closes.
