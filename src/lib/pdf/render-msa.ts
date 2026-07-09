@@ -378,7 +378,23 @@ export async function renderMsaPdf(data: MsaPdfData): Promise<RenderResult> {
 
     const sections = buildSections(data);
     for (const section of sections) {
-      ensureSpace(2, 14);
+      // Keep-with-next: never orphan a section heading at the bottom of a page.
+      // Reserve room for the heading PLUS the first few lines of its body; if
+      // they don't fit together, break to a fresh page BEFORE the heading so it
+      // starts the next page with its content (previously `ensureSpace(2, 14)`
+      // only checked the heading, letting the body page-break right after it).
+      const firstParaLines = section.paragraphs[0]
+        ? wrap(sanitize(section.paragraphs[0]), 95).length
+        : 0;
+      // Reserve the heading + its ENTIRE first paragraph. Paragraphs move as a
+      // unit below (a whole paragraph pages if it doesn't fully fit), so
+      // reserving only a few lines isn't enough — the first paragraph would
+      // still jump and strand the heading. Match the paragraph loop's own
+      // `lines.length + 1` reservation at 12px so the two decisions agree.
+      if (y - (16 + (firstParaLines + 1) * 12) < margin + 40) {
+        page = doc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+      }
       page.drawText(section.heading, {
         x: margin,
         y,
