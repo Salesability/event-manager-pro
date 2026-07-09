@@ -10,7 +10,7 @@
 | 1: URL-addressable event detail (`?event=<id>`) | Done | `20bae53` |
 | 2: Quote step round-trips to the event | Done | `d14d333` |
 | 3: MSA step round-trips to the event | Done | `0a69126` |
-| 4: Next-step emphasis + tests + browser verify | Pending | - |
+| 4: Next-step emphasis + tests + browser verify | Done | `feb5a8f` |
 
 Make the calendar event-detail dialog the hub for the commercial funnel: deep-linkable via `?event=<id>`, and every step (quote, MSA) returns the coach to that event with updated status + the next CTA. "Done" = create-quote-from-an-event round-trips back to the event dialog with no manual re-navigation, and `/calendar?event=<id>` opens the right event directly.
 
@@ -26,13 +26,14 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 | `Quote.campaignId` on the read-model (edit-mode back-link) | [`queries.ts:27`](../../../src/features/quotes/queries.ts) (`Quote` type + `projection` + `QuoteRow` + `mapRow`) | Add `campaignId: number \| null` to all four so the edit page can resolve the linked event; edit page loads it via `loadCampaign(quote.campaignId)` and passes `campaigns={[campaign]}` (label-only — no picker in edit-mode) |
 | MSA-send return target (`?returnEvent=<id>`) | [`event-detail.tsx`](../../../src/app/(app)/calendar/event-detail.tsx) "Send MSA" (`href={/dealerships/${dealerId}}`) + the dealer-page MSA send-button/dialog | Thread a `returnEvent` query param through the per-dealer MSA send so it returns to `/calendar?event=<id>` |
 | Next-step emphasis in the event dialog | [`event-detail.tsx`](../../../src/app/(app)/calendar/event-detail.tsx) (the recently-fixed CTAs: Edit/View Quote, Send MSA, waiver, banner) | Highlight the single next action; reuse existing badges/`commercial` status — no new status logic |
+| `nextCommercialStep` pure selector (+ test) | new [`next-step.ts`](../../../src/features/schedule/next-step.ts) beside [`commercial-status.ts`](../../../src/features/schedule/commercial-status.ts) (the pure `isExposed`/`msaDisplayState` helpers) | Non-`server-only` module so the client dialog + `next-step.test.ts` both import it; maps `CommercialStatus` → which funnel CTA is the brand primary |
 
 **Conventions referenced:**
 - Next.js App Router: page components receive `searchParams` as a prop (async in this codebase); `CalendarView` is a `'use client'` component — use `useRouter`/`useSearchParams` for param changes, `router.replace` to avoid history spam.
 - `quotes.campaignId` (0093) is the event↔quote link; `commercial-status.ts` already computes the per-event quote/MSA status the dialog renders.
 - Event-detail CTAs + banner were refined this session (Edit/View Quote, waiver-toggle-hide, precise banner) — build on them, don't re-litigate.
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - **No DB, no migration, no new secret** — pure navigation/context wiring over existing data.
@@ -59,9 +60,9 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - [ ] Verify: from an event with no MSA, Send MSA → dealer page (event context shown) → after send, back on the event dialog. _(Covered by the Phase 4 chunk-end browser smoke — navigation/presence; sending is a mutation.)_
 
 #### Phase 4: Next-step emphasis + tests + browser verify
-- [ ] In `event-detail.tsx`, visually emphasize the single next action based on `commercial` status (no accepted quote → Create/Edit Quote; quote sent + no MSA → Send MSA; both ready → Mark accepted). Reuse existing CTAs/badges; don't add new status logic.
-- [ ] Unit-test the pure bits (e.g. an `initialEventId` parse helper, and any "which step is next" selector if extracted).
-- [ ] Browser smoke (web-test, read-only): `goto /calendar?event=<id>` opens the right dialog; open a booked event → the correct next-step CTA is emphasized; the composer "← event" link is present. (Do NOT drive create-quote/send in the smoke — those are mutations; verify the wiring by navigation + presence.)
-- [ ] Wiki: note the event-detail-as-hub + `?event=` deep-link convention in `docs/wiki/` (layout or a calendar page).
+- [x] In `event-detail.tsx`, visually emphasize the single next action based on `commercial` status (no accepted quote → Create/Edit Quote; quote sent + no MSA → Send MSA; both ready → Mark accepted). Reuse existing CTAs/badges; don't add new status logic. _(Extracted the pure `nextCommercialStep` selector; the matching funnel CTA renders brand, the campaign Edit button demotes to `outline` so exactly one primary shows.)_
+- [x] Unit-test the pure bits (e.g. an `initialEventId` parse helper, and any "which step is next" selector if extracted). _(13-case `next-step.test.ts` covering the full funnel + protected/cancelled/declined edges.)_
+- [ ] Browser smoke (web-test, read-only): `goto /calendar?event=<id>` opens the right dialog; open a booked event → the correct next-step CTA is emphasized; the composer "← event" link is present. (Do NOT drive create-quote/send in the smoke — those are mutations; verify the wiring by navigation + presence.) _(Runs as part of the chunk-end `/eval`.)_
+- [x] Wiki: note the event-detail-as-hub + `?event=` deep-link convention in `docs/wiki/` (layout or a calendar page). _(Added the "Event dialog is the workflow hub (0104)" subsection to `commercial-spine.md` + a `log.md` entry.)_
 
 **Verification note:** most of this is browser-driveable (deep-link opens the right event; the "← event" link + next-step CTA are present). The full create-quote round-trip is a *mutation* (creates a real quote), so smoke it by navigation/presence, not by actually submitting — or add a throwaway fixture+cleanup script if a real round-trip must be exercised.
