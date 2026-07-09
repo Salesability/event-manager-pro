@@ -17,7 +17,7 @@ Entries are reverse-chronological (newest at the top). Format:
 
 - **Ingest:** added the "Event dialog is the workflow hub — deep-linkable + round-trips (0104)" subsection to [commercial-spine.md](commercial-spine.md), right after the 0093 calendar-status section. Captures the four moves: `/calendar?event=<id>` deep-link (opens/strips the event-detail dialog), campaign-scoped quote save round-tripping back to the event (+ persistent "← [event]" composer link, create + edit mode), MSA send round-tripping via `?returnEvent=`, and the single next-step brand-emphasis (`nextCommercialStep`, pure/tested — Edit demotes to `outline` so one primary shows).
 - **No schema/migration/secret** — pure navigation/context wiring over the existing `quotes.campaign_id` link; `Quote.campaignId` was threaded onto the read-model for the edit-mode back-link.
-- Touched: [commercial-spine.md](commercial-spine.md). Chunk [`docs/chunks/0104-event-workflow-hub/`](../chunks/0104-event-workflow-hub/intent.md).
+- Touched: [commercial-spine.md](commercial-spine.md). Chunk [`docs/chunks/0104-event-workflow-hub/`](../chunks/closed/0104-event-workflow-hub/intent.md).
 
 ## 2026-07-07 — MSA + Quote header logo aligned to the title (0101)
 

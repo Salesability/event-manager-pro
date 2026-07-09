@@ -7,8 +7,8 @@
 The core commercial funnel — **Book Event → Create Quote → Send MSA → Mark Accepted → Protected** — has no connective tissue. Each step lives on a different surface and the coach loses their place between them:
 
 - Booking an event opens the event-detail dialog with next-step CTAs ("Create Quote", "Send MSA"). Good start.
-- Clicking **Create Quote** runs `createQuote` and `router.push('/quotes/<id>')` ([`quote-composer.tsx:442`](../../../src/features/quotes/quote-composer.tsx)) — dropping the coach on the quote's edit page (or, after further navigation, the quotes list). **Neither has any link back to the event.** The quote *knows* its `campaignId`, but nothing surfaces it.
-- To get back to the event's next step (Send MSA / Mark accepted), the coach must manually go to the calendar, **hunt for the event they were just working on, and re-open it**. The calendar's event-detail dialog is **not URL-addressable** — it only opens via a client-side click (`setDialog({kind:'detail', …})`, [`calendar-view.tsx:423`](../../../src/app/(app)/calendar/calendar-view.tsx)) — so there's nothing to link back to.
+- Clicking **Create Quote** runs `createQuote` and `router.push('/quotes/<id>')` ([`quote-composer.tsx:442`](../../../../src/features/quotes/quote-composer.tsx)) — dropping the coach on the quote's edit page (or, after further navigation, the quotes list). **Neither has any link back to the event.** The quote *knows* its `campaignId`, but nothing surfaces it.
+- To get back to the event's next step (Send MSA / Mark accepted), the coach must manually go to the calendar, **hunt for the event they were just working on, and re-open it**. The calendar's event-detail dialog is **not URL-addressable** — it only opens via a client-side click (`setDialog({kind:'detail', …})`, [`calendar-view.tsx:423`](../../../../src/app/(app)/calendar/calendar-view.tsx)) — so there's nothing to link back to.
 
 The owner flagged this as a **core workflow** that's too hard: "we need more intelligence to make it efficient for the user."
 
