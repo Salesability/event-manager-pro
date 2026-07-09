@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: URL-addressable event detail (`?event=<id>`) | Done | `20bae53` |
 | 2: Quote step round-trips to the event | Done | `d14d333` |
-| 3: MSA step round-trips to the event | Pending | - |
+| 3: MSA step round-trips to the event | Done | `0a69126` |
 | 4: Next-step emphasis + tests + browser verify | Pending | - |
 
 Make the calendar event-detail dialog the hub for the commercial funnel: deep-linkable via `?event=<id>`, and every step (quote, MSA) returns the coach to that event with updated status + the next CTA. "Done" = create-quote-from-an-event round-trips back to the event dialog with no manual re-navigation, and `/calendar?event=<id>` opens the right event directly.
@@ -32,7 +32,7 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - `quotes.campaignId` (0093) is the event↔quote link; `commercial-status.ts` already computes the per-event quote/MSA status the dialog renders.
 - Event-detail CTAs + banner were refined this session (Edit/View Quote, waiver-toggle-hide, precise banner) — build on them, don't re-litigate.
 
-**Overall Progress:** 50% (2/4 phases complete)
+**Overall Progress:** 75% (3/4 phases complete)
 
 **Note:**
 - **No DB, no migration, no new secret** — pure navigation/context wiring over existing data.
@@ -54,9 +54,9 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - [ ] Verify: booking → Create Quote → Save Draft lands back on the event dialog with the quote status now shown; the "← event" link works from the composer. _(Covered by the Phase 4 chunk-end browser smoke — navigation/presence only; create-quote is a mutation.)_
 
 #### Phase 3: MSA step round-trips to the event
-- [ ] Add a `returnEvent` query param path: event-detail "Send MSA" links to `/dealerships/${dealerId}?returnEvent=${campaignId}`; the dealer-page MSA send-dialog, on success, routes back to `/calendar?event=<returnEvent>` when the param is present (else its current behaviour).
-- [ ] Show a "← [event]" affordance on the dealer page when `returnEvent` is set, so an admin who went there to send an MSA can get back without the send.
-- [ ] Verify: from an event with no MSA, Send MSA → dealer page (event context shown) → after send, back on the event dialog.
+- [x] Add a `returnEvent` query param path: event-detail "Send MSA" links to `/dealerships/${dealerId}?returnEvent=${campaignId}`; the dealer-page MSA send-dialog, on success, routes back to `/calendar?event=<returnEvent>` when the param is present (else its current behaviour). _(Threaded `returnEventId` through `MsaSendForSignatureButton` → `MsaCreateDialog`; the dialog `router.push`es the event when set, else keeps `router.refresh()`.)_
+- [x] Show a "← [event]" affordance on the dealer page when `returnEvent` is set, so an admin who went there to send an MSA can get back without the send. _(A brand-tinted "← Back to event · <date range>" pill under the header; loads the campaign via `loadCampaign` for the dated label, generic if the id is stale.)_
+- [ ] Verify: from an event with no MSA, Send MSA → dealer page (event context shown) → after send, back on the event dialog. _(Covered by the Phase 4 chunk-end browser smoke — navigation/presence; sending is a mutation.)_
 
 #### Phase 4: Next-step emphasis + tests + browser verify
 - [ ] In `event-detail.tsx`, visually emphasize the single next action based on `commercial` status (no accepted quote → Create/Edit Quote; quote sent + no MSA → Send MSA; both ready → Mark accepted). Reuse existing CTAs/badges; don't add new status logic.
