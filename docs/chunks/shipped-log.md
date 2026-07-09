@@ -8,6 +8,7 @@ Append-only historical record for `docs/chunks/`. This file exists so `CURRENT.m
 
 ## Shipped (newest first)
 
+- 2026-07-09 — switched away from 0103-sms-service (status: scaffolded, not started → moved to Parked) → activated 0104-event-workflow-hub (event-detail dialog as commercial-funnel hub; URL-addressable `?event=` + quote/MSA round-trip back to the event).
 - 2026-07-09 — switched away from 0102-pr-based-deploy-workflow (status: scaffolded, not started → moved to Parked) → activated 0103-sms-service (Twilio + campaign-driven SMS).
 
 _(new chunk-close entries go here)_
