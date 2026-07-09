@@ -124,23 +124,26 @@ export function CalendarView({
     if (initialEventId != null) router.replace('/calendar');
   }, [router, initialEventId]);
 
-  // 0104: open the deep-linked event's detail dialog once, when `?event=<id>`
-  // first resolves to a loaded campaign. The ref latches per id so an unrelated
-  // re-render (e.g. `router.refresh`) can't yank the user back to detail from an
-  // edit/other dialog while the param is still present.
-  const openedEventRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (initialEventId == null) {
-      openedEventRef.current = null;
-      return;
+  // 0104: reflect the `?event=<id>` deep link into dialog state. Whenever the
+  // param changes to a resolvable campaign — fresh load, or a round-trip back
+  // from a quote/MSA — open that event's detail dialog. Uses React's sanctioned
+  // "adjust state during render" pattern (guarded by the last-reflected id) so
+  // it isn't a setState-in-effect, and an unrelated re-render (e.g.
+  // `router.refresh`) can't yank the user out of another dialog while the param
+  // is unchanged.
+  const [reflectedEventId, setReflectedEventId] = useState<number | null>(null);
+  if (reflectedEventId !== initialEventId) {
+    const campaign =
+      initialEventId != null
+        ? campaigns.find((c) => c.id === initialEventId) ?? null
+        : null;
+    // Latch only once resolved (or the param cleared) so an event not yet in the
+    // loaded set can still open on a later render.
+    if (initialEventId == null || campaign) {
+      setReflectedEventId(initialEventId);
+      if (campaign) setDialog({ kind: 'detail', campaign });
     }
-    if (openedEventRef.current === initialEventId) return;
-    const campaign = campaigns.find((c) => c.id === initialEventId);
-    if (campaign) {
-      openedEventRef.current = initialEventId;
-      setDialog({ kind: 'detail', campaign });
-    }
-  }, [initialEventId, campaigns]);
+  }
 
   // 0100: from the post-booking prompt, mark the just-booked event as not needing
   // an MSA (the coach's "this event is fine without one" call). Waives + closes.
