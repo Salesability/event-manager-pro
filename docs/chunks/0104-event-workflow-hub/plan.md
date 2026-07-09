@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: URL-addressable event detail (`?event=<id>`) | Pending | - |
+| 1: URL-addressable event detail (`?event=<id>`) | Done | `20bae53` |
 | 2: Quote step round-trips to the event | Pending | - |
 | 3: MSA step round-trips to the event | Pending | - |
 | 4: Next-step emphasis + tests + browser verify | Pending | - |
@@ -31,7 +31,7 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 - `quotes.campaignId` (0093) is the event↔quote link; `commercial-status.ts` already computes the per-event quote/MSA status the dialog renders.
 - Event-detail CTAs + banner were refined this session (Edit/View Quote, waiver-toggle-hide, precise banner) — build on them, don't re-litigate.
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
 - **No DB, no migration, no new secret** — pure navigation/context wiring over existing data.
@@ -40,11 +40,11 @@ For a modification to an existing file, the anchor is the nearest sibling in tha
 ### Phase Checklist
 
 #### Phase 1: URL-addressable event detail (`?event=<id>`)
-- [ ] Add `searchParams` to `CalendarPage` (`page.tsx:15`); parse `event` → `initialEventId: number | null`; pass to `CalendarView`.
-- [ ] In `CalendarView`, add a `useEffect` that, on mount / when `initialEventId` changes, finds the campaign with that id in the loaded `campaigns` and `setDialog({kind:'detail', campaign})`. No-op if not found (stale/deleted event).
-- [ ] `closeDialog` (`:113`) also strips the param: `router.replace('/calendar')` (only when a param is present, to avoid needless replaces).
-- [ ] Guard: `?event=` for an event outside the loaded date range / archived → dialog just doesn't open (no crash); consider widening the load or a fallback fetch only if it's a real gap.
-- [ ] Verify: `goto /calendar?event=<real id>` opens that event's detail dialog; closing returns the URL to `/calendar`.
+- [x] Add `searchParams` to `CalendarPage` (`page.tsx:15`); parse `event` → `initialEventId: number | null`; pass to `CalendarView`.
+- [x] In `CalendarView`, add a `useEffect` that, on mount / when `initialEventId` changes, finds the campaign with that id in the loaded `campaigns` and `setDialog({kind:'detail', campaign})`. No-op if not found (stale/deleted event). _(Ref-latches per id so an unrelated re-render can't yank the user back to detail from another dialog.)_
+- [x] `closeDialog` (`:113`) also strips the param: `router.replace('/calendar')` (only when a param is present, to avoid needless replaces).
+- [x] Guard: `?event=` for an event outside the loaded date range / archived → dialog just doesn't open (no crash); consider widening the load or a fallback fetch only if it's a real gap. _(The `campaigns.find` guard no-ops when absent; the page loads a wide year-1→year+1 range so in-range events resolve.)_
+- [ ] Verify: `goto /calendar?event=<real id>` opens that event's detail dialog; closing returns the URL to `/calendar`. _(Covered by the Phase 4 chunk-end browser smoke.)_
 
 #### Phase 2: Quote step round-trips to the event
 - [ ] In `quote-composer.tsx`, change the post-`createQuote` redirect (`:442`) so that when `values.campaignId` is set it does `router.push('/calendar?event=' + campaignId)` instead of `/quotes/<id>`; keep `/quotes/<id>` for a dealer-only (no-campaign) quote.
