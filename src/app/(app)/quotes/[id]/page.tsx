@@ -16,7 +16,7 @@ import { deriveQuoteMsaState } from '@/features/msa/send-state';
 import { displayStatusKey } from '@/features/quotes/status-display';
 import { quoteDisplayName } from '@/features/quotes/display-name';
 import { resolveQuoteRecipient } from '@/features/quotes/recipient';
-import { loadDealers } from '@/features/schedule/queries';
+import { loadCampaign, loadDealers } from '@/features/schedule/queries';
 import { loadServiceItems } from '@/features/services/queries';
 import { loadTaxRates } from '@/features/tax-rates/queries';
 import { QuoteComposer, type Recipient } from '@/features/quotes/quote-composer';
@@ -109,6 +109,7 @@ export default async function QuoteEditPage({
     qbConnection,
     attachments,
     eventMsaWaived,
+    linkedCampaign,
   ] = await Promise.all([
       loadDealers(),
       loadServiceItems(),
@@ -125,6 +126,11 @@ export default async function QuoteEditPage({
       loadQuoteAttachments(quote.id),
       // 0100: does the quote's event opt out of the MSA? Mirrors the accept gate.
       loadQuoteEventMsaWaived(quote.id),
+      // 0104: the linked event (if any) — feeds the composer's "← back to event"
+      // link so an edit-mode quote can jump back to its event dialog.
+      quote.campaignId != null
+        ? loadCampaign(quote.campaignId)
+        : Promise.resolve(null),
     ]);
   // 0082: the MSA send action moved to the dealer page; the composer keeps only
   // an informational MSA-active indicator, and the accept gate (D3) reads the
@@ -243,6 +249,9 @@ export default async function QuoteEditPage({
 
       <QuoteComposer
         dealers={dealers}
+        // 0104: only the linked event (if any) — edit-mode has no event picker,
+        // so this is used purely to resolve the "← back to event" link's label.
+        campaigns={linkedCampaign ? [linkedCampaign] : []}
         taxRates={taxRates}
         catalog={catalog}
         initialDealerId={quote.dealerId}
@@ -251,6 +260,7 @@ export default async function QuoteEditPage({
           quoteId: quote.id,
           dealerId: quote.dealerId,
           dealerName: quote.dealerName,
+          campaignId: quote.campaignId,
           quoteNotes: quote.inputs.quoteNotes ?? '',
           pickedLines: quote.pickedLines,
           subtotal: Number(quote.subtotal) || 0,

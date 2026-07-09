@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { KeyValueStrip, type KeyValueItem } from '@/components/app/key-value-strip';
 import { PageHeader } from '@/components/app/page-header';
@@ -69,6 +70,10 @@ export type InitialQuote = {
   quoteId: number;
   dealerId: number;
   dealerName: string;
+  /** 0104: the event this quote scopes to (null on legacy dealer-only rows).
+   *  Drives the edit-mode "← back to event" link; the linked campaign is passed
+   *  in `campaigns` so the composer can resolve its label. */
+  campaignId: number | null;
   /** Free-text notes rendered on the PDF. The one structured field the picker
    *  composer still owns. */
   quoteNotes: string;
@@ -330,6 +335,22 @@ export function QuoteComposer({
     [dealers, watched.dealerId],
   );
 
+  // 0104: the event this quote is scoped to — drives the persistent "← back to
+  // event" link. Create-mode tracks the live picker selection (`watched`);
+  // edit-mode uses the row's fixed `campaignId`. The linked `Campaign` (for its
+  // label) is expected in `campaigns` — the full dealer list in create-mode, or
+  // just the one linked event in edit-mode.
+  const backToCampaignId = isEdit
+    ? initial?.campaignId ?? null
+    : watched.campaignId ?? null;
+  const backToCampaign = useMemo(
+    () =>
+      backToCampaignId == null
+        ? null
+        : campaigns.find((c) => c.id === backToCampaignId) ?? null,
+    [campaigns, backToCampaignId],
+  );
+
   // 0093: events the quote can scope to — the selected dealer's non-cancelled
   // campaigns. Empty until a dealer is chosen. Create-mode only.
   const eventOptions = useMemo(() => {
@@ -439,7 +460,16 @@ export function QuoteComposer({
         const result = toLegacyResult<{ ok: true; quoteId: number }>(await createQuote(fd));
         if ('ok' in result) {
           toast.success(`Draft saved (quote #${result.quoteId})`);
-          router.push(`/quotes/${result.quoteId}`);
+          // 0104: a campaign-scoped quote round-trips back to its event dialog so
+          // the coach lands on the next step (Send MSA / Mark accepted) instead
+          // of the quote's edit page. A dealer-only quote (no campaign — not
+          // currently reachable in create-mode, guarded above) still opens the
+          // quote.
+          if (values.campaignId) {
+            router.push(`/calendar?event=${values.campaignId}`);
+          } else {
+            router.push(`/quotes/${result.quoteId}`);
+          }
         } else {
           toast.error(result.error);
         }
@@ -611,6 +641,17 @@ export function QuoteComposer({
 
   return (
     <>
+      {/* 0104: persistent "← back to event" link — the quote composer is a step
+          in the event-hub workflow, so a campaign-scoped quote always links back
+          to its event dialog (`/calendar?event=<id>`). */}
+      {backToCampaign && (
+        <Link
+          href={`/calendar?event=${backToCampaign.id}`}
+          className="text-xs font-medium text-zinc-500 transition hover:text-zinc-900"
+        >
+          ← {eventLabel(backToCampaign)}
+        </Link>
+      )}
       <PageHeader
         title={
           pageStatusBadge ? (
