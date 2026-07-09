@@ -13,6 +13,7 @@ import {
   sendCoachCampaignConfirmation,
 } from '@/features/email/actions';
 import type { CommercialStatus } from '@/features/schedule/commercial-status';
+import { nextCommercialStep } from '@/features/schedule/next-step';
 import type { Campaign } from '@/features/schedule/queries';
 
 type EventDetailProps = {
@@ -97,6 +98,22 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
     campaign.startDate === campaign.endDate
       ? formatDate(campaign.startDate)
       : `${formatDate(campaign.startDate)} – ${formatDate(campaign.endDate)}`;
+
+  // 0104: the dialog is the workflow hub, so the single next funnel step renders
+  // as the one brand primary; every other funnel CTA — and the campaign Edit
+  // button — stays `outline`, keeping exactly one primary on screen (matches the
+  // "brand blue is the one primary" button rule). No new status logic: the step
+  // is derived from the already-computed `commercial` status.
+  const nextStep = nextCommercialStep(campaign.status, commercial);
+  const primary = { color: 'brand' as const };
+  const secondary = { outline: true as const };
+  const quoteIsNext =
+    nextStep === 'create-quote' ||
+    nextStep === 'edit-quote' ||
+    nextStep === 'accept-quote';
+  const quoteVariant = quoteIsNext ? primary : secondary;
+  const sendMsaVariant = nextStep === 'send-msa' ? primary : secondary;
+  const editVariant = nextStep != null ? secondary : primary;
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -212,13 +229,24 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
             {commercial?.quoteId ? (
               // A quote already exists for this event — link to it instead of
               // offering to start a second one. A draft is still editable
-              // ("Edit Quote"); once sent/accepted it reads "View Quote".
-              <Button outline compact href={`/quotes/${commercial.quoteId}`}>
+              // ("Edit Quote"); once sent/accepted it reads "View Quote". 0104:
+              // emphasized (brand) when the quote is the next step — including
+              // "accept-quote", where viewing it is where the accept happens.
+              <Button
+                {...quoteVariant}
+                compact
+                href={`/quotes/${commercial.quoteId}`}
+                title={
+                  nextStep === 'accept-quote'
+                    ? 'Open the quote to accept it — that locks in the booking'
+                    : undefined
+                }
+              >
                 {commercial.quoteStatus === 'draft' ? 'Edit Quote' : 'View Quote'}
               </Button>
             ) : (
               <Button
-                outline
+                {...quoteVariant}
                 compact
                 href={`/quotes/new?campaignId=${campaign.id}&dealerId=${campaign.dealerId}`}
               >
@@ -236,9 +264,10 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           // isn't waived (0100) — the other half of "protect the commitment".
           <Can capability="admin:access">
             {/* 0104: carry the event context to the (per-dealer) MSA page so the
-                admin returns to this event's dialog after sending. */}
+                admin returns to this event's dialog after sending. Emphasized
+                (brand) when sending the MSA is the next funnel step. */}
             <Button
-              outline
+              {...sendMsaVariant}
               compact
               href={`/dealerships/${campaign.dealerId}?returnEvent=${campaign.id}`}
             >
@@ -286,7 +315,10 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           </Can>
         )}
         <Can capability="campaign:edit">
-          <Button color="brand" compact type="button" onClick={onEdit}>
+          {/* 0104: demoted to `outline` while a funnel step is the primary, so
+              the next action is the only brand button; brand again once the
+              event is protected/cancelled (no competing next step). */}
+          <Button {...editVariant} compact type="button" onClick={onEdit}>
             Edit
           </Button>
         </Can>
