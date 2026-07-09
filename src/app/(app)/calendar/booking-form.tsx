@@ -357,7 +357,10 @@ export function BookingForm({
           <select
             id="bk-style"
             name="styleId"
-            defaultValue={campaign?.styleId ?? ''}
+            // New event: default to the first (lowest sortOrder) format so a
+            // coach doesn't have to pick every time; admins control which is the
+            // default via the "Manage" ordering. Edit keeps the campaign's value.
+            defaultValue={campaign?.styleId ?? styles[0]?.id ?? ''}
             className={selectClass}
           >
             <option value="">—</option>
@@ -384,7 +387,9 @@ export function BookingForm({
           <select
             id="bk-source"
             name="audienceSourceId"
-            defaultValue={campaign?.audienceSourceId ?? ''}
+            // Same as Event Format: new event defaults to the first (lowest
+            // sortOrder) data source; admins control the default via "Manage".
+            defaultValue={campaign?.audienceSourceId ?? sources[0]?.id ?? ''}
             className={selectClass}
           >
             <option value="">—</option>
