@@ -9,7 +9,7 @@ import {
   DealerStatusBadge,
   MsaStatusBadge,
 } from '@/components/app/status-badge';
-import { loadCoaches, loadDealer, loadDealerActivities } from '@/features/schedule/queries';
+import { loadCampaign, loadCoaches, loadDealer, loadDealerActivities } from '@/features/schedule/queries';
 import { loadQuotesByDealer } from '@/features/quotes/queries';
 import { DealerQuotesPanel } from '@/features/quotes/dealer-quotes-panel';
 import { DealerPipelinePanel } from '@/features/dealers/dealer-pipeline-panel';
@@ -64,6 +64,19 @@ export default async function DealerDetailPage({
 
   // The push action redirects back here with ?qbpush=created|updated.
   const sp = await searchParams;
+
+  // 0104: `?returnEvent=<id>` — the admin arrived from an event's "Send MSA".
+  // Carry it into the send button (a successful send returns to that event's
+  // dialog) and surface a "← Back to event" affordance so they can bail without
+  // sending. Load the event for a dated label; a stale/invalid id just yields a
+  // generic link (the calendar no-ops on an unknown `?event=`).
+  const returnEventRaw = Array.isArray(sp.returnEvent) ? sp.returnEvent[0] : sp.returnEvent;
+  const returnEventId =
+    returnEventRaw && /^\d+$/.test(returnEventRaw) && Number(returnEventRaw) > 0
+      ? Number(returnEventRaw)
+      : null;
+  const returnEventCampaign = returnEventId != null ? await loadCampaign(returnEventId) : null;
+
   const qbNotice =
     sp.qbpush === 'created'
       ? 'Created this dealer in QuickBooks and linked it.'
@@ -96,6 +109,18 @@ export default async function DealerDetailPage({
         title={dealer.name}
         actions={<DealerStatusBadge status={dealer.status} archivedAt={dealer.archivedAt} />}
       />
+
+      {returnEventId != null && (
+        <Link
+          href={`/calendar?event=${returnEventId}`}
+          className="flex items-center gap-1.5 self-start rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500"
+        >
+          ← Back to event
+          {returnEventCampaign
+            ? ` · ${fmtEventDates(returnEventCampaign.startDate, returnEventCampaign.endDate)}`
+            : ''}
+        </Link>
+      )}
 
       {qbNotice && (
         <p className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -219,6 +244,7 @@ export default async function DealerDetailPage({
               dealerId={dealer.id}
               dealerName={dealer.name}
               recipient={msaRecipient}
+              returnEventId={returnEventId}
             />
           </div>
         ) : (
@@ -279,4 +305,20 @@ function parsePositiveIntPathSegment(v: string): number | null {
 function fmtDate(d: Date | null): string {
   if (!d) return '—';
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// 0104: date-range label for the "← Back to event" affordance. Campaign dates
+// are `date` columns (ISO, no TZ) — parse at UTC noon to match the calendar's
+// date handling so the day doesn't shift.
+function fmtEventDates(startIso: string, endIso: string): string {
+  const f = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  };
+  return startIso === endIso ? f(startIso) : `${f(startIso)} – ${f(endIso)}`;
 }

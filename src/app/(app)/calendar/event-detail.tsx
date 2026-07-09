@@ -235,7 +235,13 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           // Surfaced here only when the client has no active MSA AND the event
           // isn't waived (0100) — the other half of "protect the commitment".
           <Can capability="admin:access">
-            <Button outline compact href={`/dealerships/${campaign.dealerId}`}>
+            {/* 0104: carry the event context to the (per-dealer) MSA page so the
+                admin returns to this event's dialog after sending. */}
+            <Button
+              outline
+              compact
+              href={`/dealerships/${campaign.dealerId}?returnEvent=${campaign.id}`}
+            >
               Send MSA
             </Button>
           </Can>
