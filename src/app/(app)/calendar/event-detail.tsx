@@ -113,7 +113,12 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
     nextStep === 'accept-quote';
   const quoteVariant = quoteIsNext ? primary : secondary;
   const sendMsaVariant = nextStep === 'send-msa' ? primary : secondary;
-  const editVariant = nextStep != null ? secondary : primary;
+  // 0104 follow-up: Edit is never the funnel primary. When the funnel is complete
+  // (protected — accepted quote + active/waived MSA, nothing left to do), surface
+  // a "Back to calendar" done-action as the brand primary instead of emphasizing
+  // Edit — the coach came here to move the deal forward and there's nothing left
+  // to move.
+  const funnelComplete = commercial != null && !commercial.exposed;
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -315,13 +320,20 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
           </Can>
         )}
         <Can capability="campaign:edit">
-          {/* 0104: demoted to `outline` while a funnel step is the primary, so
-              the next action is the only brand button; brand again once the
-              event is protected/cancelled (no competing next step). */}
-          <Button {...editVariant} compact type="button" onClick={onEdit}>
+          {/* 0104: Edit is never the funnel primary — the next step, or the
+              "Back to calendar" done-action below, carries the brand emphasis. */}
+          <Button outline compact type="button" onClick={onEdit}>
             Edit
           </Button>
         </Can>
+        {funnelComplete && (
+          // 0104 follow-up: the deal is fully protected — nothing left to do
+          // here, so the brand primary is a clean exit back to the calendar
+          // rather than an emphasized Edit. Closing also strips `?event=`.
+          <Button color="brand" compact type="button" onClick={onClose}>
+            Back to calendar
+          </Button>
+        )}
       </div>
     </div>
   );
