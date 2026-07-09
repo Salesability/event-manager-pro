@@ -71,11 +71,20 @@ export default async function DealerDetailPage({
   // sending. Load the event for a dated label; a stale/invalid id just yields a
   // generic link (the calendar no-ops on an unknown `?event=`).
   const returnEventRaw = Array.isArray(sp.returnEvent) ? sp.returnEvent[0] : sp.returnEvent;
-  const returnEventId =
+  const returnEventIdRaw =
     returnEventRaw && /^\d+$/.test(returnEventRaw) && Number(returnEventRaw) > 0
       ? Number(returnEventRaw)
       : null;
-  const returnEventCampaign = returnEventId != null ? await loadCampaign(returnEventId) : null;
+  const returnEventCampaign =
+    returnEventIdRaw != null ? await loadCampaign(returnEventIdRaw) : null;
+  // Only honor the return target when the event actually belongs to THIS dealer.
+  // A stale or tampered `?returnEvent=` pointing at another dealer's event must
+  // not show a back-link — or redirect the MSA-send flow — to the wrong event.
+  const returnEvent =
+    returnEventCampaign && returnEventCampaign.dealerId === dealer.id
+      ? returnEventCampaign
+      : null;
+  const returnEventId = returnEvent?.id ?? null;
 
   const qbNotice =
     sp.qbpush === 'created'
@@ -110,15 +119,12 @@ export default async function DealerDetailPage({
         actions={<DealerStatusBadge status={dealer.status} archivedAt={dealer.archivedAt} />}
       />
 
-      {returnEventId != null && (
+      {returnEvent && (
         <Link
-          href={`/calendar?event=${returnEventId}`}
+          href={`/calendar?event=${returnEvent.id}`}
           className="flex items-center gap-1.5 self-start rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 transition hover:border-brand-500"
         >
-          ← Back to event
-          {returnEventCampaign
-            ? ` · ${fmtEventDates(returnEventCampaign.startDate, returnEventCampaign.endDate)}`
-            : ''}
+          ← Back to event · {fmtEventDates(returnEvent.startDate, returnEvent.endDate)}
         </Link>
       )}
 
