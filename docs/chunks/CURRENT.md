@@ -4,7 +4,7 @@
 
 **Status:** **0104-event-workflow-hub shipped + closed 2026-07-09** (eval PASS-with-warnings, [`closed/0104-…/eval-2026-07-09-1145.md`](closed/0104-event-workflow-hub/eval-2026-07-09-1145.md)). No standalone plan is active; the scaffolded-but-owner-gated **0103** (SMS) / **0102** (deploy-PR flow) remain parked below until their triggers fire.
 
-**Deployed:** prod = `event-manager-pro-00049-dbj` (2026-07-08 — 0099 / 0100 / 0101 + calendar UI fixes incl. Re-sync button removal; migration `0048` applied to the prod DB + trigger `_MSA_TEMPLATE_VERSION=2026-07-07`). stage = latest `dev` push. **0104 (event-workflow hub) is code-complete on `main` but not yet deployed** — navigation-only (no migration/secret); ships on the next prod deploy.
+**Deployed:** prod = `event-manager-pro-00052-x2f` (2026-07-09 — **0104 event-workflow hub + "Back to calendar" follow-up**; navigation-only, no migration/secret; build `1b6265a4`, `main` @ `7ca823d`). stage = `event-manager-pro-sandbox-00025-28m` (`dev` @ `cf064ff`). Prior prod baseline: `-00049-dbj` (2026-07-08 — 0099 / 0100 / 0101 + migration `0048` + trigger `_MSA_TEMPLATE_VERSION=2026-07-07`).
 
 ---
 
