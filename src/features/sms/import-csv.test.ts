@@ -114,6 +114,26 @@ describe('parseRecipientsCsv', () => {
     });
   });
 
+  it('rejects a non-calendar last_contact_at', () => {
+    const result = parseRecipientsCsv(
+      [HEADER, '9025551234,Pat,,express,2026-02-31'].join('\n'),
+      new Date('2026-07-13T00:00:00Z'),
+    );
+    expect(result).toMatchObject({
+      rowErrors: [expect.stringContaining('last_contact_at must be a real date')],
+    });
+  });
+
+  it('rejects a future last_contact_at using the UTC date', () => {
+    const result = parseRecipientsCsv(
+      [HEADER, '9025551234,Pat,,express,2026-07-14'].join('\n'),
+      new Date('2026-07-13T23:59:59Z'),
+    );
+    expect(result).toMatchObject({
+      rowErrors: [expect.stringContaining('last_contact_at must be a real date')],
+    });
+  });
+
   it('requires the phone and consent_basis columns', () => {
     const result = parseRecipientsCsv(['phone,first_name', '9025551234,Pat'].join('\n'));
     expect(result).toMatchObject({

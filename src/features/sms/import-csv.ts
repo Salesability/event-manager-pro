@@ -99,7 +99,26 @@ const rowSchema = z.object({
     }),
 });
 
-export function parseRecipientsCsv(text: string): ImportParseResult {
+function utcDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function isRealCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+export function parseRecipientsCsv(text: string, today = new Date()): ImportParseResult {
+  const todayUtc = utcDateString(today);
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.replace(/^﻿/, ''))
@@ -139,6 +158,15 @@ export function parseRecipientsCsv(text: string): ImportParseResult {
     if (!phone) {
       rowErrors.push(`Row ${i + 1}: "${parsed.data.phone}" is not a valid phone number`);
       continue;
+    }
+    if (parsed.data.last_contact_at) {
+      if (
+        !isRealCalendarDate(parsed.data.last_contact_at) ||
+        parsed.data.last_contact_at > todayUtc
+      ) {
+        rowErrors.push(`Row ${i + 1}: last_contact_at must be a real date on or before today`);
+        continue;
+      }
     }
     if (seen.has(phone)) {
       duplicatesDropped++;

@@ -1,6 +1,6 @@
 'use server';
 
-import { eq } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { recordAudit } from '@/features/audit/actions';
@@ -27,6 +27,10 @@ export type LaunchSmsResult =
       excludedOptOut: number;
       excludedStaleConsent: number;
     }
+  | { error: string };
+
+type CreatedSmsSend =
+  | { sendId: number; messages: { id: number; recipientId: number | null }[] }
   | { error: string };
 
 // The SMS panel lives on the event (campaign) detail surface under /calendar
@@ -105,8 +109,7 @@ export const importSmsRecipients = capabilityClient('sms:send')
 
 const launchSchema = z.object({
   campaignId: z.coerce.number().int().positive(),
-  // Twilio caps a message body at 1600 chars (concatenated segments).
-  body: z.string().trim().min(1, 'Message body is required.').max(1600),
+  body: z.string().trim().min(1, 'Message body is required.'),
 });
 
 // CASL requires visible opt-out instructions on commercial texts. Appended at
@@ -132,6 +135,12 @@ export const launchSmsSend = capabilityClient('sms:send')
     }
     const { campaignId } = parsed.data;
     const body = withStopFooter(parsed.data.body);
+    if (body.length > 1600) {
+      return {
+        error:
+          'Message body is too long after adding the opt-out footer. Keep it to 1577 characters, or include STOP instructions yourself for a 1600 character limit.',
+      };
+    }
 
     const campaign = await loadSmsCampaignContext(campaignId);
     if (!campaign) return { error: 'Campaign not found.' };
@@ -166,7 +175,26 @@ export const launchSmsSend = capabilityClient('sms:send')
     const statusCallbackUrl = origin ? `${origin}/api/twilio/webhook` : undefined;
 
     const userId = ctx.user.id;
-    const created = await db.transaction(async (tx) => {
+    const created: CreatedSmsSend = await db.transaction(async (tx): Promise<CreatedSmsSend> => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext('sms_launch_' || ${campaignId}::text))`,
+      );
+      const [recentSend] = await tx
+        .select({ id: smsSends.id })
+        .from(smsSends)
+        .where(
+          and(
+            eq(smsSends.campaignId, campaignId),
+            gte(smsSends.createdAt, sql<Date>`now() - interval '60 seconds'`),
+          ),
+        )
+        .limit(1);
+      if (recentSend) {
+        return {
+          error: 'A send for this campaign was just launched — check the send log before launching again.',
+        };
+      }
+
       const [send] = await tx
         .insert(smsSends)
         .values({
@@ -191,6 +219,7 @@ export const launchSmsSend = capabilityClient('sms:send')
         .returning({ id: smsMessages.id, recipientId: smsMessages.recipientId });
       return { sendId: send.id, messages };
     });
+    if (!('sendId' in created)) return created;
 
     // Sequential dispatch (intent open question #5: list sizes are hundreds —
     // a simple loop within the request is fine for v1; Twilio's Messaging
@@ -198,9 +227,27 @@ export const launchSmsSend = capabilityClient('sms:send')
     const byId = new Map(eligible.map((r) => [r.id, r]));
     let accepted = 0;
     let failed = 0;
+    let optedOutDuringDispatch = 0;
     for (const message of created.messages) {
       const recipient = message.recipientId != null ? byId.get(message.recipientId) : null;
       if (!recipient) continue;
+      const [optOut] = await db
+        .select({ id: smsOptOuts.id })
+        .from(smsOptOuts)
+        .where(eq(smsOptOuts.phone, recipient.phone))
+        .limit(1);
+      if (optOut) {
+        optedOutDuringDispatch++;
+        await db
+          .update(smsMessages)
+          .set({
+            status: 'failed',
+            errorCode: 'opted_out_before_dispatch',
+            statusUpdatedAt: new Date(),
+          })
+          .where(eq(smsMessages.id, message.id));
+        continue;
+      }
       const rendered = renderSmsBody(body, {
         firstName: recipient.firstName,
         lastName: recipient.lastName,
@@ -226,6 +273,19 @@ export const launchSmsSend = capabilityClient('sms:send')
       }
     }
 
+    // Keep the persisted send snapshot in agreement with what actually
+    // happened: an opt-out that raced in between evaluation and dispatch is an
+    // EXCLUSION on the parent row (its message row carries the
+    // `opted_out_before_dispatch` detail), so the send log and the launch
+    // result can never disagree about the excluded count.
+    const excludedOptOut = summary.excludedOptOut + optedOutDuringDispatch;
+    if (optedOutDuringDispatch > 0) {
+      await db
+        .update(smsSends)
+        .set({ excludedOptOut })
+        .where(eq(smsSends.id, created.sendId));
+    }
+
     await recordAudit({
       action: 'sms.launched',
       targetTable: 'sms_sends',
@@ -234,7 +294,7 @@ export const launchSmsSend = capabilityClient('sms:send')
         campaignId,
         accepted,
         failed,
-        excludedOptOut: summary.excludedOptOut,
+        excludedOptOut,
         excludedStaleConsent: summary.excludedStaleConsent,
       },
     });
@@ -245,7 +305,7 @@ export const launchSmsSend = capabilityClient('sms:send')
       sendId: created.sendId,
       accepted,
       failed,
-      excludedOptOut: summary.excludedOptOut,
+      excludedOptOut,
       excludedStaleConsent: summary.excludedStaleConsent,
     };
   });
