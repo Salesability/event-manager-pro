@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 // Keyed identity fingerprint for SMS ledger continuity (0105). HMAC-SHA256
 // over the normalized recipient identity (name + phone), keyed on
@@ -23,6 +23,12 @@ import { createHmac } from 'node:crypto';
 // Missing/invalid key → null (feature degrades gracefully; import and launch
 // proceed with no fingerprint) rather than sealed-box's throw, because the
 // fingerprint is an enhancement to the phone key, not a gate on sending.
+//
+// Format: `<8-hex key id>:<64-hex hmac>`. The key id (a public hash of the
+// key, not of any identity) makes cross-key comparisons detectable: after a
+// rotation, old ledger fingerprints carry the old key id, so
+// `compareFingerprints` reads them as `unknown` — never as a false
+// "name differs" warning.
 
 const KEY_BYTES = 32;
 
@@ -36,9 +42,15 @@ function getKey(): Buffer | null {
 // Normalization: trim, lowercase, collapse internal whitespace — so
 // " Pat  CHEN " and "Pat Chen" fingerprint identically, while "Robert" vs
 // "Bob" (or a typo) intentionally does not. Fields are joined with `|` to
-// keep ("ann", "marie smith") distinct from ("ann marie", "smith").
+// keep ("ann", "marie smith") distinct from ("ann marie", "smith"); literal
+// pipes IN a name are folded to spaces so a crafted "ann|marie" can't forge
+// the field boundary.
 function normalize(part: string | null): string {
-  return (part ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return (part ?? '')
+    .replace(/\|/g, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 export function computeIdentityHmac(input: {
@@ -54,7 +66,25 @@ export function computeIdentityHmac(input: {
   const first = normalize(input.firstName);
   const last = normalize(input.lastName);
   if (!first && !last) return null;
-  return createHmac('sha256', key)
+  const keyId = createHash('sha256').update(key).digest('hex').slice(0, 8);
+  const hmac = createHmac('sha256', key)
     .update(`${first}|${last}|${input.phone}`, 'utf8')
     .digest('hex');
+  return `${keyId}:${hmac}`;
+}
+
+/** Person-continuity verdict between two stored fingerprints. `unknown` when
+ *  either is absent OR they were minted under different keys (rotation must
+ *  never surface as a false "name differs" — decision.md D2). */
+export function compareFingerprints(
+  a: string | null,
+  b: string | null,
+): 'matches' | 'differs' | 'unknown' {
+  if (!a || !b) return 'unknown';
+  const keyIdOf = (s: string) => /^([0-9a-f]{8}):/.exec(s)?.[1] ?? null;
+  const aKey = keyIdOf(a);
+  const bKey = keyIdOf(b);
+  // Different key ids ⇒ minted under different keys ⇒ not comparable.
+  if (aKey && bKey && aKey !== bKey) return 'unknown';
+  return a === b ? 'matches' : 'differs';
 }

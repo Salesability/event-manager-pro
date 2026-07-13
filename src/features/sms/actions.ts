@@ -11,7 +11,12 @@ import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
 import { normalizePhoneE164, parseRecipientsCsv } from './import-csv';
-import { evaluateCampaignRecipients, loadSmsCampaignContext } from './queries';
+import {
+  evaluateCampaignRecipients,
+  loadSmsCampaignContext,
+  type EvaluatedRecipient,
+  type RecipientEvaluation,
+} from './queries';
 
 type ActionResult = { ok: true } | { error: string };
 
@@ -31,8 +36,26 @@ export type LaunchSmsResult =
   | { error: string };
 
 type CreatedSmsSend =
-  | { sendId: number; messages: { id: number; recipientId: number | null }[] }
+  | {
+      sendId: number;
+      messages: { id: number; recipientId: number | null }[];
+      eligible: EvaluatedRecipient[];
+      summary: RecipientEvaluation['summary'];
+    }
   | { error: string };
+
+// Campaign-scoped advisory lock shared by launch AND import (0105): a
+// re-import can't swap the recipient list between a launch's evaluation and
+// its message-row creation, and two launches can't double-send. Transaction-
+// scoped, so it releases on commit/rollback.
+async function lockCampaignSmsTx(
+  tx: Parameters<Parameters<(typeof db)['transaction']>[0]>[0],
+  campaignId: number,
+) {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext('sms_launch_' || ${campaignId}::text))`,
+  );
+}
 
 // The SMS panel lives on the event (campaign) detail surface under /calendar
 // (0104 workflow hub); dealership pages show campaign summaries too.
@@ -82,6 +105,7 @@ export const importSmsRecipients = capabilityClient('sms:send')
 
     const userId = ctx.user.id;
     await db.transaction(async (tx) => {
+      await lockCampaignSmsTx(tx, campaignId);
       await tx.delete(smsRecipients).where(eq(smsRecipients.campaignId, campaignId));
       await tx.insert(smsRecipients).values(
         parsed.rows.map((row) => ({
@@ -161,17 +185,6 @@ export const launchSmsSend = capabilityClient('sms:send')
       };
     }
 
-    const { recipients, summary } = await evaluateCampaignRecipients(campaignId);
-    if (summary.total === 0) {
-      return { error: 'No recipients imported for this campaign yet.' };
-    }
-    const eligible = recipients.filter((r) => r.eligibility.eligible);
-    if (!eligible.length) {
-      return {
-        error: `All ${summary.total} recipients are excluded (${summary.excludedOptOut} opted out, ${summary.excludedStaleConsent} stale consent).`,
-      };
-    }
-
     // Status callbacks ride SITE_URL (operator-configured origin — never the
     // request Host, same posture as share-link emails). Absent in local dev →
     // no callback; messages simply stay `queued`.
@@ -180,9 +193,7 @@ export const launchSmsSend = capabilityClient('sms:send')
 
     const userId = ctx.user.id;
     const created: CreatedSmsSend = await db.transaction(async (tx): Promise<CreatedSmsSend> => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtext('sms_launch_' || ${campaignId}::text))`,
-      );
+      await lockCampaignSmsTx(tx, campaignId);
       const [recentSend] = await tx
         .select({ id: smsSends.id })
         .from(smsSends)
@@ -196,6 +207,25 @@ export const launchSmsSend = capabilityClient('sms:send')
       if (recentSend) {
         return {
           error: 'A send for this campaign was just launched — check the send log before launching again.',
+        };
+      }
+
+      // Evaluate INSIDE the locked transaction (0105): a concurrent re-import
+      // takes the same campaign lock, so the list the review promised is the
+      // list the send row + message snapshots are built from — no stale
+      // in-memory recipient set.
+      const { recipients, summary } = await evaluateCampaignRecipients(
+        campaignId,
+        new Date(),
+        tx,
+      );
+      if (summary.total === 0) {
+        return { error: 'No recipients imported for this campaign yet.' };
+      }
+      const eligible = recipients.filter((r) => r.eligibility.eligible);
+      if (!eligible.length) {
+        return {
+          error: `All ${summary.total} recipients are excluded (${summary.excludedOptOut} opted out, ${summary.excludedStaleConsent} stale consent).`,
         };
       }
 
@@ -228,9 +258,10 @@ export const launchSmsSend = capabilityClient('sms:send')
           })),
         )
         .returning({ id: smsMessages.id, recipientId: smsMessages.recipientId });
-      return { sendId: send.id, messages };
+      return { sendId: send.id, messages, eligible, summary };
     });
     if (!('sendId' in created)) return created;
+    const { eligible, summary } = created;
 
     // Sequential dispatch (intent open question #5: list sizes are hundreds —
     // a simple loop within the request is fine for v1; Twilio's Messaging

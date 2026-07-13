@@ -10,6 +10,7 @@ import {
   smsRecipients,
   smsSends,
 } from '@/lib/db/schema';
+import { compareFingerprints } from '@/lib/sms/identity';
 import { smsEligibility, type SmsEligibility } from './eligibility';
 
 // Accept either the app pool or a transaction so `launchSmsSend` can evaluate
@@ -218,18 +219,17 @@ export async function loadRecipientHistory(
     }
     // First row per phone is the most recent (desc order) — it carries the
     // last outcome and the fingerprint the continuity check compares against.
-    const currentHmac = currentByPhone.get(row.phone) ?? null;
+    // `compareFingerprints` handles the key-rotation case (different key ids
+    // read as `unknown`, never a false "differs").
     entries.set(row.phone, {
       phone: row.phone,
       priorCount: 1,
       lastStatus: row.status,
       lastAt: row.createdAt,
-      identity:
-        currentHmac && row.identityHmac
-          ? currentHmac === row.identityHmac
-            ? 'matches'
-            : 'differs'
-          : 'unknown',
+      identity: compareFingerprints(
+        currentByPhone.get(row.phone) ?? null,
+        row.identityHmac,
+      ),
     });
   }
   return [...entries.values()];
