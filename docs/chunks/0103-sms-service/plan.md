@@ -10,7 +10,7 @@
 | 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Done | `35b9d36` |
 | 2: Schema — `sms_messages`, `sms_sends`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Done | `8099dc5` |
 | 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Done | `80dbc2c` |
-| 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Pending | - |
+| 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Done | - |
 | 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
 
@@ -43,7 +43,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 50% (3/6 phases complete)
+**Overall Progress:** 67% (4/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -90,10 +90,11 @@ phone snapshotted on the message).
 - [x] Test case: template rendering + CSV import parsing/normalization units — `template.test.ts`, `import-csv.test.ts` (DB-level launch flow lands in Phase 6 integration)
 
 #### Phase 4: Status-callback webhook + STOP opt-out
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `src/lib/sms/webhook-verify.ts` — Twilio `X-Twilio-Signature` verification: base64 HMAC-SHA1 over URL + alphabetically-sorted form params, `timingSafeEqual` compare (no timestamp/replay window in Twilio's scheme — replays are no-ops downstream: monotonic flips + idempotent opt-out)
+- [x] `src/lib/sms/webhook-events.ts` — pure classification: status-callback vs inbound message, Twilio→ledger status mapping (`accepted/scheduled/sending`→`queued`; unknown→ignored), monotonic `STATUS_RANK`, STOP-keyword match (STOP/STOPALL/UNSUBSCRIBE/CANCEL/END/QUIT, whole-message)
+- [x] `src/app/api/twilio/webhook/route.ts` — external route handler: raw body read, verify BEFORE any DB touch (URL built from SITE_URL, never request Host), guarded-UPDATE status flip by `provider_sid` (404 on unknown sid so a raced callback retries; 200 on no-forward-transition), inbound STOP → permanent opt-out insert (ON CONFLICT DO NOTHING), 2xx-ack for authentic-but-unrecognized shapes
+- [x] Test case: signature verification matrix (valid, tampered param, wrong URL/Host confusion, wrong token, missing header, param-order insensitivity) — `webhook-verify.test.ts`
+- [x] Test case: classification + status-mapping + STOP-keyword units — `webhook-events.test.ts` (DB round-trip lands in Phase 6 integration)
 
 #### Phase 5: UI — campaign-detail SMS panel
 - [ ] Task 1
