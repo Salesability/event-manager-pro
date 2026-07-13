@@ -145,8 +145,16 @@ describe.skipIf(!dbUrl)('sms schema (0103 Phase 2)', () => {
     expect(message!.recipientId).not.toBeNull();
   });
 
-  it('recipient delete (retention purge, D5) leaves the message row with recipient_id NULL and the phone snapshot intact', async () => {
-    let after: { phone: string; recipientId: number | null } | undefined;
+  it('recipient delete (retention purge, D5) leaves the message row with phone + 0105 send-event snapshots intact', async () => {
+    let after:
+      | {
+          phone: string;
+          recipientId: number | null;
+          consentBasis: string | null;
+          lastContactAt: string | null;
+          identityHmac: string | null;
+        }
+      | undefined;
 
     try {
       await db.transaction(async (tx) => {
@@ -156,7 +164,9 @@ describe.skipIf(!dbUrl)('sms schema (0103 Phase 2)', () => {
           .values({
             campaignId,
             phone: '+19025557777',
-            consentBasis: 'express',
+            consentBasis: 'implied_purchase',
+            lastContactAt: '2026-01-15',
+            identityHmac: 'a'.repeat(64),
           })
           .returning({ id: smsRecipients.id });
         const [send] = await tx
@@ -176,6 +186,11 @@ describe.skipIf(!dbUrl)('sms schema (0103 Phase 2)', () => {
             recipientId: recipient.id,
             phone: '+19025557777',
             status: 'delivered',
+            // 0105: launch stamps these snapshots so the ledger stays a
+            // self-sufficient CASL record after the purge.
+            consentBasis: 'implied_purchase',
+            lastContactAt: '2026-01-15',
+            identityHmac: 'a'.repeat(64),
           })
           .returning({ id: smsMessages.id });
 
@@ -183,7 +198,13 @@ describe.skipIf(!dbUrl)('sms schema (0103 Phase 2)', () => {
         await tx.delete(smsRecipients).where(eq(smsRecipients.id, recipient.id));
 
         [after] = await tx
-          .select({ phone: smsMessages.phone, recipientId: smsMessages.recipientId })
+          .select({
+            phone: smsMessages.phone,
+            recipientId: smsMessages.recipientId,
+            consentBasis: smsMessages.consentBasis,
+            lastContactAt: smsMessages.lastContactAt,
+            identityHmac: smsMessages.identityHmac,
+          })
           .from(smsMessages)
           .where(eq(smsMessages.id, msg.id));
 
@@ -193,7 +214,13 @@ describe.skipIf(!dbUrl)('sms schema (0103 Phase 2)', () => {
       if (!(err instanceof Rollback)) throw err;
     }
 
-    expect(after).toEqual({ phone: '+19025557777', recipientId: null });
+    expect(after).toEqual({
+      phone: '+19025557777',
+      recipientId: null,
+      consentBasis: 'implied_purchase',
+      lastContactAt: '2026-01-15',
+      identityHmac: 'a'.repeat(64),
+    });
   });
 
   it('opt-outs are globally unique on phone', async () => {

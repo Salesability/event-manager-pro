@@ -104,6 +104,8 @@ async function main() {
         phone: `${PHONE_PREFIX}0001`,
         firstName: 'Evie',
         consentBasis: 'express',
+        // Matches the prior send's fingerprint below → "same person as before".
+        identityHmac: 'evie'.padEnd(64, '0'),
       },
       {
         campaignId: campaign.id,
@@ -111,6 +113,8 @@ async function main() {
         firstName: 'Piers',
         consentBasis: 'implied_purchase',
         lastContactAt: '2026-02-01',
+        // Differs from the prior send's fingerprint → recycled-number warning.
+        identityHmac: 'piers-new'.padEnd(64, '0'),
       },
       {
         campaignId: campaign.id,
@@ -148,6 +152,8 @@ async function main() {
         providerSid: 'SM0103smoke0001',
         status: 'delivered',
         statusUpdatedAt: new Date(),
+        consentBasis: 'express',
+        identityHmac: 'evie'.padEnd(64, '0'),
       },
       {
         sendId: send.id,
@@ -156,6 +162,9 @@ async function main() {
         status: 'failed',
         errorCode: '30007',
         statusUpdatedAt: new Date(),
+        consentBasis: 'implied_purchase',
+        lastContactAt: '2025-06-01',
+        identityHmac: 'piers-old'.padEnd(64, '0'),
       },
     ]);
 

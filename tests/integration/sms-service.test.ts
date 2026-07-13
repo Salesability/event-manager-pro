@@ -30,7 +30,7 @@ import {
   smsRecipients,
   smsSends,
 } from '@/lib/db/schema';
-import { evaluateCampaignRecipients } from '@/features/sms/queries';
+import { evaluateCampaignRecipients, loadRecipientHistory } from '@/features/sms/queries';
 import { computeTwilioSignature } from '@/lib/sms/webhook-verify';
 import { POST } from '@/app/api/twilio/webhook/route';
 
@@ -313,6 +313,119 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
     } finally {
       await db.delete(smsOptOuts).where(like(smsOptOuts.phone, `${PHONE_PREFIX}003%`));
     }
+  });
+
+  it('reconstitutes dealer-scoped history across a purge via the phone key + identity fingerprint (0105)', async () => {
+    let entries: Awaited<ReturnType<typeof loadRecipientHistory>> | undefined;
+
+    try {
+      await db.transaction(async (tx) => {
+        // Dealer with an OLD campaign whose recipients were already purged —
+        // only the message ledger remains (recipient_id NULL, snapshots kept).
+        const old = await seedCampaign(tx);
+        const [oldSend] = await tx
+          .insert(smsSends)
+          .values({
+            campaignId: old.campaignId,
+            body: 'Old body',
+            totalRecipients: 2,
+            excludedOptOut: 0,
+            excludedStaleConsent: 0,
+          })
+          .returning({ id: smsSends.id });
+        await tx.insert(smsMessages).values([
+          // Same person then and now (matching fingerprint), delivered twice.
+          {
+            sendId: oldSend.id,
+            phone: `${PHONE_PREFIX}0040`,
+            status: 'delivered',
+            identityHmac: 'match'.padEnd(64, '0'),
+          },
+          {
+            sendId: oldSend.id,
+            phone: `${PHONE_PREFIX}0040`,
+            status: 'sent',
+            identityHmac: 'match'.padEnd(64, '0'),
+          },
+          // Number later recycled: the historical fingerprint differs.
+          {
+            sendId: oldSend.id,
+            phone: `${PHONE_PREFIX}0041`,
+            status: 'undelivered',
+            identityHmac: 'old-owner'.padEnd(64, '0'),
+          },
+        ]);
+
+        // The dealer signs on again: NEW campaign (same dealer), fresh import.
+        const [newCampaign] = await tx
+          .insert(campaigns)
+          .values({
+            publicId: publicId(),
+            dealerId: old.dealerId,
+            startDate: '2026-09-01',
+            endDate: '2026-09-02',
+            status: 'booked',
+            smsEmail: 50,
+          })
+          .returning({ id: campaigns.id });
+        await tx.insert(smsRecipients).values([
+          {
+            campaignId: newCampaign.id,
+            phone: `${PHONE_PREFIX}0040`,
+            consentBasis: 'express',
+            identityHmac: 'match'.padEnd(64, '0'),
+          },
+          {
+            campaignId: newCampaign.id,
+            phone: `${PHONE_PREFIX}0041`,
+            consentBasis: 'express',
+            identityHmac: 'new-owner'.padEnd(64, '0'),
+          },
+          // No prior history — must not appear in the entries.
+          {
+            campaignId: newCampaign.id,
+            phone: `${PHONE_PREFIX}0042`,
+            consentBasis: 'express',
+          },
+        ]);
+
+        // An unrelated dealer texting the same number must NOT leak in.
+        const other = await seedCampaign(tx);
+        const [otherSend] = await tx
+          .insert(smsSends)
+          .values({
+            campaignId: other.campaignId,
+            body: 'Other dealer body',
+            totalRecipients: 1,
+            excludedOptOut: 0,
+            excludedStaleConsent: 0,
+          })
+          .returning({ id: smsSends.id });
+        await tx.insert(smsMessages).values({
+          sendId: otherSend.id,
+          phone: `${PHONE_PREFIX}0042`,
+          status: 'delivered',
+        });
+
+        entries = await loadRecipientHistory(newCampaign.id, tx);
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) throw err;
+    }
+
+    expect(entries).toBeDefined();
+    const byPhone = new Map(entries!.map((e) => [e.phone, e]));
+    expect(byPhone.size).toBe(2); // 0042 has no history FOR THIS DEALER
+    expect(byPhone.get(`${PHONE_PREFIX}0040`)).toMatchObject({
+      priorCount: 2,
+      identity: 'matches',
+    });
+    expect(byPhone.get(`${PHONE_PREFIX}0041`)).toMatchObject({
+      priorCount: 1,
+      lastStatus: 'undelivered',
+      identity: 'differs',
+    });
   });
 
   afterEach(async () => {
