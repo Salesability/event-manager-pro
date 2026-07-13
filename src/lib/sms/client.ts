@@ -13,7 +13,7 @@ let cached: { client: Twilio; messagingServiceSid: string } | null = null;
 // swapped/upgraded (e.g. to a short code) without a code change. Canada has
 // no 10DLC registry; deliverability hangs on the toll-free number being
 // verified, which is owner-driven provisioning (see
-// docs/chunks/0103-sms-service/research.md).
+// docs/chunks/closed/0103-sms-service/research.md).
 export function client(): ClientResult {
   if (cached) return { ok: true, ...cached };
 

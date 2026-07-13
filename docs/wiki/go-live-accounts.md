@@ -315,7 +315,7 @@ buys for an event, chunk 0103), and reports back per-message delivery status + S
 - Messaging Service SID (starts `MG…`) → `TWILIO_MESSAGING_SERVICE_SID`
 - Verification status of the toll-free number (approved / pending)
 
-> Research + sender-strategy rationale: [`docs/chunks/0103-sms-service/research.md`](../chunks/0103-sms-service/research.md).
+> Research + sender-strategy rationale: [`docs/chunks/closed/0103-sms-service/research.md`](../chunks/closed/0103-sms-service/research.md).
 
 ---
 
