@@ -39,6 +39,7 @@ export type Capability =
   | 'msa:edit'
   | 'msa:read'
   | 'email:send'
+  | 'sms:send'
   | 'coach-availability:edit-own'
   | 'coach-availability:edit-any';
 
@@ -115,6 +116,9 @@ export function can(
     case 'campaign:edit':
     case 'campaign:cancel':
     case 'email:send':
+    // 0103 D4: launching campaign SMS is compliance-sensitive — admin-only
+    // for v1 (covers import/launch/opt-out on the SMS surface).
+    case 'sms:send':
     case 'coach-availability:edit-any':
       // Pure-admin caps. Already handled by the shortcut above; reaching
       // here means the profile is not admin → deny.

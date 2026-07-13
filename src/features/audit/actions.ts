@@ -39,7 +39,10 @@ export type AuditActionId =
   | 'msa.created'
   | 'msa.sent'
   | 'msa.signed'
-  | 'msa.declined';
+  | 'msa.declined'
+  | 'sms.recipients_imported'
+  | 'sms.launched'
+  | 'sms.opt_out_recorded';
 
 export type RecordAuditInput = {
   action: AuditActionId;

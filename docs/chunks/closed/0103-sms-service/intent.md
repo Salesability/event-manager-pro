@@ -4,7 +4,7 @@
 
 ## Problem
 
-The app has no SMS capability. The vision ([`docs/strategy/vision.md`](../../strategy/vision.md), Module 2 "Event Production Console") makes SMS a marketing channel campaigns can activate — texts sent to a dealership's customer list to drive event attendance, as an **add-on service the dealer buys for a given event**, not something every campaign uses. Today there is no SMS provider integration, no way to compose a campaign-driven text message, no recipient-list handling, and no delivery tracking; campaigns only carry an `sms_email` *count* (a delivery metric derived from the accepted quote), not an actual send capability.
+The app has no SMS capability. The vision ([`docs/strategy/vision.md`](../../../strategy/vision.md), Module 2 "Event Production Console") makes SMS a marketing channel campaigns can activate — texts sent to a dealership's customer list to drive event attendance, as an **add-on service the dealer buys for a given event**, not something every campaign uses. Today there is no SMS provider integration, no way to compose a campaign-driven text message, no recipient-list handling, and no delivery tracking; campaigns only carry an `sms_email` *count* (a delivery metric derived from the accepted quote), not an actual send capability.
 
 Sending also has a compliance problem that email doesn't force as hard: the dealer's contact list is only lawfully textable under CASL consent, and **implied consent goes stale** — if the dealer has had no contact/transaction with a person within the consent window, that opt-in has lapsed. Without the service tracking opt-outs and consent recency, any SMS send we run on a dealer's behalf risks texting people the dealer no longer has the right to text.
 

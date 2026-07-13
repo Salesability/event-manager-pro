@@ -13,6 +13,14 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-13 — Campaign SMS service ships (0103)
+
+- **Ingest:** created [sms.md](sms.md) — the Twilio campaign-SMS feature page: quote-derived add-on gate (`sms_email > 0`, no flag column), per-campaign dealer-list CSV import, the CASL compliance floor (permanent global `sms_opt_outs`, fixed staleness windows 24mo/6mo/never, 24-month recipient retention purge with a surviving minimized ledger), persist-first launch + sequential dispatch, HMAC-verified status-callback webhook + inbound STOP capture, `SMS_DEV_TO` dev-redirect failsafe, admin-only `sms:send` capability.
+- [data-model.md](data-model.md): added the four `sms_*` tables to *Tables at a glance* + the domain-edge bullets (CASCADE list vs RESTRICT ledger vs SET-NULL purge link vs FK-less opt-out registry).
+- [go-live-accounts.md](go-live-accounts.md): §6 Twilio provisioning runbook (owner-driven: account, toll-free purchase, Messaging Service, toll-free verification — **not yet provisioned**; carrier delivery blocked until then), at-a-glance row, hand-back checklist entry, `SMS_DEV_TO` dev-config note.
+- New migrations `0049` (four tables + three enums) and `0050` (three `audit_action` values) — applied to sandbox only; **prod migration pending deploy**.
+- Chunk [`docs/chunks/closed/0103-sms-service/`](../chunks/closed/0103-sms-service/plan.md); evals `eval-2026-07-13-0956.md` (PASS-with-warnings) + `eval-2026-07-13-1005.md` (post-fix pass).
+
 ## 2026-07-09 — Event dialog is the commercial-workflow hub (0104)
 
 - **Ingest:** added the "Event dialog is the workflow hub — deep-linkable + round-trips (0104)" subsection to [commercial-spine.md](commercial-spine.md), right after the 0093 calendar-status section. Captures the four moves: `/calendar?event=<id>` deep-link (opens/strips the event-detail dialog), campaign-scoped quote save round-tripping back to the event (+ persistent "← [event]" composer link, create + edit mode), MSA send round-tripping via `?returnEvent=`, and the single next-step brand-emphasis (`nextCommercialStep`, pure/tested — Edit demotes to `outline` so one primary shows).
