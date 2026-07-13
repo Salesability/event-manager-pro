@@ -44,6 +44,12 @@ export const smsRecipients = pgTable(
     // it is treated as stale by the eligibility predicate (never sendable),
     // not rejected at import, so the pre-send summary can report it.
     lastContactAt: date('last_contact_at'),
+    // 0105: keyed identity fingerprint (HMAC-SHA256 over normalized name +
+    // phone, `src/lib/sms/identity.ts`). Verification-only — lets a re-import
+    // after the 24-month purge confirm person-continuity on a phone number
+    // without the ledger ever holding a readable name. Null when
+    // SMS_IDENTITY_HMAC_KEY is unset (feature degrades gracefully).
+    identityHmac: text('identity_hmac'),
     ...timestamps,
     ...actors,
   },

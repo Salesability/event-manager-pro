@@ -308,6 +308,9 @@ buys for an event, chunk 0103), and reports back per-message delivery status + S
 **Developer does**
 - Wires the credentials into Secret Manager (sandbox + prod split like Resend/BoldSign), points the
   Messaging Service's status callback at the app's webhook, and sends a stage test (dev-redirected).
+- Generates `SMS_IDENTITY_HMAC_KEY` (`openssl rand -base64 32`, developer-side secret — no vendor
+  account involved): keys the verification-only recipient fingerprint on the message ledger (chunk
+  0105) so a dealer-list re-import after the 24-month purge can confirm person-continuity per number.
 
 **Hand back to the developer:**
 - Account SID → `TWILIO_ACCOUNT_SID` *(secret)*

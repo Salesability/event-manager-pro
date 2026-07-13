@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  date,
   index,
   pgEnum,
   pgTable,
@@ -10,7 +11,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { bigIdentity, timestamps } from './_columns';
-import { smsRecipients } from './sms-recipients';
+import { smsRecipients, smsConsentBasis } from './sms-recipients';
 import { smsSends } from './sms-sends';
 
 // Twilio's message lifecycle as reported by status callbacks. `queued` is the
@@ -54,6 +55,15 @@ export const smsMessages = pgTable(
     // failed/undelivered, or the thrown create-call message.
     errorCode: text('error_code'),
     statusUpdatedAt: timestamp('status_updated_at', { withTimezone: true }),
+    // 0105 send-event snapshots, stamped at launch so the ledger stays a
+    // self-sufficient CASL defense record after the 24-month recipient purge:
+    // on what consent basis the send was lawful + the last dealer↔customer
+    // contact it was measured from + the verification-only identity
+    // fingerprint (person-continuity check across purge-then-re-import; see
+    // sms-recipients.ts). Nullable: pre-0105 rows and unset-key deploys.
+    consentBasis: smsConsentBasis('consent_basis'),
+    lastContactAt: date('last_contact_at'),
+    identityHmac: text('identity_hmac'),
     ...timestamps,
   },
   (table) => [
