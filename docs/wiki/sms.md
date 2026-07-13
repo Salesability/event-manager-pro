@@ -1,6 +1,6 @@
 # Campaign SMS (Twilio)
 
-Campaign-driven text messaging to a dealership's customer list — the first Module-2 (Event Production Console) channel. Shipped by chunk [`0103-sms-service`](../chunks/closed/0103-sms-service/plan.md) (2026-07-13); product decisions in its [`decision.md`](../chunks/closed/0103-sms-service/decision.md) (D1–D5).
+Campaign-driven text messaging to a dealership's customer list — the first Module-2 (Event Production Console) channel. Shipped by chunk [`0103-sms-service`](../chunks/closed/0103-sms-service/plan.md) (2026-07-13); product decisions in its [`decision.md`](../chunks/closed/0103-sms-service/decision.md) (D1–D5). Ledger continuity (consent snapshots + identity fingerprint + history badges) added by [`0105-sms-ledger-continuity`](../chunks/closed/0105-sms-ledger-continuity/plan.md) same day.
 
 ## The add-on gate (D1)
 
@@ -18,6 +18,15 @@ SMS is **not** a universal channel — it's a service the dealer buys via the qu
 - **Opt-out is permanent and global.** `sms_opt_outs` is keyed on bare phone number, has no FKs, is never purged, and beats express consent. Sources: `stop_reply` (webhook) and `manual` (`addSmsOptOut`).
 - **CASL consent staleness** (fixed windows, D3): implied consent from a purchase/contract lapses **24 months** after `last_contact_at`; from an inquiry, **6 months**; express never lapses; an implied-basis recipient with no last-contact date is never sendable. Pure predicate in `src/features/sms/eligibility.ts`.
 - **Retention (D5):** dealer-supplied identity data (`sms_recipients`) is hard-deleted **24 months after import** (`scripts/purge-sms-recipients.ts`, dry-run default). The ledger survives, minimized — `sms_messages.recipient_id` goes NULL, the phone snapshot stays, and the body lives once on the send row so no customer names linger. Purpose: the CASL defense record ("texted this number on this date, delivered, STOP honored").
+- **Ledger self-sufficiency (0105):** each message row is also stamped at launch with `consent_basis` + `last_contact_at` (send-event snapshots), so the ledger proves *on what consent basis the send was lawful* with no join to purgeable data.
+
+## Ledger continuity across a purge (0105)
+
+The phone snapshot is the re-linking key when a dealer signs on again after a purge — but phones get recycled, so it proves *number* continuity, not *person* continuity. Shoring it up:
+
+- **Identity fingerprint:** `identity_hmac` = HMAC-SHA256 over the normalized name + phone, keyed on `SMS_IDENTITY_HMAC_KEY`, format `<8-hex key id>:<64-hex hmac>` (`src/lib/sms/identity.ts`). Stamped on recipients at import, snapshotted onto message rows at launch. **Verification-only** — a candidate identity can be checked against history; names can never be read back out. PIPEDA posture (we hold the key ⇒ pseudonymous personal data, retained as documented minimization) recorded in [`0105 decision.md`](../chunks/closed/0105-sms-ledger-continuity/decision.md) D2. Degradation: unset key / nameless row ⇒ NULL; key rotation ⇒ old fingerprints read `unknown` via the key-id prefix (never a false "differs").
+- **History surfacing:** the pre-send review's "Prior sends for this dealer" block (`loadRecipientHistory`, dealer-scoped by design — never cross-dealer) shows per-number prior-send counts, last outcome, and the continuity verdict: green "same person as before" / amber "name differs from prior sends" (likely recycled number — treat inherited history with suspicion).
+- **Concurrency:** import and launch share a campaign-scoped advisory lock, and launch evaluates recipients *inside* its locked transaction — a re-import can't swap the list between the review's promise and the send's snapshot.
 
 ## Auth & security
 
