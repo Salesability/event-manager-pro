@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   campaigns,
@@ -26,6 +26,7 @@ export type EvaluatedRecipient = {
   lastName: string | null;
   consentBasis: 'express' | 'implied_purchase' | 'implied_inquiry';
   lastContactAt: string | null;
+  identityHmac: string | null;
   eligibility: SmsEligibility;
 };
 
@@ -56,6 +57,7 @@ export async function evaluateCampaignRecipients(
       lastName: smsRecipients.lastName,
       consentBasis: smsRecipients.consentBasis,
       lastContactAt: smsRecipients.lastContactAt,
+      identityHmac: smsRecipients.identityHmac,
     })
     .from(smsRecipients)
     .where(eq(smsRecipients.campaignId, campaignId));
@@ -147,6 +149,90 @@ export async function loadSmsSendLog(campaignId: number): Promise<SmsSendLogEntr
       counts.filter((c) => c.sendId === s.id).map((c) => [c.status, c.count]),
     ),
   }));
+}
+
+export type RecipientHistoryEntry = {
+  phone: string;
+  priorCount: number;
+  lastStatus: string;
+  lastAt: Date;
+  /** Person-continuity verdict (0105): the current import's fingerprint vs the
+   *  most recent historical send to this number for this dealer. `matches` =
+   *  same name-on-number as before; `differs` = likely recycled number or a
+   *  name change — treat inherited history/consent with suspicion; `unknown` =
+   *  no fingerprint on one side (nameless row, unset key, or pre-0105 rows). */
+  identity: 'matches' | 'differs' | 'unknown';
+};
+
+// Dealer-scoped prior-send history for a campaign's recipients (0105) — the
+// re-linking read that makes the purge survivable: `sms_messages.phone` joins
+// history regardless of whether the original recipient rows still exist, and
+// the dealer scope rides `sms_sends → campaigns.dealer_id` (never the purged
+// recipient). Only phones WITH history are returned; sends for the given
+// campaign itself count too (a second launch sees the first).
+export async function loadRecipientHistory(
+  campaignId: number,
+  exec: Executor = db,
+): Promise<RecipientHistoryEntry[]> {
+  const [campaign] = await exec
+    .select({ dealerId: campaigns.dealerId })
+    .from(campaigns)
+    .where(eq(campaigns.id, campaignId))
+    .limit(1);
+  if (!campaign) return [];
+
+  const current = await exec
+    .select({ phone: smsRecipients.phone, identityHmac: smsRecipients.identityHmac })
+    .from(smsRecipients)
+    .where(eq(smsRecipients.campaignId, campaignId));
+  if (!current.length) return [];
+
+  const history = await exec
+    .select({
+      phone: smsMessages.phone,
+      status: smsMessages.status,
+      createdAt: smsMessages.createdAt,
+      identityHmac: smsMessages.identityHmac,
+    })
+    .from(smsMessages)
+    .innerJoin(smsSends, eq(smsSends.id, smsMessages.sendId))
+    .innerJoin(campaigns, eq(campaigns.id, smsSends.campaignId))
+    .where(
+      and(
+        eq(campaigns.dealerId, campaign.dealerId),
+        inArray(
+          smsMessages.phone,
+          current.map((r) => r.phone),
+        ),
+      ),
+    )
+    .orderBy(desc(smsMessages.createdAt));
+
+  const currentByPhone = new Map(current.map((r) => [r.phone, r.identityHmac]));
+  const entries = new Map<string, RecipientHistoryEntry>();
+  for (const row of history) {
+    const existing = entries.get(row.phone);
+    if (existing) {
+      existing.priorCount++;
+      continue;
+    }
+    // First row per phone is the most recent (desc order) — it carries the
+    // last outcome and the fingerprint the continuity check compares against.
+    const currentHmac = currentByPhone.get(row.phone) ?? null;
+    entries.set(row.phone, {
+      phone: row.phone,
+      priorCount: 1,
+      lastStatus: row.status,
+      lastAt: row.createdAt,
+      identity:
+        currentHmac && row.identityHmac
+          ? currentHmac === row.identityHmac
+            ? 'matches'
+            : 'differs'
+          : 'unknown',
+    });
+  }
+  return [...entries.values()];
 }
 
 export type SmsCampaignContext = {

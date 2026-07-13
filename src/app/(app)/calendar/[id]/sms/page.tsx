@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/app/page-header';
 import { loadCampaign } from '@/features/schedule/queries';
 import {
   evaluateCampaignRecipients,
+  loadRecipientHistory,
   loadSmsSendLog,
 } from '@/features/sms/queries';
 import { SmsPanel } from '@/features/sms/sms-panel';
@@ -54,9 +55,10 @@ export default async function CampaignSmsPage({
     );
   }
 
-  const [{ recipients, summary }, sendLogRaw] = await Promise.all([
+  const [{ recipients, summary }, sendLogRaw, history] = await Promise.all([
     evaluateCampaignRecipients(campaign.id),
     loadSmsSendLog(campaign.id),
+    loadRecipientHistory(campaign.id),
   ]);
 
   const excluded = recipients
@@ -83,6 +85,13 @@ export default async function CampaignSmsPage({
         campaignId={campaign.id}
         summary={summary}
         excluded={excluded}
+        history={history.map((h) => ({
+          phone: h.phone,
+          priorCount: h.priorCount,
+          lastStatus: h.lastStatus,
+          lastAtIso: h.lastAt.toISOString(),
+          identity: h.identity,
+        }))}
         defaultBody={defaultBody}
         sendLog={sendLogRaw.map((s) => ({
           id: s.id,

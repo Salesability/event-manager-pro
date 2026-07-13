@@ -30,6 +30,15 @@ export type SmsPanelProps = {
     excludedStaleConsent: number;
   };
   excluded: Array<{ phone: string; reason: 'opted_out' | 'stale_consent' }>;
+  /** 0105: dealer-scoped prior-send history for imported numbers (only phones
+   *  WITH history appear). `identity` is the person-continuity verdict. */
+  history: Array<{
+    phone: string;
+    priorCount: number;
+    lastStatus: string;
+    lastAtIso: string;
+    identity: 'matches' | 'differs' | 'unknown';
+  }>;
   defaultBody: string;
   sendLog: Array<{
     id: number;
@@ -46,6 +55,7 @@ export function SmsPanel({
   campaignId,
   summary,
   excluded,
+  history,
   defaultBody,
   sendLog,
 }: SmsPanelProps) {
@@ -168,6 +178,31 @@ export function SmsPanel({
         {summary.total === 0 && (
           <p className="text-sm text-zinc-500">No recipients imported yet.</p>
         )}
+        {history.length > 0 && (
+          <div className="mt-3 border-t border-zinc-200 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Prior sends for this dealer
+            </p>
+            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-zinc-600">
+              {history.map((h) => (
+                <li key={h.phone} className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs">{h.phone}</span>
+                  <span className="text-xs text-zinc-500">
+                    texted {h.priorCount}× · last {h.lastStatus} {formatDate(h.lastAtIso)}
+                  </span>
+                  {h.identity === 'matches' && (
+                    <Badge color="green">same person as before</Badge>
+                  )}
+                  {h.identity === 'differs' && (
+                    // A changed name on the same number — possibly recycled;
+                    // inherited history/consent should be treated with suspicion.
+                    <Badge color="amber">name differs from prior sends</Badge>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Section>
 
       <Section title="Compose" variant="card">
@@ -261,5 +296,13 @@ function formatDateTime(iso: string) {
     year: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+  });
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }

@@ -7,6 +7,7 @@ import { recordAudit } from '@/features/audit/actions';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
 import { smsMessages, smsOptOuts, smsRecipients, smsSends } from '@/lib/db/schema';
+import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
 import { normalizePhoneE164, parseRecipientsCsv } from './import-csv';
@@ -90,6 +91,9 @@ export const importSmsRecipients = capabilityClient('sms:send')
           lastName: row.lastName,
           consentBasis: row.consentBasis,
           lastContactAt: row.lastContactAt,
+          // 0105: verification-only person-continuity fingerprint (null when
+          // the key is unset or the row is nameless).
+          identityHmac: computeIdentityHmac(row),
           createdById: userId,
           updatedById: userId,
         })),
@@ -214,6 +218,13 @@ export const launchSmsSend = capabilityClient('sms:send')
             sendId: send.id,
             recipientId: r.id,
             phone: r.phone,
+            // 0105 send-event snapshots: the ledger stays a self-sufficient
+            // CASL defense record (consent basis + the last-contact date it
+            // was measured from) + person-continuity fingerprint, all of
+            // which survive the 24-month recipient purge.
+            consentBasis: r.consentBasis,
+            lastContactAt: r.lastContactAt,
+            identityHmac: r.identityHmac,
           })),
         )
         .returning({ id: smsMessages.id, recipientId: smsMessages.recipientId });
