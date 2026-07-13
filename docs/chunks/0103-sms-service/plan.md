@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Done | `35b9d36` |
 | 2: Schema — `sms_messages`, `sms_sends`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Done | `8099dc5` |
-| 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Pending | - |
+| 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Done | `80dbc2c` |
 | 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Pending | - |
 | 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Pending | - |
 | 6: Tests + smoke verification | Pending | - |
@@ -43,7 +43,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 33% (2/6 phases complete)
+**Overall Progress:** 50% (3/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -78,10 +78,16 @@ phone snapshotted on the message).
 - [x] Test case: `tests/integration/sms-schema.test.ts` — 6 cases: round-trip chain, purge → SET-NULL ledger survival, global opt-out unique, cross-campaign duplicate allowed / in-campaign rejected, E.164 CHECK rejection, status-enum lifecycle
 
 #### Phase 3: Compose + launch Server Actions
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `sms:send` capability (pure-admin, D4) in `src/lib/auth/capabilities.ts`
+- [x] `src/lib/sms/template.ts` — `renderSmsBody` personalization (`{{first_name}}` / `{{last_name}}` / `{{dealer_name}}`; missing → ''; unknown variable left verbatim)
+- [x] `src/features/sms/eligibility.ts` — pure CASL predicate (D3 fixed windows: purchase 24mo, inquiry 6mo, express never; opt-out beats express; missing last-contact on implied basis = stale)
+- [x] `src/features/sms/import-csv.ts` — CSV row parser + zod row schema + E.164 phone normalization (+1 default; keep-first in-file dedupe; all-or-nothing row validation)
+- [x] `src/features/sms/actions.ts` — `importSmsRecipients` (wholesale replace of the campaign list), `launchSmsSend` (D1 gate `sms_email > 0`, booked-only, opt-out + staleness exclusion, tx-created send + message rows then per-row dispatch, auto STOP footer), `addSmsOptOut` (manual source, idempotent)
+- [x] `src/features/sms/queries.ts` — `evaluateCampaignRecipients` (shared by preview + launch so they can't disagree), `loadSmsSendLog`, `loadSmsCampaignContext`
+- [x] `scripts/purge-sms-recipients.ts` — D5 retention purge (dry-run default, `--delete` to purge; recipients ≥ 24 months old; ledger survives via SET NULL)
+- [x] `audit_action` enum + `AuditActionId` gained `sms.recipients_imported` / `sms.launched` / `sms.opt_out_recorded` (migration `0050`, applied to sandbox)
+- [x] Test case: eligibility predicate unit matrix (bases × windows × opt-out × boundary day × missing dates) — `eligibility.test.ts`
+- [x] Test case: template rendering + CSV import parsing/normalization units — `template.test.ts`, `import-csv.test.ts` (DB-level launch flow lands in Phase 6 integration)
 
 #### Phase 4: Status-callback webhook + STOP opt-out
 - [ ] Task 1
