@@ -228,6 +228,23 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
             Email Coach
           </Button>
         </Can>
+        {campaign.status === 'booked' && (campaign.smsEmail ?? 0) > 0 && (
+          // 0103 D1: the SMS add-on gate — the button only exists when the
+          // accepted quote carries Digital (SMS/Email) touches. Sits with the
+          // other per-campaign messaging actions; the full surface (import /
+          // review / launch / log) needs server data, so it lives on its own
+          // page, same move as Send MSA → dealer page.
+          <Can capability="sms:send">
+            <Button
+              outline
+              compact
+              href={`/calendar/${campaign.id}/sms`}
+              title="Compose and send campaign texts to the dealer's list"
+            >
+              SMS
+            </Button>
+          </Can>
+        )}
         <span className="flex-1" />
         {campaign.status !== 'cancelled' && (
           <Can capability="quote:edit">
