@@ -36,6 +36,7 @@ Each section below is marked **You do** / **Developer does** so the boundary is 
 | **Supabase** | The database + staff login | Business | Free tier exists; **Pro (~US$25/mo)** recommended for a live business (daily backups, no auto-pause) |
 | **Resend** | Sends quote / contract emails | Business | Free tier covers low volume; Pro (~US$20/mo) for a verified domain + headroom |
 | **BoldSign** | E-signatures on MSAs + quotes | Business | Paid (per-sender plans, ~US$10–40/mo); has a free trial |
+| **Twilio** | Campaign SMS sends (chunk 0103) | Business | Pay-as-you-go (~US$2/mo toll-free number + ~US$0.008/segment to Canada); trial credit to start |
 | **Google Cloud** | Hosting + PDF storage + "Sign in with Google" | Business | Pay-as-you-go; **likely under ~US$10–20/mo** at this scale, plus a card on file |
 | **Domain / DNS** | The app's web address (`eventpro.salesability.ca`) | Business | Already owned (salesability.ca); just DNS records |
 
@@ -288,12 +289,43 @@ domain (needed by Resend).
 
 ---
 
+## 6. Twilio — campaign SMS
+
+**What it's for.** Sends campaign text messages to a dealership's customer list (the SMS add-on a dealer
+buys for an event, chunk 0103), and reports back per-message delivery status + STOP replies.
+
+**You do**
+1. Go to **twilio.com** → sign up with the business email → turn on 2FA.
+2. Buy a **toll-free number** (Phone Numbers → Buy a Number → Toll-Free). Canada has no 10DLC registry;
+   verified toll-free is Twilio's recommended route for application-to-person texting into Canada.
+3. Create a **Messaging Service** (Messaging → Services) and attach the toll-free number to it. The app
+   sends via the service, so the number can be swapped later without a code change.
+4. **Submit toll-free verification** (the console prompts for a business profile, the use case — event
+   marketing on behalf of dealerships — sample messages, and how recipients opted in). ⚠️ **Unverified
+   toll-free numbers are blocked by carriers** — sends to real customers won't deliver until this is
+   approved (typically days to a few weeks). Trial-mode sends to your own verified number work meanwhile.
+
+**Developer does**
+- Wires the credentials into Secret Manager (sandbox + prod split like Resend/BoldSign), points the
+  Messaging Service's status callback at the app's webhook, and sends a stage test (dev-redirected).
+
+**Hand back to the developer:**
+- Account SID → `TWILIO_ACCOUNT_SID` *(secret)*
+- Auth token → `TWILIO_AUTH_TOKEN` *(secret)*
+- Messaging Service SID (starts `MG…`) → `TWILIO_MESSAGING_SERVICE_SID`
+- Verification status of the toll-free number (approved / pending)
+
+> Research + sender-strategy rationale: [`docs/chunks/0103-sms-service/research.md`](../chunks/0103-sms-service/research.md).
+
+---
+
 ## Developer-side config (no account needed — for reference)
 
 These aren't vendor accounts; the developer sets them on the production deploy:
 
 - `APP_ENV=production` — flips the app into live mode (also the safety switch that stops test emails leaking).
 - `EMAIL_DEV_TO` — **left unset** in production (it's a dev-only inbox redirect).
+- `SMS_DEV_TO` — **left unset** in production (dev-only phone redirect for campaign SMS, chunk 0103).
 - `MSA_TEMPLATE_VERSION` — the active contract-wording version, bumped when the MSA prose changes.
 
 ## Hand-back checklist (one message to the developer)
@@ -304,6 +336,7 @@ When the accounts exist, the developer needs these collected (secrets via passwo
 - [ ] Resend: API key, verified from-address — **domain verified?**
 - [ ] BoldSign: API key, **region chosen (Canada?)**
 - [ ] Google Cloud: project ID, developer added to IAM, billing active, consent-screen name/email
+- [ ] Twilio: Account SID + auth token, Messaging Service SID, **toll-free verification submitted?**
 - [ ] Domain: agreed app address (`eventpro.salesability.ca`), DNS access
 - [ ] Confirm **2FA is on** for every account above
 

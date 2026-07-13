@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Pending | - |
+| 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Done | `35b9d36` |
 | 2: Schema — `sms_messages`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Pending | - |
 | 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Pending | - |
 | 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Pending | - |
@@ -42,7 +42,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 0% (0/6 phases complete)
+**Overall Progress:** 17% (1/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -53,8 +53,13 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: Research spike + vendor foundation
-- [ ] Task 1
-- [ ] Task 2
+- [x] Research spike: Canadian A2P sender-number strategy (long code vs toll-free-verified vs short code; CRTC/carrier filtering; Twilio Messaging Service) → `research.md` with a recommendation (one verified toll-free number + Messaging Service)
+- [x] Add the `twilio` dependency (`twilio@6.0.2`)
+- [x] `src/lib/sms/client.ts` — module-cached Twilio client factory, env guard with `{ error }` return, `__resetForTests()` (anchor: `src/lib/boldsign/client.ts:22`)
+- [x] `src/lib/sms/send.ts` — `sendSms` wrapper with the inverted dev-redirect gate (`APP_ENV==='production'` real-sends; else redirect to `SMS_DEV_TO` or refuse) (anchor: `src/lib/email/send.ts:46`)
+- [x] `.env.example` Twilio block (creds, Messaging Service SID, `SMS_DEV_TO` doctrine)
+- [x] `docs/wiki/go-live-accounts.md` — Twilio provisioning runbook entry §6 (owner-driven: account creation, toll-free purchase + verification — flagged, not blocking)
+- [x] Unit tests: client env-guard + send redirect matrix (anchor: `src/lib/email/send.test.ts`)
 
 #### Phase 2: Schema — messages, recipients, opt-outs
 - [ ] Task 1
