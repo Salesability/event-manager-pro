@@ -10,8 +10,8 @@
 | 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Done | `35b9d36` |
 | 2: Schema — `sms_messages`, `sms_sends`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Done | `8099dc5` |
 | 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Done | `80dbc2c` |
-| 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Done | - |
-| 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Pending | - |
+| 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Done | `6a10b92` |
+| 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Done | `24e1e88` |
 | 6: Tests + smoke verification | Pending | - |
 
 The app has no SMS capability; the vision (Module 2, Event Production Console) makes SMS a first-class campaign channel — but **as a per-campaign add-on, not something every campaign uses**. This chunk builds the Twilio integration + the campaign-driven text send: on campaigns where the SMS add-on is active, staff compose an SMS derived from campaign data, attach a recipient list, launch, and track delivery — with a hard compliance floor: permanent STOP/opt-out enforcement **and** consent-staleness exclusion (a dealer's list opt-in lapses when there's been no dealer↔customer contact within the CASL implied-consent window; stale recipients are excluded and reported at pre-send review). "Done" = a real SMS delivers from stage (dev-redirected), status lands back via webhook, a STOP reply permanently excludes that number, and a stale-consent recipient provably never sends. See `intent.md` for non-goals (no DataLoader, no two-way console, no AI creative) and the open questions (what flips the add-on on — quote-derived vs explicit flag; staleness field requirements).
@@ -34,7 +34,7 @@ For each new file or method below, the builder reads the anchor first and matche
 | Delivery-status model (per-message `queued/sent/delivered/failed`) | `src/lib/db/schema/campaigns.ts:34` | `campaignGcalSyncStatus` trio is the existing best-effort, app-is-source-of-truth, manual-retry projection-status pattern |
 | `.env.example` Twilio block | `.env.example` BoldSign block | Same doc-comment style; that block also documents the shared-dev-redirect rationale to follow |
 | `src/lib/db/schema/sms-sends.ts` (added Phase 2, not in original sketch) | `src/lib/db/schema/quote-attachments.ts` | One-row-per-launch parent of `sms_messages`; carries the body ONCE (D5 — no per-recipient rendered bodies in the ledger) + the pre-send exclusion-count snapshot |
-| Campaign-detail SMS panel | event-detail component in `src/features/schedule/` hosting the Email Client / Email Coach actions | Same surface, same layer — the SMS panel sits beside the existing per-campaign messaging actions (locate exact file at build time; add row here) |
+| Campaign-detail SMS panel | event-detail component in `src/features/schedule/` hosting the Email Client / Email Coach actions | Same surface, same layer — the SMS panel sits beside the existing per-campaign messaging actions. Located at build time: `src/app/(app)/calendar/event-detail.tsx` (dialog button) + dedicated page `src/app/(app)/calendar/[id]/sms/page.tsx` + client panel `src/features/sms/sms-panel.tsx` (the dialog is a snapshot-props client component, so the data-heavy surface gets its own server page — same move as Send MSA → dealer page) |
 
 **Conventions referenced:**
 - `docs/wiki/conventions.md` — mutations via Server Actions; route handler only for the Twilio webhook (external caller).
@@ -43,7 +43,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 67% (4/6 phases complete)
+**Overall Progress:** 83% (5/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -97,9 +97,10 @@ phone snapshotted on the message).
 - [x] Test case: classification + status-mapping + STOP-keyword units — `webhook-events.test.ts` (DB round-trip lands in Phase 6 integration)
 
 #### Phase 5: UI — campaign-detail SMS panel
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
+- [x] `src/app/(app)/calendar/[id]/sms/page.tsx` — server page: `assertCan('sms:send')`, D1 gate rendering (explanatory empty state when the add-on isn't active / not booked), evaluation + send-log load, `?event=` back link to the dialog
+- [x] `src/features/sms/sms-panel.tsx` — client panel: CSV import (replace-confirm), pre-send review badges + excluded list with reasons, compose textarea (variables hint, STOP-footer note) + confirm-dialog launch, per-send delivery log with status badges
+- [x] `src/app/(app)/calendar/event-detail.tsx` — "SMS" button beside Email Client/Coach, rendered only when `booked && smsEmail > 0` inside `<Can capability="sms:send">` (D1 gate; links out like Send MSA does)
+- [x] Test case: covered by unit layers (eligibility/template/import) + Phase 6 browser smoke of the panel route (read-only)
 
 #### Phase 6: Tests + smoke verification
 - [ ] Service-level integration test for the SMS send path (opt-out exclusion provable against real DB)
