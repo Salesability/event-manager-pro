@@ -35,6 +35,15 @@ substitutions:
   # to send on a non-production deploy).
   _EMAIL_DEV_TO: 'david.hogan@networknode.ca'
   _BOLDSIGN_API_BASE_URL: https://api-ca.boldsign.com
+  # Twilio campaign SMS (0103). The account SID mounts from Secret Manager
+  # alongside the auth token + identity-HMAC key — not because the SID is
+  # truly secret (it's an identifier) but because GitHub Push Protection
+  # pattern-matches `AC…` SIDs and blocks any push containing one.
+  # _SMS_DEV_TO mirrors _EMAIL_DEV_TO: non-prod redirects every send to this
+  # phone (else sendSms refuses). The 902-710-8640 number is the campaign
+  # sender — NEVER pool +19027073043 here (it belongs to the live traffic app).
+  _TWILIO_MESSAGING_SERVICE_SID: MG39b602366c521eb2d6aa90047a5e6cc8
+  _SMS_DEV_TO: '+15149185000'
 
 steps:
   # 1) Unit-test gate (same as prod: unit-only; integration flakes on the pooler).
@@ -89,8 +98,8 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=3000
-      - --set-env-vars=^@@^NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}@@NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}@@SITE_URL=${_SITE_URL}@@APP_ENV=${_APP_ENV}@@MSA_TEMPLATE_VERSION=${_MSA_TEMPLATE_VERSION}@@GCS_BUCKET=${_GCS_BUCKET}@@GCS_PROJECT_ID=${_GCS_PROJECT_ID}@@RESEND_FROM_EMAIL=${_RESEND_FROM_EMAIL}@@EMAIL_DEV_TO=${_EMAIL_DEV_TO}@@BOLDSIGN_API_BASE_URL=${_BOLDSIGN_API_BASE_URL}
-      - --set-secrets=DATABASE_URL=database-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest
+      - --set-env-vars=^@@^NEXT_PUBLIC_SUPABASE_URL=${_NEXT_PUBLIC_SUPABASE_URL}@@NEXT_PUBLIC_SUPABASE_ANON_KEY=${_NEXT_PUBLIC_SUPABASE_ANON_KEY}@@SITE_URL=${_SITE_URL}@@APP_ENV=${_APP_ENV}@@MSA_TEMPLATE_VERSION=${_MSA_TEMPLATE_VERSION}@@GCS_BUCKET=${_GCS_BUCKET}@@GCS_PROJECT_ID=${_GCS_PROJECT_ID}@@RESEND_FROM_EMAIL=${_RESEND_FROM_EMAIL}@@EMAIL_DEV_TO=${_EMAIL_DEV_TO}@@BOLDSIGN_API_BASE_URL=${_BOLDSIGN_API_BASE_URL}@@TWILIO_MESSAGING_SERVICE_SID=${_TWILIO_MESSAGING_SERVICE_SID}@@SMS_DEV_TO=${_SMS_DEV_TO}
+      - --set-secrets=DATABASE_URL=database-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest,BOLDSIGN_API_KEY=boldsign-api-key:latest,BOLDSIGN_WEBHOOK_SECRET=boldsign-webhook-secret:latest,RESEND_API_KEY=resend-api-key:latest,TWILIO_ACCOUNT_SID=twilio-account-sid:latest,TWILIO_AUTH_TOKEN=twilio-auth-token:latest,SMS_IDENTITY_HMAC_KEY=sms-identity-hmac-key:latest
 
 # No `images:` block — the push step already uploads both tags before deploy.
 
