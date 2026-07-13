@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Research spike + vendor foundation (Twilio account, sender-number strategy, `src/lib/sms/` client, env/secrets) | Done | `35b9d36` |
-| 2: Schema — `sms_messages`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Pending | - |
+| 2: Schema — `sms_messages`, `sms_sends`, per-campaign recipients, permanent `sms_opt_outs` (+ migration) | Done | `8099dc5` |
 | 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Pending | - |
 | 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Pending | - |
 | 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Pending | - |
@@ -33,6 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 | Consent-eligibility predicate (opt-out + staleness) | `src/features/quotes/accept-gate.ts` | Pure, executor-injectable, real-DB-tested predicate module — the shape for `isRecipientEligible(consentBasis, lastContactAt, optedOut)` so the CASL window logic is unit-testable in isolation |
 | Delivery-status model (per-message `queued/sent/delivered/failed`) | `src/lib/db/schema/campaigns.ts:34` | `campaignGcalSyncStatus` trio is the existing best-effort, app-is-source-of-truth, manual-retry projection-status pattern |
 | `.env.example` Twilio block | `.env.example` BoldSign block | Same doc-comment style; that block also documents the shared-dev-redirect rationale to follow |
+| `src/lib/db/schema/sms-sends.ts` (added Phase 2, not in original sketch) | `src/lib/db/schema/quote-attachments.ts` | One-row-per-launch parent of `sms_messages`; carries the body ONCE (D5 — no per-recipient rendered bodies in the ledger) + the pre-send exclusion-count snapshot |
 | Campaign-detail SMS panel | event-detail component in `src/features/schedule/` hosting the Email Client / Email Coach actions | Same surface, same layer — the SMS panel sits beside the existing per-campaign messaging actions (locate exact file at build time; add row here) |
 
 **Conventions referenced:**
@@ -42,7 +43,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 17% (1/6 phases complete)
+**Overall Progress:** 33% (2/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -62,9 +63,19 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Unit tests: client env-guard + send redirect matrix (anchor: `src/lib/email/send.test.ts`)
 
 #### Phase 2: Schema — messages, recipients, opt-outs
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
+
+Shaped by `decision.md` D1–D5 (owner-confirmed 2026-07-13): no campaign flag
+(gate = `sms_email > 0`); per-campaign dealer-list import; permanent global
+opt-outs; body stored once per launch; recipients hard-deleted at 24 months
+with the message ledger surviving (`recipient_id` nullable, `ON DELETE SET NULL`,
+phone snapshotted on the message).
+
+- [x] `src/lib/db/schema/sms-recipients.ts` — per-campaign imported dealer list: campaign FK, phone (E.164, CHECK-guarded), name, consent basis enum (`express` / `implied_purchase` / `implied_inquiry`), `last_contact_at`; unique `(campaign_id, phone)`; `created_at` index for the retention purge
+- [x] `src/lib/db/schema/sms-sends.ts` — one row per launch: campaign FK (RESTRICT), body (the template, stored once — D5), exclusion-count snapshot (`total_recipients` / `excluded_opt_out` / `excluded_stale_consent`); launch actor via `created_by_id`
+- [x] `src/lib/db/schema/sms-messages.ts` — the permanent ledger: send FK (RESTRICT), nullable recipient FK (`ON DELETE SET NULL`), snapshotted phone, Twilio SID (unique, partial), status enum (`queued`/`sent`/`delivered`/`undelivered`/`failed`), error code, status timestamps; no `actors` (machine rows)
+- [x] `src/lib/db/schema/sms-opt-outs.ts` — permanent: phone (unique), opted-out-at, source (`stop_reply` / `manual`), inbound SID evidence
+- [x] Register all four in `schema/index.ts`; migration `drizzle/0049_unusual_timeslip.sql` generated + applied to sandbox (session pooler 5432; journal `when` monotonic verified; tables + CHECKs + partial unique verified via psql)
+- [x] Test case: `tests/integration/sms-schema.test.ts` — 6 cases: round-trip chain, purge → SET-NULL ledger survival, global opt-out unique, cross-campaign duplicate allowed / in-campaign rejected, E.164 CHECK rejection, status-enum lifecycle
 
 #### Phase 3: Compose + launch Server Actions
 - [ ] Task 1
