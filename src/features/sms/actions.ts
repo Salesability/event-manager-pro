@@ -186,10 +186,15 @@ export const launchSmsSend = capabilityClient('sms:send')
     }
 
     // Status callbacks ride SITE_URL (operator-configured origin — never the
-    // request Host, same posture as share-link emails). Absent in local dev →
-    // no callback; messages simply stay `queued`.
+    // request Host, same posture as share-link emails). Only attached when the
+    // origin is public https: Twilio rejects the whole messages.create call
+    // (21609) for localhost/plain-http callback URLs, so a dev env with
+    // SITE_URL=http://localhost:3000 must send WITHOUT a callback (messages
+    // stay `queued` locally) rather than fail every dispatch.
     const origin = process.env.SITE_URL?.trim().replace(/\/$/, '');
-    const statusCallbackUrl = origin ? `${origin}/api/twilio/webhook` : undefined;
+    const statusCallbackUrl = origin?.startsWith('https://')
+      ? `${origin}/api/twilio/webhook`
+      : undefined;
 
     const userId = ctx.user.id;
     const created: CreatedSmsSend = await db.transaction(async (tx): Promise<CreatedSmsSend> => {
