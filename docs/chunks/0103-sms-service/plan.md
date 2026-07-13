@@ -12,7 +12,7 @@
 | 3: Compose + launch Server Actions (campaign-driven payload, personalization variables, opt-out exclusion, idempotent send) | Done | `80dbc2c` |
 | 4: Twilio status-callback webhook (delivery tracking) + inbound STOP → opt-out capture | Done | `6a10b92` |
 | 5: UI — campaign-detail SMS panel (compose, pre-send review summary, send log) | Done | `24e1e88` |
-| 6: Tests + smoke verification | Pending | - |
+| 6: Tests + smoke verification | Done | `11dbdea` |
 
 The app has no SMS capability; the vision (Module 2, Event Production Console) makes SMS a first-class campaign channel — but **as a per-campaign add-on, not something every campaign uses**. This chunk builds the Twilio integration + the campaign-driven text send: on campaigns where the SMS add-on is active, staff compose an SMS derived from campaign data, attach a recipient list, launch, and track delivery — with a hard compliance floor: permanent STOP/opt-out enforcement **and** consent-staleness exclusion (a dealer's list opt-in lapses when there's been no dealer↔customer contact within the CASL implied-consent window; stale recipients are excluded and reported at pre-send review). "Done" = a real SMS delivers from stage (dev-redirected), status lands back via webhook, a STOP reply permanently excludes that number, and a stale-consent recipient provably never sends. See `intent.md` for non-goals (no DataLoader, no two-way console, no AI creative) and the open questions (what flips the add-on on — quote-derived vs explicit flag; staleness field requirements).
 
@@ -43,7 +43,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/go-live-accounts.md` — add the Twilio account to the provisioning runbook (owner-owned account, sandbox/prod key split like BoldSign/Resend).
 - `docs/wiki/commercial-spine.md` — campaigns are operational delivery; SMS hangs off the campaign, not the quote.
 
-**Overall Progress:** 83% (5/6 phases complete)
+**Overall Progress:** 100% (6/6 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -103,8 +103,9 @@ phone snapshotted on the message).
 - [x] Test case: covered by unit layers (eligibility/template/import) + Phase 6 browser smoke of the panel route (read-only)
 
 #### Phase 6: Tests + smoke verification
-- [ ] Service-level integration test for the SMS send path (opt-out exclusion provable against real DB)
-- [ ] Verify multi-step operations with real DB (launch → message rows → webhook status flip)
-- [ ] Verify transaction rollback on failure
-- [ ] Smoke (web-test): `goto` the campaign/event detail route; expect the SMS panel heading + compose/review controls (read-only — do NOT click a real send)
-- [ ] (If DB state is needed) `pnpm dlx tsx scripts/sms-service-smoke.ts insert`; run web-test; `... cleanup`
+- [x] Service-level integration test for the SMS send path (opt-out exclusion provable against real DB) — `tests/integration/sms-service.test.ts` (opt-out + stale exclusion via `evaluateCampaignRecipients` on real rows)
+- [x] Verify multi-step operations with real DB (launch-shape rows → webhook status flip) — real route-handler `POST` with signed Twilio payloads: delivered flip, out-of-order `sent` can't regress, tampered signature 401s without touching the DB, unknown sid 404s, inbound STOP → permanent opt-out (idempotent), chatty inbound ignored. Needed `tests/integration/helpers/load-env.ts` (the route's import chain evaluates the app db pool, which captures `DATABASE_URL` at import time)
+- [x] Verify transaction rollback on failure — a CHECK-violating message row aborts the whole launch tx (no orphaned `sms_sends` row)
+- [x] Smoke (web-test): `/calendar/1397/sms` renders heading, recipients import, pre-send review badges (4 imported / 2 eligible / 1 opted out / 1 stale) + excluded reasons, compose + Launch, send log with delivered/failed badges; `/calendar?event=1397` dialog shows the gated SMS link. Read-only; screenshot `/tmp/web-test-sms-panel.png`. (Dev server needed a restart — it predated the new route.)
+- [x] `scripts/sms-service-smoke.ts` insert/cleanup fixture (booked + `smsEmail>0` + all three review states + a prior send) — cleaned up after the smoke
+- [x] Full-suite note: parallel `pnpm test` tripped the known sandbox-pooler `EMAXCONNSESSION` flake (12 cross-suite failures incl. pre-existing tests); serial `vitest run tests/integration/ --no-file-parallelism` = 81/81 PASS, units 1335/1335 PASS
