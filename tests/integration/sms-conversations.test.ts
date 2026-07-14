@@ -331,10 +331,13 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
 
     const replySid = `SMreply_${publicId()}`;
     twilioMocks.create.mockResolvedValueOnce({ sid: replySid });
+    // aiDrafted: the approved-AI-draft provenance flag (0106 Phase 4) must
+    // persist through the round trip onto the message row.
     const result = await sendThreadReply({
       threadId: conversation.id,
       body: 'We open at 9am — reply with a time and we will book you in.',
       userId: user.id,
+      aiDrafted: true,
     });
     expect(result).toEqual({ ok: true, messageId: expect.any(Number) });
 
@@ -352,6 +355,7 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
     const outbound = conversation.messages[1];
     expect(outbound.direction).toBe('outbound');
     expect(outbound.status).toBe('queued');
+    expect(outbound.aiDrafted).toBe(true);
     const [outboundRow] = await db
       .select({ providerSid: smsThreadMessages.providerSid, createdById: smsThreadMessages.createdById })
       .from(smsThreadMessages)

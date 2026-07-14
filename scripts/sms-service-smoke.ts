@@ -5,6 +5,11 @@
 // the full panel (review badges, excluded list with reasons, send log) for a
 // read-only eyeball — no real Twilio call is made.
 //
+// 0106 addition: two conversation threads — an active one (unread inbound +
+// a delivered staff reply + an approved AI-drafted reply) and a STOP-halted
+// one — so the Conversations section renders thread rows, message bubbles,
+// status/AI badges, the reply affordance, and the halted state.
+//
 // Usage:
 //   set -a && source .env.local && set +a && pnpm dlx tsx scripts/sms-service-smoke.ts insert
 //   set -a && source .env.local && set +a && pnpm dlx tsx scripts/sms-service-smoke.ts cleanup
@@ -25,6 +30,8 @@ import {
   smsOptOuts,
   smsRecipients,
   smsSends,
+  smsThreadMessages,
+  smsThreads,
 } from '../src/lib/db/schema';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -60,6 +67,17 @@ async function main() {
           .where(inArray(campaigns.dealerId, dealerIds));
         const campaignIds = campaignRows.map((c) => c.id);
         if (campaignIds.length) {
+          const threadRows = await db
+            .select({ id: smsThreads.id })
+            .from(smsThreads)
+            .where(inArray(smsThreads.campaignId, campaignIds));
+          const threadIds = threadRows.map((t) => t.id);
+          if (threadIds.length) {
+            await db
+              .delete(smsThreadMessages)
+              .where(inArray(smsThreadMessages.threadId, threadIds));
+            await db.delete(smsThreads).where(inArray(smsThreads.id, threadIds));
+          }
           const sendRows = await db
             .select({ id: smsSends.id })
             .from(smsSends)
@@ -168,7 +186,76 @@ async function main() {
       },
     ]);
 
-    console.log(`Inserted 0103 smoke fixture. campaignId=${campaign.id}`);
+    // 0106 conversation threads. Evie's is the active thread: her reply is
+    // unread (last_inbound_at > last_read_at) so the "new reply" badge shows,
+    // and it carries a delivered staff reply + an approved AI draft. Olive's
+    // is the halted thread (she's in the opt-out registry above).
+    const [evieThread] = await db
+      .insert(smsThreads)
+      .values({
+        campaignId: campaign.id,
+        phone: `${PHONE_PREFIX}0001`,
+        lastMessageAt: new Date(),
+        lastInboundAt: new Date(),
+      })
+      .returning({ id: smsThreads.id });
+    await db.insert(smsThreadMessages).values([
+      {
+        threadId: evieThread.id,
+        direction: 'inbound',
+        body: 'Interested! What time do you open Saturday?',
+        providerSid: 'SM0106smokein01',
+      },
+      {
+        threadId: evieThread.id,
+        direction: 'outbound',
+        body: 'Hi Evie — Saturday works great. What time suits you best?',
+        providerSid: 'SM0106smokeout1',
+        status: 'delivered',
+        statusUpdatedAt: new Date(),
+      },
+      {
+        threadId: evieThread.id,
+        direction: 'outbound',
+        body: 'We can hold 10am for you — reply YES to confirm.',
+        providerSid: 'SM0106smokeout2',
+        status: 'sent',
+        statusUpdatedAt: new Date(),
+        aiDrafted: true,
+      },
+      {
+        threadId: evieThread.id,
+        direction: 'inbound',
+        body: 'YES please, 10am Saturday',
+        providerSid: 'SM0106smokein02',
+      },
+    ]);
+
+    const [oliveThread] = await db
+      .insert(smsThreads)
+      .values({
+        campaignId: campaign.id,
+        phone: `${PHONE_PREFIX}0004`,
+        lastMessageAt: new Date(),
+        lastInboundAt: new Date(),
+      })
+      .returning({ id: smsThreads.id });
+    await db.insert(smsThreadMessages).values([
+      {
+        threadId: oliveThread.id,
+        direction: 'inbound',
+        body: 'not interested',
+        providerSid: 'SM0106smokein03',
+      },
+      {
+        threadId: oliveThread.id,
+        direction: 'inbound',
+        body: 'STOP',
+        providerSid: 'SM0106smokein04',
+      },
+    ]);
+
+    console.log(`Inserted 0103+0106 smoke fixture. campaignId=${campaign.id}`);
     console.log(`Navigate to /calendar/${campaign.id}/sms`);
   } finally {
     await client.end({ timeout: 5 });
