@@ -9,7 +9,7 @@ import { db } from '@/lib/db';
 import { campaigns, smsMessages, smsOptOuts, smsRecipients, smsSends, smsThreads } from '@/lib/db/schema';
 import { draftSmsReply } from '@/lib/ai/draft-sms-reply';
 import { sendThreadReply } from '@/lib/sms/conversations';
-import { loadThreadDraftContext } from './conversations/queries';
+import { loadInboxUnreadCount, loadThreadDraftContext } from './conversations/queries';
 import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
@@ -470,6 +470,18 @@ export const markThreadRead = capabilityClient('sms:send')
 
     revalidateSmsViews();
     return { ok: true };
+  });
+
+export type InboxUnreadCountResult = { ok: true; count: number };
+
+// Nav-badge poll (0107): how many threads have unread inbound. Read-only —
+// reads triggered by our own UI go through a Server Action like everything
+// else (route handlers are external-callers-only per conventions).
+// validation: skip — takes no input; returns a count only.
+export const getInboxUnreadCount = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async (): Promise<InboxUnreadCountResult> => {
+    return { ok: true, count: await loadInboxUnreadCount() };
   });
 
 const reassignSchema = z.object({
