@@ -16,6 +16,7 @@ export * from './quote-attachments';
 export * from './quote-line-items';
 export * from './quotes';
 export * from './service-items';
+export * from './sms-conversations';
 export * from './sms-messages';
 export * from './sms-opt-outs';
 export * from './sms-recipients';
