@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: Schema — conversation threads + inbound persistence | Done | `add2840` |
 | 2: Webhook — capture non-STOP inbound into threads | Done | `c0e69ef` |
-| 3: Console UI + staff reply action | Pending | - |
+| 3: Console UI + staff reply action | Done | `e8798c1` |
 | 4: AI-drafted replies (draft-and-approve) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` + `db-conventions` skill — before any schema/migration work
 - `CLAUDE.md` → Conventions — mutations are Server Actions; the webhook route stays external-caller-only
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -56,10 +56,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test case 2 — mid-thread STOP writes opt-out AND appends thread evidence; STOP/chatter from unknown number creates no thread (opt-out still lands)
 
 #### Phase 3: Console UI + staff reply action
-- [ ] Task 1
-- [ ] Task 2 (reply action: opt-out recheck + dev-redirect via `sendSms`)
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] Task 1 — `ConversationsPanel` (`src/features/sms/conversations/conversations-panel.tsx`) + read model (`conversations/queries.ts`: `loadCampaignConversations` with unread/opted-out derivation, `loadReassignCandidates` per D2); rendered on `/calendar/[id]/sms` on BOTH gate branches (replies can arrive after the launch gate lapses); actions `replyToThread` / `markThreadRead` / `reassignThread` (+ 2 new `audit_action` enum values, migration `0053`)
+- [x] Task 2 (reply action: opt-out recheck + dev-redirect via `sendSms`) — `sendThreadReply` in `src/lib/sms/conversations.ts`: persist-first queued row → dispatch → sid/failed stamp, opt-out recheck before dispatch, replying clears unread; webhook status callback extended to flip thread-reply rows (same monotonic rank)
+- [x] Test case 1 — reply round-trip: dev-redirect proven (Twilio addressed at `SMS_DEV_TO`, real recipient in body prefix), persist-first row + actor stamp, status callback flips the thread ledger
+- [x] Test case 2 — STOP mid-thread → reply refused before dispatch, no outbound row; reassign candidates = the other campaigns that texted the number
 
 #### Phase 4: AI-drafted replies (draft-and-approve)
 - [ ] Task 1 (gated on owner call: autonomy + disclosure wording)
