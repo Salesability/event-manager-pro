@@ -99,6 +99,56 @@ export async function loadCampaignConversations(
   }));
 }
 
+export type ThreadDraftContext = {
+  threadId: number;
+  phone: string;
+  dealerName: string;
+  startDate: string;
+  endDate: string;
+  optedOut: boolean;
+  messages: Array<{ direction: 'inbound' | 'outbound'; body: string }>;
+};
+
+// Everything the AI draft needs (0106 Phase 4): the campaign facts the prompt
+// is constrained to (dealer name + event dates) plus the transcript, and the
+// opt-out flag so a halted thread is refused before any model call.
+export async function loadThreadDraftContext(
+  threadId: number,
+): Promise<ThreadDraftContext | null> {
+  const [thread] = await db
+    .select({
+      threadId: smsThreads.id,
+      phone: smsThreads.phone,
+      dealerName: dealers.name,
+      startDate: campaigns.startDate,
+      endDate: campaigns.endDate,
+    })
+    .from(smsThreads)
+    .innerJoin(campaigns, eq(campaigns.id, smsThreads.campaignId))
+    .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .where(eq(smsThreads.id, threadId))
+    .limit(1);
+  if (!thread) return null;
+
+  const [messages, [optOut]] = await Promise.all([
+    db
+      .select({
+        direction: smsThreadMessages.direction,
+        body: smsThreadMessages.body,
+      })
+      .from(smsThreadMessages)
+      .where(eq(smsThreadMessages.threadId, threadId))
+      .orderBy(asc(smsThreadMessages.createdAt)),
+    db
+      .select({ id: smsOptOuts.id })
+      .from(smsOptOuts)
+      .where(eq(smsOptOuts.phone, thread.phone))
+      .limit(1),
+  ]);
+
+  return { ...thread, optedOut: Boolean(optOut), messages };
+}
+
 export type ReassignCandidate = {
   campaignId: number;
   dealerName: string;

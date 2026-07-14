@@ -9,7 +9,12 @@ import { Textarea } from '@/components/catalyst/textarea';
 import { Section } from '@/components/app/section';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
-import { markThreadRead, reassignThread, replyToThread } from '../actions';
+import {
+  draftThreadReply,
+  markThreadRead,
+  reassignThread,
+  replyToThread,
+} from '../actions';
 
 // Client half of the conversation console (0106 Phase 3). Mirrors SmsPanel:
 // data arrives serialized from the server page, every mutation routes through
@@ -68,6 +73,9 @@ function ConversationThread({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [reply, setReply] = useState('');
+  // D1 provenance: the current reply text started life as an AI draft
+  // (approve/edit both count; clearing the box resets it).
+  const [replyIsAiDraft, setReplyIsAiDraft] = useState(false);
   const [reassignTo, setReassignTo] = useState('');
 
   function onReply() {
@@ -75,11 +83,29 @@ function ConversationThread({
       const fd = new FormData();
       fd.set('threadId', String(conversation.id));
       fd.set('body', reply);
+      if (replyIsAiDraft) fd.set('aiDrafted', 'true');
       const result = toLegacyResult<{ ok: true }>(await replyToThread(fd));
       if ('ok' in result) {
         toast.success('Reply sent');
         setReply('');
+        setReplyIsAiDraft(false);
         router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function onDraft() {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set('threadId', String(conversation.id));
+      const result = toLegacyResult<{ ok: true; draft: string }>(
+        await draftThreadReply(fd),
+      );
+      if ('ok' in result) {
+        setReply(result.draft);
+        setReplyIsAiDraft(true);
       } else {
         toast.error(result.error);
       }
@@ -169,13 +195,24 @@ function ConversationThread({
         <div className="mt-3 space-y-2">
           <Textarea
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onChange={(e) => {
+              setReply(e.target.value);
+              if (e.target.value.trim() === '') setReplyIsAiDraft(false);
+            }}
             rows={2}
             maxLength={1600}
             aria-label={`Reply to ${conversation.phone}`}
-            placeholder="Type a reply…"
+            placeholder="Type a reply, or draft one with AI…"
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-2">
+            {replyIsAiDraft && (
+              <span className="mr-auto text-xs text-zinc-500">
+                AI draft — edit freely; nothing sends until you click Send.
+              </span>
+            )}
+            <Button outline compact type="button" onClick={onDraft} disabled={pending}>
+              Draft AI reply
+            </Button>
             <Button
               color="brand"
               compact

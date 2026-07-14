@@ -7,7 +7,9 @@ import { recordAudit } from '@/features/audit/actions';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
 import { campaigns, smsMessages, smsOptOuts, smsRecipients, smsSends, smsThreads } from '@/lib/db/schema';
+import { draftSmsReply } from '@/lib/ai/draft-sms-reply';
 import { sendThreadReply } from '@/lib/sms/conversations';
+import { loadThreadDraftContext } from './conversations/queries';
 import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
@@ -361,6 +363,10 @@ export const launchSmsSend = capabilityClient('sms:send')
 const replySchema = z.object({
   threadId: z.coerce.number().int().positive(),
   body: z.string().trim().min(1, 'Reply text is required.').max(1600, 'Replies are capped at 1600 characters.'),
+  // Provenance only (D1/D4): the reply text originated as an approved AI
+  // draft (possibly edited). FormData carries strings, so the flag is the
+  // literal 'true' — anything else reads as staff-authored.
+  aiDrafted: z.literal('true').optional(),
 });
 
 // Staff reply into a conversation thread (0106 Phase 3). The heavy lifting —
@@ -379,6 +385,7 @@ export const replyToThread = capabilityClient('sms:send')
       threadId: parsed.data.threadId,
       body: parsed.data.body,
       userId: ctx.user.id,
+      aiDrafted: parsed.data.aiDrafted === 'true',
     });
     if ('error' in result) return result;
 
@@ -386,7 +393,7 @@ export const replyToThread = capabilityClient('sms:send')
       action: 'sms.thread_replied',
       targetTable: 'sms_thread_messages',
       targetId: result.messageId,
-      payload: { threadId: parsed.data.threadId },
+      payload: { threadId: parsed.data.threadId, aiDrafted: parsed.data.aiDrafted === 'true' },
     });
 
     revalidateSmsViews();
@@ -396,6 +403,52 @@ export const replyToThread = capabilityClient('sms:send')
 const threadIdSchema = z.object({
   threadId: z.coerce.number().int().positive(),
 });
+
+export type DraftReplyResult = { ok: true; draft: string } | { error: string };
+
+// AI-drafted reply suggestion (0106 Phase 4, D1 draft-and-approve). Returns
+// TEXT for the console's reply box — never sends. The staff member edits or
+// discards freely; sending goes through `replyToThread` with the aiDrafted
+// provenance flag. Drafts are constrained to campaign facts inside
+// `draftSmsReply`'s prompt; no audit entry because nothing is mutated.
+export const draftThreadReply = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<DraftReplyResult> => {
+    const parsed = threadIdSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid thread id.' };
+    }
+
+    const context = await loadThreadDraftContext(parsed.data.threadId);
+    if (!context) return { error: 'Conversation not found.' };
+    if (context.optedOut) {
+      return { error: 'This number has opted out (STOP) — no reply can be sent, so there is nothing to draft.' };
+    }
+    if (!context.messages.some((m) => m.direction === 'inbound')) {
+      return { error: 'Nothing to reply to yet — the conversation has no inbound message.' };
+    }
+
+    return draftSmsReply({
+      dealerName: context.dealerName,
+      eventDates: eventDatesLabel(context.startDate, context.endDate),
+      conversation: context.messages,
+    });
+  });
+
+// Matches the sms page's date label ("Aug 1 – Aug 2, 2026") so the AI states
+// the event dates the same way the rest of the surface renders them.
+function eventDatesLabel(startIso: string, endIso: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  };
+  return startIso === endIso ? fmt(startIso) : `${fmt(startIso)} – ${fmt(endIso)}`;
+}
 
 // Clears the thread's unread marker (single global read pointer, v1).
 export const markThreadRead = capabilityClient('sms:send')

@@ -24,6 +24,7 @@
     "dev:local-db": "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/event_manager_test next dev"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@google-cloud/storage": "^7.19.0",
     "@headlessui/react": "^2.2.10",
     "@hookform/resolvers": "^5.2.2",
