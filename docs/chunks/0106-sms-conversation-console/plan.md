@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: Schema — conversation threads + inbound persistence | Done | `add2840` |
-| 2: Webhook — capture non-STOP inbound into threads | Pending | - |
+| 2: Webhook — capture non-STOP inbound into threads | Done | `c0e69ef` |
 | 3: Console UI + staff reply action | Pending | - |
 | 4: AI-drafted replies (draft-and-approve) | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -24,6 +24,7 @@ For each new file or method below, the builder reads the anchor first and matche
 | `src/lib/db/schema/sms-conversations.ts` (thread + inbound-message tables, or a `direction` extension of `sms_messages`) | `src/lib/db/schema/sms-messages.ts:36` | Same schema family — enums, FK style, audit columns, ledger posture |
 | Webhook inbound-persistence branch | `src/app/api/twilio/webhook/route.ts:134` (`handleInbound`) | The exact function being extended — STOP capture is the sibling behavior |
 | Inbound classification (thread attribution, intent tagging) | `src/lib/sms/webhook-events.ts:43` (`isStopMessage` + event parsing) | Same layer: pure, unit-testable webhook-payload logic |
+| `src/lib/sms/conversations.ts` (attribution + capture persistence — added Phase 2) | `src/features/sms/queries.ts:48` (Executor pattern) | DB-touching capture logic, kept out of the pure webhook-events layer |
 | `src/features/sms/conversations/queries.ts` (thread list, thread detail) | `src/features/sms/queries.ts:116` (`loadSmsSendLog`) | Same read-model shape — campaign-scoped Drizzle reads returning typed rows |
 | `replyToThread` server action (staff send + AI-draft approve) | `src/features/sms/actions.ts:157` (`launchSmsSend`) | Same layer: `capabilityClient('sms:send')`, zod `safeParse`, opt-out recheck before `sendSms` |
 | Console UI (thread list + conversation view) | `src/features/sms/sms-panel.tsx:1` | Same feature's panel — section layout, badge styles, server-action wiring |
@@ -35,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` + `db-conventions` skill — before any schema/migration work
 - `CLAUDE.md` → Conventions — mutations are Server Actions; the webhook route stays external-caller-only
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -49,10 +50,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Task 2 — schema file `src/lib/db/schema/sms-conversations.ts` + `index.ts` export; migration `drizzle/0052_gorgeous_shaman.sql` generated (no auth-schema statements emitted; journal `when` verified increasing) + applied to sandbox DB (verified via `\d`)
 
 #### Phase 2: Webhook — capture non-STOP inbound into threads
-- [ ] Task 1 (thread attribution rule per intent.md open question)
-- [ ] Task 2 (STOP continues to short-circuit: opt-out + thread halt)
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] Task 1 (thread attribution rule per intent.md open question) — D2 most-recent-send: `src/lib/sms/conversations.ts` `captureInboundMessage` picks the latest of (existing thread's `last_message_at`, latest launch send in `sms_messages`), so ongoing/reassigned conversations keep winning and a newer campaign send re-attributes; no campaign history → ack-and-ignore (unchanged posture)
+- [x] Task 2 (STOP continues to short-circuit: opt-out + thread halt) — STOP path unchanged (permanent opt-out insert first), plus `captureInboundStop` appends the STOP to the phone's most recent thread as evidence (never creates one)
+- [x] Test case 1 — `tests/integration/sms-conversations.test.ts`: capture + sid-replay idempotency (no dup row, no unread re-bump), second inbound joins same thread; multi-campaign attribution to most recent send
+- [x] Test case 2 — mid-thread STOP writes opt-out AND appends thread evidence; STOP/chatter from unknown number creates no thread (opt-out still lands)
 
 #### Phase 3: Console UI + staff reply action
 - [ ] Task 1
