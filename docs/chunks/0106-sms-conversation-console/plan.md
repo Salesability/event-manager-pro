@@ -11,7 +11,7 @@
 | 2: Webhook — capture non-STOP inbound into threads | Done | `c0e69ef` |
 | 3: Console UI + staff reply action | Done | `e8798c1` |
 | 4: AI-drafted replies (draft-and-approve) | Done | `e853aba` |
-| 5: Tests + smoke verification | Pending | - |
+| 5: Tests + smoke verification | Done | `e3c9cc6` |
 
 Campaign SMS invites replies but the webhook discards everything except STOP — customer replies land in a black hole. This chunk persists inbound replies as conversation threads, surfaces them to staff with a reply path, and layers AI-drafted responses (vision Module 3's draft/review/approve workflow) toward capturing appointment intent. "Done" = a real reply to a campaign send shows up in the console, a staff (or approved-AI-drafted) reply delivers back, and STOP mid-thread provably halts all further outbound. Phase 4 is gated on the autonomous-vs-draft-and-approve owner call in `intent.md` (plan assumes draft-and-approve).
 
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` + `db-conventions` skill — before any schema/migration work
 - `CLAUDE.md` → Conventions — mutations are Server Actions; the webhook route stays external-caller-only
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -68,7 +68,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test case 2 — result shapes: unset key degrades gracefully (no SDK call), trimmed ok path, refusal → error, empty → error, thrown → error (SDK fully mocked)
 
 #### Phase 5: Tests + smoke verification
-- [ ] Service-level integration test for inbound-capture → thread → reply round-trip
-- [ ] Verify STOP mid-thread blocks further outbound (integration)
-- [ ] Smoke (web-test): `goto /calendar/<id>/sms`; expect conversation section with thread rows + reply affordance
-- [ ] (DB state) extend `scripts/sms-service-smoke.ts` (or new `scripts/sms-conversation-smoke.ts`) with `insert` / `cleanup` seeding a thread with inbound + outbound messages
+- [x] Service-level integration test for inbound-capture → thread → reply round-trip — `tests/integration/sms-conversations.test.ts` "staff reply" walks signed-webhook inbound → thread → `sendThreadReply` (dev-redirect proven, `aiDrafted` provenance persisted) → status callback flips the thread ledger
+- [x] Verify STOP mid-thread blocks further outbound (integration) — same test: STOP → opt-out row → reply refused before dispatch, no outbound row, Twilio mock not called
+- [x] Smoke (web-test): `goto /calendar/<id>/sms`; expect conversation section with thread rows + reply affordance — exercised by the chunk-end `/eval` browser smoke (build-skill two-tier gate: web-test runs once at chunk-end, against the extended fixture below)
+- [x] (DB state) extend `scripts/sms-service-smoke.ts` (or new `scripts/sms-conversation-smoke.ts`) — extended `sms-service-smoke.ts`: seeds an active thread (unread inbound, delivered staff reply, approved AI draft) + a STOP-halted thread; cleanup sweeps thread messages → threads first; insert/cleanup round-trip verified against sandbox
