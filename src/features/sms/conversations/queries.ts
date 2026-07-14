@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   campaigns,
@@ -14,7 +14,7 @@ import {
 
 // Read model for the per-campaign conversation console (0106 Phase 3).
 // Campaign-scoped like `loadSmsSendLog` — a campaign has at most a handful of
-// live threads, so each thread ships with its full message list (no paging).
+// live threads, so each thread ships with its recent message list (no paging).
 
 export type ConversationMessage = {
   id: number;
@@ -71,7 +71,11 @@ export async function loadCampaignConversations(
         threads.map((t) => t.id),
       ),
     )
-    .orderBy(asc(smsThreadMessages.createdAt));
+    // 500 most-recent messages per campaign bounds a customer-spam blowup;
+    // anything older simply drops off the console view.
+    .orderBy(desc(smsThreadMessages.createdAt))
+    .limit(500);
+  messages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   const optedOut = new Set<string>();
   const optOutRows = await db
@@ -95,7 +99,15 @@ export async function loadCampaignConversations(
     optedOut: optedOut.has(t.phone),
     messages: messages
       .filter((m) => m.threadId === t.id)
-      .map(({ threadId: _threadId, ...m }) => m),
+      .map((m) => ({
+        id: m.id,
+        direction: m.direction,
+        body: m.body,
+        status: m.status,
+        errorCode: m.errorCode,
+        aiDrafted: m.aiDrafted,
+        createdAt: m.createdAt,
+      })),
   }));
 }
 
@@ -138,7 +150,9 @@ export async function loadThreadDraftContext(
       })
       .from(smsThreadMessages)
       .where(eq(smsThreadMessages.threadId, threadId))
-      .orderBy(asc(smsThreadMessages.createdAt)),
+      // Bounds customer-controlled prompt size/cost.
+      .orderBy(desc(smsThreadMessages.createdAt))
+      .limit(30),
     db
       .select({ id: smsOptOuts.id })
       .from(smsOptOuts)
@@ -146,7 +160,11 @@ export async function loadThreadDraftContext(
       .limit(1),
   ]);
 
-  return { ...thread, optedOut: Boolean(optOut), messages };
+  return {
+    ...thread,
+    optedOut: Boolean(optOut),
+    messages: messages.reverse().map((m) => ({ ...m, body: m.body.slice(0, 500) })),
+  };
 }
 
 export type ReassignCandidate = {

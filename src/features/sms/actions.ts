@@ -489,12 +489,32 @@ export const reassignThread = capabilityClient('sms:send')
     }
     const { threadId, campaignId } = parsed.data;
 
+    const [thread] = await db
+      .select({ phone: smsThreads.phone })
+      .from(smsThreads)
+      .where(eq(smsThreads.id, threadId))
+      .limit(1);
+    if (!thread) return { error: 'Conversation not found.' };
+
     const [target] = await db
       .select({ id: campaigns.id })
       .from(campaigns)
       .where(eq(campaigns.id, campaignId))
       .limit(1);
     if (!target) return { error: 'Target campaign not found.' };
+
+    const [sendHistory] = await db
+      .select({ id: smsMessages.id })
+      .from(smsMessages)
+      .innerJoin(smsSends, eq(smsSends.id, smsMessages.sendId))
+      .where(and(eq(smsSends.campaignId, campaignId), eq(smsMessages.phone, thread.phone)))
+      .limit(1);
+    if (!sendHistory) {
+      return {
+        error:
+          'That campaign has never texted this number — reassignment is limited to campaigns that have.',
+      };
+    }
 
     try {
       const updated = await db
