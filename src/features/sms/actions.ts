@@ -61,10 +61,12 @@ async function lockCampaignSmsTx(
 }
 
 // The SMS panel lives on the event (campaign) detail surface under /calendar
-// (0104 workflow hub); dealership pages show campaign summaries too.
+// (0104 workflow hub); dealership pages show campaign summaries too, and the
+// global inbox (0107) aggregates every thread.
 function revalidateSmsViews() {
   revalidatePath('/calendar');
   revalidatePath('/dealerships');
+  revalidatePath('/messages');
 }
 
 function parseId(formData: FormData, key: string): number | null {

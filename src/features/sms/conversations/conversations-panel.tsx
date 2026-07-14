@@ -22,28 +22,32 @@ import {
 // gate here is display-only — `sendThreadReply` re-checks the registry
 // server-side immediately before dispatch.
 
-export type ConversationsPanelProps = {
-  conversations: Array<{
+// Also the wire shape the global inbox (0107) reuses — its threads carry
+// extra row context (dealer/event) on top of this.
+export type ConversationThreadData = {
+  id: number;
+  phone: string;
+  lastMessageAtIso: string;
+  unread: boolean;
+  optedOut: boolean;
+  messages: Array<{
     id: number;
-    phone: string;
-    lastMessageAtIso: string;
-    unread: boolean;
-    optedOut: boolean;
-    messages: Array<{
-      id: number;
-      direction: 'inbound' | 'outbound';
-      body: string;
-      status: string | null;
-      errorCode: string | null;
-      aiDrafted: boolean;
-      createdAtIso: string;
-    }>;
-    reassignCandidates: Array<{
-      campaignId: number;
-      dealerName: string;
-      startDate: string;
-    }>;
+    direction: 'inbound' | 'outbound';
+    body: string;
+    status: string | null;
+    errorCode: string | null;
+    aiDrafted: boolean;
+    createdAtIso: string;
   }>;
+  reassignCandidates: Array<{
+    campaignId: number;
+    dealerName: string;
+    startDate: string;
+  }>;
+};
+
+export type ConversationsPanelProps = {
+  conversations: ConversationThreadData[];
 };
 
 export function ConversationsPanel({ conversations }: ConversationsPanelProps) {
@@ -65,10 +69,12 @@ export function ConversationsPanel({ conversations }: ConversationsPanelProps) {
   );
 }
 
-function ConversationThread({
+// Exported for the global inbox's detail pane (0107) — shared internals, not
+// a fork: reply / AI draft / mark-read / reassign behave identically there.
+export function ConversationThread({
   conversation,
 }: {
-  conversation: ConversationsPanelProps['conversations'][number];
+  conversation: ConversationThreadData;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
