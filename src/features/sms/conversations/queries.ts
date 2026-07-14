@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   campaigns,
@@ -109,6 +109,117 @@ export async function loadCampaignConversations(
         createdAt: m.createdAt,
       })),
   }));
+}
+
+export type InboxThread = CampaignConversation & {
+  campaignId: number;
+  dealerName: string;
+  startDate: string;
+  endDate: string;
+};
+
+// Global inbox read model (0107): the campaign-scoped shape above minus the
+// campaignId filter, joined to campaigns/dealers so each row carries its
+// dealer/event context. Needs-action-first — unread threads sort above read
+// ones, recency within each group.
+export async function loadSmsInbox(): Promise<InboxThread[]> {
+  const threads = await db
+    .select({
+      id: smsThreads.id,
+      campaignId: smsThreads.campaignId,
+      dealerName: dealers.name,
+      startDate: campaigns.startDate,
+      endDate: campaigns.endDate,
+      phone: smsThreads.phone,
+      lastMessageAt: smsThreads.lastMessageAt,
+      lastInboundAt: smsThreads.lastInboundAt,
+      lastReadAt: smsThreads.lastReadAt,
+    })
+    .from(smsThreads)
+    .innerJoin(campaigns, eq(campaigns.id, smsThreads.campaignId))
+    .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .orderBy(desc(smsThreads.lastMessageAt));
+  if (!threads.length) return [];
+
+  const messages = await db
+    .select({
+      id: smsThreadMessages.id,
+      threadId: smsThreadMessages.threadId,
+      direction: smsThreadMessages.direction,
+      body: smsThreadMessages.body,
+      status: smsThreadMessages.status,
+      errorCode: smsThreadMessages.errorCode,
+      aiDrafted: smsThreadMessages.aiDrafted,
+      createdAt: smsThreadMessages.createdAt,
+    })
+    .from(smsThreadMessages)
+    .where(
+      inArray(
+        smsThreadMessages.threadId,
+        threads.map((t) => t.id),
+      ),
+    )
+    // 1000 most-recent messages app-wide bounds the aggregate view (vs 500
+    // per campaign above); the oldest threads' transcripts drop off the inbox
+    // but stay fully readable on their per-event page. Unread state is
+    // thread-column-derived, so it can't be starved by this bound.
+    .orderBy(desc(smsThreadMessages.createdAt))
+    .limit(1000);
+  messages.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+
+  const optedOut = new Set<string>();
+  const optOutRows = await db
+    .select({ phone: smsOptOuts.phone })
+    .from(smsOptOuts)
+    .where(
+      inArray(
+        smsOptOuts.phone,
+        threads.map((t) => t.phone),
+      ),
+    );
+  for (const r of optOutRows) optedOut.add(r.phone);
+
+  const rows = threads.map((t) => ({
+    id: t.id,
+    campaignId: t.campaignId,
+    dealerName: t.dealerName,
+    startDate: t.startDate,
+    endDate: t.endDate,
+    phone: t.phone,
+    lastMessageAt: t.lastMessageAt,
+    unread:
+      t.lastInboundAt != null &&
+      (t.lastReadAt == null || t.lastInboundAt > t.lastReadAt),
+    optedOut: optedOut.has(t.phone),
+    messages: messages
+      .filter((m) => m.threadId === t.id)
+      .map((m) => ({
+        id: m.id,
+        direction: m.direction,
+        body: m.body,
+        status: m.status,
+        errorCode: m.errorCode,
+        aiDrafted: m.aiDrafted,
+        createdAt: m.createdAt,
+      })),
+  }));
+  // Stable sort: unread block first, recency (the DB order) within each block.
+  return rows.sort((a, b) => Number(b.unread) - Number(a.unread));
+}
+
+// Badge count (0107): threads with inbound newer than the global read pointer.
+// Matches the `unread` derivation above — one number, polled by the nav badge.
+export async function loadInboxUnreadCount(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(smsThreads)
+    .where(
+      or(
+        and(isNotNull(smsThreads.lastInboundAt), isNull(smsThreads.lastReadAt)),
+        gt(smsThreads.lastInboundAt, smsThreads.lastReadAt),
+      ),
+    );
+  return row?.count ?? 0;
 }
 
 export type ThreadDraftContext = {
