@@ -1,8 +1,12 @@
 # Active chunk
 
-**Plan:** _None — pick a new plan_
+**Plan:** [`docs/chunks/0106-sms-conversation-console/plan.md`](0106-sms-conversation-console/plan.md)
+**Intent:** [`docs/chunks/0106-sms-conversation-console/intent.md`](0106-sms-conversation-console/intent.md)
 
-**Status:** **0103-sms-service + 0105-sms-ledger-continuity shipped + closed 2026-07-13** (both eval PASS-with-warnings; [`closed/0103-…/eval-2026-07-13-1005.md`](closed/0103-sms-service/eval-2026-07-13-1005.md), [`closed/0105-…/eval-2026-07-13-1111.md`](closed/0105-sms-ledger-continuity/eval-2026-07-13-1111.md)). ⚠️ **Both on branch `0103-sms-service`, NOT merged to `main`** — merging auto-deploys prod (0095 keyless CI), and migrations `0049`–`0051` must be applied to the **prod** DB (`pnpm db:migrate:prod`) *before* the merge lands. Owner/dev-side before real sends: Twilio provisioning ([`go-live-accounts.md` §6](../wiki/go-live-accounts.md)) + prod secrets (`TWILIO_*`, `SMS_IDENTITY_HMAC_KEY`).
+**Started:** 2026-07-14
+**Status:** Scaffolded — phases not yet started. Inbound campaign-SMS replies currently land in a black hole (webhook acts on STOP only); this chunk persists them as conversation threads, gives staff a console + reply path, and layers AI-drafted replies (vision Module 3 draft-and-approve). Key open question for the owner: autonomous AI chat vs draft-and-approve (see intent.md).
+
+_Prior context:_ **0103-sms-service + 0105-sms-ledger-continuity shipped + closed 2026-07-13** (both eval PASS-with-warnings; [`closed/0103-…/eval-2026-07-13-1005.md`](closed/0103-sms-service/eval-2026-07-13-1005.md), [`closed/0105-…/eval-2026-07-13-1111.md`](closed/0105-sms-ledger-continuity/eval-2026-07-13-1111.md)). ⚠️ **Both on branch `0103-sms-service`, NOT merged to `main`** — merging auto-deploys prod (0095 keyless CI), and migrations `0049`–`0051` must be applied to the **prod** DB (`pnpm db:migrate:prod`) *before* the merge lands. Owner/dev-side before real sends: Twilio provisioning ([`go-live-accounts.md` §6](../wiki/go-live-accounts.md)) + prod secrets (`TWILIO_*`, `SMS_IDENTITY_HMAC_KEY`).
 
 **Deployed:** prod = `event-manager-pro-00052-x2f` (2026-07-09 — **0104 event-workflow hub + "Back to calendar" follow-up**; navigation-only, no migration/secret; build `1b6265a4`, `main` @ `7ca823d`). stage = `event-manager-pro-sandbox-00026-r6z` (2026-07-13 — **0103+0105 campaign SMS**, `dev` @ `42b9c55`; new stage secrets `twilio-account-sid`/`twilio-auth-token`/`sms-identity-hmac-key`, Messaging Service `MG39b6…` inbound webhook → stage `/api/twilio/webhook`; sender +19027108640). Prior prod baseline: `-00049-dbj` (2026-07-08 — 0099 / 0100 / 0101 + migration `0048` + trigger `_MSA_TEMPLATE_VERSION=2026-07-07`).
 
