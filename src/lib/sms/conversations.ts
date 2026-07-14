@@ -4,10 +4,12 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   smsMessages,
+  smsOptOuts,
   smsSends,
   smsThreadMessages,
   smsThreads,
 } from '@/lib/db/schema';
+import { sendSms } from '@/lib/sms/send';
 
 // Inbound conversation capture (0106 Phase 2). Attribution rule (D2): an
 // inbound joins the phone's most recent conversation activity — the latest of
@@ -135,4 +137,90 @@ export async function captureInboundStop(
   const threadId = await resolveThread(input.from, true, exec);
   if (threadId === null) return null;
   return appendInbound(threadId, input.body, input.messageSid, exec);
+}
+
+export type ThreadReplyResult =
+  | { ok: true; messageId: number }
+  | { error: string };
+
+// Staff (or approved-AI-draft) reply into a thread (0106 Phase 3). Persist-
+// first like `launchSmsSend`: the outbound row exists as `queued` BEFORE the
+// Twilio call, then the accept stamps `provider_sid` (status callbacks flip it
+// from there) or the failure stamps `failed` + the error — either way the
+// conversation shows what was attempted. The opt-out recheck runs immediately
+// before dispatch: STOP always wins, human or AI, no exceptions. Replies are
+// responses to a customer-initiated inbound (not CEM blasts), so no STOP
+// footer and no booked/add-on gate — a customer who replies after the event
+// completes still gets answered. Delivery redirects via `sendSms`'s doctrine
+// (non-prod → SMS_DEV_TO or refuse).
+export async function sendThreadReply(
+  input: { threadId: number; body: string; userId: string; aiDrafted?: boolean },
+  exec: Executor = db,
+): Promise<ThreadReplyResult> {
+  const [thread] = await exec
+    .select({ id: smsThreads.id, phone: smsThreads.phone })
+    .from(smsThreads)
+    .where(eq(smsThreads.id, input.threadId))
+    .limit(1);
+  if (!thread) return { error: 'Conversation not found.' };
+
+  const [optOut] = await exec
+    .select({ id: smsOptOuts.id })
+    .from(smsOptOuts)
+    .where(eq(smsOptOuts.phone, thread.phone))
+    .limit(1);
+  if (optOut) {
+    return {
+      error:
+        'This number has opted out (STOP) — no further messages can be sent to it.',
+    };
+  }
+
+  const [message] = await exec
+    .insert(smsThreadMessages)
+    .values({
+      threadId: thread.id,
+      direction: 'outbound',
+      body: input.body,
+      status: 'queued',
+      aiDrafted: input.aiDrafted ?? false,
+      createdById: input.userId,
+      updatedById: input.userId,
+    })
+    .returning({ id: smsThreadMessages.id });
+
+  // Same status-callback posture as `launchSmsSend`: only attach on a public
+  // https SITE_URL (Twilio 21609-rejects localhost/plain-http callbacks).
+  const origin = process.env.SITE_URL?.trim().replace(/\/$/, '');
+  const statusCallbackUrl = origin?.startsWith('https://')
+    ? `${origin}/api/twilio/webhook`
+    : undefined;
+
+  const result = await sendSms({
+    to: thread.phone,
+    body: input.body,
+    statusCallbackUrl,
+  });
+  if ('ok' in result) {
+    await exec
+      .update(smsThreadMessages)
+      .set({ providerSid: result.sid })
+      .where(eq(smsThreadMessages.id, message.id));
+  } else {
+    await exec
+      .update(smsThreadMessages)
+      .set({ status: 'failed', errorCode: result.error, statusUpdatedAt: new Date() })
+      .where(eq(smsThreadMessages.id, message.id));
+  }
+
+  // Replying implies the staff member read the thread — clear the unread
+  // marker along with the activity bump.
+  const now = new Date();
+  await exec
+    .update(smsThreads)
+    .set({ lastMessageAt: now, lastReadAt: now, updatedById: input.userId })
+    .where(eq(smsThreads.id, thread.id));
+
+  if ('ok' in result) return { ok: true, messageId: message.id };
+  return { error: `SMS send failed: ${result.error}` };
 }

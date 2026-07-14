@@ -17,12 +17,26 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 vi.mock('server-only', () => ({}));
 
+// Mock the vendor boundary only (never a real Twilio call from tests); the
+// dev-redirect doctrine in `sendSms` still runs for real, so the reply test
+// proves the redirect below.
+const twilioMocks = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock('@/lib/sms/client', () => ({
+  client: () => ({
+    ok: true,
+    client: { messages: { create: twilioMocks.create } },
+    messagingServiceSid: 'MG_test',
+  }),
+  __resetForTests: () => {},
+}));
+
 // MUST precede every `@/…` import: the route handler's chain evaluates the
 // app db pool, which reads DATABASE_URL at import time.
 import './helpers/load-env';
 
 import * as schema from '@/lib/db/schema';
 import {
+  authUsers,
   campaigns,
   dealers,
   smsMessages,
@@ -31,6 +45,11 @@ import {
   smsThreadMessages,
   smsThreads,
 } from '@/lib/db/schema';
+import {
+  loadCampaignConversations,
+  loadReassignCandidates,
+} from '@/features/sms/conversations/queries';
+import { sendThreadReply } from '@/lib/sms/conversations';
 import { computeTwilioSignature } from '@/lib/sms/webhook-verify';
 import { POST } from '@/app/api/twilio/webhook/route';
 
@@ -70,6 +89,10 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
     db = drizzle(sql, { schema });
     process.env.SITE_URL = SITE_URL;
     process.env.TWILIO_AUTH_TOKEN = AUTH_TOKEN;
+    // Deterministic redirect decision for the reply test: never production,
+    // always a dev target.
+    process.env.APP_ENV = 'development';
+    process.env.SMS_DEV_TO = '+15005550006';
   });
 
   afterAll(async () => {
@@ -240,6 +263,11 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
     const threads = await threadRows(newerCampaign);
     expect(threads).toHaveLength(1);
     expect(threads[0].phone).toBe(phone);
+
+    // D2 reassign candidates: exactly the OTHER campaign that texted this
+    // number (attribution can only be wrong between campaigns sharing it).
+    const candidates = await loadReassignCandidates(threads[0].id);
+    expect(candidates.map((c) => c.campaignId)).toEqual([olderCampaign]);
   });
 
   it('appends a mid-thread STOP as evidence AND writes the permanent opt-out', async () => {
@@ -276,6 +304,90 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
       .from(smsThreadMessages)
       .where(eq(smsThreadMessages.threadId, thread.id));
     expect(messages.map((m) => m.body)).toEqual(['interested', 'STOP']);
+  });
+
+  // Long timeout: this walks reply → callback → STOP → refusal, each a round
+  // trip to the remote sandbox pooler.
+  it('staff reply: persist-first outbound, dev-redirect, read-marker clear, STOP halt (Phase 3)', { timeout: 30_000 }, async () => {
+    const phone = `${PHONE_PREFIX}0005`;
+    const { campaignId } = await seedCampaignWithSend(phone);
+    // Actor FK requires a real auth.users row; any sandbox user will do.
+    const [user] = await db.select({ id: authUsers.id }).from(authUsers).limit(1);
+    expect(user).toBeDefined();
+
+    await POST(
+      signedRequest({
+        SmsStatus: 'received',
+        From: phone,
+        Body: 'interested — what time do you open?',
+        MessageSid: `SMin_${publicId()}`,
+      }) as never,
+    );
+
+    // Unread until someone reads or replies.
+    let [conversation] = await loadCampaignConversations(campaignId);
+    expect(conversation.unread).toBe(true);
+    expect(conversation.optedOut).toBe(false);
+
+    const replySid = `SMreply_${publicId()}`;
+    twilioMocks.create.mockResolvedValueOnce({ sid: replySid });
+    const result = await sendThreadReply({
+      threadId: conversation.id,
+      body: 'We open at 9am — reply with a time and we will book you in.',
+      userId: user.id,
+    });
+    expect(result).toEqual({ ok: true, messageId: expect.any(Number) });
+
+    // The dispatch was dev-redirected: Twilio was addressed at SMS_DEV_TO
+    // with the real recipient folded into the body prefix.
+    expect(twilioMocks.create).toHaveBeenCalledTimes(1);
+    const createArgs = twilioMocks.create.mock.calls[0][0];
+    expect(createArgs.to).toBe('+15005550006');
+    expect(createArgs.body).toContain(`[DEV→${phone}]`);
+
+    // Persisted outbound row carries the sid + actor; replying cleared unread.
+    [conversation] = await loadCampaignConversations(campaignId);
+    expect(conversation.unread).toBe(false);
+    expect(conversation.messages).toHaveLength(2);
+    const outbound = conversation.messages[1];
+    expect(outbound.direction).toBe('outbound');
+    expect(outbound.status).toBe('queued');
+    const [outboundRow] = await db
+      .select({ providerSid: smsThreadMessages.providerSid, createdById: smsThreadMessages.createdById })
+      .from(smsThreadMessages)
+      .where(eq(smsThreadMessages.id, outbound.id));
+    expect(outboundRow.providerSid).toBe(replySid);
+    expect(outboundRow.createdById).toBe(user.id);
+
+    // A status callback for the reply sid flips the thread-message ledger.
+    const cbRes = await POST(
+      signedRequest({ MessageSid: replySid, MessageStatus: 'delivered' }) as never,
+    );
+    expect(cbRes.status).toBe(200);
+    [conversation] = await loadCampaignConversations(campaignId);
+    expect(conversation.messages[1].status).toBe('delivered');
+
+    // STOP mid-thread → the reply path is refused before any dispatch.
+    await POST(
+      signedRequest({
+        SmsStatus: 'received',
+        From: phone,
+        Body: 'STOP',
+        MessageSid: `SMin_${publicId()}`,
+      }) as never,
+    );
+    [conversation] = await loadCampaignConversations(campaignId);
+    expect(conversation.optedOut).toBe(true);
+    const halted = await sendThreadReply({
+      threadId: conversation.id,
+      body: 'this must never send',
+      userId: user.id,
+    });
+    expect(halted).toEqual({ error: expect.stringContaining('opted out') });
+    expect(twilioMocks.create).toHaveBeenCalledTimes(1);
+    // No outbound row was persisted for the refused reply.
+    [conversation] = await loadCampaignConversations(campaignId);
+    expect(conversation.messages.filter((m) => m.direction === 'outbound')).toHaveLength(1);
   });
 
   it('never creates a thread for STOP or chatter from a number with no campaign history', async () => {

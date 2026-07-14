@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { smsMessages, smsOptOuts } from '@/lib/db/schema';
+import { smsMessages, smsOptOuts, smsThreadMessages } from '@/lib/db/schema';
 import {
   captureInboundMessage,
   captureInboundStop,
@@ -122,6 +122,24 @@ async function handleStatusCallback(
 
   if (updated.length) return new NextResponse('OK', { status: 200 });
 
+  // A callback sid can also belong to a conversation-thread reply (0106) —
+  // same monotonic flip on that ledger.
+  const updatedReply = await db
+    .update(smsThreadMessages)
+    .set({
+      status,
+      errorCode,
+      statusUpdatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(smsThreadMessages.providerSid, messageSid),
+        inArray(smsThreadMessages.status, eligibleCurrent),
+      ),
+    )
+    .returning({ id: smsThreadMessages.id });
+  if (updatedReply.length) return new NextResponse('OK', { status: 200 });
+
   // Either the sid is unknown (404 — lets Twilio retry a callback that raced
   // our post-dispatch provider_sid write) or the row is already at/past this
   // rank (200 — replay/out-of-order, nothing to do).
@@ -131,6 +149,14 @@ async function handleStatusCallback(
     .where(eq(smsMessages.providerSid, messageSid))
     .limit(1);
   if (existing) {
+    return new NextResponse('OK (no forward transition).', { status: 200 });
+  }
+  const [existingReply] = await db
+    .select({ id: smsThreadMessages.id })
+    .from(smsThreadMessages)
+    .where(eq(smsThreadMessages.providerSid, messageSid))
+    .limit(1);
+  if (existingReply) {
     return new NextResponse('OK (no forward transition).', { status: 200 });
   }
   return new NextResponse('Message not found for the supplied sid.', { status: 404 });

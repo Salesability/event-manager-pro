@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { recordAudit } from '@/features/audit/actions';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
-import { smsMessages, smsOptOuts, smsRecipients, smsSends } from '@/lib/db/schema';
+import { campaigns, smsMessages, smsOptOuts, smsRecipients, smsSends, smsThreads } from '@/lib/db/schema';
+import { sendThreadReply } from '@/lib/sms/conversations';
 import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
@@ -355,6 +356,119 @@ export const launchSmsSend = capabilityClient('sms:send')
       excludedOptOut,
       excludedStaleConsent: summary.excludedStaleConsent,
     };
+  });
+
+const replySchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+  body: z.string().trim().min(1, 'Reply text is required.').max(1600, 'Replies are capped at 1600 characters.'),
+});
+
+// Staff reply into a conversation thread (0106 Phase 3). The heavy lifting —
+// opt-out recheck, persist-first outbound row, dev-redirected dispatch via
+// `sendSms` — lives in `sendThreadReply` (src/lib/sms/conversations.ts) so the
+// integration tests can drive it without the capability wrapper.
+export const replyToThread = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = replySchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid reply input.' };
+    }
+
+    const result = await sendThreadReply({
+      threadId: parsed.data.threadId,
+      body: parsed.data.body,
+      userId: ctx.user.id,
+    });
+    if ('error' in result) return result;
+
+    await recordAudit({
+      action: 'sms.thread_replied',
+      targetTable: 'sms_thread_messages',
+      targetId: result.messageId,
+      payload: { threadId: parsed.data.threadId },
+    });
+
+    revalidateSmsViews();
+    return { ok: true };
+  });
+
+const threadIdSchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+});
+
+// Clears the thread's unread marker (single global read pointer, v1).
+export const markThreadRead = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = threadIdSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid thread id.' };
+    }
+
+    const updated = await db
+      .update(smsThreads)
+      .set({ lastReadAt: new Date(), updatedById: ctx.user.id })
+      .where(eq(smsThreads.id, parsed.data.threadId))
+      .returning({ id: smsThreads.id });
+    if (!updated.length) return { error: 'Conversation not found.' };
+
+    revalidateSmsViews();
+    return { ok: true };
+  });
+
+const reassignSchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+  campaignId: z.coerce.number().int().positive(),
+});
+
+// D2: attribution defaults to most-recent-send and can guess wrong when a
+// number is on several campaigns — staff move the whole thread to the right
+// one. Refuses (rather than merges) when the target campaign already has a
+// thread for the number — the unique (campaign_id, phone) index backstops a
+// race on that check.
+export const reassignThread = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = reassignSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid reassignment input.' };
+    }
+    const { threadId, campaignId } = parsed.data;
+
+    const [target] = await db
+      .select({ id: campaigns.id })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId))
+      .limit(1);
+    if (!target) return { error: 'Target campaign not found.' };
+
+    try {
+      const updated = await db
+        .update(smsThreads)
+        .set({ campaignId, updatedById: ctx.user.id })
+        .where(eq(smsThreads.id, threadId))
+        .returning({ id: smsThreads.id });
+      if (!updated.length) return { error: 'Conversation not found.' };
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && err.code === '23505') {
+        return {
+          error:
+            'That campaign already has a conversation with this number — reassignment would collide with it.',
+        };
+      }
+      throw err;
+    }
+
+    await recordAudit({
+      action: 'sms.thread_reassigned',
+      targetTable: 'sms_threads',
+      targetId: threadId,
+      payload: { campaignId },
+    });
+
+    revalidateSmsViews();
+    return { ok: true };
   });
 
 const optOutSchema = z.object({
