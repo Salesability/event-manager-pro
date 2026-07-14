@@ -1,6 +1,12 @@
 # Active chunk
 
-**Plan:** _None — pick a new plan_
+**Plan:** [`docs/chunks/0107-sms-inbox/plan.md`](0107-sms-inbox/plan.md)
+**Intent:** [`docs/chunks/0107-sms-inbox/intent.md`](0107-sms-inbox/intent.md)
+
+**Started:** 2026-07-14
+**Status:** Scaffolded — phases not yet started
+
+Global SMS Messages inbox: top-level `Messages` nav tab (capability `sms:send`) + `/messages` page aggregating threads across all campaigns, needs-action-first, with a persistent can't-miss unread badge. Prerequisite surface for the next chunk on the autonomous-conversation path (AI reply approval queue — approvals cannot be missed); per-event `/calendar/<id>/sms` stays for event-scoped work.
 
 _Prior context:_ **0106-sms-conversation-console shipped + closed 2026-07-14** (eval PASS-with-warnings; [`closed/0106-…/eval-2026-07-14-1736.md`](closed/0106-sms-conversation-console/eval-2026-07-14-1736.md)). Joins **0103 + 0105** (closed 2026-07-13) on branch `0103-sms-service`, **NOT merged to `main`** — merging auto-deploys prod (0095 keyless CI), and migrations `0049`–`0053` must be applied to the **prod** DB (`pnpm db:migrate:prod`) *before* the merge lands. Owner/dev-side before real sends: Twilio provisioning ([`go-live-accounts.md` §6](../wiki/go-live-accounts.md)) + prod secrets (`TWILIO_*`, `SMS_IDENTITY_HMAC_KEY`), and **`ANTHROPIC_API_KEY`** (per env) for the new AI-drafted replies (the Draft button degrades to a friendly error until set).
 
