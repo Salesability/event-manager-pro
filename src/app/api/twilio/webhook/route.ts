@@ -3,6 +3,10 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { smsMessages, smsOptOuts } from '@/lib/db/schema';
 import {
+  captureInboundMessage,
+  captureInboundStop,
+} from '@/lib/sms/conversations';
+import {
   classifyTwilioWebhook,
   isStopMessage,
   STATUS_RANK,
@@ -21,8 +25,9 @@ import { verifyTwilioSignature } from '@/lib/sms/webhook-verify';
 //     MessageSid + MessageStatus [+ ErrorCode] → flip the sms_messages ledger
 //     row, monotonically (out-of-order callbacks never regress a status).
 //   • Inbound messages to our number (Messaging Service inbound URL):
-//     From + Body → STOP capture into the permanent opt-out registry; every
-//     other inbound is acked and ignored (two-way console is a non-goal).
+//     From + Body → STOP capture into the permanent opt-out registry; any
+//     other inbound persists as a conversation-thread message (0106) when the
+//     number has campaign history to attribute it to, else acked and ignored.
 //
 // The signature base URL is built from SITE_URL (operator-configured origin)
 // + this route's path — never the request Host header, which a proxy-level
@@ -137,7 +142,14 @@ async function handleInbound(
   messageSid: string | null,
 ): Promise<NextResponse> {
   if (!isStopMessage(body)) {
-    return new NextResponse('OK (inbound ignored).', { status: 200 });
+    // 0106: non-STOP inbound persists as a conversation-thread message,
+    // attributed to the campaign that most recently texted the number. A
+    // number with no campaign history stays ack-and-ignore.
+    const captured = await captureInboundMessage({ from, body, messageSid });
+    if (!captured) {
+      return new NextResponse('OK (inbound ignored).', { status: 200 });
+    }
+    return new NextResponse('OK', { status: 200 });
   }
 
   // Permanent + idempotent: a repeat STOP (or a replayed webhook) is a no-op.
@@ -150,6 +162,11 @@ async function handleInbound(
       providerMessageSid: messageSid,
     })
     .onConflictDoNothing({ target: smsOptOuts.phone });
+
+  // The opt-out registry above is the enforcement record; if the number has
+  // an active thread, also append the STOP there so the console shows why
+  // the conversation halted. Never creates a thread.
+  await captureInboundStop({ from, body, messageSid });
 
   return new NextResponse('OK', { status: 200 });
 }
