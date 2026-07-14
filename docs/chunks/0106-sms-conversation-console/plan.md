@@ -10,7 +10,7 @@
 | 1: Schema — conversation threads + inbound persistence | Done | `add2840` |
 | 2: Webhook — capture non-STOP inbound into threads | Done | `c0e69ef` |
 | 3: Console UI + staff reply action | Done | `e8798c1` |
-| 4: AI-drafted replies (draft-and-approve) | Pending | - |
+| 4: AI-drafted replies (draft-and-approve) | Done | `e853aba` |
 | 5: Tests + smoke verification | Pending | - |
 
 Campaign SMS invites replies but the webhook discards everything except STOP — customer replies land in a black hole. This chunk persists inbound replies as conversation threads, surfaces them to staff with a reply path, and layers AI-drafted responses (vision Module 3's draft/review/approve workflow) toward capturing appointment intent. "Done" = a real reply to a campaign send shows up in the console, a staff (or approved-AI-drafted) reply delivers back, and STOP mid-thread provably halts all further outbound. Phase 4 is gated on the autonomous-vs-draft-and-approve owner call in `intent.md` (plan assumes draft-and-approve).
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/data-model.md` + `db-conventions` skill — before any schema/migration work
 - `CLAUDE.md` → Conventions — mutations are Server Actions; the webhook route stays external-caller-only
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -62,10 +62,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test case 2 — STOP mid-thread → reply refused before dispatch, no outbound row; reassign candidates = the other campaigns that texted the number
 
 #### Phase 4: AI-drafted replies (draft-and-approve)
-- [ ] Task 1 (gated on owner call: autonomy + disclosure wording)
-- [ ] Task 2 (drafts constrained to campaign facts; approve/edit/discard UI)
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] Task 1 (gated on owner call: autonomy + disclosure wording) — resolved D1 (draft-and-approve, nothing sends without a human) + D4 (no disclosure tag on approved drafts); `src/lib/ai/draft-sms-reply.ts` = first LLM surface (Anthropic SDK, `claude-opus-4-8`, env-keyed `ANTHROPIC_API_KEY` with graceful degradation, `{ok}\|{error}` result per the vendor-client anchor, refusal stop-reason handled)
+- [x] Task 2 (drafts constrained to campaign facts; approve/edit/discard UI) — prompt states ONLY dealer name + event dates + reply-to-book; hard rules against invented prices/inventory/hours; `draftThreadReply` action (opted-out + no-inbound refusals) fills the reply box, staff edit/discard freely, send rides `replyToThread` with `aiDrafted` provenance (persisted on the message row + audit payload, "AI draft" badge in thread)
+- [x] Test case 1 — `src/lib/ai/draft-sms-reply.test.ts`: prompt constrained to campaign facts + transcript rendering
+- [x] Test case 2 — result shapes: unset key degrades gracefully (no SDK call), trimmed ok path, refusal → error, empty → error, thrown → error (SDK fully mocked)
 
 #### Phase 5: Tests + smoke verification
 - [ ] Service-level integration test for inbound-capture → thread → reply round-trip
