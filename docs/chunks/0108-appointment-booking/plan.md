@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: [Schema — slot grid + appointments + booking token] | Pending | - |
+| 1: [Schema — slot grid + appointments + booking token] | Done | `c97dac7` |
 | 2: [Booking domain — token resolution, availability, book action] | Pending | - |
 | 3: [Public /book/<token> page] | Pending | - |
 | 4: [Staff surface — slots + appointments on the event page] | Pending | - |
@@ -36,7 +36,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — recipient retention (24-month purge) and opt-out semantics the booking page must not violate
 - `docs/wiki/conventions.md` — mutations via Server Actions (the public booking form is still our own UI)
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -46,8 +46,12 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: [Schema — slot grid + appointments + booking token]
-- [ ] Task 1
-- [ ] Task 2
+- [x] Decide slot representation → **derived** slots (per-campaign `campaign_booking_settings`: day window minutes + capacity; slot length fixed 30 min in code) — no materialized slot rows to sync when campaign dates shift
+- [x] `campaign_booking_settings` table (unique campaign FK, window CHECKs incl. half-hour alignment, capacity ≥ 1)
+- [x] `appointments` table (campaign RESTRICT, recipient SET NULL + name/phone snapshot, `appointment_status` enum, partial-unique one-live-booking-per-recipient race backstop, slot CHECKs)
+- [x] `booking_token` column on `sms_recipients` + partial unique index
+- [x] Export from `schema/index.ts`; generate migration `0054` (`0054_zippy_wolfpack.sql`) (verify journal `when` > previous; strip any `auth` schema statements)
+- [x] Apply migration to sandbox DB (5432 session pooler) — applied + verified 2026-07-15
 
 #### Phase 2: [Booking domain — token resolution, availability, book action]
 - [ ] Task 1
