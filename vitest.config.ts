@@ -15,5 +15,10 @@ export default defineConfig({
       'tests/integration/**/*.test.ts',
       'eslint-plugins/**/*.test.ts',
     ],
+    // tests/integration/ runs against the remote sandbox pooler (per-query
+    // wire round trips, not local Postgres) — the 5s default flakes whenever
+    // latency drifts. Suite-wide ceiling: unit tests finish in ms so the
+    // looser bound is inert for them; a genuinely hung test still fails at 15s.
+    testTimeout: 15_000,
   },
 });
