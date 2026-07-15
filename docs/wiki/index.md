@@ -32,7 +32,7 @@ One per substantial feature.
 
 - [calendar-distribution.md](calendar-distribution.md) — booked campaigns project one-way into Google Calendar (coach + dealer as guests + a shared colour-by-coach team calendar). Keyless DWD auth, customer-safe event body, best-effort status-driven sync. Chunk `0077`.
 - [booking.md](booking.md) — tokenized `/book/<token>` customer self-serve appointment booking: derived half-hour slot grids (per-campaign window + capacity), one-live-appointment-per-person under advisory locks, purge-surviving appointment snapshots, staff panel with per-recipient links. Chunk `0108`.
-- [sms.md](sms.md) — campaign SMS via Twilio: quote-derived add-on gate, per-campaign dealer-list import, CASL compliance floor (permanent STOP registry + consent-staleness windows + 24-month retention purge), signed status-callback webhook, dev-redirect failsafe, two-way conversation console with AI-drafted replies (draft-and-approve). Chunks `0103`/`0105`/`0106`.
+- [sms.md](sms.md) — campaign SMS via Twilio: quote-derived add-on gate, per-campaign dealer-list import, CASL compliance floor (permanent STOP registry + consent-staleness windows + 24-month retention purge), signed status-callback webhook, dev-redirect failsafe, two-way conversation console with AI-drafted replies (draft-and-approve), global `/messages` inbox + unread nav badge. Chunks `0103`/`0105`/`0106`/`0107`.
 
 ## How this wiki is maintained
 

@@ -3,7 +3,7 @@
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-07-14
 
-> **Paused 2026-07-14 (owner call):** all 4 phases are implemented, committed, and smoke-verified on branch `0103-sms-service` (unmerged), but the owner is rethinking the SMS-AI direction, so the chunk-end `/eval` was aborted mid-run (static tsc PASS; Codex review stopped before returning findings; the plan-specific browser smoke had already passed in Phase 4). Un-park trigger: the owner settles the SMS-AI direction. If the work resumes, re-run `/eval` for the close-out gate.
+> **Paused 2026-07-14 (owner call), un-parked 2026-07-15:** all 4 phases were implemented, committed, and smoke-verified before the pause; the chunk-end `/eval` was aborted mid-run during the SMS-AI rethink. **Un-park trigger fired 2026-07-15** — the business settled on exactly this surface (inbox + human-in-the-loop AI-suggested replies), so the chunk-end `/eval` re-ran for the close-out gate (see the dated eval report in this folder).
 
 ## Progress Tracker
 
