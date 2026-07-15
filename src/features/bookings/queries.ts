@@ -129,6 +129,15 @@ export type AppointmentListItem = {
   createdAt: Date;
 };
 
+export type RecipientBookingLink = {
+  recipientId: number;
+  firstName: string | null;
+  lastName: string | null;
+  phone: string;
+  /** Path only (`/book/<token>`) — the panel prefixes the origin at copy time. */
+  bookingPath: string;
+};
+
 export type CampaignBookingOverview = {
   /** Null until booking is enabled for the campaign. */
   settings: BookingSettings | null;
@@ -137,6 +146,9 @@ export type CampaignBookingOverview = {
   totalRecipients: number;
   slots: SlotAvailability[];
   appointments: AppointmentListItem[];
+  /** Every token-holding recipient's shareable link — this chunk ships with
+   * links handed out manually (the `{{booking_link}}` send token is chunk 2). */
+  recipientLinks: RecipientBookingLink[];
 };
 
 /** Staff read model for the per-event booking panel (Phase 4): settings +
@@ -170,7 +182,7 @@ export async function loadCampaignBookingOverview(
         }
       : null;
 
-  const [tokenCounts, slots, appointmentRows] = await Promise.all([
+  const [tokenCounts, slots, appointmentRows, linkRows] = await Promise.all([
     db
       .select({
         total: count(),
@@ -199,6 +211,19 @@ export async function loadCampaignBookingOverview(
       .from(appointments)
       .where(eq(appointments.campaignId, campaignId))
       .orderBy(asc(appointments.slotDate), asc(appointments.slotStartMinute)),
+    db
+      .select({
+        recipientId: smsRecipients.id,
+        firstName: smsRecipients.firstName,
+        lastName: smsRecipients.lastName,
+        phone: smsRecipients.phone,
+        bookingToken: smsRecipients.bookingToken,
+      })
+      .from(smsRecipients)
+      .where(
+        and(eq(smsRecipients.campaignId, campaignId), isNotNull(smsRecipients.bookingToken)),
+      )
+      .orderBy(asc(smsRecipients.lastName), asc(smsRecipients.firstName)),
   ]);
 
   return {
@@ -207,6 +232,13 @@ export async function loadCampaignBookingOverview(
     totalRecipients: tokenCounts[0]?.total ?? 0,
     slots,
     appointments: appointmentRows,
+    recipientLinks: linkRows.map((r) => ({
+      recipientId: r.recipientId,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      phone: r.phone,
+      bookingPath: `/book/${encodeURIComponent(r.bookingToken!)}`,
+    })),
   };
 }
 

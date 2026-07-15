@@ -243,6 +243,16 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
             >
               SMS
             </Button>
+            {/* 0108: appointment booking rides the same SMS add-on — the slot
+                grid + per-recipient booking links live on their own page. */}
+            <Button
+              outline
+              compact
+              href={`/calendar/${campaign.id}/bookings`}
+              title="Set up the appointment slot grid and see who booked"
+            >
+              Bookings
+            </Button>
           </Can>
         )}
         <span className="flex-1" />
