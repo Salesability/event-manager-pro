@@ -44,7 +44,8 @@ export type AuditActionId =
   | 'sms.launched'
   | 'sms.opt_out_recorded'
   | 'sms.thread_replied'
-  | 'sms.thread_reassigned';
+  | 'sms.thread_reassigned'
+  | 'booking.settings_saved';
 
 export type RecordAuditInput = {
   action: AuditActionId;
