@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: [Schema — slot grid + appointments + booking token] | Done | `c97dac7` |
 | 2: [Booking domain — token resolution, availability, book action] | Done | `daa1905` |
-| 3: [Public /book/<token> page] | Pending | - |
+| 3: [Public /book/<token> page] | Done | `5638037` |
 | 4: [Staff surface — slots + appointments on the event page] | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -37,7 +37,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — recipient retention (24-month purge) and opt-out semantics the booking page must not violate
 - `docs/wiki/conventions.md` — mutations via Server Actions (the public booking form is still our own UI)
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -62,11 +62,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: booking input schema + slot-membership validation unit tests — membership via `isSlotInGrid` tests; the zod input path is module-private in the `'use server'` file, exercised by Phase 5 integration tests
 
 #### Phase 3: [Public /book/<token> page]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `/book` entry in `PUBLIC_PATHS` (`src/lib/supabase/middleware.ts`) with why-public comment
+- [x] `src/app/book/[token]/page.tsx` — branded public page (share/coach pattern): greeting (first name + dealer + event dates), slot grid grouped by day, `?error=` banner; unknown token / booking-not-enabled → `notFound()`; noindex
+- [x] Booked + event-passed states (revisit shows the booking; ended event stops booking)
+- [x] Slot picker = radio chips + single confirm submit (no client JS; full slots disabled) — `bookAppointment` input reshaped to one `slot` field (`YYYY-MM-DD#minute`)
+- [x] Test: server component + no client logic — rendering exercised by Phase 5 web-test smoke (grid, booked state, invalid token)
 
 #### Phase 4: [Staff surface — slots + appointments on the event page]
 - [ ] Task 1
