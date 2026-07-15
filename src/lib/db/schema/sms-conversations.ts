@@ -14,6 +14,21 @@ import { actors, bigIdentity, timestamps } from './_columns';
 import { campaigns } from './campaigns';
 import { smsMessageStatus } from './sms-messages';
 
+// Display-only conversation signals (0110), classified from the customer's own
+// messages by `src/lib/ai/classify-sms-thread.ts`. Closed vocabularies — the
+// classifier's output contract is these enums, never prose. They gate nothing.
+export const smsThreadSentiment = pgEnum('sms_thread_sentiment', [
+  'positive',
+  'neutral',
+  'negative',
+]);
+
+export const smsProspectTemperature = pgEnum('sms_prospect_temperature', [
+  'hot',
+  'warm',
+  'cold',
+]);
+
 // A conversation thread is a (campaign, phone) pair (0106 D2) — per-campaign
 // even though all campaigns share one sender, so the same number talking about
 // two events is two threads. Created by the webhook on the first non-STOP
@@ -33,6 +48,18 @@ export const smsThreads = pgTable(
       .references(() => campaigns.id, { onDelete: 'restrict' }),
     // E.164, same normalization as the rest of the SMS family.
     phone: text('phone').notNull(),
+    // 0110: purge-safe customer-name snapshot ("First Last"), stamped by the
+    // thread writers from the campaign's recipient row at creation/reassign —
+    // never read live through the 24-month-retention `sms_recipients` row.
+    // Null when the number was never on the campaign's list (unknown caller);
+    // the UI falls back to the phone.
+    displayName: text('display_name'),
+    // 0110: display-only AI classification of the customer's messages (dots +
+    // hot/warm/cold badges). Null until classified; `classified_at` vs
+    // `last_inbound_at` tells readers whether the labels are stale.
+    sentiment: smsThreadSentiment('sentiment'),
+    prospectTemperature: smsProspectTemperature('prospect_temperature'),
+    classifiedAt: timestamp('classified_at', { withTimezone: true }),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
     lastInboundAt: timestamp('last_inbound_at', { withTimezone: true }),
     // Single global read pointer (v1, small team) — not per-staff read state.
