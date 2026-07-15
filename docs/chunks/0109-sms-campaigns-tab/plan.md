@@ -9,8 +9,8 @@
 |-------|--------|--------|
 | 1: [Campaign-index read model] | Done | `c8f70f2` |
 | 2: [Top-level page + list view] | Done | `1bc4ab3` |
-| 3: [Nav tab] | Done | - |
-| 4: Tests + smoke verification | Pending | - |
+| 3: [Nav tab] | Done | `a0cf9d2` |
+| 4: Tests + smoke verification | Done | - |
 
 The SMS ledger's only door is calendar → event dialog → SMS button — the event dialog acting as a nav hub (the 0104 anti-pattern). This chunk adds a top-level `sms:send`-gated tab listing every SMS-relevant campaign (dealer, dates, add-on/launch state, imported count, last send, unread) with rows linking to the existing `/calendar/<id>/sms` pages. `/messages` stays purely the inbox (owner call 2026-07-14). Done = the full import → launch → replies workflow is runnable without opening the calendar; the dialog's SMS button demotes to a shortcut. Owner calls resolved 2026-07-15: tab **"SMS" at `/sms`**; list rule **gate-active ∪ has-history**; event-dialog SMS button **kept as shortcut**.
 
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — add-on gate semantics (`booked` + `smsEmail > 0`) and thread/unread derivation the row states must match
 - `docs/wiki/conventions.md` — reads for our own UI via server components/actions; no new route handlers
 
-**Overall Progress:** 75% (3/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -55,7 +55,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: static nav config with an existing capability-filter path — exercised by Phase 4's gated browser smoke (tab visible next to Messages)
 
 #### Phase 4: Tests + smoke verification
-- [ ] Service-level integration test for the campaign-index read model (qualification rule + counts)
-- [ ] Smoke (web-test): `goto <route>`; expect the page heading + a row for a fixture SMS campaign with dealer/date/state; click the row → lands on `/calendar/<id>/sms`
-- [ ] Smoke (web-test): nav shows the new tab next to Messages (gated visible)
-- [ ] (If DB state is needed) reuse `scripts/sms-service-smoke.ts insert` / `cleanup`
+- [x] Service-level integration test for the campaign-index read model (qualification rule + counts) — `tests/integration/sms-campaign-index.test.ts` (2 tests)
+- [x] Smoke (web-test): `goto /sms` — heading + rows (real sandbox gate-active campaigns: Century Mazda, Bathurst Toyota) with dealer/date/state; row click landed on `/calendar/92/sms` — PASS 2026-07-15
+- [x] Smoke (web-test): nav shows the SMS tab next to Messages (gated visible) — PASS 2026-07-15
+- [x] ~~(If DB state is needed) reuse `scripts/sms-service-smoke.ts insert` / `cleanup`~~ not needed — sandbox already held qualifying gate-active campaigns; integration fixtures self-clean
