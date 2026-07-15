@@ -13,6 +13,13 @@ Entries are reverse-chronological (newest at the top). Format:
 
 ---
 
+## 2026-07-14 — SMS conversation console + AI-drafted replies ship (0106)
+
+- **Ingest:** [sms.md](sms.md) — new *Conversation console* section: non-STOP inbound now persists as (campaign, phone) threads (most-recent-send attribution + staff reassign), staff reply path (persist-first, opt-out recheck, dev-redirect, no CEM footer/gate on replies), mark-read, and AI-drafted replies (draft-and-approve via Anthropic `claude-opus-4-8`, campaign-facts-constrained, `ai_drafted` provenance — the repo's first LLM surface; `ANTHROPIC_API_KEY` not yet provisioned in deploys). Flow step 4 updated (status callbacks flip both ledgers; STOP appends thread evidence) + new step 5 (Converse). Parked list gained 0106-a (STOP-vs-dispatch race, shares 0103-a's fix shape).
+- [data-model.md](data-model.md): added `sms_threads` + `sms_thread_messages` to *Tables at a glance* + the conversation-ledger relationship bullet.
+- New migrations `0052` (two tables + direction enum) and `0053` (two `audit_action` values) — applied to sandbox; **prod migration pending deploy** (joins 0049–0051 on the unmerged `0103-sms-service` branch).
+- Chunk [`docs/chunks/closed/0106-sms-conversation-console/`](../chunks/closed/0106-sms-conversation-console/plan.md); eval `eval-2026-07-14-1736.md` (PASS-with-warnings; Codex Mediums/Low fixed in-cycle at `d72c1cc`, High parked as 0106-a).
+
 ## 2026-07-13 — Campaign SMS service ships (0103)
 
 - **Ingest:** created [sms.md](sms.md) — the Twilio campaign-SMS feature page: quote-derived add-on gate (`sms_email > 0`, no flag column), per-campaign dealer-list CSV import, the CASL compliance floor (permanent global `sms_opt_outs`, fixed staleness windows 24mo/6mo/never, 24-month recipient retention purge with a surviving minimized ledger), persist-first launch + sequential dispatch, HMAC-verified status-callback webhook + inbound STOP capture, `SMS_DEV_TO` dev-redirect failsafe, admin-only `sms:send` capability.
