@@ -1,8 +1,12 @@
 # Active chunk
 
-**Plan:** _None — pick a new plan_
+**Plan:** [`docs/chunks/0110-sms-console-polish/plan.md`](0110-sms-console-polish/plan.md)
+**Intent:** [`docs/chunks/0110-sms-console-polish/intent.md`](0110-sms-console-polish/intent.md)
 
-The whole SMS line is shipped on branch `0108-appointment-booking`: **0103/0105** (send engine + ledger), **0106** (conversation console + human-in-the-loop AI-drafted replies), **0107** (global `/messages` inbox), **0108** (tokenized `/book/<token>` self-serve appointment booking), **0109** (top-level `/sms` campaigns tab). Natural next candidates: booking "chunk 2" (`{{booking_link}}` send-path token + confirmation SMS — not yet scaffolded), the ship-to-stage/prod pass for the SMS line (prod migrations `0049`–`0055` + Twilio toll-free verification + `ANTHROPIC_API_KEY`), or un-park an item below.
+**Started:** 2026-07-15
+**Status:** Scaffolded — phases not yet started
+
+Competitor-review polish before the SMS stage review (owner call 2026-07-15): customer names on threads (purge-safe snapshots), turn-state labels, quick-reply chips beside the AI Draft button, a per-campaign funnel stat strip, and display-only sentiment dots + hot/warm/cold prospect badges (AI-classified — Phase 5 carries an owner call on auto-classify-on-inbound, the app's first autonomous LLM call). **After this ships: stage deploy of the whole SMS line for business review.** Then: booking "chunk 2" (`{{booking_link}}` send token + confirmation SMS — not yet scaffolded) and the prod runway (migrations `0049`–`0056`, Twilio toll-free verification, `ANTHROPIC_API_KEY`).
 
 **Branch layout (owner calls 2026-07-14/15):** the SMS line builds on branch **`0108-appointment-booking`** (contains `0103-sms-service` tip `ac5de2b` — 0103+0105+0106+0107 — merged back in 2026-07-15, plus shipped 0108). Owner call: *every inbound reply must be visible even when none is expected*. The on-demand "Draft AI reply" button stays (human-initiated, degrades without `ANTHROPIC_API_KEY`); only the *auto-draft/approval-queue/autonomy* path remains shelved. Migrations `0049`–`0055` in-tree, all applied to sandbox; prod is still at `0048` — **apply prod migrations before the line merges to `main`** (0095 keyless CI auto-deploys prod on merge).
 _Prior context:_ **0109-sms-campaigns-tab shipped + closed 2026-07-15** (eval PASS-with-warnings; [`closed/0109-…/eval-2026-07-15-1510.md`](closed/0109-sms-campaigns-tab/eval-2026-07-15-1510.md)) — the `/sms` tab is the global door to every campaign ledger. **0108** closed the same day ([`closed/0108-…/eval-2026-07-15-1005.md`](closed/0108-appointment-booking/eval-2026-07-15-1005.md)); booking chunk 2 (`{{booking_link}}` send token + confirmation SMS) is not yet scaffolded.
