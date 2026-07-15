@@ -64,6 +64,17 @@ export default async function CampaignSmsPage({
   );
 
   if (!gateActive) {
+    const sendLogRaw = await loadSmsSendLog(campaign.id);
+    const sendLog = sendLogRaw.map((s) => ({
+      id: s.id,
+      body: s.body,
+      createdAtIso: s.createdAt.toISOString(),
+      totalRecipients: s.totalRecipients,
+      excludedOptOut: s.excludedOptOut,
+      excludedStaleConsent: s.excludedStaleConsent,
+      messageCounts: s.messageCounts,
+    }));
+
     return (
       <div className="space-y-6">
         <PageHeader
@@ -80,6 +91,7 @@ export default async function CampaignSmsPage({
             ? `SMS is only available for booked campaigns (this one is ${campaign.status}).`
             : 'The SMS add-on is not active for this campaign — its accepted quote has no Digital (SMS / Email) touches. Add the line to the quote (or accept one that carries it) and this surface lights up.'}
         </p>
+        {sendLog.length > 0 && <ReadOnlySendLog sendLog={sendLog} />}
         <ConversationsPanel conversations={conversations} />
       </div>
     );
@@ -138,6 +150,52 @@ export default async function CampaignSmsPage({
   );
 }
 
+function ReadOnlySendLog({
+  sendLog,
+}: {
+  sendLog: Array<{
+    id: number;
+    body: string;
+    createdAtIso: string;
+    totalRecipients: number;
+    excludedOptOut: number;
+    excludedStaleConsent: number;
+    messageCounts: Record<string, number>;
+  }>;
+}) {
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-4">
+      <h2 className="text-sm font-semibold text-zinc-900">Send log</h2>
+      <ul className="mt-3 space-y-3">
+        {sendLog.map((send) => (
+          <li key={send.id} className="rounded-lg border border-zinc-200 p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>{formatDateTime(send.createdAtIso)}</span>
+              <span>·</span>
+              <span>
+                {send.totalRecipients} on list, {send.excludedOptOut} opted out,{' '}
+                {send.excludedStaleConsent} stale
+              </span>
+            </div>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-zinc-800">
+              {send.body}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
+              {(['queued', 'sent', 'delivered', 'undelivered', 'failed'] as const).map((status) =>
+                send.messageCounts[status] ? (
+                  <span key={status} className="rounded-md bg-zinc-100 px-2 py-1">
+                    {send.messageCounts[status]} {status}
+                  </span>
+                ) : null,
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function eventDateLabel(startIso: string, endIso: string): string {
   const fmt = (iso: string) => {
     const [y, m, d] = iso.split('-').map(Number);
@@ -149,4 +207,14 @@ function eventDateLabel(startIso: string, endIso: string): string {
     });
   };
   return startIso === endIso ? fmt(startIso) : `${fmt(startIso)} – ${fmt(endIso)}`;
+}
+
+function formatDateTime(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
