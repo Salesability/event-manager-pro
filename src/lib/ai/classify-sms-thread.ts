@@ -39,10 +39,11 @@ function client(): { ok: true; client: Anthropic } | { error: string } {
     return { error: 'ANTHROPIC_API_KEY is not set — classification is unavailable.' };
   }
   // Webhook-safe budget: this runs inside the Twilio inbound handler (Twilio
-  // gives ~15s total), so a slow model call must fail fast instead of hanging
-  // the ack — unlike the draft path, where a staff member is watching a
-  // spinner and the SDK defaults are fine.
-  cached = new Anthropic({ apiKey, timeout: 8_000, maxRetries: 0 });
+  // gives ~15s total) AFTER the capture's own DB round-trips, so a slow model
+  // call must fail fast instead of hanging the ack — 5s leaves generous
+  // headroom even with a slow pooler. Unlike the draft path, where a staff
+  // member is watching a spinner and the SDK defaults are fine.
+  cached = new Anthropic({ apiKey, timeout: 5_000, maxRetries: 0 });
   return { ok: true, client: cached };
 }
 

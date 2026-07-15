@@ -312,6 +312,14 @@ describe.skipIf(!dbUrl)('sms console polish (0110)', () => {
       noResponse: 2,
       stops: 1,
     });
+
+    // STOP always wins (eval fix): a mid-thread STOP clears the AI labels —
+    // a halted thread must not keep wearing a stale "hot prospect" badge.
+    await inbound(responder, 'STOP');
+    const [halted] = await loadCampaignConversations(campaignId);
+    expect(halted.optedOut).toBe(true);
+    expect(halted.sentiment).toBeNull();
+    expect(halted.prospectTemperature).toBeNull();
   });
 
   it('a classifier failure never blocks the inbound capture (best-effort)', async () => {

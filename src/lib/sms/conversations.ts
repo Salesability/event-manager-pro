@@ -170,7 +170,15 @@ export async function captureInboundStop(
 ): Promise<CapturedInbound | null> {
   const threadId = await resolveThread(input.from, true, exec);
   if (threadId === null) return null;
-  return appendInbound(threadId, input.body, input.messageSid, exec);
+  const captured = await appendInbound(threadId, input.body, input.messageSid, exec);
+  // 0110: STOP always wins — a halted thread must not keep wearing a stale
+  // "hot prospect" label (the classifier only runs on non-STOP inbounds).
+  // Clearing returns the thread to unclassified; idempotent on replays.
+  await exec
+    .update(smsThreads)
+    .set({ sentiment: null, prospectTemperature: null, classifiedAt: null })
+    .where(eq(smsThreads.id, threadId));
+  return captured;
 }
 
 // 0110 display-only classification (decision.md D1 — owner-blessed autonomous
