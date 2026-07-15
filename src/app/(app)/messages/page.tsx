@@ -30,6 +30,8 @@ export default async function MessagesPage() {
       unread: t.unread,
       awaitingReply: t.awaitingReply,
       optedOut: t.optedOut,
+      sentiment: t.sentiment,
+      prospectTemperature: t.prospectTemperature,
       messages: t.messages.map((m) => ({
         id: m.id,
         direction: m.direction,

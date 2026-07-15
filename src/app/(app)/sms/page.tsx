@@ -25,6 +25,9 @@ export default async function SmsCampaignsPage() {
     lastSendAtIso: r.lastSendAt ? r.lastSendAt.toISOString() : null,
     threadCount: r.threadCount,
     unreadThreads: r.unreadThreads,
+    hotThreads: r.hotThreads,
+    warmThreads: r.warmThreads,
+    coldThreads: r.coldThreads,
   }));
 
   return (

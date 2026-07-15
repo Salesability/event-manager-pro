@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/catalyst/badge';
 import type { ConversationThreadData } from './conversations-panel';
+import { SentimentDot, TemperatureBadge } from './thread-signals';
 
 // Master list of the global inbox (0107). Lives apart from inbox-view.tsx so
 // the node-env render test can import it without dragging in the Server
@@ -49,6 +50,10 @@ export function InboxThreadList({
                 >
                   {t.displayName ?? t.phone}
                 </span>
+                {t.sentiment && <SentimentDot sentiment={t.sentiment} />}
+                {t.prospectTemperature && (
+                  <TemperatureBadge temperature={t.prospectTemperature} />
+                )}
                 {t.unread && <Badge color="brand">new reply</Badge>}
                 {t.optedOut && <Badge color="red">opted out</Badge>}
                 {!t.optedOut && (

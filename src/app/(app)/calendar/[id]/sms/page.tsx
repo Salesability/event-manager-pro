@@ -59,6 +59,8 @@ export default async function CampaignSmsPage({
       unread: c.unread,
       awaitingReply: c.awaitingReply,
       optedOut: c.optedOut,
+      sentiment: c.sentiment,
+      prospectTemperature: c.prospectTemperature,
       messages: c.messages.map((m) => ({
         id: m.id,
         direction: m.direction,

@@ -38,6 +38,9 @@ export type CampaignConversation = {
   awaitingReply: boolean;
   /** The number STOPped — the thread is halted, reply is refused server-side. */
   optedOut: boolean;
+  /** 0110 display-only AI labels; null = not (yet) classified. */
+  sentiment: 'positive' | 'neutral' | 'negative' | null;
+  prospectTemperature: 'hot' | 'warm' | 'cold' | null;
   messages: ConversationMessage[];
 };
 
@@ -59,6 +62,8 @@ export async function loadCampaignConversations(
       id: smsThreads.id,
       phone: smsThreads.phone,
       displayName: smsThreads.displayName,
+      sentiment: smsThreads.sentiment,
+      prospectTemperature: smsThreads.prospectTemperature,
       lastMessageAt: smsThreads.lastMessageAt,
       lastInboundAt: smsThreads.lastInboundAt,
       lastReadAt: smsThreads.lastReadAt,
@@ -114,6 +119,8 @@ export async function loadCampaignConversations(
       (t.lastReadAt == null || t.lastInboundAt > t.lastReadAt),
     awaitingReply: awaitingReply(t),
     optedOut: optedOut.has(t.phone),
+    sentiment: t.sentiment,
+    prospectTemperature: t.prospectTemperature,
     messages: messages
       .filter((m) => m.threadId === t.id)
       .map((m) => ({
@@ -149,6 +156,8 @@ export async function loadSmsInbox(): Promise<InboxThread[]> {
       endDate: campaigns.endDate,
       phone: smsThreads.phone,
       displayName: smsThreads.displayName,
+      sentiment: smsThreads.sentiment,
+      prospectTemperature: smsThreads.prospectTemperature,
       lastMessageAt: smsThreads.lastMessageAt,
       lastInboundAt: smsThreads.lastInboundAt,
       lastReadAt: smsThreads.lastReadAt,
@@ -211,6 +220,8 @@ export async function loadSmsInbox(): Promise<InboxThread[]> {
       (t.lastReadAt == null || t.lastInboundAt > t.lastReadAt),
     awaitingReply: awaitingReply(t),
     optedOut: optedOut.has(t.phone),
+    sentiment: t.sentiment,
+    prospectTemperature: t.prospectTemperature,
     messages: messages
       .filter((m) => m.threadId === t.id)
       .map((m) => ({

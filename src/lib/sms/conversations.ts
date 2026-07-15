@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { and, desc, eq } from 'drizzle-orm';
+import { classifySmsThread } from '@/lib/ai/classify-sms-thread';
 import { db } from '@/lib/db';
 import {
   smsMessages,
@@ -170,6 +171,46 @@ export async function captureInboundStop(
   const threadId = await resolveThread(input.from, true, exec);
   if (threadId === null) return null;
   return appendInbound(threadId, input.body, input.messageSid, exec);
+}
+
+// 0110 display-only classification (decision.md D1 — owner-blessed autonomous
+// call). Best-effort by contract: every failure path (no key, timeout,
+// refusal, malformed output) returns without touching the thread — the
+// caller (the webhook) must never fail because of this. Same transcript
+// bounds as `loadThreadDraftContext` (30 messages × 500 chars).
+export async function classifyThreadFromInbound(
+  threadId: number,
+  exec: Executor = db,
+): Promise<void> {
+  // Cheap pre-check so keyless environments skip the transcript read too.
+  if (!process.env.ANTHROPIC_API_KEY) return;
+
+  const recent = await exec
+    .select({
+      direction: smsThreadMessages.direction,
+      body: smsThreadMessages.body,
+    })
+    .from(smsThreadMessages)
+    .where(eq(smsThreadMessages.threadId, threadId))
+    .orderBy(desc(smsThreadMessages.createdAt))
+    .limit(30);
+  if (!recent.some((m) => m.direction === 'inbound')) return;
+
+  const result = await classifySmsThread({
+    conversation: recent
+      .reverse()
+      .map((m) => ({ direction: m.direction, body: m.body.slice(0, 500) })),
+  });
+  if ('error' in result) return;
+
+  await exec
+    .update(smsThreads)
+    .set({
+      sentiment: result.classification.sentiment,
+      prospectTemperature: result.classification.temperature,
+      classifiedAt: new Date(),
+    })
+    .where(eq(smsThreads.id, threadId));
 }
 
 export type ThreadReplyResult =

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/catalyst/textarea';
 import { Section } from '@/components/app/section';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
+import { SentimentDot, TemperatureBadge } from './thread-signals';
 import { QUICK_REPLIES } from '../quick-replies';
 import {
   draftThreadReply,
@@ -35,6 +36,9 @@ export type ConversationThreadData = {
   /** 0110 turn-state: the customer's message is last — the ball is ours. */
   awaitingReply: boolean;
   optedOut: boolean;
+  /** 0110 display-only AI labels; null = not (yet) classified. */
+  sentiment: 'positive' | 'neutral' | 'negative' | null;
+  prospectTemperature: 'hot' | 'warm' | 'cold' | null;
   messages: Array<{
     id: number;
     direction: 'inbound' | 'outbound';
@@ -161,6 +165,10 @@ export function ConversationThread({
         </span>
         {conversation.displayName && (
           <span className="font-mono text-xs text-zinc-500">{conversation.phone}</span>
+        )}
+        {conversation.sentiment && <SentimentDot sentiment={conversation.sentiment} />}
+        {conversation.prospectTemperature && (
+          <TemperatureBadge temperature={conversation.prospectTemperature} />
         )}
         {conversation.unread && <Badge color="brand">new reply</Badge>}
         {conversation.optedOut && <Badge color="red">opted out (STOP)</Badge>}

@@ -16,7 +16,14 @@ function texts(node: unknown, out: string[] = []): string[] {
     return out;
   }
   if (typeof node === 'object' && 'props' in (node as object)) {
-    texts((node as ReactElement<{ children?: unknown }>).props?.children, out);
+    const el = node as ReactElement<{ children?: unknown }>;
+    // Resolve nested function components (e.g. the 0110 thread-signal
+    // badges) by calling them — same no-DOM contract as the list itself.
+    if (typeof el.type === 'function') {
+      texts((el.type as (p: unknown) => unknown)(el.props), out);
+      return out;
+    }
+    texts(el.props?.children, out);
   }
   return out;
 }
@@ -35,6 +42,8 @@ const thread = (
   unread: false,
   awaitingReply: false,
   optedOut: false,
+  sentiment: null,
+  prospectTemperature: null,
   messages: [],
   reassignCandidates: [],
   ...over,
@@ -116,6 +125,16 @@ describe('InboxThreadList', () => {
     const stopped = flat([thread({ id: 3, dealerName: 'C', optedOut: true, awaitingReply: true })]);
     expect(stopped).not.toContain('awaiting your reply');
     expect(stopped).toContain('opted out');
+  });
+
+  it('shows the temperature badge only on classified threads (0110)', () => {
+    const classified = flat([
+      thread({ id: 1, dealerName: 'A', sentiment: 'positive', prospectTemperature: 'hot' }),
+    ]);
+    expect(classified).toContain('hot prospect');
+
+    const unclassified = flat([thread({ id: 2, dealerName: 'B' })]);
+    expect(unclassified).not.toContain('prospect');
   });
 
   it('marks the selected row with aria-current', () => {

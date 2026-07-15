@@ -341,6 +341,11 @@ export type SmsCampaignIndexRow = {
   lastSendAt: Date | null;
   threadCount: number;
   unreadThreads: number;
+  /** 0110: AI prospect-temperature aggregates (display-only, unclassified
+   *  threads count nowhere). */
+  hotThreads: number;
+  warmThreads: number;
+  coldThreads: number;
 };
 
 // Global campaign index for the /sms tab (0109): one row per SMS-relevant
@@ -368,6 +373,9 @@ export async function loadSmsCampaignIndex(): Promise<SmsCampaignIndexRow[]> {
       threadCount: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id})`,
       // Same unread derivation as the inbox (last_inbound_at > read pointer).
       unreadThreads: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id} and ${smsThreads.lastInboundAt} > coalesce(${smsThreads.lastReadAt}, '-infinity'))`,
+      hotThreads: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id} and ${smsThreads.prospectTemperature} = 'hot')`,
+      warmThreads: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id} and ${smsThreads.prospectTemperature} = 'warm')`,
+      coldThreads: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id} and ${smsThreads.prospectTemperature} = 'cold')`,
     })
     .from(campaigns)
     .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
@@ -392,5 +400,8 @@ export async function loadSmsCampaignIndex(): Promise<SmsCampaignIndexRow[]> {
     lastSendAt: r.lastSendAt,
     threadCount: r.threadCount,
     unreadThreads: r.unreadThreads,
+    hotThreads: r.hotThreads,
+    warmThreads: r.warmThreads,
+    coldThreads: r.coldThreads,
   }));
 }

@@ -5,6 +5,7 @@ import { smsMessages, smsOptOuts, smsThreadMessages } from '@/lib/db/schema';
 import {
   captureInboundMessage,
   captureInboundStop,
+  classifyThreadFromInbound,
 } from '@/lib/sms/conversations';
 import {
   classifyTwilioWebhook,
@@ -174,6 +175,15 @@ async function handleInbound(
     const captured = await captureInboundMessage({ from, body, messageSid });
     if (!captured) {
       return new NextResponse('OK (inbound ignored).', { status: 200 });
+    }
+    // 0110: display-only sentiment/temperature stamp, post-commit (owner-
+    // blessed autonomous call, decision.md D1). Best-effort — the classifier
+    // has its own tight timeout and every failure path is swallowed; the
+    // inbound is already persisted, so Twilio gets its 200 regardless.
+    try {
+      await classifyThreadFromInbound(captured.threadId);
+    } catch {
+      // Never fail the webhook over a display-only label.
     }
     return new NextResponse('OK', { status: 200 });
   }

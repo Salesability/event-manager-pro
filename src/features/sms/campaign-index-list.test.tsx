@@ -48,6 +48,9 @@ const row = (
   lastSendAtIso: null,
   threadCount: 0,
   unreadThreads: 0,
+  hotThreads: 0,
+  warmThreads: 0,
+  coldThreads: 0,
   ...over,
 });
 
@@ -111,5 +114,24 @@ describe('CampaignIndexList', () => {
 
   it('renders the explanatory empty state when nothing qualifies', () => {
     expect(flat([])).toContain('No SMS campaigns yet');
+  });
+
+  it('shows temperature aggregates only when non-zero (0110)', () => {
+    const withTemps = flat([
+      row({
+        campaignId: 4,
+        dealerName: 'Steele Ford',
+        threadCount: 5,
+        hotThreads: 2,
+        warmThreads: 1,
+      }),
+    ]);
+    expect(withTemps).toContain('2 hot');
+    expect(withTemps).toContain('1 warm');
+    expect(withTemps).not.toContain('cold');
+
+    expect(flat([row({ campaignId: 5, dealerName: 'Quiet Motors' })])).not.toContain(
+      'hot',
+    );
   });
 });

@@ -22,6 +22,10 @@ export type CampaignIndexRow = {
   lastSendAtIso: string | null;
   threadCount: number;
   unreadThreads: number;
+  /** 0110: AI prospect-temperature aggregates (display-only). */
+  hotThreads: number;
+  warmThreads: number;
+  coldThreads: number;
 };
 
 export function CampaignIndexList({ rows }: { rows: CampaignIndexRow[] }) {
@@ -56,6 +60,9 @@ export function CampaignIndexList({ rows }: { rows: CampaignIndexRow[] }) {
                   {r.unreadThreads} new {r.unreadThreads === 1 ? 'reply' : 'replies'}
                 </Badge>
               )}
+              {r.hotThreads > 0 && <Badge color="red">{r.hotThreads} hot</Badge>}
+              {r.warmThreads > 0 && <Badge color="amber">{r.warmThreads} warm</Badge>}
+              {r.coldThreads > 0 && <Badge color="sky">{r.coldThreads} cold</Badge>}
               <span className="ml-auto text-xs text-zinc-500">
                 {eventDateLabel(r.startDate, r.endDate)}
               </span>
