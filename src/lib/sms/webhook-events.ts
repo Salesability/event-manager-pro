@@ -66,8 +66,8 @@ export function classifyTwilioWebhook(
     };
   }
 
-  // Inbound message to our number (SmsStatus=received): the only inbound we
-  // act on is STOP capture — the two-way console is an intent non-goal.
+  // Inbound message to our number (SmsStatus=received): STOP capture into the
+  // opt-out registry, everything else into the conversation console (0106).
   if (params.SmsStatus?.toLowerCase() === 'received' || (params.From && 'Body' in params)) {
     if (!params.From) return { kind: 'ignored', reason: 'inbound without From' };
     return {

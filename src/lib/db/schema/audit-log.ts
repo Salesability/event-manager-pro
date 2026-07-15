@@ -21,7 +21,8 @@ import { bigIdentity } from './_columns';
 // The 0019 migration inserted `msa.*` BEFORE `campaign.cancelled` (ALTER TYPE ADD VALUE BEFORE),
 // and 0020 inserted `quote.edited` AFTER `quote.sent`. 0078 appended the two
 // `quote.attachment_*` values at the end (ALTER TYPE ADD VALUE, migration 0039);
-// 0103 appended the three `sms.*` values the same way (migration 0050).
+// 0103 appended the three `sms.*` values the same way (migration 0050), and
+// 0106 appended the two `sms.thread_*` values (migration 0053).
 // Keeping the TS array in lock-step with the database order keeps drizzle-kit
 // diffs quiet around this enum.
 export const auditAction = pgEnum('audit_action', [
@@ -44,6 +45,8 @@ export const auditAction = pgEnum('audit_action', [
   'sms.recipients_imported',
   'sms.launched',
   'sms.opt_out_recorded',
+  'sms.thread_replied',
+  'sms.thread_reassigned',
 ]);
 
 export const auditLog = pgTable(

@@ -3,6 +3,11 @@ import { assertCan } from '@/lib/auth/assert-can';
 import { Button } from '@/components/catalyst/button';
 import { PageHeader } from '@/components/app/page-header';
 import { loadCampaign } from '@/features/schedule/queries';
+import { ConversationsPanel } from '@/features/sms/conversations/conversations-panel';
+import {
+  loadCampaignConversations,
+  loadReassignCandidates,
+} from '@/features/sms/conversations/queries';
 import {
   evaluateCampaignRecipients,
   loadRecipientHistory,
@@ -34,6 +39,30 @@ export default async function CampaignSmsPage({
   const backHref = `/calendar?event=${campaign.id}`;
   const gateActive = campaign.status === 'booked' && (campaign.smsEmail ?? 0) > 0;
 
+  // Conversations render on BOTH branches (0106): a customer can reply after
+  // the event completes and the launch gate lapses — the thread must stay
+  // visible and answerable either way.
+  const conversationsRaw = await loadCampaignConversations(campaign.id);
+  const conversations = await Promise.all(
+    conversationsRaw.map(async (c) => ({
+      id: c.id,
+      phone: c.phone,
+      lastMessageAtIso: c.lastMessageAt.toISOString(),
+      unread: c.unread,
+      optedOut: c.optedOut,
+      messages: c.messages.map((m) => ({
+        id: m.id,
+        direction: m.direction,
+        body: m.body,
+        status: m.status,
+        errorCode: m.errorCode,
+        aiDrafted: m.aiDrafted,
+        createdAtIso: m.createdAt.toISOString(),
+      })),
+      reassignCandidates: await loadReassignCandidates(c.id),
+    })),
+  );
+
   if (!gateActive) {
     return (
       <div className="space-y-6">
@@ -51,6 +80,7 @@ export default async function CampaignSmsPage({
             ? `SMS is only available for booked campaigns (this one is ${campaign.status}).`
             : 'The SMS add-on is not active for this campaign — its accepted quote has no Digital (SMS / Email) touches. Add the line to the quote (or accept one that carries it) and this surface lights up.'}
         </p>
+        <ConversationsPanel conversations={conversations} />
       </div>
     );
   }
@@ -103,6 +133,7 @@ export default async function CampaignSmsPage({
           messageCounts: s.messageCounts,
         }))}
       />
+      <ConversationsPanel conversations={conversations} />
     </div>
   );
 }
