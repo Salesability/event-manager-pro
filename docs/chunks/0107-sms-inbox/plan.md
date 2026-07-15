@@ -7,10 +7,10 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: [Inbox read model + badge count query] | In Progress | - |
-| 2: [/messages page + in-place master–detail inbox view] | Pending | - |
-| 3: [Nav tab + live unread badge] | Pending | - |
-| 4: Tests + smoke verification | Pending | - |
+| 1: [Inbox read model + badge count query] | Done | c0be5e4 |
+| 2: [/messages page + in-place master–detail inbox view] | Done | 1e2bab0 |
+| 3: [Nav tab + live unread badge] | Done | 0d47bf5 |
+| 4: Tests + smoke verification | Done | - |
 
 SMS conversations (0106) are only reachable per-event, so inbound replies — and soon, AI reply approvals — can sit unseen; the owner's constraint is that approvals **cannot be missed**. This chunk adds the global surface — **admin-only to start** (owner call; gate on `sms:send`, which is pure-admin per 0103 D4 — if that capability is ever widened, the inbox gate gets its own review, see intent.md): a `Messages` nav tab with a live unread badge, and a `/messages` page listing threads across all campaigns needs-action-first, opening each conversation **in place** (master–detail; owner call 2026-07-14 — this is the surface the upcoming approval queue lands in, so no link-out interim). Reading/replying reuses the 0106 conversation panel internals — shared code, not a fork; the per-event `/calendar/<id>/sms` page is unchanged. Done = tab + badge visible app-wide and updating within ~a minute, threads readable/answerable from `/messages`, unread state clearing on read/reply.
 
@@ -32,7 +32,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/auth.md` — capability gating (`sms:send`) at page (`assertCan`) + nav (tab `capability:`) + action (`capabilityClient`) layers
 - `docs/wiki/conventions.md` — Server Actions for anything our own UI triggers; no new route handlers
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 100% (4/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -45,22 +45,24 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] `loadInboxUnreadCount` in the same file — single count of threads with unread inbound (`last_inbound_at > coalesce(last_read_at, -infinity)`)
 
 #### Phase 2: [/messages page + inbox view]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- [ ] Test case 1
-- [ ] Test case 2
-- [ ] Test case 3
+- [x] Export `ConversationThread` (+ `ConversationThreadData` type) from `conversations-panel.tsx` — shared internals for the inbox detail pane, not a fork
+- [x] `src/features/sms/conversations/inbox-view.tsx` + `inbox-thread-list.tsx` — client master–detail: hook-free `InboxThreadList` in its own module (dealer/event/phone context, unread badge + bold, last-message preview; separate file so the node-env test avoids the server-only actions import) + detail pane rendering the shared `ConversationThread`; opening an unread thread fires `markThreadRead` (read-on-open); no default selection so nothing is auto-marked read
+- [x] `src/app/(app)/messages/page.tsx` — `assertCan('sms:send')` + `loadSmsInbox` + serialization (ISO dates, per-thread reassign candidates) + `PageHeader` + `SmsInboxView`
+- [x] Add `/messages` to `revalidateSmsViews()` so reply/mark-read/reassign refresh the inbox
+- [x] Test: list rows render dealer/event/phone context, unread + opted-out badges, last-message preview
+- [x] Test: outbound preview gets the `You: ` prefix; empty thread renders no preview
+- [x] Test: selected row carries `aria-current`
 
 #### Phase 3: [Nav tab + live unread badge]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `getInboxUnreadCount` read action in `src/features/sms/actions.ts` — `capabilityClient('sms:send')`, returns `{ ok, count }` (`// validation: skip` — no input)
+- [x] `Messages` tab in `OPERATIONAL_TABS` (`capability: 'sms:send'`) + badge rendered inside the tab link
+- [x] `src/components/app/messages-unread-badge.tsx` (polls the action every 45s + on every route change) + hook-free `unread-count-pill.tsx` (red pill, hidden at 0, 99+ cap)
+- [x] Test: pill renders count + aria-label
+- [x] Test: pill hidden at zero; display caps at 99+
 
 #### Phase 4: Tests + smoke verification
-- [ ] Service-level integration test for the inbox read model
-- [ ] Verify multi-step operations with real DB
-- [ ] Smoke (web-test): `goto /messages`; expect heading "Messages" + thread rows with dealer/event context; click a row → conversation renders in place (master–detail) with a reply box (fixture-dependent)
-- [ ] Smoke (web-test): `goto /calendar`; nav shows a `Messages` tab (badge count fixture-dependent)
-- [ ] (If DB state is needed) `pnpm dlx tsx scripts/0107-sms-inbox-smoke.ts insert`; run web-test; `... cleanup`
+- [x] Service-level integration test for the inbox read model — `tests/integration/sms-inbox.test.ts` (phone prefix `+1999557`): cross-campaign aggregation + dealer/event context joins + needs-action-first sort + opted-out flag
+- [x] Verify multi-step operations with real DB — unread-count lifecycle (outbound-only → inbound → read → new inbound), delta-based so the shared sandbox DB can't skew it
+- [x] Smoke (web-test): `goto /messages` — heading "Messages" + thread rows with dealer/event context ✓; click a row → conversation renders in place (master–detail) with reply box + Draft AI reply ✓; read-on-open cleared the row's "new reply" badge ✓
+- [x] Smoke (web-test): `goto /calendar` — nav shows the `Messages` tab ✓; badge re-polled on route change and dropped 2 → 1 after the read ✓
+- [x] ~~`pnpm dlx tsx scripts/0107-sms-inbox-smoke.ts insert`~~ — reused the existing 0106 fixture (`scripts/sms-service-smoke.ts insert`/`cleanup`) instead; it already seeds conversation threads and no inbox-specific state was needed
