@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   campaigns,
@@ -9,6 +9,7 @@ import {
   smsOptOuts,
   smsRecipients,
   smsSends,
+  smsThreads,
 } from '@/lib/db/schema';
 import { compareFingerprints } from '@/lib/sms/identity';
 import { smsEligibility, type SmsEligibility } from './eligibility';
@@ -261,4 +262,72 @@ export async function loadSmsCampaignContext(
     .where(eq(campaigns.id, campaignId))
     .limit(1);
   return row ?? null;
+}
+
+export type SmsCampaignIndexRow = {
+  campaignId: number;
+  dealerName: string;
+  startDate: string;
+  endDate: string;
+  status: 'draft' | 'booked' | 'cancelled' | 'completed';
+  /** The 0103 D1 add-on gate is live right now (booked + smsEmail > 0) — the
+   *  composer works; false rows are history-only (send log + replies). */
+  gateActive: boolean;
+  recipientCount: number;
+  sendCount: number;
+  lastSendAt: Date | null;
+  threadCount: number;
+  unreadThreads: number;
+};
+
+// Global campaign index for the /sms tab (0109): one row per SMS-relevant
+// campaign — gate-active (the add-on gate above) ∪ has-history (sends or
+// threads exist), owner call 2026-07-15 — so a completed event's ledger and
+// replies keep a door after the launch gate lapses. Aggregates are scalar
+// subselects: the qualifying set is campaigns (tens), not messages.
+export async function loadSmsCampaignIndex(): Promise<SmsCampaignIndexRow[]> {
+  const hasSends = sql`exists (select 1 from ${smsSends} where ${smsSends.campaignId} = ${campaigns.id})`;
+  const hasThreads = sql`exists (select 1 from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id})`;
+
+  const rows = await db
+    .select({
+      campaignId: campaigns.id,
+      dealerName: dealers.name,
+      startDate: campaigns.startDate,
+      endDate: campaigns.endDate,
+      status: campaigns.status,
+      smsEmail: campaigns.smsEmail,
+      recipientCount: sql<number>`(select count(*)::int from ${smsRecipients} where ${smsRecipients.campaignId} = ${campaigns.id})`,
+      sendCount: sql<number>`(select count(*)::int from ${smsSends} where ${smsSends.campaignId} = ${campaigns.id})`,
+      lastSendAt: sql<Date | null>`(select max(${smsSends.createdAt}) from ${smsSends} where ${smsSends.campaignId} = ${campaigns.id})`.mapWith(
+        (v) => (v == null ? null : new Date(v)),
+      ),
+      threadCount: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id})`,
+      // Same unread derivation as the inbox (last_inbound_at > read pointer).
+      unreadThreads: sql<number>`(select count(*)::int from ${smsThreads} where ${smsThreads.campaignId} = ${campaigns.id} and ${smsThreads.lastInboundAt} > coalesce(${smsThreads.lastReadAt}, '-infinity'))`,
+    })
+    .from(campaigns)
+    .innerJoin(dealers, eq(dealers.id, campaigns.dealerId))
+    .where(
+      or(
+        and(eq(campaigns.status, 'booked'), sql`${campaigns.smsEmail} > 0`),
+        hasSends,
+        hasThreads,
+      ),
+    )
+    .orderBy(desc(campaigns.startDate), desc(campaigns.id));
+
+  return rows.map((r) => ({
+    campaignId: r.campaignId,
+    dealerName: r.dealerName,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    status: r.status,
+    gateActive: r.status === 'booked' && (r.smsEmail ?? 0) > 0,
+    recipientCount: r.recipientCount,
+    sendCount: r.sendCount,
+    lastSendAt: r.lastSendAt,
+    threadCount: r.threadCount,
+    unreadThreads: r.unreadThreads,
+  }));
 }

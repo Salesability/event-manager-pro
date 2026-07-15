@@ -30,9 +30,11 @@ The per-campaign SMS ledger (`/calendar/<id>/sms` — recipient import, launch c
 
 ## Open questions
 
-- **Tab label + route (owner call):** "SMS" at `/sms`? "Campaigns" risks confusion — in this app campaigns *are* events, and the tab lists them through an SMS lens. Leaning "SMS".
-- **Which campaigns qualify for the list:** booked with the add-on active (gate-active) only, or also past/gate-lapsed campaigns that have SMS history (sends or threads)? Leaning: gate-active ∪ has-history, with the state shown per row.
-- **Keep or drop the event dialog's SMS button** once the tab exists (default: keep as shortcut).
+_All three resolved 2026-07-15 (owner):_
+
+- ~~Tab label + route?~~ **"SMS" at `/sms`.**
+- ~~Which campaigns qualify?~~ **Gate-active ∪ has-history** — booked events with the SMS add-on active, plus any campaign with SMS history (sends or threads), state shown per row.
+- ~~Keep or drop the event dialog's SMS button?~~ **Keep as shortcut** (no code change).
 
 ## Why now
 

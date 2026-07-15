@@ -1,18 +1,18 @@
 # SMS campaigns tab — move the ledger off event-dialog nav — Plan
 
 **Intent:** [`intent.md`](intent.md)
-**Started:** _Not started — scaffolded 2026-07-14, queued behind 0108-appointment-booking_
+**Started:** 2026-07-15
 
 ## Progress Tracker
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: [Campaign-index read model] | Pending | - |
+| 1: [Campaign-index read model] | Done | - |
 | 2: [Top-level page + list view] | Pending | - |
 | 3: [Nav tab] | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
-The SMS ledger's only door is calendar → event dialog → SMS button — the event dialog acting as a nav hub (the 0104 anti-pattern). This chunk adds a top-level `sms:send`-gated tab listing every SMS-relevant campaign (dealer, dates, add-on/launch state, imported count, last send, unread) with rows linking to the existing `/calendar/<id>/sms` pages. `/messages` stays purely the inbox (owner call 2026-07-14). Done = the full import → launch → replies workflow is runnable without opening the calendar; the dialog's SMS button demotes to a shortcut. Two naming calls pending in intent.md (tab label/route; list-qualification rule).
+The SMS ledger's only door is calendar → event dialog → SMS button — the event dialog acting as a nav hub (the 0104 anti-pattern). This chunk adds a top-level `sms:send`-gated tab listing every SMS-relevant campaign (dealer, dates, add-on/launch state, imported count, last send, unread) with rows linking to the existing `/calendar/<id>/sms` pages. `/messages` stays purely the inbox (owner call 2026-07-14). Done = the full import → launch → replies workflow is runnable without opening the calendar; the dialog's SMS button demotes to a shortcut. Owner calls resolved 2026-07-15: tab **"SMS" at `/sms`**; list rule **gate-active ∪ has-history**; event-dialog SMS button **kept as shortcut**.
 
 ## Code Anchors
 
@@ -31,18 +31,18 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — add-on gate semantics (`booked` + `smsEmail > 0`) and thread/unread derivation the row states must match
 - `docs/wiki/conventions.md` — reads for our own UI via server components/actions; no new route handlers
 
-**Overall Progress:** 0% (0/4 phases complete)
+**Overall Progress:** 25% (1/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
 - Integration tests come last, after all phases pass (verifies real DB behavior)
-- Phase 1 blocks on intent.md's naming call (tab label/route) + list-qualification rule — one-line owner answers, get them at un-park
+- ~~Phase 1 blocks on intent.md's naming call + list-qualification rule~~ **Resolved 2026-07-15:** "SMS" at `/sms`; gate-active ∪ has-history (state per row); dialog button kept
 
 ### Phase Checklist
 
 #### Phase 1: [Campaign-index read model]
-- [ ] Task 1
-- [ ] Task 2
+- [x] `loadSmsCampaignIndex` in `src/features/sms/queries.ts` — one row per qualifying campaign (gate-active: `status='booked' AND sms_email > 0`; OR has-history: sends or threads exist), with dealer name, dates, status, add-on/gate state, recipient count, send count + last-send-at, thread count + unread flag
+- [x] Qualification + per-row state derivation matches the add-on gate and unread semantics documented in `docs/wiki/sms.md`
 
 #### Phase 2: [Top-level page + list view]
 - [ ] Task 1
