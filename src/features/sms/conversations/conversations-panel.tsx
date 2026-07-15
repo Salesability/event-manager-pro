@@ -122,6 +122,7 @@ export function ConversationThread({
     startTransition(async () => {
       const fd = new FormData();
       fd.set('threadId', String(conversation.id));
+      fd.set('seenThrough', conversation.lastMessageAtIso);
       const result = toLegacyResult<{ ok: true }>(await markThreadRead(fd));
       if ('ok' in result) {
         router.refresh();

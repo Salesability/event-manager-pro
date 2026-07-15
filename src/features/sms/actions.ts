@@ -406,6 +406,13 @@ const threadIdSchema = z.object({
   threadId: z.coerce.number().int().positive(),
 });
 
+const markThreadReadSchema = threadIdSchema.extend({
+  // +1ms: the snapshot ISO carries milliseconds but timestamptz stores
+  // microseconds — without the round-up, `last_read_at` truncates below the
+  // very message the client rendered and the thread reads unread forever.
+  seenThrough: z.iso.datetime().transform((iso) => new Date(new Date(iso).getTime() + 1)),
+});
+
 export type DraftReplyResult = { ok: true; draft: string } | { error: string };
 
 // AI-drafted reply suggestion (0106 Phase 4, D1 draft-and-approve). Returns
@@ -456,14 +463,15 @@ function eventDatesLabel(startIso: string, endIso: string): string {
 export const markThreadRead = capabilityClient('sms:send')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
-    const parsed = threadIdSchema.safeParse(Object.fromEntries(formData));
+    const parsed = markThreadReadSchema.safeParse(Object.fromEntries(formData));
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? 'Invalid thread id.' };
     }
 
+    // Mark only through the rendered snapshot; a newer inbound stays unread.
     const updated = await db
       .update(smsThreads)
-      .set({ lastReadAt: new Date(), updatedById: ctx.user.id })
+      .set({ lastReadAt: parsed.data.seenThrough, updatedById: ctx.user.id })
       .where(eq(smsThreads.id, parsed.data.threadId))
       .returning({ id: smsThreads.id });
     if (!updated.length) return { error: 'Conversation not found.' };

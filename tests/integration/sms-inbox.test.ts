@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { eq, inArray, like } from 'drizzle-orm';
+import { eq, inArray, like, sql as drizzleSql } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -8,9 +8,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 //   • loadSmsInbox aggregates threads across campaigns, joins dealer/event
 //     context onto each row, derives unread + opted-out, and sorts
 //     needs-action-first (unread above read regardless of recency);
-//   • loadInboxUnreadCount tracks the inbound → read → new-inbound lifecycle.
+//   • a thread's unread derivation tracks inbound → read → new-inbound.
 // The sandbox DB is shared, so every assertion filters to this file's
-// fixtures (phone prefix) and count checks are deltas, never absolutes.
+// fixtures (phone prefix or thread id), never global absolutes.
 //
 // `pnpm test` skips when DATABASE_URL is unset.
 
@@ -28,10 +28,7 @@ import {
   smsThreadMessages,
   smsThreads,
 } from '@/lib/db/schema';
-import {
-  loadInboxUnreadCount,
-  loadSmsInbox,
-} from '@/features/sms/conversations/queries';
+import { loadSmsInbox } from '@/features/sms/conversations/queries';
 
 const dbUrl = process.env.DATABASE_URL;
 const publicId = () => randomBytes(9).toString('base64url');
@@ -115,6 +112,20 @@ describe.skipIf(!dbUrl)('sms global inbox read model (0107)', () => {
     return thread.id;
   }
 
+  async function loadThreadUnread(threadId: number) {
+    const [row] = await db
+      .select({
+        unread: drizzleSql<boolean>`
+          last_inbound_at is not null
+          and last_inbound_at > coalesce(last_read_at, '-infinity'::timestamptz)
+        `,
+      })
+      .from(smsThreads)
+      .where(eq(smsThreads.id, threadId));
+    expect(row).toBeDefined();
+    return row.unread;
+  }
+
   it('aggregates threads across campaigns with dealer/event context, needs-action-first', async () => {
     const campaignA = await seedCampaign('Inbox Test Dealer A', '2026-08-01', '2026-08-02');
     const campaignB = await seedCampaign('Inbox Test Dealer B', '2026-09-05', '2026-09-05');
@@ -191,15 +202,13 @@ describe.skipIf(!dbUrl)('sms global inbox read model (0107)', () => {
     const campaignId = await seedCampaign('Inbox Count Dealer', '2026-08-01', '2026-08-01');
     const phone = `${PHONE_PREFIX}0003`;
 
-    const baseline = await loadInboxUnreadCount();
-
     // Outbound-only thread (no inbound yet): not unread.
     const threadId = await seedThread(campaignId, phone, {
       lastMessageAt: new Date('2026-07-10T12:00:00Z'),
       lastInboundAt: null,
       lastReadAt: null,
     });
-    expect(await loadInboxUnreadCount()).toBe(baseline);
+    expect(await loadThreadUnread(threadId)).toBe(false);
 
     // Inbound lands → unread.
     await db
@@ -209,14 +218,14 @@ describe.skipIf(!dbUrl)('sms global inbox read model (0107)', () => {
         lastMessageAt: new Date('2026-07-11T12:00:00Z'),
       })
       .where(eq(smsThreads.id, threadId));
-    expect(await loadInboxUnreadCount()).toBe(baseline + 1);
+    expect(await loadThreadUnread(threadId)).toBe(true);
 
-    // Staff reads it → drops back.
+    // Staff reads through the rendered snapshot → drops back.
     await db
       .update(smsThreads)
-      .set({ lastReadAt: new Date('2026-07-11T12:05:00Z') })
+      .set({ lastReadAt: new Date('2026-07-11T12:00:00Z') })
       .where(eq(smsThreads.id, threadId));
-    expect(await loadInboxUnreadCount()).toBe(baseline);
+    expect(await loadThreadUnread(threadId)).toBe(false);
 
     // A newer inbound after the read → unread again.
     await db
@@ -226,6 +235,6 @@ describe.skipIf(!dbUrl)('sms global inbox read model (0107)', () => {
         lastMessageAt: new Date('2026-07-12T12:00:00Z'),
       })
       .where(eq(smsThreads.id, threadId));
-    expect(await loadInboxUnreadCount()).toBe(baseline + 1);
+    expect(await loadThreadUnread(threadId)).toBe(true);
   });
 });

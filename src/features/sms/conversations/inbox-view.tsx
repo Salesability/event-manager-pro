@@ -33,6 +33,7 @@ export function SmsInboxView({ threads }: { threads: InboxViewThread[] }) {
     startTransition(async () => {
       const fd = new FormData();
       fd.set('threadId', String(thread.id));
+      fd.set('seenThrough', thread.lastMessageAtIso);
       const result = toLegacyResult<{ ok: true }>(await markThreadRead(fd));
       // Read-on-open is best-effort — a failure just leaves the row unread;
       // the explicit "Mark read" button in the detail pane remains.
