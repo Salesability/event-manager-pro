@@ -139,14 +139,17 @@ function SlotPicker(props: { token: string; slots: SlotAvailability[] }) {
           <legend className="text-sm font-medium text-zinc-900">{formatSlotDate(date)}</legend>
           <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {slots.map((slot) => (
-              <label key={`${slot.date}#${slot.startMinute}`} className="block">
+              <label key={`${slot.date}#${slot.startMinute}`} className="relative block">
+                {/* Invisible overlay (not sr-only) so the radio itself takes
+                    the tap/click — keeps it reachable for pointer-driven
+                    automation and screen readers alike. */}
                 <input
                   type="radio"
                   name="slot"
                   value={`${slot.date}#${slot.startMinute}`}
                   required
                   disabled={slot.isFull}
-                  className="peer sr-only"
+                  className="peer absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
                 />
                 <span
                   className={

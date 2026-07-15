@@ -1,20 +1,16 @@
 'use server';
 
 import { randomBytes } from 'crypto';
-import { and, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { recordAudit } from '@/features/audit/actions';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
-import {
-  appointments,
-  campaignBookingSettings,
-  campaigns,
-  smsRecipients,
-} from '@/lib/db/schema';
-import { isSlotInGrid, SLOT_LENGTH_MINUTES } from './slots';
+import { campaignBookingSettings, campaigns, smsRecipients } from '@/lib/db/schema';
+import { bookSlot } from './book';
+import { SLOT_LENGTH_MINUTES } from './slots';
 
 // Booking domain actions (0108 Phase 2): the public book action the
 // /book/<token> page posts to, and the staff settings/token-mint action the
@@ -24,24 +20,6 @@ import { isSlotInGrid, SLOT_LENGTH_MINUTES } from './slots';
 // this token resolves to a customer's PII and authorizes a booking write, not
 // a display-only share id. 18 bytes → 24 url-safe chars, unguessable.
 const generateBookingToken = () => randomBytes(18).toString('base64url');
-
-// Bookings only race other bookings — capacity + one-per-recipient are
-// re-checked under this campaign-scoped lock, so two concurrent submits
-// serialize. Distinct from the 'sms_launch_' key (imports/launches).
-async function lockCampaignBookingTx(
-  tx: Parameters<Parameters<(typeof db)['transaction']>[0]>[0],
-  campaignId: number,
-) {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext('booking_' || ${campaignId}::text))`,
-  );
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  const code = (err as { code?: string; cause?: { code?: string } })?.code;
-  const causeCode = (err as { cause?: { code?: string } })?.cause?.code;
-  return code === '23505' || causeCode === '23505';
-}
 
 // `slot` is one field ("YYYY-MM-DD#minute") because the page's picker is a
 // radio group — a radio can only carry a single value, and one field keeps the
@@ -62,15 +40,13 @@ const bookInputSchema = z
     'Off-grid slot time.',
   );
 
-type BookOutcome = 'ok' | 'already-booked' | 'slot-full';
-
-// The unguessable token IS the gate (like the /share/coach pages): it must
-// resolve to a recipient row before anything else runs, and every value the
-// write uses derives from that row, never from the caller. Results travel as
-// redirects back to the token page (no client JS on the public surface):
-// success + already-booked re-render as the booked state; refusals carry
-// ?error= for the page to surface. Opt-out does NOT block booking — STOP
-// halts SMS, not the customer's own web self-serve.
+// The unguessable token IS the gate (like the /share/coach pages) — the
+// domain half (resolve + locked transaction) lives in book.ts so the
+// integration suite can exercise it. Results travel as redirects back to the
+// token page (no client JS on the public surface): success + already-booked
+// re-render as the booked state; refusals carry ?error= for the page to
+// surface. Opt-out does NOT block booking — STOP halts SMS, not the
+// customer's own web self-serve.
 // authz: public
 export async function bookAppointment(formData: FormData) {
   const parsed = bookInputSchema.safeParse({
@@ -85,97 +61,25 @@ export async function bookAppointment(formData: FormData) {
   const { token, slotDate, slotStartMinute } = parsed.data;
   const back = (query = '') => `/book/${encodeURIComponent(token)}${query}`;
 
-  const [target] = await db
-    .select({
-      recipientId: smsRecipients.id,
-      campaignId: campaigns.id,
-      firstName: smsRecipients.firstName,
-      lastName: smsRecipients.lastName,
-      phone: smsRecipients.phone,
-      startDate: campaigns.startDate,
-      endDate: campaigns.endDate,
-      dayStartMinute: campaignBookingSettings.dayStartMinute,
-      dayEndMinute: campaignBookingSettings.dayEndMinute,
-      slotCapacity: campaignBookingSettings.slotCapacity,
-    })
-    .from(smsRecipients)
-    .innerJoin(campaigns, eq(campaigns.id, smsRecipients.campaignId))
-    .innerJoin(
-      campaignBookingSettings,
-      eq(campaignBookingSettings.campaignId, campaigns.id),
-    )
-    .where(eq(smsRecipients.bookingToken, token))
-    .limit(1);
-  // Unknown token → the page itself 404s; don't leak validity via the action.
-  if (!target) redirect(back());
-
-  // Token lifetime: the link outlives the event but stops booking — the page
-  // shows "this event has passed" (intent's lean call).
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  if (target.endDate < todayIso) redirect(back());
-
-  if (!isSlotInGrid(target, { date: slotDate, startMinute: slotStartMinute })) {
-    redirect(back('?error=invalid'));
+  const outcome = await bookSlot({ token, slotDate, slotStartMinute });
+  switch (outcome) {
+    // Unknown token → the page itself 404s; don't leak validity via the action.
+    // Ended event → the page renders its "event has passed" state from data.
+    case 'unknown-token':
+    case 'event-ended':
+      redirect(back());
+      break;
+    case 'invalid-slot':
+      redirect(back('?error=invalid'));
+      break;
+    case 'slot-full':
+      redirect(back('?error=full'));
+      break;
+    default:
+      // 'ok' and 'already-booked' both land on the booked-state render.
+      revalidatePath('/calendar');
+      redirect(back());
   }
-
-  let outcome: BookOutcome;
-  try {
-    outcome = await db.transaction(async (tx): Promise<BookOutcome> => {
-      await lockCampaignBookingTx(tx, target.campaignId);
-
-      const [existing] = await tx
-        .select({ id: appointments.id })
-        .from(appointments)
-        .where(
-          and(
-            eq(appointments.recipientId, target.recipientId),
-            eq(appointments.status, 'booked'),
-          ),
-        )
-        .limit(1);
-      if (existing) return 'already-booked';
-
-      const [slotCount] = await tx
-        .select({ booked: count() })
-        .from(appointments)
-        .where(
-          and(
-            eq(appointments.campaignId, target.campaignId),
-            eq(appointments.slotDate, slotDate),
-            eq(appointments.slotStartMinute, slotStartMinute),
-            eq(appointments.status, 'booked'),
-          ),
-        );
-      if ((slotCount?.booked ?? 0) >= target.slotCapacity) return 'slot-full';
-
-      // Snapshot the recipient's name/phone: the appointment must survive the
-      // 24-month recipient purge. Actors stay null — no user on the public path.
-      await tx.insert(appointments).values({
-        campaignId: target.campaignId,
-        recipientId: target.recipientId,
-        slotDate,
-        slotStartMinute,
-        firstName: target.firstName,
-        lastName: target.lastName,
-        phone: target.phone,
-      });
-      return 'ok';
-    });
-  } catch (err) {
-    // Race backstop tripped (appointments_recipient_booked_unique) — treat as
-    // the double-submit it is.
-    if (isUniqueViolation(err)) {
-      outcome = 'already-booked';
-    } else {
-      throw err;
-    }
-  }
-
-  if (outcome === 'slot-full') redirect(back('?error=full'));
-  // Success and already-booked both land on the booked-state render.
-  revalidatePath('/calendar');
-  redirect(back());
 }
 
 const settingsSchema = z
