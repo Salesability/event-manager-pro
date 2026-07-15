@@ -11,6 +11,13 @@ Entries are reverse-chronological (newest at the top). Format:
 - link to the page(s) touched
 ```
 
+## 2026-07-15 — 0108 appointment booking shipped (tokenized /book/<token>)
+
+- Created [booking.md](booking.md): derived slot grids, the public token page, invariants (one-per-person across re-imports, capacity under advisory locks, purge-surviving snapshots), staff surface, chunk-2 (send-path token) status.
+- [data-model.md](data-model.md): added `campaign_booking_settings` + `appointments` rows; `booking_token` on `sms_recipients` (migrations `0054`/`0055`, sandbox-applied; prod still at `0048`).
+- [auth.md](auth.md): `/book` added to the public-path whitelist; `bookAppointment` joins the `// authz: public` exception list.
+- [index.md](index.md) + [sms.md](sms.md): booking.md linked; sms.md notes the shelved-chatbot → booking-link direction.
+
 ---
 
 ## 2026-07-14 — SMS conversation console + AI-drafted replies ship (0106)
