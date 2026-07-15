@@ -71,6 +71,9 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
     db = drizzle(sql, { schema });
     process.env.SITE_URL = SITE_URL;
     process.env.TWILIO_AUTH_TOKEN = AUTH_TOKEN;
+    // Keyless → the 0110 inbound classifier no-ops instead of making a REAL
+    // Anthropic call from the webhook tests below.
+    delete process.env.ANTHROPIC_API_KEY;
   });
 
   afterAll(async () => {

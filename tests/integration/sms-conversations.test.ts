@@ -93,6 +93,10 @@ describe.skipIf(!dbUrl)('sms inbound conversation capture (0106 Phase 2)', () =>
     // always a dev target.
     process.env.APP_ENV = 'development';
     process.env.SMS_DEV_TO = '+15005550006';
+    // Keyless → the 0110 inbound classifier no-ops (its documented
+    // degradation) instead of making a REAL Anthropic call from tests.
+    // 0110's own integration file mocks the SDK to test the stamp.
+    delete process.env.ANTHROPIC_API_KEY;
   });
 
   afterAll(async () => {
