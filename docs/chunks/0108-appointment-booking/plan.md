@@ -41,7 +41,7 @@ For each new file or method below, the builder reads the anchor first and matche
 **Note:**
 - Each phase includes both implementation and tests
 - Integration tests come last, after all phases pass (verifies real DB behavior)
-- Phase 1 blocks on the intent's two owner calls (slot-grid shape + capacity default) — surface them before writing the migration
+- ~~Phase 1 blocks on the intent's two owner calls~~ **Resolved 2026-07-14:** half-hour slots (day window default 9–17, per-campaign editable); capacity is a **per-campaign setting** (dealership staffing = coach + sales staff, varies by dealer/event). Suggests derived slots from per-campaign booking settings (slot length fixed at 30 min, window + capacity columns) rather than materialized slot rows — decide in Phase 1 with `db-conventions`
 
 ### Phase Checklist
 

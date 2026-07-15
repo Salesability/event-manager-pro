@@ -40,8 +40,13 @@ Chunk 2 (separate): the `{{booking_link}}` template token in the campaign send p
 
 ## Open questions
 
-- **Slot grid shape (owner call):** who defines it and what's the default — e.g. half-hour slots across each event day 9–5, capacity N per slot? Per-campaign editable grid, or a fixed template to start?
-- **Slot capacity default (owner call):** how many appointments per slot?
+_Slot-grid calls resolved 2026-07-14 (owner):_
+
+- ~~Slot grid shape?~~ **Half-hour slots** across each event day. Day window: default 9:00–17:00, stored per campaign so staff can adjust (default taken by Claude, not an owner mandate — cheap to change).
+- ~~Slot capacity?~~ **Per-campaign setting, not a global constant.** Capacity reflects how many customers the dealership can handle at once — the coach plus the dealer's own sales staff — and dealership size varies. Stored on the campaign's booking settings (set when enabling booking for the campaign); no new dealer-level field — staffing can vary per event even at the same dealer, matching the repo's per-campaign-snapshot doctrine.
+
+_Still open (resolvable during the plan without blocking Phase 1):_
+
 - **What the page collects:** pre-filled name/phone from the recipient — do we ask for anything else (email, vehicle of interest, notes)? Lean v1 says no.
 - **Token lifetime:** does the link die after the event ends (probably: token resolves but page shows "this event has passed")?
 - **Who builds the slot grid in-app:** admin-only (`sms:send`-adjacent) or the event's coach too?
