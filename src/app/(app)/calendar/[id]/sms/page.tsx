@@ -8,9 +8,11 @@ import {
   loadCampaignConversations,
   loadReassignCandidates,
 } from '@/features/sms/conversations/queries';
+import { FunnelStrip } from '@/features/sms/funnel-strip';
 import {
   evaluateCampaignRecipients,
   loadRecipientHistory,
+  loadSmsCampaignFunnel,
   loadSmsSendLog,
 } from '@/features/sms/queries';
 import { SmsPanel } from '@/features/sms/sms-panel';
@@ -39,9 +41,14 @@ export default async function CampaignSmsPage({
   const backHref = `/calendar?event=${campaign.id}`;
   const gateActive = campaign.status === 'booked' && (campaign.smsEmail ?? 0) > 0;
 
-  // Conversations render on BOTH branches (0106): a customer can reply after
-  // the event completes and the launch gate lapses — the thread must stay
-  // visible and answerable either way.
+  // The funnel strip (0110) and conversations (0106) render on BOTH branches:
+  // a customer can reply after the event completes and the launch gate lapses
+  // — the ledger and its numbers must stay visible either way. The strip only
+  // appears once there's something to count (pre-launch pages open with the
+  // composer, not a row of zeros).
+  const funnel = await loadSmsCampaignFunnel(campaign.id);
+  const showFunnel = funnel.sent > 0 || funnel.responses > 0;
+
   const conversationsRaw = await loadCampaignConversations(campaign.id);
   const conversations = await Promise.all(
     conversationsRaw.map(async (c) => ({
@@ -93,6 +100,7 @@ export default async function CampaignSmsPage({
             ? `SMS is only available for booked campaigns (this one is ${campaign.status}).`
             : 'The SMS add-on is not active for this campaign — its accepted quote has no Digital (SMS / Email) touches. Add the line to the quote (or accept one that carries it) and this surface lights up.'}
         </p>
+        {showFunnel && <FunnelStrip funnel={funnel} />}
         {sendLog.length > 0 && <ReadOnlySendLog sendLog={sendLog} />}
         <ConversationsPanel conversations={conversations} />
       </div>
@@ -125,6 +133,7 @@ export default async function CampaignSmsPage({
           </Button>
         }
       />
+      {showFunnel && <FunnelStrip funnel={funnel} />}
       <SmsPanel
         campaignId={campaign.id}
         summary={summary}

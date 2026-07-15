@@ -236,6 +236,69 @@ export async function loadRecipientHistory(
   return [...entries.values()];
 }
 
+export type SmsCampaignFunnel = {
+  /** Every attempted message row across the campaign's launches (= the send
+   *  log's per-status counts summed). */
+  sent: number;
+  delivered: number;
+  /** Threads with any inbound (0110 intent leaning) — a STOP-only reply
+   *  counts here AND under `stops`; the strip reads them side by side. */
+  responses: number;
+  /** Distinct messaged phones that never replied (floored at 0). */
+  noResponse: number;
+  /** Messaged phones now in the permanent opt-out registry, whenever they
+   *  stopped — the "how many burned this list" number. */
+  stops: number;
+};
+
+// Funnel strip for the Campaign SMS page (0110): a live snapshot the owner
+// can reconcile against the send log (sent/delivered), the conversation
+// threads (responses), and the opt-out registry (stops). Campaign-scoped
+// counts — same scale posture as `loadSmsSendLog`.
+export async function loadSmsCampaignFunnel(
+  campaignId: number,
+  exec: Executor = db,
+): Promise<SmsCampaignFunnel> {
+  const [[messageAgg], [threadAgg], [stopAgg]] = await Promise.all([
+    exec
+      .select({
+        sent: sql<number>`count(*)::int`,
+        delivered: sql<number>`count(*) filter (where ${smsMessages.status} = 'delivered')::int`,
+        phones: sql<number>`count(distinct ${smsMessages.phone})::int`,
+      })
+      .from(smsMessages)
+      .innerJoin(smsSends, eq(smsSends.id, smsMessages.sendId))
+      .where(eq(smsSends.campaignId, campaignId)),
+    exec
+      .select({
+        responses: sql<number>`count(*) filter (where ${smsThreads.lastInboundAt} is not null)::int`,
+      })
+      .from(smsThreads)
+      .where(eq(smsThreads.campaignId, campaignId)),
+    exec
+      .select({ stops: sql<number>`count(distinct ${smsOptOuts.phone})::int` })
+      .from(smsOptOuts)
+      .where(
+        sql`${smsOptOuts.phone} in (select distinct ${smsMessages.phone} from ${smsMessages} inner join ${smsSends} on ${smsSends.id} = ${smsMessages.sendId} where ${smsSends.campaignId} = ${campaignId})`,
+      ),
+  ]);
+
+  const sent = messageAgg?.sent ?? 0;
+  const delivered = messageAgg?.delivered ?? 0;
+  const phones = messageAgg?.phones ?? 0;
+  const responses = threadAgg?.responses ?? 0;
+  return {
+    sent,
+    delivered,
+    responses,
+    // Responded threads' phones are always a subset of messaged phones
+    // (thread creation and reassign both require launch-send history), so
+    // the subtraction is honest; floor anyway against edge data.
+    noResponse: Math.max(0, phones - responses),
+    stops: stopAgg?.stops ?? 0,
+  };
+}
+
 export type SmsCampaignContext = {
   id: number;
   status: string;
