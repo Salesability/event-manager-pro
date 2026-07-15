@@ -11,6 +11,11 @@ Entries are reverse-chronological (newest at the top). Format:
 - link to the page(s) touched
 ```
 
+## 2026-07-15 — 0109 SMS campaigns tab closed
+
+- [sms.md](sms.md): new "Campaigns tab (0109)" section (`/sms` route, gate-active ∪ has-history rule, read-only send log on gate-lapsed pages).
+- [index.md](index.md): sms.md summary line extended with the `/sms` tab + chunk `0109`.
+
 ## 2026-07-15 — 0107 global SMS inbox closed (un-parked same day)
 
 - [sms.md](sms.md): new "Global inbox (0107)" section (Messages tab, needs-action-first read model, master–detail reuse of the console, 0107-a scale posture); mark-read semantics updated (snapshot-stamped `seenThrough`, not `now()` — fix `d2b6654`).

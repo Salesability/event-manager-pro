@@ -28,6 +28,10 @@ The **Conversations** section of `/calendar/[id]/sms` — rendered on both gate 
 
 The **Messages** nav tab + `/messages` page — the app-wide door to every thread, so replies (and any future approval flow) can't sit unseen behind per-event pages. Admin-only to start (gate `sms:send` at page/`assertCan`, action/`capabilityClient`, and nav-tab layers — the tab doesn't mount for non-admins). Read model `loadSmsInbox` / `loadInboxUnreadCount` (`src/features/sms/conversations/queries.ts`): threads across all campaigns joined to dealer/event context, needs-action-first (unread block above read, recency within), messages bounded to the 1000 most-recent app-wide. Master–detail: selecting a thread opens it **in place**, reusing the 0106 panel internals (reply, Draft AI reply, reassign, opt-out refusal — shared code, not a fork); opening marks read via the same snapshot-stamped `markThreadRead`. The nav badge polls the count every 45s. Per-event `/calendar/[id]/sms` is unchanged. Scale posture is v1-lean — unbounded thread list + per-thread reassign-candidate fan-out + the global message cap are parked as **0107-a** (see `CURRENT.md`).
 
+## Campaigns tab (0109)
+
+The **SMS** nav tab at `/sms` — the global door to every per-campaign ledger, so the event dialog stops being the only way in (it keeps its SMS button as a shortcut). Gate `sms:send` at page + nav layers (same posture as `/messages`). Read model `loadSmsCampaignIndex` (`src/features/sms/queries.ts`): one row per qualifying campaign — **gate-active ∪ has-history** (owner call 2026-07-15) — with dealer/dates/state badges, recipient count, sends + last send, and unread-reply count; rows link to `/calendar/<id>/sms`. Gate-lapsed pages (completed/cancelled campaigns with history) render a **read-only send log** + conversations, no composer — the index never links to a page that hides its ledger.
+
 ## Compliance floor
 
 - **Opt-out is permanent and global.** `sms_opt_outs` is keyed on bare phone number, has no FKs, is never purged, and beats express consent. Sources: `stop_reply` (webhook) and `manual` (`addSmsOptOut`).
