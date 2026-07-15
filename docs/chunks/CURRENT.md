@@ -4,7 +4,7 @@
 **Intent:** [`docs/chunks/0107-sms-inbox/intent.md`](0107-sms-inbox/intent.md)
 
 **Started:** 2026-07-14
-**Status:** Scaffolded — phases not yet started
+**Status:** ⏸ Paused 2026-07-14 — owner rethinking the SMS-AI direction. All 4 phases built + smoke-verified; chunk-end `/eval` aborted mid-run (see the pause note in plan.md). The entire SMS line (0103 + 0105 + 0106 + 0107) is parked on branch `0103-sms-service`, **unmerged** — `main` carries none of it, so nothing reaches prod until a deliberate merge (which still requires the prod migrations first, per below).
 
 Global SMS Messages inbox: top-level `Messages` nav tab (capability `sms:send`) + `/messages` page aggregating threads across all campaigns, needs-action-first, with a persistent can't-miss unread badge. Prerequisite surface for the next chunk on the autonomous-conversation path (AI reply approval queue — approvals cannot be missed); per-event `/calendar/<id>/sms` stays for event-scoped work.
 

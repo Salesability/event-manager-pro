@@ -3,6 +3,8 @@
 **Intent:** [`intent.md`](intent.md)
 **Started:** 2026-07-14
 
+> **Paused 2026-07-14 (owner call):** all 4 phases are implemented, committed, and smoke-verified on branch `0103-sms-service` (unmerged), but the owner is rethinking the SMS-AI direction, so the chunk-end `/eval` was aborted mid-run (static tsc PASS; Codex review stopped before returning findings; the plan-specific browser smoke had already passed in Phase 4). Un-park trigger: the owner settles the SMS-AI direction. If the work resumes, re-run `/eval` for the close-out gate.
+
 ## Progress Tracker
 
 | Phase | Status | Commit |
@@ -10,7 +12,7 @@
 | 1: [Inbox read model + badge count query] | Done | c0be5e4 |
 | 2: [/messages page + in-place master–detail inbox view] | Done | 1e2bab0 |
 | 3: [Nav tab + live unread badge] | Done | 0d47bf5 |
-| 4: Tests + smoke verification | Done | - |
+| 4: Tests + smoke verification | Done | e3542d1 |
 
 SMS conversations (0106) are only reachable per-event, so inbound replies — and soon, AI reply approvals — can sit unseen; the owner's constraint is that approvals **cannot be missed**. This chunk adds the global surface — **admin-only to start** (owner call; gate on `sms:send`, which is pure-admin per 0103 D4 — if that capability is ever widened, the inbox gate gets its own review, see intent.md): a `Messages` nav tab with a live unread badge, and a `/messages` page listing threads across all campaigns needs-action-first, opening each conversation **in place** (master–detail; owner call 2026-07-14 — this is the surface the upcoming approval queue lands in, so no link-out interim). Reading/replying reuses the 0106 conversation panel internals — shared code, not a fork; the per-event `/calendar/<id>/sms` page is unchanged. Done = tab + badge visible app-wide and updating within ~a minute, threads readable/answerable from `/messages`, unread state clearing on read/reply.
 
