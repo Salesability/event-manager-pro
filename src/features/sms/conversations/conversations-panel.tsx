@@ -9,6 +9,7 @@ import { Textarea } from '@/components/catalyst/textarea';
 import { Section } from '@/components/app/section';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
+import { QUICK_REPLIES } from '../quick-replies';
 import {
   draftThreadReply,
   markThreadRead,
@@ -225,6 +226,26 @@ export function ConversationThread({
             aria-label={`Reply to ${conversation.phone}`}
             placeholder="Type a reply, or draft one with AI…"
           />
+          {/* 0110 quick replies: same "fills the box, staff edit/send"
+              contract as the AI draft — a chip is a starting point, not a
+              send. Filling from a chip resets the AI-draft provenance flag. */}
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_REPLIES.map((q) => (
+              <button
+                key={q.label}
+                type="button"
+                title={q.body}
+                disabled={pending}
+                onClick={() => {
+                  setReply(q.body);
+                  setReplyIsAiDraft(false);
+                }}
+                className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-medium text-zinc-600 transition hover:border-brand-500 hover:text-brand-700 disabled:opacity-50"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-end gap-2">
             {replyIsAiDraft && (
               <span className="mr-auto text-xs text-zinc-500">
