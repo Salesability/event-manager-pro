@@ -8,7 +8,7 @@ import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
 import { campaigns, smsMessages, smsOptOuts, smsRecipients, smsSends, smsThreads } from '@/lib/db/schema';
 import { draftSmsReply } from '@/lib/ai/draft-sms-reply';
-import { sendThreadReply } from '@/lib/sms/conversations';
+import { lookupThreadDisplayName, sendThreadReply } from '@/lib/sms/conversations';
 import { loadInboxUnreadCount, loadThreadDraftContext } from './conversations/queries';
 import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
@@ -538,10 +538,19 @@ export const reassignThread = capabilityClient('sms:send')
       };
     }
 
+    // 0110: the target campaign's list may name this number differently —
+    // re-stamp the snapshot when it does; keep the existing one when the
+    // target list doesn't know the number (it's still the best info we have).
+    const displayName = await lookupThreadDisplayName(campaignId, thread.phone);
+
     try {
       const updated = await db
         .update(smsThreads)
-        .set({ campaignId, updatedById: ctx.user.id })
+        .set({
+          campaignId,
+          ...(displayName ? { displayName } : {}),
+          updatedById: ctx.user.id,
+        })
         .where(eq(smsThreads.id, threadId))
         .returning({ id: smsThreads.id });
       if (!updated.length) return { error: 'Conversation not found.' };

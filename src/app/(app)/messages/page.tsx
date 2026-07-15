@@ -25,8 +25,10 @@ export default async function MessagesPage() {
       startDate: t.startDate,
       endDate: t.endDate,
       phone: t.phone,
+      displayName: t.displayName,
       lastMessageAtIso: t.lastMessageAt.toISOString(),
       unread: t.unread,
+      awaitingReply: t.awaitingReply,
       optedOut: t.optedOut,
       messages: t.messages.map((m) => ({
         id: m.id,

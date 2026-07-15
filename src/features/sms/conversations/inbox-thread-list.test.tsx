@@ -30,8 +30,10 @@ const thread = (
   startDate: '2026-08-01',
   endDate: '2026-08-02',
   phone: '+15065551234',
+  displayName: null,
   lastMessageAtIso: '2026-07-14T15:00:00.000Z',
   unread: false,
+  awaitingReply: false,
   optedOut: false,
   messages: [],
   reassignCandidates: [],
@@ -92,6 +94,28 @@ describe('InboxThreadList', () => {
     const noMessages = flat([thread({ id: 2, dealerName: 'Sydney Mazda' })]);
     expect(noMessages).toContain('Sydney Mazda');
     expect(noMessages).not.toContain('You: ');
+  });
+
+  it('leads with the display-name snapshot when present, phone otherwise (0110)', () => {
+    const named = flat([
+      thread({ id: 1, dealerName: 'Summerside Hyundai', displayName: 'Sarah Tester' }),
+    ]);
+    expect(named).toContain('Sarah Tester');
+    expect(named).toContain('+15065551234'); // phone stays visible as context
+
+    const unnamed = flat([thread({ id: 2, dealerName: 'Parkway Mazda' })]);
+    expect(unnamed).toContain('+15065551234'); // fallback lead
+    expect(unnamed).not.toContain('Sarah Tester');
+  });
+
+  it('shows the turn-state label both ways, suppressed on opted-out threads (0110)', () => {
+    expect(flat([thread({ id: 1, dealerName: 'A', awaitingReply: true })])).toContain(
+      'awaiting your reply',
+    );
+    expect(flat([thread({ id: 2, dealerName: 'B' })])).toContain('waiting on customer');
+    const stopped = flat([thread({ id: 3, dealerName: 'C', optedOut: true, awaitingReply: true })]);
+    expect(stopped).not.toContain('awaiting your reply');
+    expect(stopped).toContain('opted out');
   });
 
   it('marks the selected row with aria-current', () => {

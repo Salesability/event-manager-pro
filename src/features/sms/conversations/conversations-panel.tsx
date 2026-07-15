@@ -27,8 +27,12 @@ import {
 export type ConversationThreadData = {
   id: number;
   phone: string;
+  /** 0110: purge-safe customer-name snapshot; null = lead with the phone. */
+  displayName: string | null;
   lastMessageAtIso: string;
   unread: boolean;
+  /** 0110 turn-state: the customer's message is last — the ball is ours. */
+  awaitingReply: boolean;
   optedOut: boolean;
   messages: Array<{
     id: number;
@@ -151,9 +155,19 @@ export function ConversationThread({
   return (
     <li className="rounded-lg border border-zinc-200 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-sm text-zinc-800">{conversation.phone}</span>
+        <span className="text-sm font-medium text-zinc-900">
+          {conversation.displayName ?? conversation.phone}
+        </span>
+        {conversation.displayName && (
+          <span className="font-mono text-xs text-zinc-500">{conversation.phone}</span>
+        )}
         {conversation.unread && <Badge color="brand">new reply</Badge>}
         {conversation.optedOut && <Badge color="red">opted out (STOP)</Badge>}
+        {!conversation.optedOut && (
+          <Badge color={conversation.awaitingReply ? 'amber' : 'zinc'}>
+            {conversation.awaitingReply ? 'awaiting your reply' : 'waiting on customer'}
+          </Badge>
+        )}
         <span className="text-xs text-zinc-500">
           last activity {formatDateTime(conversation.lastMessageAtIso)}
         </span>

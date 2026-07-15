@@ -29,13 +29,27 @@ export type ConversationMessage = {
 export type CampaignConversation = {
   id: number;
   phone: string;
+  /** 0110: purge-safe customer-name snapshot; null = lead with the phone. */
+  displayName: string | null;
   lastMessageAt: Date;
   /** New inbound since a staff member last read/replied. */
   unread: boolean;
+  /** 0110 turn-state: the customer's message is last — the ball is ours. */
+  awaitingReply: boolean;
   /** The number STOPped — the thread is halted, reply is refused server-side. */
   optedOut: boolean;
   messages: ConversationMessage[];
 };
+
+// Turn-state from the denormalized last_* pair: an inbound bumps both stamps
+// to the same instant (last_inbound_at == last_message_at), a staff reply
+// bumps only last_message_at past it — so "customer spoke last" is >=.
+function awaitingReply(row: {
+  lastInboundAt: Date | null;
+  lastMessageAt: Date;
+}): boolean {
+  return row.lastInboundAt != null && row.lastInboundAt >= row.lastMessageAt;
+}
 
 export async function loadCampaignConversations(
   campaignId: number,
@@ -44,6 +58,7 @@ export async function loadCampaignConversations(
     .select({
       id: smsThreads.id,
       phone: smsThreads.phone,
+      displayName: smsThreads.displayName,
       lastMessageAt: smsThreads.lastMessageAt,
       lastInboundAt: smsThreads.lastInboundAt,
       lastReadAt: smsThreads.lastReadAt,
@@ -92,10 +107,12 @@ export async function loadCampaignConversations(
   return threads.map((t) => ({
     id: t.id,
     phone: t.phone,
+    displayName: t.displayName,
     lastMessageAt: t.lastMessageAt,
     unread:
       t.lastInboundAt != null &&
       (t.lastReadAt == null || t.lastInboundAt > t.lastReadAt),
+    awaitingReply: awaitingReply(t),
     optedOut: optedOut.has(t.phone),
     messages: messages
       .filter((m) => m.threadId === t.id)
@@ -131,6 +148,7 @@ export async function loadSmsInbox(): Promise<InboxThread[]> {
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       phone: smsThreads.phone,
+      displayName: smsThreads.displayName,
       lastMessageAt: smsThreads.lastMessageAt,
       lastInboundAt: smsThreads.lastInboundAt,
       lastReadAt: smsThreads.lastReadAt,
@@ -186,10 +204,12 @@ export async function loadSmsInbox(): Promise<InboxThread[]> {
     startDate: t.startDate,
     endDate: t.endDate,
     phone: t.phone,
+    displayName: t.displayName,
     lastMessageAt: t.lastMessageAt,
     unread:
       t.lastInboundAt != null &&
       (t.lastReadAt == null || t.lastInboundAt > t.lastReadAt),
+    awaitingReply: awaitingReply(t),
     optedOut: optedOut.has(t.phone),
     messages: messages
       .filter((m) => m.threadId === t.id)

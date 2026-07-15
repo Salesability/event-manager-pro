@@ -47,16 +47,22 @@ export function InboxThreadList({
                     'text-sm text-zinc-900 ' + (t.unread ? 'font-semibold' : 'font-medium')
                   }
                 >
-                  {t.dealerName}
+                  {t.displayName ?? t.phone}
                 </span>
                 {t.unread && <Badge color="brand">new reply</Badge>}
                 {t.optedOut && <Badge color="red">opted out</Badge>}
+                {!t.optedOut && (
+                  <Badge color={t.awaitingReply ? 'amber' : 'zinc'}>
+                    {t.awaitingReply ? 'awaiting your reply' : 'waiting on customer'}
+                  </Badge>
+                )}
                 <span className="ml-auto text-xs text-zinc-500">
                   {formatDateTime(t.lastMessageAtIso)}
                 </span>
               </div>
               <p className="mt-0.5 text-xs text-zinc-500">
-                {eventDateLabel(t.startDate, t.endDate)} · {t.phone}
+                {t.dealerName} · {eventDateLabel(t.startDate, t.endDate)}
+                {t.displayName ? <> · {t.phone}</> : null}
               </p>
               {last && (
                 <p className="mt-1 truncate text-xs text-zinc-600">

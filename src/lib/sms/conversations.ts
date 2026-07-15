@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import {
   smsMessages,
   smsOptOuts,
+  smsRecipients,
   smsSends,
   smsThreadMessages,
   smsThreads,
@@ -25,6 +26,33 @@ type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 type Executor = Database | Transaction;
 
 export type CapturedInbound = { threadId: number; messageId: number };
+
+// 0110: purge-safe name snapshot. Resolve "First Last" from the campaign's
+// recipient row at stamp time — thread creation below, and reassign (the
+// other campaign's list may name the number differently). Null when the
+// number isn't on that campaign's list; callers keep any prior snapshot then.
+export async function lookupThreadDisplayName(
+  campaignId: number,
+  phone: string,
+  exec: Executor = db,
+): Promise<string | null> {
+  const [recipient] = await exec
+    .select({
+      firstName: smsRecipients.firstName,
+      lastName: smsRecipients.lastName,
+    })
+    .from(smsRecipients)
+    .where(
+      and(eq(smsRecipients.campaignId, campaignId), eq(smsRecipients.phone, phone)),
+    )
+    .limit(1);
+  if (!recipient) return null;
+  const name = [recipient.firstName, recipient.lastName]
+    .filter((part) => part && part.trim())
+    .join(' ')
+    .trim();
+  return name || null;
+}
 
 // Find the thread this phone's next inbound belongs to. `existingOnly` is the
 // STOP posture: a bare STOP never *creates* a thread (the opt-out registry is
@@ -68,9 +96,14 @@ async function resolveThread(
   // Find-or-create the (campaign, phone) thread. Insert-first with
   // onConflictDoNothing so two racing inbounds can't double-create against
   // the unique (campaign_id, phone) index; the loser falls through to select.
+  const displayName = await lookupThreadDisplayName(
+    latestLaunch.campaignId,
+    phone,
+    exec,
+  );
   const [created] = await exec
     .insert(smsThreads)
-    .values({ campaignId: latestLaunch.campaignId, phone })
+    .values({ campaignId: latestLaunch.campaignId, phone, displayName })
     .onConflictDoNothing()
     .returning({ id: smsThreads.id });
   if (created) return created.id;

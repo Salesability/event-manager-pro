@@ -47,8 +47,10 @@ export default async function CampaignSmsPage({
     conversationsRaw.map(async (c) => ({
       id: c.id,
       phone: c.phone,
+      displayName: c.displayName,
       lastMessageAtIso: c.lastMessageAt.toISOString(),
       unread: c.unread,
+      awaitingReply: c.awaitingReply,
       optedOut: c.optedOut,
       messages: c.messages.map((m) => ({
         id: m.id,
