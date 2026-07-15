@@ -107,11 +107,28 @@ export async function bookSlot(input: {
       if (existing) return 'already-booked';
 
       const [freshSettings] = await tx
-        .select({ slotCapacity: campaignBookingSettings.slotCapacity })
+        .select({
+          dayStartMinute: campaignBookingSettings.dayStartMinute,
+          dayEndMinute: campaignBookingSettings.dayEndMinute,
+          slotCapacity: campaignBookingSettings.slotCapacity,
+        })
         .from(campaignBookingSettings)
         .where(eq(campaignBookingSettings.campaignId, target.campaignId))
         .limit(1);
       if (!freshSettings) return 'invalid-slot';
+      if (
+        !isSlotInGrid(
+          {
+            startDate: target.startDate,
+            endDate: target.endDate,
+            dayStartMinute: freshSettings.dayStartMinute,
+            dayEndMinute: freshSettings.dayEndMinute,
+          },
+          { date: input.slotDate, startMinute: input.slotStartMinute },
+        )
+      ) {
+        return 'invalid-slot';
+      }
 
       const [slotCount] = await tx
         .select({ booked: count() })

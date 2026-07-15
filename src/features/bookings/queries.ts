@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, asc, count, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   appointments,
@@ -93,7 +93,14 @@ export async function loadBookingContext(token: string): Promise<BookingContext 
       })
       .from(appointments)
       .where(
-        and(eq(appointments.recipientId, row.recipientId), eq(appointments.status, 'booked')),
+        and(
+          eq(appointments.status, 'booked'),
+          or(
+            eq(appointments.recipientId, row.recipientId),
+            // Phone arm keeps a re-imported recipient's booked state visible.
+            and(eq(appointments.campaignId, row.campaignId), eq(appointments.phone, row.phone)),
+          ),
+        ),
       )
       .limit(1),
   ]);

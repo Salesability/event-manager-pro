@@ -209,6 +209,10 @@ describe.skipIf(!dbUrl)('booking domain (0108)', () => {
     expect(
       await bookSlot({ token: reimported.token, slotDate: END, slotStartMinute: 660 }),
     ).toBe('already-booked');
+    expect((await loadBookingContext(reimported.token))!.existingAppointment).toEqual({
+      slotDate: START,
+      slotStartMinute: 600,
+    });
   });
 
   it('enforces capacity under concurrent submits (exactly one wins the last seat)', async () => {
