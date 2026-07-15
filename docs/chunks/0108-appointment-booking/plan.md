@@ -10,7 +10,7 @@
 | 1: [Schema — slot grid + appointments + booking token] | Done | `c97dac7` |
 | 2: [Booking domain — token resolution, availability, book action] | Done | `daa1905` |
 | 3: [Public /book/<token> page] | Done | `5638037` |
-| 4: [Staff surface — slots + appointments on the event page] | Pending | - |
+| 4: [Staff surface — slots + appointments on the event page] | Done | `3fbad75` |
 | 5: Tests + smoke verification | Pending | - |
 
 The SMS "book your appointment" CTA finally gets a booking transaction: a per-recipient unguessable token resolves a public `/book/<token>` page where the customer picks one slot from the campaign's grid; the appointment lands in-app for staff. No SMS changes in this chunk (the `{{booking_link}}` send-path token + confirmation SMS are chunk 2) — done = a manually shared link books an appointment end-to-end, one per recipient, capacity-enforced, visible to staff on the event surface, with rows that outlive the 24-month recipient purge.
@@ -37,7 +37,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — recipient retention (24-month purge) and opt-out semantics the booking page must not violate
 - `docs/wiki/conventions.md` — mutations via Server Actions (the public booking form is still our own UI)
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -69,9 +69,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Test: server component + no client logic — rendering exercised by Phase 5 web-test smoke (grid, booked state, invalid token)
 
 #### Phase 4: [Staff surface — slots + appointments on the event page]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
+- [x] `loadCampaignBookingOverview` gains per-recipient booking links (token holders) — staff must be able to hand links out manually (the chunk's done-condition)
+- [x] `src/features/bookings/bookings-panel.tsx` (client) — settings enable/edit form (capacity + half-hour window selects → `saveCampaignBookingSettings`), token status, read-only slot grid with booked/capacity, appointments table, copyable recipient links
+- [x] `src/app/(app)/calendar/[id]/bookings/page.tsx` — per-event subpage (`assertCan('sms:send')` + `loadCampaign` + `PageHeader` + Back-to-event), serializes overview into the panel
+- [x] "Bookings" button in the event dialog next to "SMS" (same `sms:send` gate + add-on condition)
+- [x] Test: client panel is presentational + one action call — exercised by Phase 5 auth-gated smoke
 
 #### Phase 5: Tests + smoke verification
 - [ ] Service-level integration test for the booking domain (token resolve, one-per-recipient, capacity under concurrency)
