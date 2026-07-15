@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: [Schema — slot grid + appointments + booking token] | Done | `c97dac7` |
-| 2: [Booking domain — token resolution, availability, book action] | Pending | - |
+| 2: [Booking domain — token resolution, availability, book action] | Done | `daa1905` |
 | 3: [Public /book/<token> page] | Pending | - |
 | 4: [Staff surface — slots + appointments on the event page] | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -27,6 +27,7 @@ For each new file or method below, the builder reads the anchor first and matche
 | `src/features/bookings/queries.ts` (`loadBookingContext` by token, `loadCampaignSlots`) | `loadCampaignConversations` — `src/features/sms/conversations/queries.ts:40` | Same layer + read-model shape: `'server-only'`, typed exports, campaign-scoped select-then-map, derivation comments |
 | Public book Server Action (token-gated, unauthed) in `src/features/bookings/actions.ts` | `signInWithMagicLink` — `src/features/auth/actions.ts:28` | The only public-tier action shape in the repo: `// authz: public` marker + validation-note comment; gate is the token itself — validate it server-side first, everything derived from the row it resolves |
 | `src/app/book/[token]/page.tsx` | `src/app/share/coach/[id]/page.tsx:14` | The public-page pattern: own branded header (no `(app)` shell), param-validate → `notFound()`, server-loaded data only |
+| `audit_action` enum value additions | `src/lib/db/schema/audit-log.ts:28` (enum header comment) | Appending an enum value = `ALTER TYPE ADD VALUE` migration (0055) + lock-step TS array order |
 | `/book` entry in `PUBLIC_PATHS` | `src/lib/supabase/middleware.ts:8` | Same list + same style of "why this is public" comment as `/share/coach` |
 | Staff slots/appointments panel on the event surface | `src/app/(app)/calendar/[id]/sms/page.tsx:25` | The per-event subpage pattern: `assertCan` + `loadCampaign` + `notFound` + `PageHeader` with a Back-to-event button; the panel itself mirrors `SmsPanel`'s server-serialized props shape |
 
@@ -36,7 +37,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — recipient retention (24-month purge) and opt-out semantics the booking page must not violate
 - `docs/wiki/conventions.md` — mutations via Server Actions (the public booking form is still our own UI)
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -54,11 +55,11 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Apply migration to sandbox DB (5432 session pooler) — applied + verified 2026-07-15
 
 #### Phase 2: [Booking domain — token resolution, availability, book action]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Task 3
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `src/features/bookings/slots.ts` — pure 30-min slot-grid derivation (campaign dates × settings window) + slot-time formatting; slot length is a code constant
+- [x] `src/features/bookings/queries.ts` — `loadBookingContext(token)` (recipient + campaign + dealer + settings + live-appointment + per-slot booked counts) and `loadCampaignBookingOverview(campaignId)` for the staff surface
+- [x] `src/features/bookings/actions.ts` — public `bookAppointment` (token IS the gate; zod-parsed; advisory-locked capacity + one-per-recipient inside a transaction; unique-index backstop; redirect-based results) + staff `saveCampaignBookingSettings` (`sms:send`; settings upsert + mints missing recipient tokens ≥16 random bytes base64url)
+- [x] Test: slot-grid derivation unit tests (multi-day span, window boundaries, formatting)
+- [x] Test: booking input schema + slot-membership validation unit tests — membership via `isSlotInGrid` tests; the zod input path is module-private in the `'use server'` file, exercised by Phase 5 integration tests
 
 #### Phase 3: [Public /book/<token> page]
 - [ ] Task 1
