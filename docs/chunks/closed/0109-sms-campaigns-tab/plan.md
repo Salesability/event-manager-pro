@@ -1,0 +1,61 @@
+# SMS campaigns tab — move the ledger off event-dialog nav — Plan
+
+**Intent:** [`intent.md`](intent.md)
+**Started:** 2026-07-15
+
+## Progress Tracker
+
+| Phase | Status | Commit |
+|-------|--------|--------|
+| 1: [Campaign-index read model] | Done | `c8f70f2` |
+| 2: [Top-level page + list view] | Done | `1bc4ab3` |
+| 3: [Nav tab] | Done | `a0cf9d2` |
+| 4: Tests + smoke verification | Done | - |
+
+The SMS ledger's only door is calendar → event dialog → SMS button — the event dialog acting as a nav hub (the 0104 anti-pattern). This chunk adds a top-level `sms:send`-gated tab listing every SMS-relevant campaign (dealer, dates, add-on/launch state, imported count, last send, unread) with rows linking to the existing `/calendar/<id>/sms` pages. `/messages` stays purely the inbox (owner call 2026-07-14). Done = the full import → launch → replies workflow is runnable without opening the calendar; the dialog's SMS button demotes to a shortcut. Owner calls resolved 2026-07-15: tab **"SMS" at `/sms`**; list rule **gate-active ∪ has-history**; event-dialog SMS button **kept as shortcut**.
+
+## Code Anchors
+
+For each new file or method below, the builder reads the anchor first and matches its shape (length, error handling, naming, query style). For modifications to an existing file, the anchor is the nearest sibling method in that same file.
+
+| New code | Anchor (`path:line`) | Why this anchor |
+|----------|---------------------|-----------------|
+| `loadSmsCampaignIndex` in `src/features/sms/queries.ts` | `loadSmsSendLog` — `src/features/sms/queries.ts:116` | Same file, same layer: `'server-only'` typed read model; the index variant aggregates per-campaign (joins `dealers`, counts recipients/sends/unread threads) instead of per-send |
+| Top-level page (route per intent's naming call, e.g. `src/app/(app)/sms/page.tsx`) | `src/app/(app)/messages/page.tsx:17` | The 0107 sibling: `assertCan('sms:send')` + `PageHeader` + one view component over one query call |
+| Campaign-list view component in `src/features/sms/` | `QuotesAdmin` — `src/features/quotes/quotes-admin.tsx:37` | The server-loader → client `<DataTable>` consumer pattern for an index of linkable rows with status badges |
+| Nav tab in `OPERATIONAL_TABS` | `src/components/app/app-nav.tsx:23` (the 0107 `messages` row with `capability: 'sms:send'`) | Same capability-gating mechanism, adjacent placement |
+| (If owner opts to demote/remove the dialog button) SMS button in event dialog | `src/app/(app)/calendar/event-detail.tsx:237` | The existing `<Can capability="sms:send">` block that links to `/calendar/<id>/sms` |
+
+**Conventions referenced:**
+- `docs/wiki/auth.md` — capability gating at page (`assertCan`) + nav (tab `capability:`) layers
+- `docs/wiki/sms.md` — add-on gate semantics (`booked` + `smsEmail > 0`) and thread/unread derivation the row states must match
+- `docs/wiki/conventions.md` — reads for our own UI via server components/actions; no new route handlers
+
+**Overall Progress:** 100% (4/4 phases complete)
+
+**Note:**
+- Each phase includes both implementation and tests
+- Integration tests come last, after all phases pass (verifies real DB behavior)
+- ~~Phase 1 blocks on intent.md's naming call + list-qualification rule~~ **Resolved 2026-07-15:** "SMS" at `/sms`; gate-active ∪ has-history (state per row); dialog button kept
+
+### Phase Checklist
+
+#### Phase 1: [Campaign-index read model]
+- [x] `loadSmsCampaignIndex` in `src/features/sms/queries.ts` — one row per qualifying campaign (gate-active: `status='booked' AND sms_email > 0`; OR has-history: sends or threads exist), with dealer name, dates, status, add-on/gate state, recipient count, send count + last-send-at, thread count + unread flag
+- [x] Qualification + per-row state derivation matches the add-on gate and unread semantics documented in `docs/wiki/sms.md`
+
+#### Phase 2: [Top-level page + list view]
+- [x] `src/app/(app)/sms/page.tsx` — `assertCan('sms:send')` + `PageHeader` + one view component over `loadSmsCampaignIndex` (messages/page.tsx shape)
+- [x] `src/features/sms/campaign-index-list.tsx` — list view: dealer, dates, gate/status badge, recipient count, sends + last send, unread badge; rows link to `/calendar/<id>/sms`
+- [x] Test: list renders rows + empty state (unit, RTL like inbox-thread-list.test.tsx)
+- [x] Test: row states (gate-active vs history-only; unread badge) derive from props
+
+#### Phase 3: [Nav tab]
+- [x] `SMS` tab in `OPERATIONAL_TABS` (`/sms`, capability `sms:send`), placed before Messages
+- [x] Test: static nav config with an existing capability-filter path — exercised by Phase 4's gated browser smoke (tab visible next to Messages)
+
+#### Phase 4: Tests + smoke verification
+- [x] Service-level integration test for the campaign-index read model (qualification rule + counts) — `tests/integration/sms-campaign-index.test.ts` (2 tests)
+- [x] Smoke (web-test): `goto /sms` — heading + rows (real sandbox gate-active campaigns: Century Mazda, Bathurst Toyota) with dealer/date/state; row click landed on `/calendar/92/sms` — PASS 2026-07-15
+- [x] Smoke (web-test): nav shows the SMS tab next to Messages (gated visible) — PASS 2026-07-15
+- [x] ~~(If DB state is needed) reuse `scripts/sms-service-smoke.ts insert` / `cleanup`~~ not needed — sandbox already held qualifying gate-active campaigns; integration fixtures self-clean

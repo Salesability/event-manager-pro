@@ -11,6 +11,7 @@ import { usePathname } from 'next/navigation';
 import { useContext } from 'react';
 import { CapabilityContext } from '@/components/auth/capability-provider';
 import type { Capability } from '@/lib/auth/capabilities';
+import { MessagesUnreadBadge } from './messages-unread-badge';
 
 type Tab = { href: string; label: string; requiresAdmin?: true; capability?: Capability };
 
@@ -29,6 +30,13 @@ const OPERATIONAL_TABS: readonly Tab[] = [
   // so this highlights alone (not also Dealers) when active.
   { href: '/dealerships/pipeline', label: 'Pipeline', requiresAdmin: true },
   { href: '/quotes', label: 'Quotes', capability: 'quote:edit' },
+  // Campaign SMS index (0109) — the global door to every per-event ledger
+  // (import / launch / send log), so the event dialog stops being the only
+  // way in; admin-only today via the pure-admin `sms:send` (0103 D4).
+  { href: '/sms', label: 'SMS', capability: 'sms:send' },
+  // Global SMS inbox (0107) — carries the live unread badge (see the render
+  // below); admin-only today via the pure-admin `sms:send` (0103 D4).
+  { href: '/messages', label: 'Messages', capability: 'sms:send' },
   { href: '/reports', label: 'Reports' },
 ];
 
@@ -92,6 +100,7 @@ export function AppNav({ isAdmin }: { isAdmin: boolean }) {
             }
           >
             {tab.label}
+            {tab.href === '/messages' && <MessagesUnreadBadge />}
           </Link>
         );
       })}

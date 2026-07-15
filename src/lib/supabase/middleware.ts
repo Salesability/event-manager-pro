@@ -10,6 +10,10 @@ const PUBLIC_PATHS = [
   '/auth/callback',
   '/auth/auth-error',
   '/share/coach',
+  // Customer self-serve booking page (0108) — the recipient followed an SMS
+  // link and has no session; the unguessable per-recipient token in the path
+  // is the gate (resolved server-side; unknown token 404s, never /login).
+  '/book',
   '/api/boldsign/webhook',
   '/api/production-feed',
 ];

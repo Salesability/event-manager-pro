@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { smsMessages, smsOptOuts } from '@/lib/db/schema';
+import { smsMessages, smsOptOuts, smsThreadMessages } from '@/lib/db/schema';
+import {
+  captureInboundMessage,
+  captureInboundStop,
+  classifyThreadFromInbound,
+} from '@/lib/sms/conversations';
 import {
   classifyTwilioWebhook,
   isStopMessage,
@@ -21,8 +26,9 @@ import { verifyTwilioSignature } from '@/lib/sms/webhook-verify';
 //     MessageSid + MessageStatus [+ ErrorCode] → flip the sms_messages ledger
 //     row, monotonically (out-of-order callbacks never regress a status).
 //   • Inbound messages to our number (Messaging Service inbound URL):
-//     From + Body → STOP capture into the permanent opt-out registry; every
-//     other inbound is acked and ignored (two-way console is a non-goal).
+//     From + Body → STOP capture into the permanent opt-out registry; any
+//     other inbound persists as a conversation-thread message (0106) when the
+//     number has campaign history to attribute it to, else acked and ignored.
 //
 // The signature base URL is built from SITE_URL (operator-configured origin)
 // + this route's path — never the request Host header, which a proxy-level
@@ -117,6 +123,24 @@ async function handleStatusCallback(
 
   if (updated.length) return new NextResponse('OK', { status: 200 });
 
+  // A callback sid can also belong to a conversation-thread reply (0106) —
+  // same monotonic flip on that ledger.
+  const updatedReply = await db
+    .update(smsThreadMessages)
+    .set({
+      status,
+      errorCode,
+      statusUpdatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(smsThreadMessages.providerSid, messageSid),
+        inArray(smsThreadMessages.status, eligibleCurrent),
+      ),
+    )
+    .returning({ id: smsThreadMessages.id });
+  if (updatedReply.length) return new NextResponse('OK', { status: 200 });
+
   // Either the sid is unknown (404 — lets Twilio retry a callback that raced
   // our post-dispatch provider_sid write) or the row is already at/past this
   // rank (200 — replay/out-of-order, nothing to do).
@@ -128,6 +152,14 @@ async function handleStatusCallback(
   if (existing) {
     return new NextResponse('OK (no forward transition).', { status: 200 });
   }
+  const [existingReply] = await db
+    .select({ id: smsThreadMessages.id })
+    .from(smsThreadMessages)
+    .where(eq(smsThreadMessages.providerSid, messageSid))
+    .limit(1);
+  if (existingReply) {
+    return new NextResponse('OK (no forward transition).', { status: 200 });
+  }
   return new NextResponse('Message not found for the supplied sid.', { status: 404 });
 }
 
@@ -137,7 +169,23 @@ async function handleInbound(
   messageSid: string | null,
 ): Promise<NextResponse> {
   if (!isStopMessage(body)) {
-    return new NextResponse('OK (inbound ignored).', { status: 200 });
+    // 0106: non-STOP inbound persists as a conversation-thread message,
+    // attributed to the campaign that most recently texted the number. A
+    // number with no campaign history stays ack-and-ignore.
+    const captured = await captureInboundMessage({ from, body, messageSid });
+    if (!captured) {
+      return new NextResponse('OK (inbound ignored).', { status: 200 });
+    }
+    // 0110: display-only sentiment/temperature stamp, post-commit (owner-
+    // blessed autonomous call, decision.md D1). Best-effort — the classifier
+    // has its own tight timeout and every failure path is swallowed; the
+    // inbound is already persisted, so Twilio gets its 200 regardless.
+    try {
+      await classifyThreadFromInbound(captured.threadId);
+    } catch {
+      // Never fail the webhook over a display-only label.
+    }
+    return new NextResponse('OK', { status: 200 });
   }
 
   // Permanent + idempotent: a repeat STOP (or a replayed webhook) is a no-op.
@@ -150,6 +198,11 @@ async function handleInbound(
       providerMessageSid: messageSid,
     })
     .onConflictDoNothing({ target: smsOptOuts.phone });
+
+  // The opt-out registry above is the enforcement record; if the number has
+  // an active thread, also append the STOP there so the console shows why
+  // the conversation halted. Never creates a thread.
+  await captureInboundStop({ from, body, messageSid });
 
   return new NextResponse('OK', { status: 200 });
 }

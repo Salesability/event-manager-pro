@@ -11,7 +11,35 @@ Entries are reverse-chronological (newest at the top). Format:
 - link to the page(s) touched
 ```
 
+## 2026-07-15 — 0110 SMS console polish closed
+
+- Ingested 0110 into [sms.md](sms.md): new **Console polish (0110)** section (purge-safe name snapshots + migration `0056`, turn-state derivation, quick-reply chips, funnel-strip semantics, and the first owner-blessed autonomous LLM call — inbound sentiment/temperature classification, STOP clears labels); 0110 chunk link added to the header; parked 0110-a (classifier inside the webhook request) + 0110-b (turn-state persist gap) added to Open questions.
+
+## 2026-07-15 — 0109 SMS campaigns tab closed
+
+- [sms.md](sms.md): new "Campaigns tab (0109)" section (`/sms` route, gate-active ∪ has-history rule, read-only send log on gate-lapsed pages).
+- [index.md](index.md): sms.md summary line extended with the `/sms` tab + chunk `0109`.
+
+## 2026-07-15 — 0107 global SMS inbox closed (un-parked same day)
+
+- [sms.md](sms.md): new "Global inbox (0107)" section (Messages tab, needs-action-first read model, master–detail reuse of the console, 0107-a scale posture); mark-read semantics updated (snapshot-stamped `seenThrough`, not `now()` — fix `d2b6654`).
+- [index.md](index.md): sms.md summary line extended with the inbox + chunk `0107`.
+
+## 2026-07-15 — 0108 appointment booking shipped (tokenized /book/<token>)
+
+- Created [booking.md](booking.md): derived slot grids, the public token page, invariants (one-per-person across re-imports, capacity under advisory locks, purge-surviving snapshots), staff surface, chunk-2 (send-path token) status.
+- [data-model.md](data-model.md): added `campaign_booking_settings` + `appointments` rows; `booking_token` on `sms_recipients` (migrations `0054`/`0055`, sandbox-applied; prod still at `0048`).
+- [auth.md](auth.md): `/book` added to the public-path whitelist; `bookAppointment` joins the `// authz: public` exception list.
+- [index.md](index.md) + [sms.md](sms.md): booking.md linked; sms.md notes the shelved-chatbot → booking-link direction.
+
 ---
+
+## 2026-07-14 — SMS conversation console + AI-drafted replies ship (0106)
+
+- **Ingest:** [sms.md](sms.md) — new *Conversation console* section: non-STOP inbound now persists as (campaign, phone) threads (most-recent-send attribution + staff reassign), staff reply path (persist-first, opt-out recheck, dev-redirect, no CEM footer/gate on replies), mark-read, and AI-drafted replies (draft-and-approve via Anthropic `claude-opus-4-8`, campaign-facts-constrained, `ai_drafted` provenance — the repo's first LLM surface; `ANTHROPIC_API_KEY` not yet provisioned in deploys). Flow step 4 updated (status callbacks flip both ledgers; STOP appends thread evidence) + new step 5 (Converse). Parked list gained 0106-a (STOP-vs-dispatch race, shares 0103-a's fix shape).
+- [data-model.md](data-model.md): added `sms_threads` + `sms_thread_messages` to *Tables at a glance* + the conversation-ledger relationship bullet.
+- New migrations `0052` (two tables + direction enum) and `0053` (two `audit_action` values) — applied to sandbox; **prod migration pending deploy** (joins 0049–0051 on the unmerged `0103-sms-service` branch).
+- Chunk [`docs/chunks/closed/0106-sms-conversation-console/`](../chunks/closed/0106-sms-conversation-console/plan.md); eval `eval-2026-07-14-1736.md` (PASS-with-warnings; Codex Mediums/Low fixed in-cycle at `d72c1cc`, High parked as 0106-a).
 
 ## 2026-07-13 — Campaign SMS service ships (0103)
 

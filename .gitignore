@@ -37,3 +37,6 @@ next-env.d.ts
 # Misc
 *.pem
 skills-lock.json
+
+# local session debris (screenshots, throwaway smoke scripts)
+/scratchpad/

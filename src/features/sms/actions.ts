@@ -6,7 +6,10 @@ import { z } from 'zod';
 import { recordAudit } from '@/features/audit/actions';
 import { capabilityClient, formDataSchema } from '@/lib/actions/action-client';
 import { db } from '@/lib/db';
-import { smsMessages, smsOptOuts, smsRecipients, smsSends } from '@/lib/db/schema';
+import { campaigns, smsMessages, smsOptOuts, smsRecipients, smsSends, smsThreads } from '@/lib/db/schema';
+import { draftSmsReply } from '@/lib/ai/draft-sms-reply';
+import { lookupThreadDisplayName, sendThreadReply } from '@/lib/sms/conversations';
+import { loadInboxUnreadCount, loadThreadDraftContext } from './conversations/queries';
 import { computeIdentityHmac } from '@/lib/sms/identity';
 import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
@@ -58,10 +61,12 @@ async function lockCampaignSmsTx(
 }
 
 // The SMS panel lives on the event (campaign) detail surface under /calendar
-// (0104 workflow hub); dealership pages show campaign summaries too.
+// (0104 workflow hub); dealership pages show campaign summaries too, and the
+// global inbox (0107) aggregates every thread.
 function revalidateSmsViews() {
   revalidatePath('/calendar');
   revalidatePath('/dealerships');
+  revalidatePath('/messages');
 }
 
 function parseId(formData: FormData, key: string): number | null {
@@ -355,6 +360,219 @@ export const launchSmsSend = capabilityClient('sms:send')
       excludedOptOut,
       excludedStaleConsent: summary.excludedStaleConsent,
     };
+  });
+
+const replySchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+  body: z.string().trim().min(1, 'Reply text is required.').max(1600, 'Replies are capped at 1600 characters.'),
+  // Provenance only (D1/D4): the reply text originated as an approved AI
+  // draft (possibly edited). FormData carries strings, so the flag is the
+  // literal 'true' — anything else reads as staff-authored.
+  aiDrafted: z.literal('true').optional(),
+});
+
+// Staff reply into a conversation thread (0106 Phase 3). The heavy lifting —
+// opt-out recheck, persist-first outbound row, dev-redirected dispatch via
+// `sendSms` — lives in `sendThreadReply` (src/lib/sms/conversations.ts) so the
+// integration tests can drive it without the capability wrapper.
+export const replyToThread = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = replySchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid reply input.' };
+    }
+
+    const result = await sendThreadReply({
+      threadId: parsed.data.threadId,
+      body: parsed.data.body,
+      userId: ctx.user.id,
+      aiDrafted: parsed.data.aiDrafted === 'true',
+    });
+    if ('error' in result) return result;
+
+    await recordAudit({
+      action: 'sms.thread_replied',
+      targetTable: 'sms_thread_messages',
+      targetId: result.messageId,
+      payload: { threadId: parsed.data.threadId, aiDrafted: parsed.data.aiDrafted === 'true' },
+    });
+
+    revalidateSmsViews();
+    return { ok: true };
+  });
+
+const threadIdSchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+});
+
+const markThreadReadSchema = threadIdSchema.extend({
+  // +1ms: the snapshot ISO carries milliseconds but timestamptz stores
+  // microseconds — without the round-up, `last_read_at` truncates below the
+  // very message the client rendered and the thread reads unread forever.
+  seenThrough: z.iso.datetime().transform((iso) => new Date(new Date(iso).getTime() + 1)),
+});
+
+export type DraftReplyResult = { ok: true; draft: string } | { error: string };
+
+// AI-drafted reply suggestion (0106 Phase 4, D1 draft-and-approve). Returns
+// TEXT for the console's reply box — never sends. The staff member edits or
+// discards freely; sending goes through `replyToThread` with the aiDrafted
+// provenance flag. Drafts are constrained to campaign facts inside
+// `draftSmsReply`'s prompt; no audit entry because nothing is mutated.
+export const draftThreadReply = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData }): Promise<DraftReplyResult> => {
+    const parsed = threadIdSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid thread id.' };
+    }
+
+    const context = await loadThreadDraftContext(parsed.data.threadId);
+    if (!context) return { error: 'Conversation not found.' };
+    if (context.optedOut) {
+      return { error: 'This number has opted out (STOP) — no reply can be sent, so there is nothing to draft.' };
+    }
+    if (!context.messages.some((m) => m.direction === 'inbound')) {
+      return { error: 'Nothing to reply to yet — the conversation has no inbound message.' };
+    }
+
+    return draftSmsReply({
+      dealerName: context.dealerName,
+      eventDates: eventDatesLabel(context.startDate, context.endDate),
+      conversation: context.messages,
+    });
+  });
+
+// Matches the sms page's date label ("Aug 1 – Aug 2, 2026") so the AI states
+// the event dates the same way the rest of the surface renders them.
+function eventDatesLabel(startIso: string, endIso: string): string {
+  const fmt = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+  };
+  return startIso === endIso ? fmt(startIso) : `${fmt(startIso)} – ${fmt(endIso)}`;
+}
+
+// Clears the thread's unread marker (single global read pointer, v1).
+export const markThreadRead = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = markThreadReadSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid thread id.' };
+    }
+
+    // Mark only through the rendered snapshot; a newer inbound stays unread.
+    const updated = await db
+      .update(smsThreads)
+      .set({ lastReadAt: parsed.data.seenThrough, updatedById: ctx.user.id })
+      .where(eq(smsThreads.id, parsed.data.threadId))
+      .returning({ id: smsThreads.id });
+    if (!updated.length) return { error: 'Conversation not found.' };
+
+    revalidateSmsViews();
+    return { ok: true };
+  });
+
+export type InboxUnreadCountResult = { ok: true; count: number };
+
+// Nav-badge poll (0107): how many threads have unread inbound. Read-only —
+// reads triggered by our own UI go through a Server Action like everything
+// else (route handlers are external-callers-only per conventions).
+// validation: skip — takes no input; returns a count only.
+export const getInboxUnreadCount = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async (): Promise<InboxUnreadCountResult> => {
+    return { ok: true, count: await loadInboxUnreadCount() };
+  });
+
+const reassignSchema = z.object({
+  threadId: z.coerce.number().int().positive(),
+  campaignId: z.coerce.number().int().positive(),
+});
+
+// D2: attribution defaults to most-recent-send and can guess wrong when a
+// number is on several campaigns — staff move the whole thread to the right
+// one. Refuses (rather than merges) when the target campaign already has a
+// thread for the number — the unique (campaign_id, phone) index backstops a
+// race on that check.
+export const reassignThread = capabilityClient('sms:send')
+  .schema(formDataSchema)
+  .action(async ({ parsedInput: formData, ctx }): Promise<ActionResult> => {
+    const parsed = reassignSchema.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? 'Invalid reassignment input.' };
+    }
+    const { threadId, campaignId } = parsed.data;
+
+    const [thread] = await db
+      .select({ phone: smsThreads.phone })
+      .from(smsThreads)
+      .where(eq(smsThreads.id, threadId))
+      .limit(1);
+    if (!thread) return { error: 'Conversation not found.' };
+
+    const [target] = await db
+      .select({ id: campaigns.id })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId))
+      .limit(1);
+    if (!target) return { error: 'Target campaign not found.' };
+
+    const [sendHistory] = await db
+      .select({ id: smsMessages.id })
+      .from(smsMessages)
+      .innerJoin(smsSends, eq(smsSends.id, smsMessages.sendId))
+      .where(and(eq(smsSends.campaignId, campaignId), eq(smsMessages.phone, thread.phone)))
+      .limit(1);
+    if (!sendHistory) {
+      return {
+        error:
+          'That campaign has never texted this number — reassignment is limited to campaigns that have.',
+      };
+    }
+
+    // 0110: the target campaign's list may name this number differently —
+    // re-stamp the snapshot when it does; keep the existing one when the
+    // target list doesn't know the number (it's still the best info we have).
+    const displayName = await lookupThreadDisplayName(campaignId, thread.phone);
+
+    try {
+      const updated = await db
+        .update(smsThreads)
+        .set({
+          campaignId,
+          ...(displayName ? { displayName } : {}),
+          updatedById: ctx.user.id,
+        })
+        .where(eq(smsThreads.id, threadId))
+        .returning({ id: smsThreads.id });
+      if (!updated.length) return { error: 'Conversation not found.' };
+    } catch (err) {
+      if (err instanceof Error && 'code' in err && err.code === '23505') {
+        return {
+          error:
+            'That campaign already has a conversation with this number — reassignment would collide with it.',
+        };
+      }
+      throw err;
+    }
+
+    await recordAudit({
+      action: 'sms.thread_reassigned',
+      targetTable: 'sms_threads',
+      targetId: threadId,
+      payload: { campaignId },
+    });
+
+    revalidateSmsViews();
+    return { ok: true };
   });
 
 const optOutSchema = z.object({
