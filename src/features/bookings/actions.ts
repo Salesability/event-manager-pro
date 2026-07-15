@@ -43,18 +43,24 @@ function isUniqueViolation(err: unknown): boolean {
   return code === '23505' || causeCode === '23505';
 }
 
-const bookInputSchema = z.object({
-  token: z.string().trim().min(1).max(200),
-  slotDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid slot date.'),
-  slotStartMinute: z.coerce
-    .number()
-    .int()
-    .min(0)
-    .max(1440 - SLOT_LENGTH_MINUTES)
-    .refine((m) => m % SLOT_LENGTH_MINUTES === 0, 'Off-grid slot time.'),
-});
+// `slot` is one field ("YYYY-MM-DD#minute") because the page's picker is a
+// radio group — a radio can only carry a single value, and one field keeps the
+// public form free of client JS.
+const bookInputSchema = z
+  .object({
+    token: z.string().trim().min(1).max(200),
+    slot: z.string().regex(/^\d{4}-\d{2}-\d{2}#\d{1,4}$/, 'Malformed slot.'),
+  })
+  .transform(({ token, slot }) => {
+    const [slotDate, minuteRaw] = slot.split('#');
+    return { token, slotDate, slotStartMinute: Number(minuteRaw) };
+  })
+  .refine(
+    (v) =>
+      v.slotStartMinute % SLOT_LENGTH_MINUTES === 0 &&
+      v.slotStartMinute <= 1440 - SLOT_LENGTH_MINUTES,
+    'Off-grid slot time.',
+  );
 
 type BookOutcome = 'ok' | 'already-booked' | 'slot-full';
 
@@ -69,8 +75,7 @@ type BookOutcome = 'ok' | 'already-booked' | 'slot-full';
 export async function bookAppointment(formData: FormData) {
   const parsed = bookInputSchema.safeParse({
     token: formData.get('token'),
-    slotDate: formData.get('slotDate'),
-    slotStartMinute: formData.get('slotStartMinute'),
+    slot: formData.get('slot'),
   });
   if (!parsed.success) {
     const token = String(formData.get('token') ?? '').trim();
