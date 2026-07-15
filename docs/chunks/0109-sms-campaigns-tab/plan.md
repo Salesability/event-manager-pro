@@ -7,8 +7,8 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: [Campaign-index read model] | Done | - |
-| 2: [Top-level page + list view] | Pending | - |
+| 1: [Campaign-index read model] | Done | `c8f70f2` |
+| 2: [Top-level page + list view] | Done | - |
 | 3: [Nav tab] | Pending | - |
 | 4: Tests + smoke verification | Pending | - |
 
@@ -31,7 +31,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — add-on gate semantics (`booked` + `smsEmail > 0`) and thread/unread derivation the row states must match
 - `docs/wiki/conventions.md` — reads for our own UI via server components/actions; no new route handlers
 
-**Overall Progress:** 25% (1/4 phases complete)
+**Overall Progress:** 50% (2/4 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -45,10 +45,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Qualification + per-row state derivation matches the add-on gate and unread semantics documented in `docs/wiki/sms.md`
 
 #### Phase 2: [Top-level page + list view]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
-- [ ] Test case 2
+- [x] `src/app/(app)/sms/page.tsx` — `assertCan('sms:send')` + `PageHeader` + one view component over `loadSmsCampaignIndex` (messages/page.tsx shape)
+- [x] `src/features/sms/campaign-index-list.tsx` — list view: dealer, dates, gate/status badge, recipient count, sends + last send, unread badge; rows link to `/calendar/<id>/sms`
+- [x] Test: list renders rows + empty state (unit, RTL like inbox-thread-list.test.tsx)
+- [x] Test: row states (gate-active vs history-only; unread badge) derive from props
 
 #### Phase 3: [Nav tab]
 - [ ] Task 1
