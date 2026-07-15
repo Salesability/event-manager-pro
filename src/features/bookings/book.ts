@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   appointments,
@@ -55,6 +55,7 @@ export async function bookSlot(input: {
       firstName: smsRecipients.firstName,
       lastName: smsRecipients.lastName,
       phone: smsRecipients.phone,
+      status: campaigns.status,
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       dayStartMinute: campaignBookingSettings.dayStartMinute,
@@ -74,6 +75,7 @@ export async function bookSlot(input: {
   // Token lifetime: the link outlives the event but stops booking — the page
   // shows "this event has passed" (intent's lean call). Host-local date,
   // app-wide pattern (0097-a).
+  if (target.status === 'cancelled') return 'event-ended';
   const now = new Date();
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if (target.endDate < todayIso) return 'event-ended';
@@ -91,12 +93,25 @@ export async function bookSlot(input: {
         .from(appointments)
         .where(
           and(
-            eq(appointments.recipientId, target.recipientId),
             eq(appointments.status, 'booked'),
+            or(
+              eq(appointments.recipientId, target.recipientId),
+              and(
+                eq(appointments.campaignId, target.campaignId),
+                eq(appointments.phone, target.phone),
+              ),
+            ),
           ),
         )
         .limit(1);
       if (existing) return 'already-booked';
+
+      const [freshSettings] = await tx
+        .select({ slotCapacity: campaignBookingSettings.slotCapacity })
+        .from(campaignBookingSettings)
+        .where(eq(campaignBookingSettings.campaignId, target.campaignId))
+        .limit(1);
+      if (!freshSettings) return 'invalid-slot';
 
       const [slotCount] = await tx
         .select({ booked: count() })
@@ -109,7 +124,7 @@ export async function bookSlot(input: {
             eq(appointments.status, 'booked'),
           ),
         );
-      if ((slotCount?.booked ?? 0) >= target.slotCapacity) return 'slot-full';
+      if ((slotCount?.booked ?? 0) >= freshSettings.slotCapacity) return 'slot-full';
 
       // Snapshot the recipient's name/phone: the appointment must survive the
       // 24-month recipient purge. Actors stay null — no user on the public path.

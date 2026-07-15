@@ -125,8 +125,10 @@ export const saveCampaignBookingSettings = capabilityClient('sms:send')
       .where(eq(campaigns.id, campaignId))
       .limit(1);
     if (!campaign) return { error: 'Campaign not found.' };
-    if (campaign.status === 'cancelled') {
-      return { error: 'Booking cannot be enabled on a cancelled campaign.' };
+    if (campaign.status !== 'booked') {
+      return {
+        error: `Booking can only be enabled for booked campaigns (this one is ${campaign.status}).`,
+      };
     }
 
     const userId = ctx.user.id;
@@ -135,6 +137,10 @@ export const saveCampaignBookingSettings = capabilityClient('sms:send')
       // recipient re-import's delete + reinsert (sms/actions.ts).
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtext('sms_launch_' || ${campaignId}::text))`,
+      );
+      // Settings writes serialize against in-flight bookings.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext('booking_' || ${campaignId}::text))`,
       );
 
       await tx

@@ -81,6 +81,7 @@ describe.skipIf(!dbUrl)('booking domain (0108)', () => {
     withSettings?: boolean;
     startDate?: string;
     endDate?: string;
+    status?: (typeof campaigns.$inferInsert)['status'];
   }) {
     const [dealer] = await db
       .insert(dealers)
@@ -94,7 +95,7 @@ describe.skipIf(!dbUrl)('booking domain (0108)', () => {
         dealerId: dealer.id,
         startDate: opts.startDate ?? START,
         endDate: opts.endDate ?? END,
-        status: 'booked',
+        status: opts.status ?? 'booked',
         smsEmail: 100,
       })
       .returning({ id: campaigns.id });
@@ -198,6 +199,16 @@ describe.skipIf(!dbUrl)('booking domain (0108)', () => {
     expect(
       ctx!.slots.find((s) => s.date === START && s.startMinute === 600),
     ).toMatchObject({ booked: 1, isFull: false });
+
+    // Re-import deletes + reinserts the recipient; the same phone still gets
+    // one booked appointment for this campaign.
+    await db.delete(smsRecipients).where(eq(smsRecipients.id, recipient.id));
+    const reimported = await seedRecipient(campaignId, '1003', {
+      phone: `${PHONE_PREFIX}0003`,
+    });
+    expect(
+      await bookSlot({ token: reimported.token, slotDate: END, slotStartMinute: 660 }),
+    ).toBe('already-booked');
   });
 
   it('enforces capacity under concurrent submits (exactly one wins the last seat)', async () => {
@@ -264,6 +275,21 @@ describe.skipIf(!dbUrl)('booking domain (0108)', () => {
     ).toBe('event-ended');
     const ctx = await loadBookingContext(endedRecipient.token);
     expect(ctx!.eventEnded).toBe(true);
+
+    const cancelled = await seedBookableCampaign({
+      dealerName: 'Cancelled Motors',
+      status: 'cancelled',
+    });
+    const cancelledRecipient = await seedRecipient(cancelled, '0009');
+    expect(
+      await bookSlot({
+        token: cancelledRecipient.token,
+        slotDate: START,
+        slotStartMinute: 540,
+      }),
+    ).toBe('event-ended');
+    const cancelledCtx = await loadBookingContext(cancelledRecipient.token);
+    expect(cancelledCtx!.eventEnded).toBe(true);
   });
 
   it('keeps the appointment when its recipient row is purged', async () => {

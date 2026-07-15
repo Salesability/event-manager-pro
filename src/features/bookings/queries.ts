@@ -60,6 +60,7 @@ export async function loadBookingContext(token: string): Promise<BookingContext 
       lastName: smsRecipients.lastName,
       phone: smsRecipients.phone,
       dealerName: dealers.name,
+      status: campaigns.status,
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       dayStartMinute: campaignBookingSettings.dayStartMinute,
@@ -106,7 +107,8 @@ export async function loadBookingContext(token: string): Promise<BookingContext 
     dealerName: row.dealerName,
     startDate: row.startDate,
     endDate: row.endDate,
-    eventEnded: row.endDate < todayIso(),
+    // Cancelled campaigns read as ended on the public page.
+    eventEnded: row.status === 'cancelled' || row.endDate < todayIso(),
     slots,
     existingAppointment: existing ?? null,
   };
