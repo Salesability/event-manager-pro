@@ -1,3 +1,4 @@
+export * from './appointments';
 export * from './audience-sources';
 export * from './audit-log';
 export * from './auth';

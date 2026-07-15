@@ -50,11 +50,23 @@ export const smsRecipients = pgTable(
     // without the ledger ever holding a readable name. Null when
     // SMS_IDENTITY_HMAC_KEY is unset (feature degrades gracefully).
     identityHmac: text('identity_hmac'),
+    // 0108: unguessable token gating the public /book/<token> page. Higher
+    // entropy than display publicIds (≥16 random bytes, base64url) — it
+    // resolves to this recipient's PII and authorizes a booking write. Null
+    // until minted (booking enabled for the campaign). Dies with the row at
+    // the 24-month purge; the appointment it produced snapshots name/phone
+    // and survives via `appointments.recipient_id` SET NULL.
+    bookingToken: text('booking_token'),
     ...timestamps,
     ...actors,
   },
   (table) => [
     uniqueIndex('sms_recipients_campaign_phone_unique').on(table.campaignId, table.phone),
+    // Token lookup is the public page's entry point; partial like
+    // `sms_thread_messages.provider_sid` (most rows have no token).
+    uniqueIndex('sms_recipients_booking_token_unique')
+      .on(table.bookingToken)
+      .where(sql`booking_token IS NOT NULL`),
     index('sms_recipients_campaign_id_idx').on(table.campaignId),
     // The 24-month retention purge filters on import date (D5).
     index('sms_recipients_created_at_idx').on(table.createdAt),
