@@ -9,7 +9,7 @@
 |-------|--------|--------|
 | 1: [Runner + environment guards] | Done | a630353 |
 | 2: [Demo dealer + campaign module] | Done | d769246 |
-| 3: [SMS recipients + history modules] | Pending | - |
+| 3: [SMS recipients + history modules] | Done | ef07f2c |
 | 4: [Century Mazda fixture migration + smoke-script promotion] | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — thread model + funnel semantics the fabricated history must reconcile with
 - `docs/wiki/go-live-accounts.md` — prod ref / sandbox ref identities behind the guard
 
-**Overall Progress:** 40% (2/5 phases complete)
+**Overall Progress:** 60% (3/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -55,9 +55,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Live verify on sandbox: seed twice → identical rows; `--clean` → zero marker rows
 
 #### Phase 3: [SMS recipients + history modules]
-- [ ] Task 1
-- [ ] Task 2
-- [ ] Test case 1
+- [x] `scripts/seeds/20-sms-recipients.ts` — 6-recipient consent-mix list on the demo campaign (4 eligible across express/implied_purchase/implied_inquiry, 1 stale-CASL implied_purchase @ 25 months, 1 opted-out via `stop_reply` registry row), identity fingerprints via `computeIdentityHmac`, fixed `demo-booking-token` on the responder
+- [x] `seed:demo` script gains `NODE_OPTIONS=--conditions=react-server` (the `server-only` import inside `src/lib/sms/identity.ts` — same trick as the 2026-07-15 one-off)
+- [x] `scripts/seeds/30-sms-history.ts` — fabricated send (`demo-` providerSids) + 5 ledger messages with consent/identity snapshots + responder thread (name snapshot, positive/hot labels, outbound+inbound transcript); printed expected-numbers contract: funnel 5 sent / 4 delivered / 1 response / 4 no response / 1 stop; pre-send 6 imported / 4 eligible / 1 opted out / 1 stale
+- [x] Live verify on sandbox: seed twice → identical counts; funnel/pre-send numbers match the printed contract
 
 #### Phase 4: [Century Mazda fixture migration + smoke-script promotion]
 - [ ] Task 1
