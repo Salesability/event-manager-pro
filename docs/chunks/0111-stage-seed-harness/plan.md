@@ -8,7 +8,7 @@
 | Phase | Status | Commit |
 |-------|--------|--------|
 | 1: [Runner + environment guards] | Done | a630353 |
-| 2: [Demo dealer + campaign module] | Pending | - |
+| 2: [Demo dealer + campaign module] | Done | d769246 |
 | 3: [SMS recipients + history modules] | Pending | - |
 | 4: [Century Mazda fixture migration + smoke-script promotion] | Pending | - |
 | 5: Tests + smoke verification | Pending | - |
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — thread model + funnel semantics the fabricated history must reconcile with
 - `docs/wiki/go-live-accounts.md` — prod ref / sandbox ref identities behind the guard
 
-**Overall Progress:** 20% (1/5 phases complete)
+**Overall Progress:** 40% (2/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -49,8 +49,10 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Guard unit tests: prod ref refused even with opt-in; sandbox/local pass without opt-in; unknown target needs opt-in; missing URL refused
 
 #### Phase 2: [Demo dealer + campaign module]
-- [ ] Task 1
-- [ ] Task 2
+- [x] `scripts/seeds/markers.ts` — shared ownership markers (`demo-` publicId prefix, reserved `+1999555` phone block distinct from the 0108/0110 smoke blocks)
+- [x] `scripts/seeds/10-demo-dealer.ts` — Demo Motors dealer + upcoming booked campaign (`smsEmail: 100`) + booking settings; `findDemoCampaignId` lookup for downstream modules; scoped clean (appointments → campaign [recipients/settings cascade] → dealer)
+- [x] Runner order fix: default run = full reverse clean pass, then forward seed pass (per-module clean-then-seed breaks on `restrict` FKs from later modules)
+- [x] Live verify on sandbox: seed twice → identical rows; `--clean` → zero marker rows
 
 #### Phase 3: [SMS recipients + history modules]
 - [ ] Task 1
