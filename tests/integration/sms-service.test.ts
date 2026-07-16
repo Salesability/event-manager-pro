@@ -51,7 +51,7 @@ import {
   smsRecipients,
   smsSends,
 } from '@/lib/db/schema';
-import { launchSmsSend } from '@/features/sms/actions';
+import { importSmsRecipients, launchSmsSend } from '@/features/sms/actions';
 import {
   campaignHasDispatchedSend,
   evaluateCampaignRecipients,
@@ -579,6 +579,59 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
         .from(smsSends)
         .where(eq(smsSends.campaignId, campaignId));
       expect(sends).toHaveLength(2);
+    } finally {
+      if (fixture) await cleanupCampaign(fixture.campaignId, fixture.dealerId);
+    }
+  });
+
+  it('refuses a recipient re-import once the campaign has broadcast (0113)', async () => {
+    let fixture: { campaignId: number; dealerId: number } | null = null;
+    try {
+      fixture = await seedCampaign(db);
+      const { campaignId } = fixture;
+      await db.insert(smsRecipients).values({
+        campaignId,
+        phone: `${PHONE_PREFIX}0054`,
+        consentBasis: 'express',
+      });
+      const [send] = await db
+        .insert(smsSends)
+        .values({
+          campaignId,
+          body: 'Broadcast',
+          totalRecipients: 1,
+          excludedOptOut: 0,
+          excludedStaleConsent: 0,
+        })
+        .returning({ id: smsSends.id });
+      await db.insert(smsMessages).values({
+        sendId: send.id,
+        phone: `${PHONE_PREFIX}0054`,
+        providerSid: `SMlock_${publicId()}`,
+      });
+
+      const fd = new FormData();
+      fd.set('campaignId', String(campaignId));
+      fd.set(
+        'file',
+        new File(
+          [`phone,first_name,last_name,consent_basis,last_contact_at\n${PHONE_PREFIX}0055,New,Person,express,\n`],
+          'list.csv',
+          { type: 'text/csv' },
+        ),
+      );
+      const result = await importSmsRecipients(fd);
+      expect(result.data).toEqual({
+        error:
+          'This campaign has already been broadcast — its recipient list is locked. Campaigns send one broadcast.',
+      });
+
+      // The sent audience survives untouched.
+      const rows = await db
+        .select({ phone: smsRecipients.phone })
+        .from(smsRecipients)
+        .where(eq(smsRecipients.campaignId, campaignId));
+      expect(rows).toEqual([{ phone: `${PHONE_PREFIX}0054` }]);
     } finally {
       if (fixture) await cleanupCampaign(fixture.campaignId, fixture.dealerId);
     }

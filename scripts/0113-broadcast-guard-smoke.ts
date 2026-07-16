@@ -131,7 +131,17 @@ async function cleanup() {
       .where(like(campaigns.publicId, `${FIXTURE_MARKER}%`))
   ).map((c) => c.id);
   if (campaignIds.length) {
-    await db.delete(smsMessages).where(like(smsMessages.phone, `${PHONE_PREFIX}%`));
+    // Scope the message sweep to the fixture sends — never globally by phone
+    // prefix, so an unrelated row sharing the prefix can't be caught.
+    const sendIds = (
+      await db
+        .select({ id: smsSends.id })
+        .from(smsSends)
+        .where(inArray(smsSends.campaignId, campaignIds))
+    ).map((s) => s.id);
+    if (sendIds.length) {
+      await db.delete(smsMessages).where(inArray(smsMessages.sendId, sendIds));
+    }
     await db.delete(smsSends).where(inArray(smsSends.campaignId, campaignIds));
     await db
       .delete(smsRecipients)

@@ -110,8 +110,12 @@ export const importSmsRecipients = capabilityClient('sms:send')
     if ('error' in parsed) return parsed;
 
     const userId = ctx.user.id;
-    await db.transaction(async (tx) => {
+    const alreadyBroadcast = await db.transaction(async (tx) => {
       await lockCampaignSmsTx(tx, campaignId);
+      // One broadcast per campaign (0113): once dispatched, the recipient
+      // list is the sent audience — a wholesale replace would make the
+      // pre-send review disagree with the ledger. Same gate as the launch.
+      if (await campaignHasDispatchedSend(campaignId, tx)) return true;
       await tx.delete(smsRecipients).where(eq(smsRecipients.campaignId, campaignId));
       await tx.insert(smsRecipients).values(
         parsed.rows.map((row) => ({
@@ -128,7 +132,14 @@ export const importSmsRecipients = capabilityClient('sms:send')
           updatedById: userId,
         })),
       );
+      return false;
     });
+    if (alreadyBroadcast) {
+      return {
+        error:
+          'This campaign has already been broadcast — its recipient list is locked. Campaigns send one broadcast.',
+      };
+    }
 
     await recordAudit({
       action: 'sms.recipients_imported',
