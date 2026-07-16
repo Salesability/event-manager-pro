@@ -10,8 +10,8 @@
 | 1: [Runner + environment guards] | Done | a630353 |
 | 2: [Demo dealer + campaign module] | Done | d769246 |
 | 3: [SMS recipients + history modules] | Done | ef07f2c |
-| 4: [Century Mazda fixture migration + smoke-script promotion] | In Progress | - |
-| 5: Tests + smoke verification | Pending | - |
+| 4: [Century Mazda fixture migration + smoke-script promotion] | Done | 1917888 |
+| 5: Tests + smoke verification | In Progress | - |
 
 Generalize the per-chunk `insert|cleanup` smoke-fixture pattern into a permanent `scripts/seeds/` harness: ordered modules with `seed`/`clean`, marker-owned rows, hard prod-refusal, one `pnpm seed:demo` entry point. Done = the SMS-line demo state is reproducible from a clean sandbox in one command, idempotently, and the 2026-07-15 ad-hoc fixtures are off the real Century Mazda campaign.
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — thread model + funnel semantics the fabricated history must reconcile with
 - `docs/wiki/go-live-accounts.md` — prod ref / sandbox ref identities behind the guard
 
-**Overall Progress:** 60% (3/5 phases complete)
+**Overall Progress:** 80% (4/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -62,7 +62,7 @@ For each new file or method below, the builder reads the anchor first and matche
 
 #### Phase 4: [Century Mazda fixture migration + smoke-script promotion]
 - [x] `scripts/0111-century-mazda-sweep.ts` — one-off, hard-scoped to campaign 92: messages of the 2026-07-16 test send → the send row → the 6 fixture recipients (5× `+1902555` + the dev number) → the `+19025550105` opt-out; prod-refusal via the harness guard (fixture content itself was replaced by, not moved to, the demo modules — new invented names on Demo Motors)
-- [ ] Run the sweep on the sandbox; verify campaign 92 has zero SMS rows (pre-2026-07-15 state) — **paused: destructive on the shared sandbox, needs user go-ahead (2026-07-16)**
+- [x] Run the sweep on the sandbox; verify campaign 92 has zero SMS rows (pre-2026-07-15 state) — user ran it 2026-07-16; verified 0 recipients / 0 sends / 0 threads / 0 fixture opt-outs
 - [x] Smoke-script promotion: header pointers on `scripts/0108-booking-smoke.ts` + `scripts/0110-console-polish-smoke.ts` marking `scripts/seeds/` as the permanent home for demo state (scripts stay as chunk-historical eval fixtures)
 
 #### Phase 5: Tests + smoke verification
