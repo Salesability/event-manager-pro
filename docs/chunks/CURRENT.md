@@ -1,12 +1,8 @@
 # Active chunk
 
-**Plan:** [`docs/chunks/0112-confirm-dialog-sweep/plan.md`](0112-confirm-dialog-sweep/plan.md)
-**Intent:** [`docs/chunks/0112-confirm-dialog-sweep/intent.md`](0112-confirm-dialog-sweep/intent.md)
+**Plan:** _None — pick a new plan_
 
-**Started:** 2026-07-16
-**Status:** Scaffolded — phases not yet started
-
-Retire every native `window.confirm()` (10 call sites, 7 files) for a shared Catalyst-Alert confirm dialog with design-system button treatments — owner flagged the native dialog as dated UX during the 2026-07-16 stage review. Still queued behind it: booking "chunk 2" (`{{booking_link}}` send token + confirmation SMS — not yet scaffolded) and the SMS-line prod runway (prod migrations `0049`–`0056`, Twilio toll-free verification, prod `ANTHROPIC_API_KEY`).
+_(0112-confirm-dialog-sweep closed 2026-07-16, PASS with warnings — see [`closed/0112-…/eval-2026-07-16-1102.md`](closed/0112-confirm-dialog-sweep/eval-2026-07-16-1102.md).)_ Queued candidates: booking "chunk 2" (`{{booking_link}}` send token + confirmation SMS — not yet scaffolded) and the SMS-line prod runway (prod migrations `0049`–`0056`, Twilio toll-free verification, prod `ANTHROPIC_API_KEY`).
 
 **Branch layout (owner calls 2026-07-14/15):** the SMS line builds on branch **`0108-appointment-booking`** (contains `0103-sms-service` tip `ac5de2b` — 0103+0105+0106+0107 — merged back in 2026-07-15, plus shipped 0108, 0109, 0110). Owner call: *every inbound reply must be visible even when none is expected*. The on-demand "Draft AI reply" button stays (human-initiated, degrades without `ANTHROPIC_API_KEY`); 0110 added the **first owner-blessed autonomous LLM call** (display-only sentiment/temperature classification on inbound — [`closed/0110-…/decision.md`](closed/0110-sms-console-polish/decision.md) D1); the *auto-draft/approval-queue* path remains shelved. Migrations `0049`–`0056` in-tree, all applied to sandbox; prod is still at `0048` — **apply prod migrations before the line merges to `main`** (0095 keyless CI auto-deploys prod on merge).
 _Prior context:_ **0109-sms-campaigns-tab** closed 2026-07-15 ([`closed/0109-…/eval-2026-07-15-1510.md`](closed/0109-sms-campaigns-tab/eval-2026-07-15-1510.md)) — the `/sms` tab is the global door to every campaign ledger. **0108** closed the same day ([`closed/0108-…/eval-2026-07-15-1005.md`](closed/0108-appointment-booking/eval-2026-07-15-1005.md)); booking chunk 2 (`{{booking_link}}` send token + confirmation SMS) is not yet scaffolded.
