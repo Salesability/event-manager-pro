@@ -10,7 +10,7 @@
 | 1: [Runner + environment guards] | Done | a630353 |
 | 2: [Demo dealer + campaign module] | Done | d769246 |
 | 3: [SMS recipients + history modules] | Done | ef07f2c |
-| 4: [Century Mazda fixture migration + smoke-script promotion] | Pending | - |
+| 4: [Century Mazda fixture migration + smoke-script promotion] | In Progress | - |
 | 5: Tests + smoke verification | Pending | - |
 
 Generalize the per-chunk `insert|cleanup` smoke-fixture pattern into a permanent `scripts/seeds/` harness: ordered modules with `seed`/`clean`, marker-owned rows, hard prod-refusal, one `pnpm seed:demo` entry point. Done = the SMS-line demo state is reproducible from a clean sandbox in one command, idempotently, and the 2026-07-15 ad-hoc fixtures are off the real Century Mazda campaign.
@@ -61,8 +61,9 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Live verify on sandbox: seed twice → identical counts; funnel/pre-send numbers match the printed contract
 
 #### Phase 4: [Century Mazda fixture migration + smoke-script promotion]
-- [ ] Task 1
-- [ ] Task 2
+- [x] `scripts/0111-century-mazda-sweep.ts` — one-off, hard-scoped to campaign 92: messages of the 2026-07-16 test send → the send row → the 6 fixture recipients (5× `+1902555` + the dev number) → the `+19025550105` opt-out; prod-refusal via the harness guard (fixture content itself was replaced by, not moved to, the demo modules — new invented names on Demo Motors)
+- [ ] Run the sweep on the sandbox; verify campaign 92 has zero SMS rows (pre-2026-07-15 state) — **paused: destructive on the shared sandbox, needs user go-ahead (2026-07-16)**
+- [x] Smoke-script promotion: header pointers on `scripts/0108-booking-smoke.ts` + `scripts/0110-console-polish-smoke.ts` marking `scripts/seeds/` as the permanent home for demo state (scripts stay as chunk-historical eval fixtures)
 
 #### Phase 5: Tests + smoke verification
 - [ ] Integration test: seed twice → identical counts; clean → zero marker rows, zero non-marker rows touched; prod-ref URL → non-zero exit before any write
