@@ -43,7 +43,7 @@ substitutions:
   # phone (else sendSms refuses). The 902-710-8640 number is the campaign
   # sender — NEVER pool +19027073043 here (it belongs to the live traffic app).
   _TWILIO_MESSAGING_SERVICE_SID: MG39b602366c521eb2d6aa90047a5e6cc8
-  _SMS_DEV_TO: '+15149185000'
+  _SMS_DEV_TO: '+19028026215'
 
 steps:
   # 1) Unit-test gate (same as prod: unit-only; integration flakes on the pooler).
