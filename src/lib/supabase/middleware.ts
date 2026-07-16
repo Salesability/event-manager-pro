@@ -16,6 +16,9 @@ const PUBLIC_PATHS = [
   '/book',
   '/api/boldsign/webhook',
   '/api/production-feed',
+  // Twilio status callbacks + inbound SMS (no session) — gated in-handler by
+  // Twilio signature verification, like the BoldSign webhook above.
+  '/api/twilio/webhook',
 ];
 const ADMIN_PATHS = ['/admin', '/production', '/dealerships'];
 
