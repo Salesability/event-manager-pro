@@ -1,3 +1,7 @@
+// NOTE (0111): demo state now has a permanent home — `pnpm seed:demo`
+// (scripts/seeds/). This script stays as the 0108 chunk-historical eval
+// fixture; don't extend it for new demo needs.
+//
 // 0108 chunk-end browser smoke fixture: seeds a bookable campaign + one
 // tokenized recipient so the public /book/<token> page and the staff bookings
 // panel can be walked without importing a real dealer list:

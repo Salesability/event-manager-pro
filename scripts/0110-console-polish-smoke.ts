@@ -1,3 +1,7 @@
+// NOTE (0111): demo state now has a permanent home — `pnpm seed:demo`
+// (scripts/seeds/). This script stays as the 0110 chunk-historical eval
+// fixture; don't extend it for new demo needs.
+//
 // 0110 chunk-end browser smoke fixture: seeds one gate-active campaign whose
 // SMS surfaces exercise every polish item at once:
 //   • recipient "Sarah Smoketest" + a conversation thread carrying her name
