@@ -153,6 +153,29 @@ export async function loadSmsSendLog(campaignId: number): Promise<SmsSendLogEntr
   }));
 }
 
+// One broadcast per campaign (0113): true iff any of the campaign's sends has
+// a message Twilio actually accepted (`provider_sid` stamped). Fully-failed
+// launches (no sid on any row) don't count, so a crashed launch stays
+// retryable. `launchSmsSend` evaluates this inside its locked tx; the SMS
+// page reads it via the pool to drive the composer's "already sent" swap.
+export async function campaignHasDispatchedSend(
+  campaignId: number,
+  exec: Executor = db,
+): Promise<boolean> {
+  const [row] = await exec
+    .select({ id: smsMessages.id })
+    .from(smsMessages)
+    .innerJoin(smsSends, eq(smsSends.id, smsMessages.sendId))
+    .where(
+      and(
+        eq(smsSends.campaignId, campaignId),
+        sql`${smsMessages.providerSid} is not null`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export type RecipientHistoryEntry = {
   phone: string;
   priorCount: number;
