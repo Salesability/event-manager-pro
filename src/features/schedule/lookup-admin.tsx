@@ -4,6 +4,7 @@ import { useActionState, useEffect, useMemo, useRef, useState, useTransition } f
 import { useRouter } from 'next/navigation';
 import { Can } from '@/components/auth/can';
 import { Button } from '@/components/catalyst/button';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -182,6 +183,7 @@ function LookupRow({
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState(item.label);
   const [pending, startTransition] = useTransition();
+  const { confirm, confirmDialog } = useConfirm();
 
   function save() {
     const nextLabel = label.trim();
@@ -206,8 +208,16 @@ function LookupRow({
     });
   }
 
-  function archive() {
-    if (!confirm(`Archive ${item.label}? Existing campaigns will keep this label.`)) return;
+  async function archive() {
+    if (
+      !(await confirm({
+        title: `Archive ${item.label}?`,
+        message: 'Existing campaigns will keep this label.',
+        confirmLabel: 'Archive',
+        destructive: true,
+      }))
+    )
+      return;
 
     startTransition(async () => {
       const fd = new FormData();
@@ -225,6 +235,7 @@ function LookupRow({
 
   return (
     <div className="flex min-h-14 items-center gap-2 py-2">
+      {confirmDialog}
       {editing ? (
         <>
           <input

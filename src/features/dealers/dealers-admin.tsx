@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/catalyst/dialog';
 import { Button } from '@/components/catalyst/button';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { DataTable } from '@/components/ui/data-table';
 import { toast } from '@/components/ui/toaster';
 import { makeNeedleFilter } from '@/lib/ui/data-table-filters';
@@ -67,16 +68,17 @@ const dealersGlobalFilterFn = makeNeedleFilter<Dealer>((d) => [
   d.address,
 ]);
 
-// Compose the archive confirm message from the row's facets, mirroring the
-// people-admin pattern. Counts (linked contacts, referenced campaigns) aren't
-// surfaced on the Dealer row today — once `loadDealers` denormalises them,
-// the message can list specifics. Until then it states the soft-delete
-// guarantee in plain language: archive sets `dealers.archivedAt` (no cascade,
-// no hard-delete), existing campaign references survive in the database, and
-// the dealer disappears from active staff surfaces (the People page filters
-// archived dealers via `isNull(dealers.archivedAt)`).
-function buildArchiveConfirmMessage(dealer: Dealer): string {
-  return `Archive ${dealer.name}? Existing campaigns keep their reference. Contact-link rows are preserved in history but the dealer disappears from the People page and Dealer pickers. Continue?`;
+// Compose the archive confirm body, mirroring the people-admin pattern.
+// Counts (linked contacts, referenced campaigns) aren't surfaced on the
+// Dealer row today — once `loadDealers` denormalises them, the message can
+// list specifics. Until then it states the soft-delete guarantee in plain
+// language: archive sets `dealers.archivedAt` (no cascade, no hard-delete),
+// existing campaign references survive in the database, and the dealer
+// disappears from active staff surfaces (the People page filters archived
+// dealers via `isNull(dealers.archivedAt)`). The dialog title carries the
+// "Archive <name>?" question.
+function buildArchiveConfirmMessage(): string {
+  return 'Existing campaigns keep their reference. Contact-link rows are preserved in history but the dealer disappears from the People page and Dealer pickers.';
 }
 
 // Today as 'YYYY-MM-DD' in the viewer's local time — the due-bucket / overdue
@@ -102,6 +104,7 @@ export function DealersAdmin({
   const pathname = usePathname();
   const params = useSearchParams();
   const [addOpen, setAddOpen] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
 
   // URL-driven filter state so back-nav from a dealer detail page restores
   // the search term + status pill (per 0043 Phase 5). Local debounce mirrors
@@ -192,8 +195,15 @@ export function DealersAdmin({
     startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname));
   };
 
-  function archive(dealer: Dealer) {
-    if (!confirm(buildArchiveConfirmMessage(dealer))) {
+  async function archive(dealer: Dealer) {
+    if (
+      !(await confirm({
+        title: `Archive ${dealer.name}?`,
+        message: buildArchiveConfirmMessage(),
+        confirmLabel: 'Archive',
+        destructive: true,
+      }))
+    ) {
       return;
     }
     startTransition(async () => {
@@ -271,6 +281,7 @@ export function DealersAdmin({
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      {confirmDialog}
       <ListToolbar
         search={
           <input
