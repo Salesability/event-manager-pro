@@ -29,7 +29,11 @@ export type SmsPanelProps = {
     excludedOptOut: number;
     excludedStaleConsent: number;
   };
-  excluded: Array<{ phone: string; reason: 'opted_out' | 'stale_consent' }>;
+  excluded: Array<{
+    phone: string;
+    name: string | null;
+    reason: 'opted_out' | 'stale_consent';
+  }>;
   /** 0105: dealer-scoped prior-send history for imported numbers (only phones
    *  WITH history appear). `identity` is the person-continuity verdict. */
   history: Array<{
@@ -162,14 +166,17 @@ export function SmsPanel({
           </Badge>
         </div>
         {excluded.length > 0 && (
-          <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm text-zinc-600">
+          <ul className="mt-2 max-h-48 space-y-1.5 overflow-y-auto text-sm text-zinc-600">
             {excluded.map((r) => (
-              <li key={r.phone} className="flex items-center gap-2">
+              <li key={r.phone} className="flex flex-wrap items-baseline gap-x-2">
+                {r.name && (
+                  <span className="text-xs font-medium text-zinc-700">{r.name}</span>
+                )}
                 <span className="font-mono text-xs">{r.phone}</span>
                 <span className="text-xs text-zinc-500">
                   {r.reason === 'opted_out'
-                    ? 'opted out (STOP) — never sendable'
-                    : 'consent window lapsed (CASL) — excluded'}
+                    ? 'replied STOP — permanently unsubscribed, will never be texted again (applies to every campaign)'
+                    : 'implied consent has expired under CASL (24 months after a purchase, 6 after an inquiry) — will be skipped until the dealer records fresh consent or a newer contact date'}
                 </span>
               </li>
             ))}

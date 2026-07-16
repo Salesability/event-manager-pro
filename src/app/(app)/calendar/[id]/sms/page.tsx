@@ -119,6 +119,7 @@ export default async function CampaignSmsPage({
     .filter((r) => !r.eligibility.eligible)
     .map((r) => ({
       phone: r.phone,
+      name: [r.firstName, r.lastName].filter(Boolean).join(' ').trim() || null,
       reason: r.eligibility.eligible ? ('stale_consent' as const) : r.eligibility.reason,
     }));
 
