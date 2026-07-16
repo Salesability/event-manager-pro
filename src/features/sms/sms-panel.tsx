@@ -131,15 +131,30 @@ export function SmsPanel({
   return (
     <div className="flex flex-col gap-6">
       <Section title="Recipients" variant="card">
+        {summary.total > 0 ? (
+          <p className="text-sm text-zinc-800">
+            <Badge color="green">{summary.total} imported</Badge>{' '}
+            <span className="font-medium">
+              This campaign&apos;s list is loaded
+            </span>{' '}
+            — the pre-send review below reflects it. Importing another CSV{' '}
+            <span className="font-medium">replaces the whole list</span>.
+          </p>
+        ) : (
+          <p className="text-sm text-zinc-800">
+            <span className="font-medium">No list yet</span> — import the
+            dealer&apos;s contact CSV to get started.
+          </p>
+        )}
         <p className="text-sm text-zinc-600">
-          Import the dealer&apos;s contact list for this campaign (CSV with{' '}
+          CSV columns:{' '}
           <code className="text-xs">
             phone, first_name, last_name, consent_basis, last_contact_at
           </code>
           ; consent_basis is <code className="text-xs">express</code>,{' '}
           <code className="text-xs">implied_purchase</code> or{' '}
-          <code className="text-xs">implied_inquiry</code>). Importing replaces the current
-          list. Lists are retained for 24 months, then purged.
+          <code className="text-xs">implied_inquiry</code>. Lists are retained for 24
+          months, then purged.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <input
