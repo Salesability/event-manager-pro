@@ -11,7 +11,7 @@
 | 2: [Demo dealer + campaign module] | Done | d769246 |
 | 3: [SMS recipients + history modules] | Done | ef07f2c |
 | 4: [Century Mazda fixture migration + smoke-script promotion] | Done | 1917888 |
-| 5: Tests + smoke verification | In Progress | - |
+| 5: Tests + smoke verification | Done | 3efdf58 |
 
 Generalize the per-chunk `insert|cleanup` smoke-fixture pattern into a permanent `scripts/seeds/` harness: ordered modules with `seed`/`clean`, marker-owned rows, hard prod-refusal, one `pnpm seed:demo` entry point. Done = the SMS-line demo state is reproducible from a clean sandbox in one command, idempotently, and the 2026-07-15 ad-hoc fixtures are off the real Century Mazda campaign.
 
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — thread model + funnel semantics the fabricated history must reconcile with
 - `docs/wiki/go-live-accounts.md` — prod ref / sandbox ref identities behind the guard
 
-**Overall Progress:** 80% (4/5 phases complete)
+**Overall Progress:** 100% (5/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -66,7 +66,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - [x] Smoke-script promotion: header pointers on `scripts/0108-booking-smoke.ts` + `scripts/0110-console-polish-smoke.ts` marking `scripts/seeds/` as the permanent home for demo state (scripts stay as chunk-historical eval fixtures)
 
 #### Phase 5: Tests + smoke verification
-- [ ] Integration test: seed twice → identical counts; clean → zero marker rows, zero non-marker rows touched; prod-ref URL → non-zero exit before any write
-- [ ] Smoke (web-test): `goto /calendar/<demo-campaign-id>/sms` — pre-send chips incl. both exclusion rows, funnel strip numbers match the module's printed contract
-- [ ] Smoke (web-test): `goto /messages` — demo thread with name, turn-state, sentiment dot + temperature badge; `goto /sms` — demo row with aggregates
-- [ ] `pnpm seed:demo --clean` sweep verified (marker rows gone; Century Mazda campaign back to pre-2026-07-15 state)
+- [x] Integration test: seed twice → identical counts; clean → zero marker rows, zero non-marker rows touched; prod-ref URL → non-zero exit before any write (`tests/integration/seed-demo.test.ts`, 2/2 pass)
+- [x] Smoke (web-test): `goto /calendar/3921/sms` — funnel 5/4/1/4/1 + pre-send 6/4/1/1 + both exclusion rows + prior-send identity badges + send log, all on-contract (`/tmp/web-test-demo-sms.png`)
+- [x] Smoke (web-test): `/messages` — Alex Morgan thread with sentiment dot, hot-prospect + new-reply + awaiting-your-reply; `/sms` — Demo Motors row (6 recipients · 1 send · 1 conversation, 1 hot)
+- [x] `pnpm seed:demo --clean` sweep verified (integration test + live Phase 2 check); Century Mazda reads 0 recipients / no sends on `/sms`
