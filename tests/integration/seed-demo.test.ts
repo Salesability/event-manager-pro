@@ -28,6 +28,7 @@ import {
 import { demoDealerModule } from '../../scripts/seeds/10-demo-dealer';
 import { smsRecipientsModule } from '../../scripts/seeds/20-sms-recipients';
 import { smsHistoryModule } from '../../scripts/seeds/30-sms-history';
+import { classifySeedTarget } from '../../scripts/seeds/guard';
 import { DEMO_PHONE_PREFIX, DEMO_PUBLIC_ID_PREFIX } from '../../scripts/seeds/markers';
 
 try {
@@ -37,7 +38,8 @@ try {
 }
 
 const dbUrl = process.env.DATABASE_URL;
-const pg = dbUrl ? postgres(dbUrl, { prepare: false }) : null;
+const targetVerdict = classifySeedTarget(dbUrl, false);
+const pg = targetVerdict.ok ? postgres(dbUrl!, { prepare: false }) : null;
 const db = pg ? drizzle(pg, { schema }) : null;
 
 const MODULES = [demoDealerModule, smsRecipientsModule, smsHistoryModule];
@@ -127,7 +129,7 @@ afterAll(async () => {
   await pg?.end({ timeout: 5 });
 });
 
-describe.skipIf(!dbUrl)('demo-seed harness (0111)', () => {
+describe.skipIf(!targetVerdict.ok)('demo-seed harness (0111)', () => {
   it(
     'is idempotent: seed twice → identical marker-scoped counts; clean → zero marker rows; non-marker rows never move',
     { timeout: 60_000 },

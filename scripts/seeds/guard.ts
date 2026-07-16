@@ -25,14 +25,21 @@ export function classifySeedTarget(
   if (!databaseUrl) {
     return { ok: false, reason: 'Missing env: DATABASE_URL (source .env.local first)' };
   }
+  const rawLower = databaseUrl.toLowerCase();
+  let decodedLower: string;
+  try {
+    decodedLower = decodeURIComponent(databaseUrl).toLowerCase();
+  } catch {
+    return { ok: false, reason: 'DATABASE_URL is not a parseable URL.' };
+  }
   // Hard refusal — no flag can override this branch.
-  if (databaseUrl.includes(PROD_REF)) {
+  if (rawLower.includes(PROD_REF) || decodedLower.includes(PROD_REF)) {
     return {
       ok: false,
       reason: `DATABASE_URL contains the PRODUCTION project ref (${PROD_REF}) — demo seeds never run against prod. No opt-in exists for this.`,
     };
   }
-  if (databaseUrl.includes(SANDBOX_REF)) {
+  if (decodedLower.includes(SANDBOX_REF)) {
     return { ok: true, label: `sandbox (${SANDBOX_REF})` };
   }
   let host: string;

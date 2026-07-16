@@ -21,6 +21,24 @@ describe('classifySeedTarget', () => {
     ).toBe(false);
   });
 
+  it('refuses a percent-encoded prod ref even when a sandbox ref is smuggled in a query param', () => {
+    expect(
+      classifySeedTarget(
+        'postgresql://postgres.fkfy%62eddnfxnjuxkqidp:pw@host:5432/postgres?application_name=qppenapeguwevcheqwpz',
+        false,
+      ).ok,
+    ).toBe(false);
+  });
+
+  it('refuses an uppercase prod ref even with the unknown-target opt-in set', () => {
+    expect(
+      classifySeedTarget(
+        'postgresql://postgres.FKFYBEDDNFXNJUXKQIDP:pw@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
+        true,
+      ).ok,
+    ).toBe(false);
+  });
+
   it('admits the sandbox ref without any opt-in', () => {
     expect(classifySeedTarget(SANDBOX_URL, false)).toEqual({
       ok: true,

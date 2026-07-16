@@ -20,6 +20,7 @@ import { smsMessages, smsOptOuts, smsRecipients, smsSends } from '../src/lib/db/
 import { classifySeedTarget } from './seeds/guard';
 
 const CAMPAIGN_ID = 92;
+const SEND_ID = 674;
 const FIXTURE_PHONE_BLOCK = '+1902555%';
 const DEV_PHONE = '+19028026215';
 const FIXTURE_OPT_OUT = '+19025550105';
@@ -48,7 +49,7 @@ async function sweep() {
     await db
       .select({ id: smsSends.id })
       .from(smsSends)
-      .where(eq(smsSends.campaignId, CAMPAIGN_ID))
+      .where(and(eq(smsSends.campaignId, CAMPAIGN_ID), eq(smsSends.id, SEND_ID)))
   ).map((s) => s.id);
   if (sendIds.length) {
     const messages = await db
@@ -57,7 +58,7 @@ async function sweep() {
       .returning({ id: smsMessages.id });
     const sends = await db
       .delete(smsSends)
-      .where(inArray(smsSends.id, sendIds))
+      .where(and(eq(smsSends.campaignId, CAMPAIGN_ID), inArray(smsSends.id, sendIds)))
       .returning({ id: smsSends.id });
     console.log(`  ledger: ${messages.length} message(s), ${sends.length} send(s)`);
   } else {
@@ -80,7 +81,7 @@ async function sweep() {
 
   const optOuts = await db
     .delete(smsOptOuts)
-    .where(eq(smsOptOuts.phone, FIXTURE_OPT_OUT))
+    .where(and(eq(smsOptOuts.phone, FIXTURE_OPT_OUT), eq(smsOptOuts.source, 'manual')))
     .returning({ phone: smsOptOuts.phone });
   console.log(`  opt-outs: ${optOuts.length} removed (${FIXTURE_OPT_OUT})`);
 
