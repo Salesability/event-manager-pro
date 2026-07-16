@@ -11,6 +11,10 @@ Entries are reverse-chronological (newest at the top). Format:
 - link to the page(s) touched
 ```
 
+## 2026-07-16 — 0112 confirm-dialog sweep closed
+
+- Ingested 0112 into [layout.md](layout.md): new **Confirm dialogs (no native `window.confirm`)** section — the shared `ConfirmDialog` + promise-based `useConfirm()` on Catalyst Alert (its first consumer), the call-site shape, brand/soft-red button treatments, the `alert.tsx` z-50 nested-dialog layer, and the two accepted Codex-Low edges. Native `confirm()` is retired from `src/` (10 call sites, 7 files).
+
 ## 2026-07-15 — 0110 SMS console polish closed
 
 - Ingested 0110 into [sms.md](sms.md): new **Console polish (0110)** section (purge-safe name snapshots + migration `0056`, turn-state derivation, quick-reply chips, funnel-strip semantics, and the first owner-blessed autonomous LLM call — inbound sentiment/temperature classification, STOP clears labels); 0110 chunk link added to the header; parked 0110-a (classifier inside the webhook request) + 0110-b (turn-state persist gap) added to Open questions.

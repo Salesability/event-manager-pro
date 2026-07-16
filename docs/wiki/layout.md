@@ -128,6 +128,18 @@ Implications:
 
 Established by chunk 0081. Deferred follow-up (≈0082): a shared danger/warning **Callout** panel (red icon badge + heading + soft-red action) that would also unify the ~8 ad-hoc red error panels.
 
+## Confirm dialogs (no native `window.confirm`)
+
+[`src/components/app/confirm-dialog.tsx`](../../src/components/app/confirm-dialog.tsx) (0112) is the single confirmation primitive — `ConfirmDialog` built on Catalyst `<Alert>` (its only consumer) plus a promise-based **`useConfirm()`** hook. Native `window.confirm()` is retired from `src/` entirely (it's unstyled, shows the raw hostname, blocks the tab, and hangs browser automation); don't reintroduce it.
+
+**Call-site shape** — declare `const { confirm, confirmDialog } = useConfirm()` in the component, render `{confirmDialog}` anywhere in its JSX, and gate the action with `if (!(await confirm({ title, message?, confirmLabel?, cancelLabel?, destructive? }))) return;`. Cancel, backdrop click, and Escape all resolve `false`. Works inside `useTransition` handlers and awaited inside a `useActionState` async action (the people-admin end-app-access guard does this — the dialog renders while the action is pending).
+
+**Button treatments** follow the doctrine above: the affirmative action is `color="brand"`, or the soft-red `destructive` variant when `destructive: true` (Cancel Campaign, all admin archive/removes). The dismiss button is `outline`.
+
+**Nested-dialog z-layer:** `alert.tsx` carries `z-50` on its backdrop + panel container to match `dialog.tsx` (z-40/z-50) — a confirm opened from inside a `<Dialog>` portals later and paints above its host. Without it the confirm is present-but-invisible behind the host dialog (found by the 0112 smoke).
+
+Known accepted edges (Codex Lows, [`0112 eval`](../chunks/closed/0112-confirm-dialog-sweep/eval-2026-07-16-1102.md)): no unmount cleanup for an in-flight `confirm` promise (navigation-away edge), and the hook is single-slot (a re-entrant second `confirm()` overwrites the first resolver — not reachable by normal clicks).
+
 ## Status badges + relative time
 
 ### `<Badge>` and the status-badge wrappers
