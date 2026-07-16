@@ -24,6 +24,7 @@ import { Field, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Button } from '@/components/catalyst/button';
 import { Input } from '@/components/catalyst/input';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { archivePerson, createPerson, updatePerson } from '@/features/people/actions';
@@ -119,6 +120,7 @@ export function PeopleAdmin({
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [, startTransition] = useTransition();
+  const { confirm, confirmDialog } = useConfirm();
 
   // Hide the `Last sign-in` column when no row in the population has app
   // access — saves the column from being a wall of em-dashes for chunks
@@ -141,8 +143,15 @@ export function PeopleAdmin({
     setColumnFilters([]);
   };
 
-  function archive(person: AdminPersonRow) {
-    if (!confirm(buildArchiveConfirmMessage(person))) {
+  async function archive(person: AdminPersonRow) {
+    if (
+      !(await confirm({
+        title: `Archive ${person.displayName}?`,
+        message: buildArchiveConfirmMessage(person),
+        confirmLabel: 'Archive',
+        destructive: true,
+      }))
+    ) {
       return;
     }
     startTransition(async () => {
@@ -174,6 +183,7 @@ export function PeopleAdmin({
 
   return (
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-[0_1px_4px_rgba(15,30,60,0.08)]">
+      {confirmDialog}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-zinc-500">{people.length} people</p>
@@ -283,10 +293,11 @@ export function PeopleAdmin({
   );
 }
 
-// Compose the archive confirm message from the row's actual facets so the
+// Compose the archive confirm body from the row's actual facets so the
 // admin sees exactly what's about to disappear: each active role, each
 // dealer relationship (with role), and the auth-side ban if applicable.
-// Falls back to a "nothing to remove" phrasing for orphan contacts.
+// Falls back to a "nothing to remove" phrasing for orphan contacts. The
+// dialog title carries the "Archive <name>?" question.
 function buildArchiveConfirmMessage(person: AdminPersonRow): string {
   const facets: string[] = [];
   for (const role of person.roles) facets.push(`drop ${role} role`);
@@ -299,7 +310,7 @@ function buildArchiveConfirmMessage(person: AdminPersonRow): string {
     facets.push(email ? `ban sign-in for ${email}` : 'ban sign-in account');
   }
   if (facets.length === 0) {
-    return `Archive ${person.displayName}? No active roles or relationships to remove. The contact record stays.`;
+    return 'No active roles or relationships to remove. The contact record stays.';
   }
   const list =
     facets.length === 1
@@ -307,7 +318,7 @@ function buildArchiveConfirmMessage(person: AdminPersonRow): string {
       : facets.length === 2
         ? `${facets[0]} and ${facets[1]}`
         : `${facets.slice(0, -1).join(', ')}, and ${facets[facets.length - 1]}`;
-  return `This archive will: ${list}. The contact record stays. Continue?`;
+  return `This archive will: ${list}. The contact record stays.`;
 }
 
 type DealerLinkDraft = { dealerId: string; isPrimary: boolean };
@@ -343,6 +354,7 @@ function PersonForm({
 }) {
   const router = useRouter();
   const { touched, fieldHandlers } = useTouched();
+  const { confirm, confirmDialog } = useConfirm();
   const [admin, setAdmin] = useState(person?.roles.includes('admin') ?? false);
   const [coach, setCoach] = useState(person?.roles.includes('coach') ?? false);
   const [dealer, setDealer] = useState(person?.roles.includes('dealer') ?? false);
@@ -386,9 +398,12 @@ function PersonForm({
       if (mode === 'edit' && person?.hasAppAccess && !wantsAppAccess) {
         const firstName = String(fd.get('firstName') ?? '').trim();
         const lastName = String(fd.get('lastName') ?? '').trim();
-        const ok = window.confirm(
-          `Saving will end app access for ${firstName} ${lastName} and ban their sign-in account. The contact record stays. Continue?`,
-        );
+        const ok = await confirm({
+          title: 'End app access?',
+          message: `Saving will end app access for ${firstName} ${lastName} and ban their sign-in account. The contact record stays.`,
+          confirmLabel: 'Save and end access',
+          destructive: true,
+        });
         if (!ok) return null;
       }
       return toLegacyResult<
@@ -436,6 +451,7 @@ function PersonForm({
 
   return (
     <form action={formAction} className="mt-4 flex flex-col gap-3">
+      {confirmDialog}
       {mode === 'edit' && person && (
         <input type="hidden" name="contactId" value={person.contactId} />
       )}

@@ -14,6 +14,7 @@ export default defineConfig({
       'src/**/*.test.tsx',
       'tests/integration/**/*.test.ts',
       'eslint-plugins/**/*.test.ts',
+      'scripts/seeds/**/*.test.ts',
     ],
     // tests/integration/ runs against the remote sandbox pooler (per-query
     // wire round trips, not local Postgres) — the 5s default flakes whenever

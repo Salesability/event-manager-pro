@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from '@/components/ui/toaster';
 import { Button } from '@/components/catalyst/button';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { Field, FieldGroup, Label } from '@/components/catalyst/fieldset';
 import { FieldError } from '@/components/catalyst/field-compat';
 import { Input } from '@/components/catalyst/input';
@@ -125,12 +126,20 @@ function AvailabilityRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
+  const { confirm, confirmDialog } = useConfirm();
   const coachName = block.coachId
     ? coaches.find((coach) => coach.id === block.coachId)?.displayName
     : null;
 
-  function archive() {
-    if (!confirm(`Remove ${formatRange(block.startDate, block.endDate)}?`)) return;
+  async function archive() {
+    if (
+      !(await confirm({
+        title: `Remove ${formatRange(block.startDate, block.endDate)}?`,
+        confirmLabel: 'Remove',
+        destructive: true,
+      }))
+    )
+      return;
     startTransition(async () => {
       const fd = new FormData();
       fd.set('id', String(block.id));
@@ -165,6 +174,7 @@ function AvailabilityRow({
 
   return (
     <div className="flex items-start gap-3 p-3">
+      {confirmDialog}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-zinc-900">
