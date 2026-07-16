@@ -5,6 +5,7 @@ import { Can } from '@/components/auth/can';
 import { Badge } from '@/components/catalyst/badge';
 import { Button } from '@/components/catalyst/button';
 import { MsaStatusBadge, QuoteStatusBadge } from '@/components/app/status-badge';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import { cancelCampaign, setMsaWaived } from '@/features/schedule/actions';
@@ -27,9 +28,18 @@ type EventDetailProps = {
 
 export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDetailProps) {
   const [pending, startTransition] = useTransition();
+  const { confirm, confirmDialog } = useConfirm();
 
-  function onCancel() {
-    if (!confirm(`Cancel this campaign at ${campaign.dealerName}? It will be hidden from the calendar but kept for history.`))
+  async function onCancel() {
+    if (
+      !(await confirm({
+        title: `Cancel this campaign at ${campaign.dealerName}?`,
+        message: 'It will be hidden from the calendar but kept for history.',
+        confirmLabel: 'Cancel campaign',
+        cancelLabel: 'Keep campaign',
+        destructive: true,
+      }))
+    )
       return;
     startTransition(async () => {
       const fd = new FormData();
@@ -63,12 +73,18 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
     });
   }
 
-  function onEmailClient() {
+  async function onEmailClient() {
     if (!campaign.email) {
       toast.error('No client email on file for this campaign.');
       return;
     }
-    if (!confirm(`Send confirmation to ${campaign.contact || 'the dealer contact'} <${campaign.email}>?`))
+    if (
+      !(await confirm({
+        title: 'Email the client?',
+        message: `Send confirmation to ${campaign.contact || 'the dealer contact'} <${campaign.email}>?`,
+        confirmLabel: 'Send',
+      }))
+    )
       return;
     startTransition(async () => {
       const fd = new FormData();
@@ -79,12 +95,19 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
     });
   }
 
-  function onEmailCoach() {
+  async function onEmailCoach() {
     if (!campaign.coachName) {
       toast.error('No coach assigned to this campaign.');
       return;
     }
-    if (!confirm(`Send assignment confirmation to ${campaign.coachName}?`)) return;
+    if (
+      !(await confirm({
+        title: 'Email the coach?',
+        message: `Send assignment confirmation to ${campaign.coachName}?`,
+        confirmLabel: 'Send',
+      }))
+    )
+      return;
     startTransition(async () => {
       const fd = new FormData();
       fd.set('campaignId', String(campaign.id));
@@ -122,6 +145,7 @@ export function EventDetail({ campaign, commercial, onEdit, onClose }: EventDeta
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {confirmDialog}
       {commercial && (
         <div
           className={

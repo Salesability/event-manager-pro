@@ -6,6 +6,7 @@ import { Badge } from '@/components/catalyst/badge';
 import { Button } from '@/components/catalyst/button';
 import { Textarea } from '@/components/catalyst/textarea';
 import { Section } from '@/components/app/section';
+import { useConfirm } from '@/components/app/confirm-dialog';
 import { toast } from '@/components/ui/toaster';
 import { toLegacyResult } from '@/lib/actions/legacy-result';
 import {
@@ -67,8 +68,9 @@ export function SmsPanel({
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState(defaultBody);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { confirm, confirmDialog } = useConfirm();
 
-  function onImport() {
+  async function onImport() {
     const file = fileRef.current?.files?.[0];
     if (!file) {
       toast.error('Choose a CSV file first.');
@@ -76,9 +78,11 @@ export function SmsPanel({
     }
     if (
       summary.total > 0 &&
-      !confirm(
-        `Importing replaces the ${summary.total} recipient(s) currently on this campaign. Continue?`,
-      )
+      !(await confirm({
+        title: 'Replace the recipient list?',
+        message: `Importing replaces the ${summary.total} recipient(s) currently on this campaign.`,
+        confirmLabel: 'Replace list',
+      }))
     ) {
       return;
     }
@@ -102,12 +106,13 @@ export function SmsPanel({
     });
   }
 
-  function onLaunch() {
+  async function onLaunch() {
     if (
-      !confirm(
-        `Send this text to ${summary.eligible} recipient(s)?\n\n` +
-          `${summary.excludedOptOut} opted-out and ${summary.excludedStaleConsent} stale-consent recipient(s) will be excluded.`,
-      )
+      !(await confirm({
+        title: `Send this text to ${summary.eligible} recipient(s)?`,
+        message: `${summary.excludedOptOut} opted-out and ${summary.excludedStaleConsent} stale-consent recipient(s) will be excluded.`,
+        confirmLabel: 'Launch send',
+      }))
     ) {
       return;
     }
@@ -130,6 +135,7 @@ export function SmsPanel({
 
   return (
     <div className="flex flex-col gap-6">
+      {confirmDialog}
       <Section title="Recipients" variant="card">
         {summary.total > 0 ? (
           <p className="text-sm text-zinc-800">
