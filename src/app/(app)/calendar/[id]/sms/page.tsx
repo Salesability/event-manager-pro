@@ -10,6 +10,7 @@ import {
 } from '@/features/sms/conversations/queries';
 import { FunnelStrip } from '@/features/sms/funnel-strip';
 import {
+  campaignHasDispatchedSend,
   evaluateCampaignRecipients,
   loadRecipientHistory,
   loadSmsCampaignFunnel,
@@ -109,10 +110,14 @@ export default async function CampaignSmsPage({
     );
   }
 
-  const [{ recipients, summary }, sendLogRaw, history] = await Promise.all([
+  const [{ recipients, summary }, sendLogRaw, history, alreadySent] = await Promise.all([
     evaluateCampaignRecipients(campaign.id),
     loadSmsSendLog(campaign.id),
     loadRecipientHistory(campaign.id),
+    // One broadcast per campaign (0113): mirrors the launch gate — the panel
+    // swaps the composer for the already-sent notice. Enforced server-side at
+    // launch either way.
+    campaignHasDispatchedSend(campaign.id),
   ]);
 
   const excluded = recipients
@@ -139,6 +144,7 @@ export default async function CampaignSmsPage({
       {showFunnel && <FunnelStrip funnel={funnel} />}
       <SmsPanel
         campaignId={campaign.id}
+        alreadySent={alreadySent}
         summary={summary}
         excluded={excluded}
         history={history.map((h) => ({

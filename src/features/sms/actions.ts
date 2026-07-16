@@ -15,6 +15,7 @@ import { sendSms } from '@/lib/sms/send';
 import { renderSmsBody } from '@/lib/sms/template';
 import { normalizePhoneE164, parseRecipientsCsv } from './import-csv';
 import {
+  campaignHasDispatchedSend,
   evaluateCampaignRecipients,
   loadSmsCampaignContext,
   type EvaluatedRecipient,
@@ -109,8 +110,12 @@ export const importSmsRecipients = capabilityClient('sms:send')
     if ('error' in parsed) return parsed;
 
     const userId = ctx.user.id;
-    await db.transaction(async (tx) => {
+    const alreadyBroadcast = await db.transaction(async (tx) => {
       await lockCampaignSmsTx(tx, campaignId);
+      // One broadcast per campaign (0113): once dispatched, the recipient
+      // list is the sent audience — a wholesale replace would make the
+      // pre-send review disagree with the ledger. Same gate as the launch.
+      if (await campaignHasDispatchedSend(campaignId, tx)) return true;
       await tx.delete(smsRecipients).where(eq(smsRecipients.campaignId, campaignId));
       await tx.insert(smsRecipients).values(
         parsed.rows.map((row) => ({
@@ -127,7 +132,14 @@ export const importSmsRecipients = capabilityClient('sms:send')
           updatedById: userId,
         })),
       );
+      return false;
     });
+    if (alreadyBroadcast) {
+      return {
+        error:
+          'This campaign has already been broadcast — its recipient list is locked. Campaigns send one broadcast.',
+      };
+    }
 
     await recordAudit({
       action: 'sms.recipients_imported',
@@ -158,7 +170,10 @@ function withStopFooter(body: string): string {
 // `provider_sid` onto its row (create-failures stamp `failed` + the error).
 // A crash mid-dispatch leaves the tail rows `queued` with no sid — visible in
 // the send log rather than silently double-sendable: a re-launch is a NEW
-// send, never a re-dispatch of existing rows.
+// send, never a re-dispatch of existing rows. One broadcast per campaign
+// (0113): a re-launch is only allowed while NO message row across the
+// campaign's sends carries a `provider_sid` — once anything was dispatched,
+// the broadcast gate refuses further launches for good.
 export const launchSmsSend = capabilityClient('sms:send')
   .schema(formDataSchema)
   .action(async ({ parsedInput: formData, ctx }): Promise<LaunchSmsResult> => {
@@ -204,6 +219,15 @@ export const launchSmsSend = capabilityClient('sms:send')
     const userId = ctx.user.id;
     const created: CreatedSmsSend = await db.transaction(async (tx): Promise<CreatedSmsSend> => {
       await lockCampaignSmsTx(tx, campaignId);
+      // One broadcast per campaign (0113): any dispatched message anywhere in
+      // the campaign's send history closes the composer for good. The 60s
+      // window below still covers the just-launched, no-sid-yet gap.
+      if (await campaignHasDispatchedSend(campaignId, tx)) {
+        return {
+          error:
+            'This campaign has already been broadcast — see the send log below. Campaigns send one broadcast.',
+        };
+      }
       const [recentSend] = await tx
         .select({ id: smsSends.id })
         .from(smsSends)

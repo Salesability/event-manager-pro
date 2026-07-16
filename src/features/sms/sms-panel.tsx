@@ -24,6 +24,10 @@ import {
 
 export type SmsPanelProps = {
   campaignId: number;
+  /** One broadcast per campaign (0113): a dispatched send exists, so the
+   *  composer is swapped for the already-sent notice and imports are closed.
+   *  The server gate in `launchSmsSend` enforces the same rule regardless. */
+  alreadySent: boolean;
   summary: {
     total: number;
     eligible: number;
@@ -58,6 +62,7 @@ export type SmsPanelProps = {
 
 export function SmsPanel({
   campaignId,
+  alreadySent,
   summary,
   excluded,
   history,
@@ -169,7 +174,18 @@ export function SmsPanel({
             accept=".csv,text/csv"
             className="text-sm text-zinc-700 file:mr-3 file:rounded-lg file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700"
           />
-          <Button outline compact type="button" onClick={onImport} disabled={pending}>
+          <Button
+            outline
+            compact
+            type="button"
+            onClick={onImport}
+            disabled={pending || alreadySent}
+            title={
+              alreadySent
+                ? 'This campaign has already been broadcast — its recipient list is locked.'
+                : undefined
+            }
+          >
             Import CSV
           </Button>
         </div>
@@ -234,34 +250,45 @@ export function SmsPanel({
       </Section>
 
       <Section title="Compose" variant="card">
-        <Textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={4}
-          maxLength={1600}
-          aria-label="Message body"
-        />
-        <p className="text-xs text-zinc-500">
-          Variables: {'{{first_name}}'}, {'{{last_name}}'}, {'{{dealer_name}}'}. &ldquo;Reply
-          STOP to opt out.&rdquo; is appended automatically if the message doesn&apos;t
-          mention STOP.
-        </p>
-        <div className="flex justify-end">
-          <Button
-            color="brand"
-            compact
-            type="button"
-            onClick={onLaunch}
-            disabled={pending || summary.eligible === 0 || !body.trim()}
-            title={
-              summary.eligible === 0
-                ? 'No eligible recipients — import a list first'
-                : `Send to ${summary.eligible} eligible recipient(s)`
-            }
-          >
-            Launch send
-          </Button>
-        </div>
+        {alreadySent ? (
+          <p className="text-sm text-zinc-800">
+            <span className="font-medium">
+              This campaign&apos;s broadcast has gone out
+            </span>{' '}
+            — see the send log below. One broadcast per campaign.
+          </p>
+        ) : (
+          <>
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={4}
+              maxLength={1600}
+              aria-label="Message body"
+            />
+            <p className="text-xs text-zinc-500">
+              Variables: {'{{first_name}}'}, {'{{last_name}}'}, {'{{dealer_name}}'}. &ldquo;Reply
+              STOP to opt out.&rdquo; is appended automatically if the message doesn&apos;t
+              mention STOP.
+            </p>
+            <div className="flex justify-end">
+              <Button
+                color="brand"
+                compact
+                type="button"
+                onClick={onLaunch}
+                disabled={pending || summary.eligible === 0 || !body.trim()}
+                title={
+                  summary.eligible === 0
+                    ? 'No eligible recipients — import a list first'
+                    : `Send to ${summary.eligible} eligible recipient(s)`
+                }
+              >
+                Launch send
+              </Button>
+            </div>
+          </>
+        )}
       </Section>
 
       <Section title="Send log" variant="card">

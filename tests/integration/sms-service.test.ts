@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq, inArray, like } from 'drizzle-orm';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -17,12 +17,33 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 vi.mock('server-only', () => ({}));
 
+// The 0113 broadcast-gate tests drive the REAL `launchSmsSend` action, so the
+// three boundaries it crosses are mocked: Twilio (dispatch), the Supabase
+// session + capability gate (auth), and next/cache (revalidate outside a
+// request). The webhook tests above don't touch any of these.
+const twilioMocks = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock('@/lib/sms/client', () => ({
+  client: () => ({
+    ok: true,
+    client: { messages: { create: twilioMocks.create } },
+    messagingServiceSid: 'MG_test',
+  }),
+}));
+const sessionMocks = vi.hoisted(() => ({ userId: '' }));
+vi.mock('@/lib/supabase/session', () => ({
+  getUser: async () => ({ id: sessionMocks.userId, app_metadata: { role: 'admin' } }),
+}));
+vi.mock('@/lib/auth/assert-can', () => ({ assertCan: async () => {} }));
+vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+
 // MUST precede every `@/…` import: the route handler's chain evaluates the
 // app db pool, which reads DATABASE_URL at import time.
 import './helpers/load-env';
 
 import * as schema from '@/lib/db/schema';
 import {
+  auditLog,
+  authUsers,
   campaigns,
   dealers,
   smsMessages,
@@ -30,7 +51,12 @@ import {
   smsRecipients,
   smsSends,
 } from '@/lib/db/schema';
-import { evaluateCampaignRecipients, loadRecipientHistory } from '@/features/sms/queries';
+import { importSmsRecipients, launchSmsSend } from '@/features/sms/actions';
+import {
+  campaignHasDispatchedSend,
+  evaluateCampaignRecipients,
+  loadRecipientHistory,
+} from '@/features/sms/queries';
 import { computeTwilioSignature } from '@/lib/sms/webhook-verify';
 import { POST } from '@/app/api/twilio/webhook/route';
 
@@ -66,7 +92,7 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
   let db: TestDb;
   const ORIGINAL_ENV = { ...process.env };
 
-  beforeAll(() => {
+  beforeAll(async () => {
     sql = postgres(dbUrl!, { max: 1, prepare: false });
     db = drizzle(sql, { schema });
     process.env.SITE_URL = SITE_URL;
@@ -74,6 +100,13 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
     // Keyless → the 0110 inbound classifier no-ops instead of making a REAL
     // Anthropic call from the webhook tests below.
     delete process.env.ANTHROPIC_API_KEY;
+    // 0113 launch tests: dev-redirect posture (never a real number) + a real
+    // auth user so `recordAudit`'s actor FK insert succeeds.
+    process.env.APP_ENV = 'development';
+    process.env.SMS_DEV_TO = '+15005550006';
+    const [user] = await db.select({ id: authUsers.id }).from(authUsers).limit(1);
+    expect(user).toBeDefined();
+    sessionMocks.userId = user.id;
   });
 
   afterAll(async () => {
@@ -431,7 +464,213 @@ describe.skipIf(!dbUrl)('sms send path + webhook (0103 Phase 6)', () => {
     });
   });
 
+  // ——— One broadcast per campaign (0113) ———
+  // Committed fixtures + real `launchSmsSend` (Twilio/auth/cache mocked at the
+  // file top): the gate must refuse a second launch once anything was
+  // dispatched, but a fully-failed launch (no sid anywhere) stays retryable.
+
+  function launchFormData(campaignId: number): FormData {
+    const fd = new FormData();
+    fd.set('campaignId', String(campaignId));
+    fd.set('body', 'Broadcast gate test body');
+    return fd;
+  }
+
+  async function cleanupCampaign(campaignId: number, dealerId: number) {
+    const sends = await db
+      .select({ id: smsSends.id })
+      .from(smsSends)
+      .where(eq(smsSends.campaignId, campaignId));
+    if (sends.length) {
+      const sendIds = sends.map((s) => s.id);
+      await db.delete(auditLog).where(
+        and(eq(auditLog.targetTable, 'sms_sends'), inArray(auditLog.targetId, sendIds)),
+      );
+      await db.delete(smsMessages).where(inArray(smsMessages.sendId, sendIds));
+      await db.delete(smsSends).where(inArray(smsSends.id, sendIds));
+    }
+    await db.delete(smsRecipients).where(eq(smsRecipients.campaignId, campaignId));
+    await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    await db.delete(dealers).where(eq(dealers.id, dealerId));
+  }
+
+  it('refuses a second launch once any message row carries a provider sid (0113)', async () => {
+    let fixture: { campaignId: number; dealerId: number } | null = null;
+    try {
+      fixture = await seedCampaign(db);
+      const { campaignId } = fixture;
+      await db.insert(smsRecipients).values({
+        campaignId,
+        phone: `${PHONE_PREFIX}0050`,
+        consentBasis: 'express',
+      });
+      const [send] = await db
+        .insert(smsSends)
+        .values({
+          campaignId,
+          body: 'First broadcast',
+          totalRecipients: 1,
+          excludedOptOut: 0,
+          excludedStaleConsent: 0,
+        })
+        .returning({ id: smsSends.id });
+      // One dispatched, one crashed-queued — any sid at all closes the gate.
+      await db.insert(smsMessages).values([
+        { sendId: send.id, phone: `${PHONE_PREFIX}0050`, providerSid: `SMgate_${publicId()}` },
+        { sendId: send.id, phone: `${PHONE_PREFIX}0051` },
+      ]);
+
+      const result = await launchSmsSend(launchFormData(campaignId));
+      expect(result.data).toEqual({
+        error:
+          'This campaign has already been broadcast — see the send log below. Campaigns send one broadcast.',
+      });
+      expect(twilioMocks.create).not.toHaveBeenCalled();
+
+      // The refusal rolled back inside the tx — no new send row.
+      const sends = await db
+        .select({ id: smsSends.id })
+        .from(smsSends)
+        .where(eq(smsSends.campaignId, campaignId));
+      expect(sends).toEqual([{ id: send.id }]);
+    } finally {
+      if (fixture) await cleanupCampaign(fixture.campaignId, fixture.dealerId);
+    }
+  });
+
+  it('allows a relaunch after a fully-failed launch (zero provider sids) (0113)', async () => {
+    let fixture: { campaignId: number; dealerId: number } | null = null;
+    try {
+      fixture = await seedCampaign(db);
+      const { campaignId } = fixture;
+      await db.insert(smsRecipients).values({
+        campaignId,
+        phone: `${PHONE_PREFIX}0052`,
+        consentBasis: 'express',
+      });
+      // A prior launch where every dispatch failed at Twilio: rows exist, no
+      // sid anywhere — the campaign was never actually broadcast.
+      const [failedSend] = await db
+        .insert(smsSends)
+        .values({
+          campaignId,
+          body: 'Failed broadcast',
+          totalRecipients: 1,
+          excludedOptOut: 0,
+          excludedStaleConsent: 0,
+          // Backdate past the 60-second just-launched window so only the
+          // 0113 gate is under test.
+          createdAt: new Date(Date.now() - 5 * 60_000),
+        })
+        .returning({ id: smsSends.id });
+      await db.insert(smsMessages).values({
+        sendId: failedSend.id,
+        phone: `${PHONE_PREFIX}0052`,
+        status: 'failed',
+        errorCode: 'twilio_down',
+      });
+
+      twilioMocks.create.mockResolvedValueOnce({ sid: `SMretry_${publicId()}` });
+      const result = await launchSmsSend(launchFormData(campaignId));
+      expect(result.data).toMatchObject({ ok: true, accepted: 1, failed: 0 });
+
+      const sends = await db
+        .select({ id: smsSends.id })
+        .from(smsSends)
+        .where(eq(smsSends.campaignId, campaignId));
+      expect(sends).toHaveLength(2);
+    } finally {
+      if (fixture) await cleanupCampaign(fixture.campaignId, fixture.dealerId);
+    }
+  });
+
+  it('refuses a recipient re-import once the campaign has broadcast (0113)', async () => {
+    let fixture: { campaignId: number; dealerId: number } | null = null;
+    try {
+      fixture = await seedCampaign(db);
+      const { campaignId } = fixture;
+      await db.insert(smsRecipients).values({
+        campaignId,
+        phone: `${PHONE_PREFIX}0054`,
+        consentBasis: 'express',
+      });
+      const [send] = await db
+        .insert(smsSends)
+        .values({
+          campaignId,
+          body: 'Broadcast',
+          totalRecipients: 1,
+          excludedOptOut: 0,
+          excludedStaleConsent: 0,
+        })
+        .returning({ id: smsSends.id });
+      await db.insert(smsMessages).values({
+        sendId: send.id,
+        phone: `${PHONE_PREFIX}0054`,
+        providerSid: `SMlock_${publicId()}`,
+      });
+
+      const fd = new FormData();
+      fd.set('campaignId', String(campaignId));
+      fd.set(
+        'file',
+        new File(
+          [`phone,first_name,last_name,consent_basis,last_contact_at\n${PHONE_PREFIX}0055,New,Person,express,\n`],
+          'list.csv',
+          { type: 'text/csv' },
+        ),
+      );
+      const result = await importSmsRecipients(fd);
+      expect(result.data).toEqual({
+        error:
+          'This campaign has already been broadcast — its recipient list is locked. Campaigns send one broadcast.',
+      });
+
+      // The sent audience survives untouched.
+      const rows = await db
+        .select({ phone: smsRecipients.phone })
+        .from(smsRecipients)
+        .where(eq(smsRecipients.campaignId, campaignId));
+      expect(rows).toEqual([{ phone: `${PHONE_PREFIX}0054` }]);
+    } finally {
+      if (fixture) await cleanupCampaign(fixture.campaignId, fixture.dealerId);
+    }
+  });
+
+  it('campaignHasDispatchedSend is false with no sends and flips on a sid (0113)', async () => {
+    let before: boolean | undefined;
+    let after: boolean | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const { campaignId } = await seedCampaign(tx);
+        before = await campaignHasDispatchedSend(campaignId, tx);
+        const [send] = await tx
+          .insert(smsSends)
+          .values({
+            campaignId,
+            body: 'Body',
+            totalRecipients: 1,
+            excludedOptOut: 0,
+            excludedStaleConsent: 0,
+          })
+          .returning({ id: smsSends.id });
+        await tx.insert(smsMessages).values({
+          sendId: send.id,
+          phone: `${PHONE_PREFIX}0053`,
+          providerSid: `SMflip_${publicId()}`,
+        });
+        after = await campaignHasDispatchedSend(campaignId, tx);
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) throw err;
+    }
+    expect(before).toBe(false);
+    expect(after).toBe(true);
+  });
+
   afterEach(async () => {
+    twilioMocks.create.mockReset();
     // Belt-and-braces: no fixture rows with the test prefix survive a failure.
     await db
       .delete(smsRecipients)
