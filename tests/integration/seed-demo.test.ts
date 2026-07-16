@@ -27,6 +27,7 @@ import {
 } from '@/lib/db/schema';
 import { demoDealerModule } from '../../scripts/seeds/10-demo-dealer';
 import { smsRecipientsModule } from '../../scripts/seeds/20-sms-recipients';
+import { replyTestersModule } from '../../scripts/seeds/25-reply-testers';
 import { smsHistoryModule } from '../../scripts/seeds/30-sms-history';
 import { classifySeedTarget } from '../../scripts/seeds/guard';
 import { DEMO_PHONE_PREFIX, DEMO_PUBLIC_ID_PREFIX } from '../../scripts/seeds/markers';
@@ -42,7 +43,7 @@ const targetVerdict = classifySeedTarget(dbUrl, false);
 const pg = targetVerdict.ok ? postgres(dbUrl!, { prepare: false }) : null;
 const db = pg ? drizzle(pg, { schema }) : null;
 
-const MODULES = [demoDealerModule, smsRecipientsModule, smsHistoryModule];
+const MODULES = [demoDealerModule, smsRecipientsModule, replyTestersModule, smsHistoryModule];
 
 async function seedAll() {
   for (const mod of [...MODULES].reverse()) await mod.clean(db!);
@@ -64,10 +65,17 @@ async function markerCounts() {
   const [row] = await db!
     .select({
       dealers: sql<number>`(select count(*) from ${dealers} where ${dealers.publicId} like ${`${DEMO_PUBLIC_ID_PREFIX}%`})::int`,
-      recipients: sql<number>`(select count(*) from ${smsRecipients} where ${smsRecipients.phone} like ${`${DEMO_PHONE_PREFIX}%`})::int`,
       optOuts: sql<number>`(select count(*) from ${smsOptOuts} where ${smsOptOuts.phone} like ${`${DEMO_PHONE_PREFIX}%`})::int`,
     })
     .from(sql`(select 1) as one`);
+  // Campaign-scoped, not phone-prefix: the reply-tester module (25) puts
+  // real staff numbers on the demo campaign; they must count and clean.
+  const recipients = demoCampaignIds.length
+    ? await db!
+        .select({ n: sql<number>`count(*)::int` })
+        .from(smsRecipients)
+        .where(inArray(smsRecipients.campaignId, demoCampaignIds))
+    : [{ n: 0 }];
   const sends = demoCampaignIds.length
     ? await db!
         .select({ id: smsSends.id })
@@ -89,7 +97,7 @@ async function markerCounts() {
   return {
     dealers: row.dealers,
     campaigns: demoCampaignIds.length,
-    recipients: row.recipients,
+    recipients: recipients[0].n,
     optOuts: row.optOuts,
     sends: sends.length,
     messages: messages[0].n,
@@ -141,10 +149,10 @@ describe.skipIf(!targetVerdict.ok)('demo-seed harness (0111)', () => {
       expect(first).toEqual({
         dealers: 1,
         campaigns: 1,
-        recipients: 6,
+        recipients: 8,
         optOuts: 1,
         sends: 1,
-        messages: 5,
+        messages: 7,
         threads: 1,
       });
 

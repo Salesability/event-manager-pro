@@ -4,15 +4,17 @@
 // conversation console, inbox, and /sms aggregates all light up without a
 // phone in the loop (intent's fabricate-clearly-marked leaning).
 //
-// Narrative: one launch went out to the 5 recipients who were sendable at the
-// time (Morgan Grant was already stale; Pat Quinn had not yet replied STOP).
+// Narrative: one launch went out to every recipient sendable at the time
+// (Morgan Grant was already stale; Pat Quinn had not yet replied STOP) —
+// including the module-25 reply testers, whose fabricated ledger rows are
+// what lets a staff reply attribute to the demo campaign with NO live launch.
 // Alex Morgan replied and reads positive/hot; Pat Quinn replied STOP (module
 // 20 owns the registry row).
 //
 // Printed-numbers contract (reconciles with `loadSmsCampaignFunnel`):
-//   funnel:   5 sent / 4 delivered / 1 response / 4 no response / 1 stop
-//   send row: 6 on list, 0 opted out at launch, 1 stale consent
-//   pre-send NOW (module 20): 6 imported / 4 eligible / 1 opted out / 1 stale
+//   funnel:   7 sent / 6 delivered / 1 response / 6 no response / 1 stop
+//   send row: 8 on list, 0 opted out at launch, 1 stale consent
+//   pre-send NOW (modules 20+25): 8 imported / 6 eligible / 1 opted out / 1 stale
 
 import { eq, inArray } from 'drizzle-orm';
 import {
@@ -125,8 +127,10 @@ export const smsHistoryModule: SeedModule = {
       providerSid: 'demo-in-1',
     });
 
-    console.log('   History: 1 send, 5 messages, 1 conversation (Alex Morgan, positive/hot)');
-    console.log('   Expected funnel: 5 sent / 4 delivered / 1 response / 4 no response / 1 stop');
+    console.log(
+      `   History: 1 send, ${messaged.length} messages, 1 conversation (Alex Morgan, positive/hot)`,
+    );
+    console.log('   Expected funnel: 7 sent / 6 delivered / 1 response / 6 no response / 1 stop');
     console.log(`   Stop registry: ${DEMO_STOPPED_PHONE} (replied STOP after this launch)`);
   },
 
