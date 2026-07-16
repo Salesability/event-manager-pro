@@ -22,11 +22,13 @@ import { classifySeedTarget, UNKNOWN_TARGET_OPTIN } from './guard';
 import type { SeedModule } from './types';
 
 import { demoDealerModule } from './10-demo-dealer';
+import { smsRecipientsModule } from './20-sms-recipients';
+import { smsHistoryModule } from './30-sms-history';
 
 // Ordered registry — seed walks it forward, clean walks it backward. An
 // explicit array (not an fs walk) keeps ordering deterministic and the module
 // graph type-checked; new modules are appended here as they land.
-const MODULES: SeedModule[] = [demoDealerModule];
+const MODULES: SeedModule[] = [demoDealerModule, smsRecipientsModule, smsHistoryModule];
 
 function usage(): never {
   console.error('Usage: pnpm seed:demo [--clean] [--only <module-name>]');
