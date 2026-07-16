@@ -21,10 +21,12 @@ import * as schema from '../../src/lib/db/schema';
 import { classifySeedTarget, UNKNOWN_TARGET_OPTIN } from './guard';
 import type { SeedModule } from './types';
 
+import { demoDealerModule } from './10-demo-dealer';
+
 // Ordered registry — seed walks it forward, clean walks it backward. An
 // explicit array (not an fs walk) keeps ordering deterministic and the module
 // graph type-checked; new modules are appended here as they land.
-const MODULES: SeedModule[] = [];
+const MODULES: SeedModule[] = [demoDealerModule];
 
 function usage(): never {
   console.error('Usage: pnpm seed:demo [--clean] [--only <module-name>]');
@@ -75,17 +77,20 @@ const pg = postgres(process.env.DATABASE_URL!, { prepare: false });
 const db = drizzle(pg, { schema });
 
 async function run() {
+  // Clean is always a full reverse pass over the selection BEFORE any seeding:
+  // later modules hold `restrict` FKs into earlier ones (sends/threads →
+  // campaign), so interleaving clean-then-seed per module would fail on the
+  // second run. Reverse-clean-everything + forward-seed-everything is the
+  // FK-safe idempotent shape.
+  for (const mod of [...selected].reverse()) {
+    console.log(`🧹 clean ${mod.name}`);
+    await mod.clean(db);
+  }
   if (cleanOnly) {
-    for (const mod of [...selected].reverse()) {
-      console.log(`🧹 clean ${mod.name}`);
-      await mod.clean(db);
-    }
     console.log(`Cleaned ${selected.length} module(s).`);
     return;
   }
   for (const mod of selected) {
-    console.log(`🧹 clean ${mod.name}`);
-    await mod.clean(db);
     console.log(`🌱 seed  ${mod.name}`);
     await mod.seed(db);
   }
