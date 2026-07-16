@@ -8,6 +8,12 @@ describe('isPublicPath', () => {
     expect(isPublicPath('/api/boldsign/webhook')).toBe(true);
   });
 
+  it('treats the Twilio webhook as public (signature-gated in-handler, no session cookie)', () => {
+    // Regression: without this every Twilio status callback and inbound SMS
+    // (replies, STOP) 307-redirects to /login and is silently dropped.
+    expect(isPublicPath('/api/twilio/webhook')).toBe(true);
+  });
+
   it('matches the other public paths and their subpaths', () => {
     expect(isPublicPath('/login')).toBe(true);
     expect(isPublicPath('/auth/callback')).toBe(true);

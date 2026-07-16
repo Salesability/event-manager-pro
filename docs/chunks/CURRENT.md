@@ -1,8 +1,13 @@
 # Active chunk
 
-**Plan:** _None — pick a new plan_
+**Plan:** [`docs/chunks/0111-stage-seed-harness/plan.md`](0111-stage-seed-harness/plan.md)
+**Intent:** [`docs/chunks/0111-stage-seed-harness/intent.md`](0111-stage-seed-harness/intent.md)
 
-**Status:** 0110-sms-console-polish shipped + closed 2026-07-15 (eval PASS-with-warnings; [`closed/0110-…/eval-2026-07-15-1639.md`](closed/0110-sms-console-polish/eval-2026-07-15-1639.md)). **Next up (owner-stated): stage deploy of the whole SMS line for business review.** Then: booking "chunk 2" (`{{booking_link}}` send token + confirmation SMS — not yet scaffolded) and the prod runway (migrations `0049`–`0056`, Twilio toll-free verification, `ANTHROPIC_API_KEY`).
+**Started:** 2026-07-16
+**Status:** Scaffolded — phases not yet started
+
+Marker-owned, idempotent demo-seed modules for the shared sandbox/stage DB (`scripts/seeds/` + `pnpm seed:demo`), generalizing the per-chunk `insert|cleanup` smoke-fixture pattern — because stage can't do the reset-the-container trick of the [bcgov reference](https://github.com/bcgov/biohubbc-platform/tree/dev/database/src/seeds). Hard prod-ref refusal; first consumer is the reproducible SMS-line demo (demo dealer + consent-mix recipients + fabricated history), which also un-piggybacks the 2026-07-15 ad-hoc fixtures from the real Century Mazda campaign.
+_Context:_ **the SMS line is stage-deployed for business review** (2026-07-15). After this chunk: booking "chunk 2" (`{{booking_link}}` send token + confirmation SMS — not yet scaffolded) and the prod runway (migrations `0049`–`0056`, Twilio toll-free verification, prod `ANTHROPIC_API_KEY`).
 
 **Branch layout (owner calls 2026-07-14/15):** the SMS line builds on branch **`0108-appointment-booking`** (contains `0103-sms-service` tip `ac5de2b` — 0103+0105+0106+0107 — merged back in 2026-07-15, plus shipped 0108, 0109, 0110). Owner call: *every inbound reply must be visible even when none is expected*. The on-demand "Draft AI reply" button stays (human-initiated, degrades without `ANTHROPIC_API_KEY`); 0110 added the **first owner-blessed autonomous LLM call** (display-only sentiment/temperature classification on inbound — [`closed/0110-…/decision.md`](closed/0110-sms-console-polish/decision.md) D1); the *auto-draft/approval-queue* path remains shelved. Migrations `0049`–`0056` in-tree, all applied to sandbox; prod is still at `0048` — **apply prod migrations before the line merges to `main`** (0095 keyless CI auto-deploys prod on merge).
 _Prior context:_ **0109-sms-campaigns-tab** closed 2026-07-15 ([`closed/0109-…/eval-2026-07-15-1510.md`](closed/0109-sms-campaigns-tab/eval-2026-07-15-1510.md)) — the `/sms` tab is the global door to every campaign ledger. **0108** closed the same day ([`closed/0108-…/eval-2026-07-15-1005.md`](closed/0108-appointment-booking/eval-2026-07-15-1005.md)); booking chunk 2 (`{{booking_link}}` send token + confirmation SMS) is not yet scaffolded.
