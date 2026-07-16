@@ -7,7 +7,7 @@
 
 | Phase | Status | Commit |
 |-------|--------|--------|
-| 1: [Runner + environment guards] | Pending | - |
+| 1: [Runner + environment guards] | Done | a630353 |
 | 2: [Demo dealer + campaign module] | Pending | - |
 | 3: [SMS recipients + history modules] | Pending | - |
 | 4: [Century Mazda fixture migration + smoke-script promotion] | Pending | - |
@@ -33,7 +33,7 @@ For each new file or method below, the builder reads the anchor first and matche
 - `docs/wiki/sms.md` — thread model + funnel semantics the fabricated history must reconcile with
 - `docs/wiki/go-live-accounts.md` — prod ref / sandbox ref identities behind the guard
 
-**Overall Progress:** 0% (0/5 phases complete)
+**Overall Progress:** 20% (1/5 phases complete)
 
 **Note:**
 - Each phase includes both implementation and tests
@@ -43,8 +43,10 @@ For each new file or method below, the builder reads the anchor first and matche
 ### Phase Checklist
 
 #### Phase 1: [Runner + environment guards]
-- [ ] Task 1
-- [ ] Task 2
+- [x] `scripts/seeds/guard.ts` — pure target classifier: prod-ref (`fkfybeddnfxnjuxkqidp`) hard refusal regardless of flags; sandbox ref (`qppenapeguwevcheqwpz`) + localhost allowlisted; anything else refused unless `SEED_DEMO_ALLOW_UNKNOWN_TARGET=1` (bcgov-style explicit opt-in)
+- [x] `scripts/seeds/index.ts` — runner: `.env.local` self-load (`process.loadEnvFile`, integration-test pattern), guard before connect, ordered module registry walk (clean-then-seed per module = idempotent), `--clean` (reverse order), `--only <module>`
+- [x] `package.json` `seed:demo` script + vitest `include` glob for `scripts/seeds/**/*.test.ts`
+- [x] Guard unit tests: prod ref refused even with opt-in; sandbox/local pass without opt-in; unknown target needs opt-in; missing URL refused
 
 #### Phase 2: [Demo dealer + campaign module]
 - [ ] Task 1
